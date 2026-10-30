@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14213d" />
+    <title>American Flyers</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>" />
+  </head>
+  <body>
+    <canvas id="scene" aria-label="Virtual bike ride"></canvas>
+
+    <header class="topbar">
+      <div class="brand"><span class="star">★</span> American Flyers</div>
+      <nav class="actions">
+        <button id="btn-trainer" class="primary">Connect trainer</button>
+        <button id="btn-hr">Heart rate</button>
+        <button id="btn-demo">Demo ride</button>
+        <button id="btn-reset">Reset</button>
+        <button id="btn-settings" aria-label="Settings" title="Settings">⚙</button>
+      </nav>
+    </header>
+
+    <section class="hud" aria-live="off">
+      <div class="tile power">
+        <div class="label">Power</div>
+        <div class="value"><span id="m-power">0</span><small>W</small></div>
+        <div class="zone" id="m-zone">Z1</div>
+      </div>
+      <div class="tile"><div class="label">Cadence</div><div class="value"><span id="m-cadence">0</span><small>rpm</small></div></div>
+      <div class="tile"><div class="label">Speed</div><div class="value"><span id="m-speed">0.0</span><small id="u-speed">km/h</small></div></div>
+      <div class="tile"><div class="label">Heart rate</div><div class="value"><span id="m-hr">--</span><small>bpm</small></div></div>
+      <div class="tile"><div class="label">Distance</div><div class="value"><span id="m-distance">0.00</span><small id="u-distance">km</small></div></div>
+      <div class="tile"><div class="label">Time</div><div class="value"><span id="m-time">0:00</span></div></div>
+      <div class="tile"><div class="label">Grade</div><div class="value"><span id="m-grade">0.0</span><small>%</small></div></div>
+      <div class="tile"><div class="label">Climbed</div><div class="value"><span id="m-climb">0</span><small id="u-climb">m</small></div></div>
+    </section>
+
+    <div id="demo-panel" class="demo-panel" hidden>
+      <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
+      <input id="demo-power" type="range" min="0" max="600" step="5" value="150" />
+      <p>Use ↑ / ↓ keys to adjust</p>
+    </div>
+
+    <footer class="bottom">
+      <div class="status"><span id="trainer-dot" class="dot"></span><span id="trainer-status">No trainer connected</span></div>
+      <canvas id="profile" aria-label="Elevation profile ahead"></canvas>
+    </footer>
+
+    <div id="toast" class="toast" role="status"></div>
+
+    <dialog id="settings">
+      <form method="dialog">
+        <h2>Settings</h2>
+        <label>Rider weight (kg) <input name="riderKg" type="number" min="30" max="200" step="0.5" /></label>
+        <label>Bike weight (kg) <input name="bikeKg" type="number" min="5" max="30" step="0.5" /></label>
+        <label>FTP (watts) <input name="ftp" type="number" min="50" max="600" step="1" /></label>
+        <label>Units
+          <select name="units">
+            <option value="metric">Metric (km, km/h, m)</option>
+            <option value="imperial">Imperial (mi, mph, ft)</option>
+          </select>
+        </label>
+        <label>Trainer difficulty <output id="difficulty-out"></output>
+          <input name="difficulty" type="range" min="0" max="100" step="5" />
+          <span class="hint">How much of the road grade the trainer simulates. 100% feels like the real hill.</span>
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" formnovalidate>Cancel</button>
+          <button value="save" class="primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
