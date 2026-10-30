@@ -134,7 +134,8 @@ let lastFrame = performance.now();
 let lastHud = 0;
 
 function frame(now: number) {
-  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  // rAF timestamps can precede the load-time clock reading, so clamp at 0.
+  const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
   lastFrame = now;
 
   if (demo) {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { elevationAt, ROAD_ORIGIN, ROAD_STEP, roadX, roadZ } from '../course';
+import { nearLandmark } from './landmarks';
 import { fbm, rng, smoothstep } from './noise';
 
 // Terrain is built in square tiles around the rider. Every vertex height is a
@@ -220,7 +221,7 @@ export class Terrain {
       const keep = rand();
       if (forest < 0.05 && keep > 0.06) continue;
       const near = nearestRoad(cands, x, z);
-      if (near && near.dist < 12) continue;
+      if (near && (near.dist < 12 || nearLandmark(x, z, near.d))) continue;
       const h = heightAt(x, z, near);
       if (h > 82) continue; // tree line
       const s = 0.75 + rand() * 0.7;

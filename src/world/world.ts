@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ensureRoad, roadPoint, gradeAt } from '../course';
+import { Landmarks } from './landmarks';
 import { RiderModel } from './rider';
 import { Road, type MarkerConfig } from './road';
 import { Sky, SUN_DIRECTION, HORIZON_COLOR } from './sky';
@@ -24,6 +25,7 @@ export class World {
   private readonly terrain = new Terrain();
   private readonly road: Road;
   private readonly sky = new Sky();
+  private readonly landmarks = new Landmarks();
   private mode: CameraMode = 'chase';
   private readonly camTarget = new THREE.Vector3();
   private readonly lookTarget = new THREE.Vector3();
@@ -52,7 +54,7 @@ export class World {
     this.scene.add(this.sun, this.sun.target);
 
     this.road = new Road(this.renderer, markers);
-    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.rider.group);
+    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.rider.group);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -88,6 +90,7 @@ export class World {
   update(state: WorldState, dt: number) {
     ensureRoad(state.distance + 3000);
     this.road.update(state.distance);
+    this.landmarks.update(state.distance);
 
     // Place the bike: yaw follows the road, pitch follows the grade.
     const p = roadPoint(state.distance);
