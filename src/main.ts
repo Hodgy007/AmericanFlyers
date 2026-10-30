@@ -3,7 +3,8 @@ import { bluetoothAvailable, connectTrainer, type Trainer, type TrainerReading }
 import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
 import { elevationAt, gradeAt } from './course';
 import { stepSpeed, DEFAULT_PARAMS } from './physics';
-import { Renderer, drawProfile, gradeColor } from './render';
+import { drawProfile, gradeColor } from './profile';
+import { World, type CameraMode } from './world/world';
 import { loadSettings, saveSettings, type Settings } from './settings';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -112,8 +113,23 @@ function setDemoPower(p: number) {
 
 // ------------------------------------------------------------ main loop ----
 
-const renderer = new Renderer($<HTMLCanvasElement>('scene'));
+function markerConfig() {
+  const imperial = settings.units === 'imperial';
+  return {
+    every: imperial ? KM_PER_MI * 1000 : 1000,
+    label: (n: number) => (imperial ? `${n} mi` : `${n} km`),
+  };
+}
+
+const world = new World($<HTMLCanvasElement>('scene'), markerConfig());
 const profileCanvas = $<HTMLCanvasElement>('profile');
+// `?start=12` begins the ride 12 km in, handy for jumping to the hills.
+const startKm = Number(new URLSearchParams(location.search).get('start'));
+if (startKm > 0) {
+  ride.distance = startKm * 1000;
+  ride.lastElev = elevationAt(ride.distance);
+}
+
 let lastFrame = performance.now();
 let lastHud = 0;
 
@@ -145,17 +161,7 @@ function frame(now: number) {
   powerSamples.push({ t: now, p: live.power });
   while (powerSamples.length && now - powerSamples[0].t > 3000) powerSamples.shift();
 
-  const imperial = settings.units === 'imperial';
-  renderer.draw(
-    {
-      distance: ride.distance,
-      speedMs: ride.speed,
-      crankAngle: ride.crankAngle,
-      markerEvery: imperial ? KM_PER_MI * 1000 : 1000,
-      markerLabel: (n) => (imperial ? `${n} mi` : `${n} km`),
-    },
-    dt,
-  );
+  world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: ride.crankAngle }, dt);
 
   if (now - lastHud > 200) {
     lastHud = now;
@@ -221,10 +227,18 @@ function toast(msg: string, ms = 3500) {
   toastTimer = window.setTimeout(() => el.classList.remove('show'), ms);
 }
 
+const CAMERA_LABELS: Record<CameraMode, string> = { chase: 'Chase view', side: 'Side view', rider: 'Rider’s view' };
+
+function cycleCamera() {
+  const mode = world.cycleCamera();
+  $('btn-camera').textContent = `🎥 ${CAMERA_LABELS[mode]}`;
+}
+
 function resetRide() {
   Object.assign(ride, { distance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0 });
   powerSamples.length = 0;
   lastSentGrade = NaN;
+  world.jumped();
 }
 
 function openSettings() {
@@ -254,6 +268,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     difficulty: Math.max(0, Math.min(100, Number(data.get('difficulty')))),
   };
   saveSettings(settings);
+  world.setMarkers(markerConfig());
   lastSentGrade = NaN;
 });
 $('settings').querySelector<HTMLInputElement>('[name=difficulty]')!.addEventListener('input', (e) => {
@@ -265,9 +280,12 @@ $('btn-hr').addEventListener('click', toggleHeartRate);
 $('btn-demo').addEventListener('click', () => setDemo(!demo));
 $('btn-reset').addEventListener('click', resetRide);
 $('btn-settings').addEventListener('click', openSettings);
+$('btn-camera').addEventListener('click', cycleCamera);
 $<HTMLInputElement>('demo-power').addEventListener('input', (e) => setDemoPower(Number((e.target as HTMLInputElement).value)));
 window.addEventListener('keydown', (e) => {
-  if (!demo || (e.target as HTMLElement).closest('dialog')) return;
+  if ((e.target as HTMLElement).closest('dialog')) return;
+  if (e.key === 'c' || e.key === 'C') cycleCamera();
+  if (!demo) return;
   if (e.key === 'ArrowUp') { setDemoPower(demoPower + 10); e.preventDefault(); }
   if (e.key === 'ArrowDown') { setDemoPower(demoPower - 10); e.preventDefault(); }
 });
