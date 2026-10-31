@@ -108,8 +108,16 @@ export function initAccountUi(deps: Deps) {
     const a = account();
     accountBtn.textContent = a ? `👤 ${a.name.split(' ')[0]}` : '👤 Sign in';
     accountBtn.title = a ? `${a.name} (${a.email}): profile & stats` : 'Sign in with Google or Apple';
-    admin = a ? await isAdmin() : false;
+    await checkAdmin();
+  }
+
+  async function checkAdmin() {
+    const id = account()?.id;
+    const yes = id ? await isAdmin() : false;
+    if (account()?.id !== id) return; // signed in/out meanwhile
+    admin = yes;
     adminBtn.hidden = !admin;
+    $('profile-tabs').querySelector<HTMLElement>('[data-tab=admin]')!.hidden = !admin;
   }
 
   onAccountChange(() => {
@@ -151,6 +159,7 @@ export function initAccountUi(deps: Deps) {
     tabs.querySelector<HTMLElement>('[data-tab=admin]')!.hidden = !admin;
     if (!profileDialog.open) profileDialog.showModal();
     showTab(admin || tab !== 'admin' ? tab : 'stats');
+    if (!admin) checkAdmin(); // ask again, in case the first check failed
   }
 
   // Enter in a search box mustn't submit (and so close) the profile.
@@ -593,7 +602,7 @@ export function initAccountUi(deps: Deps) {
     }
   });
 
-  return { openSignIn, openProfile, invalidate };
+  return { openSignIn, openProfile, invalidate, checkAdmin };
 }
 
 const STATUSES: FeedbackStatus[] = ['new', 'planned', 'in_progress', 'done', 'declined'];

@@ -207,13 +207,21 @@ export async function myFeedback(): Promise<Feedback[]> {
 // Every admin call is checked in the database (public.is_admin()), so these
 // fail for anyone who isn't on the admin list.
 
+/**
+ * Whether the signed-in rider is an admin. Retries a few times, because
+ * right after returning from Google / Apple the session can still be settling.
+ */
 export async function isAdmin(): Promise<boolean> {
-  if (!account()) return false;
-  try {
-    return Boolean(await check(neon.rpc('is_admin')));
-  } catch {
-    return false;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (!account()) return false;
+    try {
+      return (await check(neon.rpc('is_admin'))) === true;
+    } catch (e) {
+      console.warn('Admin check failed', attempt + 1, e);
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
   }
+  return false;
 }
 
 export interface AdminOverview {
