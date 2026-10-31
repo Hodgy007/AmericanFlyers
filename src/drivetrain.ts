@@ -14,6 +14,25 @@ const COGS = [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34]; // 11–34 casset
 /** All gear ratios (chainring ÷ cog), lowest first. */
 export const GEARS = [...new Set(CHAINRINGS.flatMap((c) => COGS.map((g) => Math.round((c / g) * 1000) / 1000)))].sort((a, b) => a - b);
 
+/**
+ * Virtual shifting: 24 evenly spaced gears from 0.75 (easier than 34×34 is
+ * 1.0) to 4.8 (a little harder than 53×11), like the virtual gears on
+ * smart trainers. Gear 12 is a middle gear, about 50×21.
+ */
+export const VIRTUAL_GEARS = Array.from({ length: 24 }, (_, i) => Math.round(0.75 * Math.pow(4.8 / 0.75, i / 23) * 1000) / 1000);
+export const VIRTUAL_REF = 11; // index of the neutral gear (feels like the road, no offset)
+
+/** Extra grade (%) sent to the trainer so a harder virtual gear pushes back harder. */
+export function gearGradeOffset(index: number) {
+  const r = VIRTUAL_GEARS[index] / VIRTUAL_GEARS[VIRTUAL_REF];
+  return Math.max(-6, Math.min(9, Math.log(r) * 5.5));
+}
+
+/** Cadence (rpm) that a road speed gives in a virtual gear. */
+export function gearCadence(speedMs: number, index: number) {
+  return (speedMs / (VIRTUAL_GEARS[index] * WHEEL_CIRCUMFERENCE)) * 60;
+}
+
 const SHIFT_INTERVAL = 0.45; // seconds between single-gear shifts
 const DEFAULT_CADENCE = 85; // rpm, when a power meter doesn't report cadence
 
@@ -26,11 +45,13 @@ export class Drivetrain {
   gear = 0;
   /** Side-to-side rock of the bike, radians (bigger when pushing hard at low speed). */
   rock = 0;
+  /** Set for virtual shifting: the rider's chosen gear (index into VIRTUAL_GEARS); null = automatic. */
+  virtualGear: number | null = null;
   private shiftTimer = 0;
   private rockAmount = 0;
 
   get ratio() {
-    return GEARS[this.gear];
+    return this.virtualGear === null ? GEARS[this.gear] : VIRTUAL_GEARS[this.virtualGear];
   }
 
   /**
@@ -44,7 +65,9 @@ export class Drivetrain {
 
     // Shift one gear at a time toward the gear that matches the wanted cadence.
     this.shiftTimer -= dt;
-    if (pedalling && speedMs > 1 && this.shiftTimer <= 0) {
+    if (this.virtualGear !== null) {
+      // The rider shifts.
+    } else if (pedalling && speedMs > 1 && this.shiftTimer <= 0) {
       const ideal = speedMs / ((wanted / 60) * WHEEL_CIRCUMFERENCE);
       const now = this.ratio;
       // A little hysteresis so it doesn't hunt between two gears.

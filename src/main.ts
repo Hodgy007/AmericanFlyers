@@ -11,7 +11,7 @@ import { World, type CameraMode } from './world/world';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { formatTime, Hud, openDataBlocks } from './hud';
 import { RideStats } from './stats';
-import { Drivetrain } from './drivetrain';
+import { Drivetrain, gearCadence, gearGradeOffset, VIRTUAL_GEARS, VIRTUAL_REF } from './drivetrain';
 import { drawWorkout } from './workouts/graph';
 import { RAMP_TEST_ID, zoneColor, type Workout } from './workouts/model';
 import { WorkoutPlayer } from './workouts/player';
@@ -26,6 +26,11 @@ import { Presence } from './cloud/presence';
 import { initRidersUi } from './ridersUi';
 import { Ghost, raceTime } from './ghost';
 import { initLeaderboardUi } from './leaderboardUi';
+import { Sound } from './sound';
+import { complete, nextSession, planById, type Session } from './plans';
+import { initPlansUi } from './plansUi';
+import { initOnboarding, onboarded } from './onboarding';
+import { workoutById } from './workouts/library';
 import type { OtherRider } from './world/others';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -43,7 +48,7 @@ let demo = false;
 let demoPower = 150;
 
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
-const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0 };
+const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false };
 const drivetrain = new Drivetrain(); // keeps the legs in step with the wheels
 const powerSamples: { t: number; p: number }[] = [];
 const zoneRefs = () => settings;
@@ -51,6 +56,8 @@ let stats = new RideStats(zoneRefs); // whole ride
 let player: WorkoutPlayer | null = null;
 let workoutStats = new RideStats(zoneRefs); // just the current workout
 let recorder = new RideRecorder(); // second-by-second samples for the saved ride
+const sound = new Sound(settings.sound);
+const beeps = { step: undefined as unknown, left: Infinity };
 const rideWorkout = { started: null as string | null, completed: null as string | null };
 
 // ------------------------------------------------------------- devices ----
@@ -115,9 +122,10 @@ async function toggleHeartRate() {
 
 // Control the trainer once a second: ERG (hold the workout's target watts)
 // during a workout, otherwise the road grade scaled by the difficulty setting.
+// With virtual shifting on, the chosen gear adds to (or takes off) the grade.
 let lastSentGrade = NaN;
 let lastSentWatts = NaN;
-setInterval(() => {
+function controlTrainer() {
   if (!trainer?.canControl) return;
   const watts = player && !player.done ? player.targetWatts() : null;
   if (watts !== null) {
@@ -127,12 +135,41 @@ setInterval(() => {
     trainer.setTargetPower(watts).catch(() => { lastSentWatts = NaN; });
     return;
   }
-  const target = Math.round(gradeAt(ride.distance) * 100 * (settings.difficulty / 100) * 10) / 10;
+  const road = gradeAt(ride.distance) * 100 * (settings.difficulty / 100);
+  const gear = settings.virtualShifting ? gearGradeOffset(vGear) : 0;
+  const target = Math.round(Math.max(-10, Math.min(20, road + gear)) * 10) / 10;
   if (Math.abs(target - lastSentGrade) < 0.1) return;
   lastSentGrade = target;
   lastSentWatts = NaN;
   trainer.setGrade(target).catch(() => { lastSentGrade = NaN; });
-}, 1000);
+}
+setInterval(controlTrainer, 1000);
+
+// ------------------------------------------------------ virtual shifting ----
+
+let vGear = VIRTUAL_REF;
+
+function shift(by: number) {
+  if (!settings.virtualShifting) return;
+  const next = Math.max(0, Math.min(VIRTUAL_GEARS.length - 1, vGear + by));
+  if (next === vGear) return;
+  vGear = next;
+  drivetrain.virtualGear = vGear;
+  sound.shift(by > 0);
+  updateGearPanel();
+  controlTrainer(); // feel it straight away
+}
+
+function updateGearPanel() {
+  const on = settings.virtualShifting;
+  $('gear-panel').hidden = !on;
+  drivetrain.virtualGear = on ? vGear : null;
+  if (!on) return;
+  $('gear-num').textContent = String(vGear + 1);
+  const pct = vGear / (VIRTUAL_GEARS.length - 1);
+  $('gear-bar').style.setProperty('--gear', String(pct));
+  $('gear-ratio').textContent = `${VIRTUAL_GEARS[vGear].toFixed(2)} : 1`;
+}
 
 // ----------------------------------------------------------------- demo ----
 
@@ -193,7 +230,9 @@ function frame(now: number) {
     const target = player && !player.done && !player.paused ? player.targetWatts() : null;
     if (target !== null) setDemoPower(Math.round(target + Math.sin(now / 900) * 4));
     live.power = demoPower;
-    live.cadence = demoPower > 0 ? Math.round(78 + demoPower / 25 + Math.sin(now / 1700) * 3) : 0;
+    live.cadence = demoPower <= 0 ? 0
+      : settings.virtualShifting && ride.speed > 2 ? Math.round(Math.min(140, gearCadence(ride.speed, vGear)))
+      : Math.round(78 + demoPower / 25 + Math.sin(now / 1700) * 3);
     live.lastReadingAt = now;
   } else if (now - live.lastReadingAt > STALE_MS) {
     live.power = 0;
@@ -234,7 +273,9 @@ function frame(now: number) {
       if (pedalling && !player.paused) workoutStats.add(dt, live.power, live.cadence, currentHr(), true);
     }
     if (player.done) finishWorkout(); // reached the end, or skipped past the last step
+    else if (!player.paused) intervalBeeps();
   }
+  sound.update(dt, { speedMs: ride.speed, pedalling: live.power > 0 || live.cadence > 0, crowd: crowdNear(ride.distance) });
 
   const others: OtherRider[] = settings.rideTogether ? presence.riders() : [];
   const g = ghostRider();
@@ -244,6 +285,10 @@ function frame(now: number) {
 
   if (now - lastHud > 200) {
     lastHud = now;
+    if (currentStage().finish === null && ride.movingTime >= 30 * 60 && !ride.planCounted) {
+      ride.planCounted = true; // no finish line: 30 minutes counts as done
+      planDone({ stage: currentStage().id });
+    }
     updateHud(grade);
     if (player) {
       drawWorkout(profileCanvas, player.steps, { elapsed: player.elapsed, trace: player.trace });
@@ -253,6 +298,55 @@ function frame(now: number) {
     }
   }
   requestAnimationFrame(frame);
+
+// Installable app: register the service worker (production builds only).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
+
+// "Install app" button where the browser offers it (Chrome, Edge, Android).
+let installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e as Event & { prompt: () => Promise<void> };
+  $('btn-install').hidden = false;
+});
+$('btn-install').addEventListener('click', async () => {
+  if (!installPrompt) return;
+  await installPrompt.prompt().catch(() => {});
+  installPrompt = null;
+  $('btn-install').hidden = true;
+});
+window.addEventListener('appinstalled', () => { $('btn-install').hidden = true; toast('American Flyers is installed. Open it from your home screen or apps.'); });
+}
+
+/** 0..1: crowds line the hairpins of the climbs and the last few hundred metres. */
+function crowdNear(d: number) {
+  const stage = currentStage();
+  let c = 0;
+  for (const sign of stage.signs) {
+    const k = 1 - Math.abs(d - sign.d - 10) / 110;
+    if (k > c) c = k;
+  }
+  c *= 0.75;
+  if (stage.finish !== null) {
+    const toGo = stage.finish - d;
+    if (toGo < 700 && toGo > -150) c = Math.max(c, toGo > 0 ? 1 - toGo / 700 : 1 + toGo / 150);
+  }
+  return Math.max(0, c);
+}
+
+/** Beeps at 3, 2, 1 seconds before a workout step ends, and a long one as it changes. */
+function intervalBeeps() {
+  if (!player) return;
+  const left = player.stepRemaining();
+  if (beeps.step !== player.step) {
+    if (beeps.step !== undefined) sound.beep(true);
+    beeps.step = player.step;
+  } else if ((player.step?.duration ?? 0) >= 20) {
+    for (const n of [3, 2, 1]) if (beeps.left > n && left <= n) sound.beep();
+  }
+  beeps.left = left;
 }
 
 function currentHr() {
@@ -305,6 +399,7 @@ new ResizeObserver(() => {
 
 function startWorkout(w: Workout) {
   player = new WorkoutPlayer(w, settings.ftp);
+  beeps.step = undefined;
   workoutStats = new RideStats(zoneRefs);
   rideWorkout.started = w.name;
   lastSentWatts = NaN;
@@ -322,6 +417,7 @@ function startWorkout(w: Workout) {
 
 function stopWorkout() {
   player = null;
+  beeps.step = undefined;
   $('workout-panel').hidden = true;
   lastSentGrade = NaN; // back to road resistance
 }
@@ -365,6 +461,7 @@ function finishWorkout() {
     });
   }
   rideWorkout.completed = w.name;
+  planDone({ workout: w.id });
   const zones = zoneSummary(workoutStats);
   stopWorkout();
   showSummary('💪', `${w.name}: complete!`, items, actions, zones);
@@ -558,7 +655,7 @@ function resetRide() {
   lastSavedSeconds = 0;
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
-  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0 });
+  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false });
   drivetrain.reset();
   powerSamples.length = 0;
   stats = new RideStats(zoneRefs);
@@ -652,8 +749,10 @@ function openStages() {
 
 function showFinish() {
   ride.finished = true;
+  sound.fanfare();
   // Only rides of the whole stage (from the start line) count for the leaderboard.
   ride.finishTime = ride.startDistance === 0 ? ride.movingTime : 0;
+  planDone({ stage: currentStage().id });
   const vsGhost = ghost && ride.finishTime ? ride.finishTime - ghost.finishS : null;
   const imperial = settings.units === 'imperial';
   const finish = currentStage().finish!;
@@ -751,12 +850,15 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     units: data.get('units') === 'imperial' ? 'imperial' : 'metric',
     difficulty: Math.max(0, Math.min(100, Number(data.get('difficulty')))),
     rideTogether: data.get('rideTogether') === 'on',
+    ghost: data.get('ghost') === 'on',
+    virtualShifting: data.get('virtualShifting') === 'on',
   };
   saveSettings(settings);
   pushSettings(settings);
   if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
   world.setMarkers(markerConfig());
   lastSentGrade = NaN;
+  updateGearPanel();
   if (!settings.rideTogether) presence.leave();
   if (!settings.ghost) ghost = null;
   else if (!ghost) loadMyGhost();
@@ -772,6 +874,27 @@ $('btn-demo').addEventListener('click', () => setDemo(!demo));
 $('btn-reset').addEventListener('click', endRide);
 $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);
+function setSound(on: boolean) {
+  sound.setEnabled(on);
+  $('btn-sound').textContent = on ? '🔊' : '🔇';
+  $('btn-sound').setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
+  if (on !== settings.sound) {
+    settings = { ...settings, sound: on };
+    saveSettings(settings);
+    pushSettings(settings);
+  }
+}
+setSound(settings.sound);
+$('btn-sound').addEventListener('click', () => setSound(!settings.sound));
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen?.().catch(() => toast('Full screen isn’t available in this browser.'));
+}
+$('btn-fullscreen').addEventListener('click', toggleFullscreen);
+if (!document.documentElement.requestFullscreen) $('btn-fullscreen').hidden = true; // e.g. iPhone Safari
+$('gear-down').addEventListener('click', () => shift(-1));
+$('gear-up').addEventListener('click', () => shift(1));
+updateGearPanel();
 $('btn-stage').addEventListener('click', openStages);
 $<HTMLInputElement>('route-upload').addEventListener('change', async (e) => {
   const input = e.target as HTMLInputElement;
@@ -810,6 +933,10 @@ $<HTMLInputElement>('demo-power').addEventListener('input', (e) => setDemoPower(
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('dialog')) return;
   if (e.key === 'c' || e.key === 'C') cycleCamera();
+  if (e.key === 'm' || e.key === 'M') setSound(!settings.sound);
+  if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  if (e.key === '=' || e.key === '+' || e.key === ']') shift(1);
+  if (e.key === '-' || e.key === '_' || e.key === '[') shift(-1);
   if (!demo) return;
   if (e.key === 'ArrowUp') { setDemoPower(demoPower + 10); e.preventDefault(); }
   if (e.key === 'ArrowDown') { setDemoPower(demoPower - 10); e.preventDefault(); }
@@ -861,6 +988,62 @@ function rideWith(distance: number, name: string) {
   world.jumped();
   toast(`Riding with ${name}. Pedal to stay on their wheel!`);
 }
+
+// ------------------------------------------------------ training plans ----
+
+function setPlan(plan: Settings['plan']) {
+  settings = { ...settings, plan };
+  saveSettings(settings);
+  pushSettings(settings);
+}
+
+/** Ticks off the next matching session of the plan being followed. */
+function planDone(what: { workout?: string; stage?: string }) {
+  const plan = planById(settings.plan?.id);
+  if (!plan || !settings.plan) return;
+  const updated = complete(plan, settings.plan, what);
+  if (!updated) return;
+  setPlan(updated);
+  const next = nextSession(plan, updated);
+  window.setTimeout(() => toast(next ? `✓ ${plan.name}: session done! Next up: ${next.title}.` : `🏆 ${plan.name} plan complete!`, 6000), 1500);
+}
+
+function rideSession(session: Session) {
+  if (session.workout) {
+    const w = workoutById(session.workout);
+    if (w) startWorkout(w);
+  } else if (session.stage) {
+    const stage = stageById(session.stage);
+    if (stage !== currentStage()) chooseStage(stage);
+    else resetRide();
+    toast(stage.finish === null ? `${stage.name}: ride for 30 minutes.` : `${stage.name}: ride to the finish line.`, 5000);
+  }
+}
+
+const plansUi = initPlansUi({ progress: () => settings.plan, setProgress: setPlan, ride: rideSession, toast });
+$('btn-plans').addEventListener('click', () => { $<HTMLDialogElement>('workouts').close(); plansUi.open(); });
+
+// ---------------------------------------------------------- first ride ----
+
+const onboarding = initOnboarding({
+  settings: () => settings,
+  save: (patch) => {
+    const oldFtp = settings.ftp;
+    settings = { ...settings, ...patch };
+    saveSettings(settings);
+    pushSettings(settings);
+    if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch(() => {});
+    world.setMarkers(markerConfig());
+  },
+  connectTrainer: async () => { if (!trainer) await toggleTrainer(); return !!trainer; },
+  connectHeartRate: async () => { if (!hrm) await toggleHeartRate(); return !!hrm; },
+  bluetooth: bluetoothAvailable(),
+  startDemo: () => { if (!demo) setDemo(true); },
+  rampTest: () => { const w = workoutById(RAMP_TEST_ID); if (w) startWorkout(w); },
+  rideStage: (id) => rideSession({ title: '', note: '', stage: id }),
+  openPlans: () => plansUi.open(),
+});
+$('btn-setup-guide').addEventListener('click', () => { $<HTMLDialogElement>('settings').close(); onboarding.open(); });
 
 // ---------------------------------------------------- ghosts & leaderboards ----
 
@@ -937,6 +1120,12 @@ onAccountChange(async (a) => {
       world.setMarkers(markerConfig());
       placeWorkoutPanel();
       lastSentGrade = NaN;
+      setSound(settings.sound);
+      updateGearPanel();
+      // A returning rider on a new device: they've done the setup before.
+      try { localStorage.setItem('americanflyers.onboarded', '1'); } catch { /* fine */ }
+      const ob = $<HTMLDialogElement>('onboarding');
+      if (ob.open) ob.close();
     }
     await savePendingRide();
     accountUi.checkAdmin(); // the session is settled now
@@ -946,7 +1135,34 @@ onAccountChange(async (a) => {
     toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
   }
 });
-initHome({ onEnterApp: () => bluetoothNote() }); // the Bluetooth note waits until the rider leaves the home page
+// The Bluetooth note and the first-ride guide wait until the rider leaves the home page.
+initHome({
+  onEnterApp: () => {
+    // A short wait lets a signed-in rider's settings arrive first (they skip it).
+    if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) onboarding.open(); }, 1500);
+    else bluetoothNote();
+  },
+});
 restoreSession();
 
 requestAnimationFrame(frame);
+
+// Installable app: register the service worker (production builds only).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
+
+// "Install app" button where the browser offers it (Chrome, Edge, Android).
+let installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e as Event & { prompt: () => Promise<void> };
+  $('btn-install').hidden = false;
+});
+$('btn-install').addEventListener('click', async () => {
+  if (!installPrompt) return;
+  await installPrompt.prompt().catch(() => {});
+  installPrompt = null;
+  $('btn-install').hidden = true;
+});
+window.addEventListener('appinstalled', () => { $('btn-install').hidden = true; toast('American Flyers is installed. Open it from your home screen or apps.'); });

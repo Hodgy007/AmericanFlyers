@@ -24,6 +24,11 @@ The live app is at https://americanflyers.vercel.app. It is built with Vite, Typ
 - [Riding](user-guide/riding.md): the top bar, data blocks, the elevation strip, camera views, demo controls, and Reset and the ride summary.
 - [Stages and routes](user-guide/stages-and-routes.md): each built-in stage, finish lines, uploading GPX routes, and deleting routes.
 - [Workouts](user-guide/workouts.md): built-in workouts, ERG mode, uploading `.zwo`, `.erg` and `.mrc` files, the ramp test, the workout creator, and `.zwo` export.
+- [Riding together](user-guide/riding-together.md): other riders on your stage, the Riding now list, Ride with, and privacy.
+- [Leaderboards and ghosts](user-guide/leaderboards-and-ghosts.md): what counts, the 🏆 leaderboard, and racing ghosts.
+- [Training plans](user-guide/training-plans.md): the three plans and how sessions tick off.
+- [Sound and virtual shifting](user-guide/sound-and-shifting.md): ride sounds, and choosing your own gears.
+- [Installing the app](user-guide/installing-the-app.md): the first-ride setup guide, installing as an app, full screen and TVs.
 - [Data blocks](user-guide/data-blocks.md): choosing and ordering the numbers on screen, with a table of all 24 fields.
 - [Settings](user-guide/settings.md): every setting, its default and what it changes.
 - [Accounts and profile](user-guide/accounts-and-profile.md): signing in, what syncs, when rides are saved, the profile tabs, `.tcx` export, and signing out.

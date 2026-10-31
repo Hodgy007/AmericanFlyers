@@ -152,6 +152,68 @@ export const BUILTIN_WORKOUTS: Workout[] = [
       ...Array.from({ length: 22 }, (_, i): Block => ({ kind: 'steady', duration: 60, power: 0.5 + i * 0.06 })),
     ],
   },
+  {
+    id: 'builtin-recovery-30',
+    name: 'Recovery Spin 30',
+    description: 'Easy spinning to recover: 30 minutes around 50 % FTP.',
+    source: 'builtin',
+    blocks: [
+      { kind: 'ramp', duration: min(5), from: 0.4, to: 0.5 },
+      { kind: 'steady', duration: min(22), power: 0.52, cadence: 95 },
+      { kind: 'ramp', duration: min(3), from: 0.5, to: 0.4 },
+    ],
+  },
+  {
+    id: 'builtin-tempo-2x20',
+    name: 'Tempo 2×20',
+    description: 'Two 20-minute tempo blocks at 80 % FTP: the engine for long climbs.',
+    source: 'builtin',
+    blocks: [
+      { kind: 'ramp', duration: min(10), from: 0.5, to: 0.75 },
+      { kind: 'intervals', repeats: 2, onDuration: min(20), onPower: 0.8, offDuration: min(5), offPower: 0.55 },
+      { kind: 'ramp', duration: min(5), from: 0.6, to: 0.4 },
+    ],
+  },
+  {
+    id: 'builtin-threshold-2x15',
+    name: 'Threshold 2×15',
+    description: 'Two 15-minute efforts at 97 % FTP. Hard, steady, and the best way to lift your FTP.',
+    source: 'builtin',
+    blocks: [
+      { kind: 'ramp', duration: min(10), from: 0.5, to: 0.8 },
+      { kind: 'intervals', repeats: 3, onDuration: 30, onPower: 1.1, offDuration: 60, offPower: 0.55 },
+      { kind: 'intervals', repeats: 2, onDuration: min(15), onPower: 0.97, offDuration: min(6), offPower: 0.5 },
+      { kind: 'ramp', duration: min(6), from: 0.55, to: 0.4 },
+    ],
+  },
+  {
+    id: 'builtin-endurance-75',
+    name: 'Endurance 75',
+    description: 'A long zone-2 ride with three short tempo lifts to keep it lively.',
+    source: 'builtin',
+    blocks: [
+      { kind: 'ramp', duration: min(10), from: 0.45, to: 0.65 },
+      { kind: 'steady', duration: min(15), power: 0.68 },
+      { kind: 'steady', duration: min(5), power: 0.8 },
+      { kind: 'steady', duration: min(12), power: 0.68 },
+      { kind: 'steady', duration: min(5), power: 0.8 },
+      { kind: 'steady', duration: min(12), power: 0.68 },
+      { kind: 'steady', duration: min(5), power: 0.8 },
+      { kind: 'ramp', duration: min(11), from: 0.65, to: 0.4 },
+    ],
+  },
+  {
+    id: 'builtin-openers-30',
+    name: 'Openers 30',
+    description: 'Short and sharp, the day before a big ride: a few hard bursts to wake the legs.',
+    source: 'builtin',
+    blocks: [
+      { kind: 'ramp', duration: min(10), from: 0.45, to: 0.7 },
+      { kind: 'intervals', repeats: 3, onDuration: min(1), onPower: 1.05, offDuration: min(2), offPower: 0.55 },
+      { kind: 'intervals', repeats: 3, onDuration: 15, onPower: 1.5, offDuration: 105, offPower: 0.5 },
+      { kind: 'ramp', duration: min(5), from: 0.55, to: 0.4 },
+    ],
+  },
 ];
 
 export const RAMP_TEST_ID = 'builtin-ramp-test';

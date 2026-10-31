@@ -200,6 +200,39 @@ Banning another admin is allowed by this function. See [Security](../developer-g
 | Ban or unban | `neon.rpc('admin_set_ban', { target, ban, reason })` |
 | Set status or reply | `neon.from('feedback').update(...)` |
 | Delete feedback | `neon.from('feedback').delete()` |
+| Riding together | `neon.rpc('ride_presence', …)` and `neon.rpc('leave_ride')` in `src/cloud/presence.ts` |
+| Leaderboard | `neon.rpc('stage_leaderboard', { p_stage, p_since })` |
+| Ghost | `neon.rpc('stage_ghost', { p_activity })` |
+
+## Riding together, leaderboards and ghosts
+
+### `live_riders`
+
+Where each signed-in rider is right now. No direct access: row-level security is on with no grants, and only the functions below read or write it.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `user_id` | `text` | Primary key. |
+| `stage_id` | `text` | Up to 80 characters. |
+| `distance` | `real` | Metres along the stage, clamped to −1,000 to 1,000,000. |
+| `speed` | `real` | m/s, clamped to 0–40. |
+| `power` | `smallint` | Watts, clamped to 0–3,000. |
+| `cadence` | `smallint` | rpm, clamped to 0–250. |
+| `updated_at` | `timestamptz` | Set on every update. |
+
+### `activities.finish_s`
+
+`integer`, nullable, greater than 0. Moving time in seconds from the start line to the finish line, set only for whole-stage rides. Indexed with `stage_id` where not null.
+
+### Functions
+
+| Function | Who | What it does |
+| --- | --- | --- |
+| `ride_presence(p_stage, p_distance, p_speed, p_power, p_cadence, p_visible)` | Signed in | Records the caller's position (or removes it when `p_visible` is false), deletes rows older than 10 minutes, and returns up to 30 other riders on the stage seen in the last 15 s: `md5` of their id, short name, distance, speed, power, cadence and the age of the position in ms. Banned riders are left out. |
+| `leave_ride()` | Signed in | Removes the caller's row. |
+| `short_name(full_name)` | Internal | *First L.*, or *Rider* when empty. |
+| `stage_leaderboard(p_stage, p_since)` | Signed in | Each rider's fastest `finish_s` on the stage (since `p_since` if given), ranked, top 25 plus the caller. Returns rank, activity id, short name, time, average power, date and `is_me`. |
+| `stage_ghost(p_activity)` | Signed in | For a finished whole-stage ride: short name, `finish_s`, the 1 s distance trace (`samples -> 'distance'`) and `is_me`. Nothing else from the ride is returned. |
 
 ## Changing the schema
 

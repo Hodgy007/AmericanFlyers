@@ -11,7 +11,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="preload" as="image" href="/images/hero.jpg" media="(min-width: 769px)" />
     <link rel="preload" as="image" href="/images/hero-768.jpg" media="(max-width: 768px)" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>" />
+    <link rel="icon" href="/icons/favicon-64.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Flyers" />
   </head>
   <body>
     <canvas id="scene" aria-label="Virtual bike ride"></canvas>
@@ -55,6 +60,9 @@
         <button id="btn-hr">Heart rate</button>
         <button id="btn-demo">Demo ride</button>
         <button id="btn-camera" title="Change camera (C)">🎥 Chase view</button>
+        <button id="btn-sound" title="Sound on/off (M)" aria-label="Sound on">🔊</button>
+        <button id="btn-fullscreen" title="Full screen (F)" aria-label="Full screen">⛶</button>
+        <button id="btn-install" title="Install American Flyers as an app" hidden>⬇ Install app</button>
         <button id="btn-reset">Reset</button>
         <button id="btn-settings" aria-label="Settings" title="Settings">⚙</button>
         <button id="btn-feedback" aria-label="Send feedback" title="Ideas & bug reports">💬</button>
@@ -82,6 +90,17 @@
       </div>
       <div class="wp-mode" id="wp-mode"></div>
     </aside>
+
+    <div id="gear-panel" class="gear-panel" hidden>
+      <button id="gear-down" title="Easier gear ( − or [ )" aria-label="Easier gear">−</button>
+      <div class="gear-readout">
+        <span class="gear-label">Gear</span>
+        <strong id="gear-num">12</strong>
+        <span id="gear-bar" class="gear-bar"></span>
+        <span id="gear-ratio" class="gear-ratio"></span>
+      </div>
+      <button id="gear-up" title="Harder gear ( + or ] )" aria-label="Harder gear">+</button>
+    </div>
 
     <div id="demo-panel" class="demo-panel" hidden>
       <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
@@ -140,6 +159,7 @@
         <div class="dialog-head">
           <h2>Workouts</h2>
           <div class="head-actions">
+            <button type="button" id="btn-plans">📅 Training plans</button>
             <label class="file-button">⬆ Upload<input type="file" id="workout-upload" accept=".zwo,.erg,.mrc" multiple /></label>
             <button type="button" id="workout-new" class="primary">＋ Create</button>
           </div>
@@ -196,12 +216,16 @@
           <input name="difficulty" type="range" min="0" max="100" step="5" />
           <span class="hint">How much of the road grade the trainer simulates. 100% feels like the real hill.</span>
         </label>
+        <label class="check"><input name="virtualShifting" type="checkbox" /> Virtual shifting
+          <span class="hint">Choose your gear with the on-screen − / + buttons or the − and + keys. Harder gears make the trainer push back harder, like a real bike. Leave your trainer in one gear.</span>
+        </label>
         <label class="check"><input name="ghost" type="checkbox" /> Race my best ride
           <span class="hint">On a stage you’ve finished, a see-through ghost of your fastest ride rides with you.</span>
         </label>
         <label class="check"><input name="rideTogether" type="checkbox" /> Ride together
           <span class="hint">Show me to other signed-in riders on the same stage, and show them to me.</span>
         </label>
+        <p class="settings-extra"><button type="button" id="btn-setup-guide" class="link">Run the setup guide again</button></p>
         <div class="dialog-actions">
           <button value="cancel" formnovalidate>Cancel</button>
           <button value="save" class="primary">Save</button>
@@ -243,6 +267,72 @@
           <button type="button" role="tab" data-tab="admin" hidden>🛠 Admin</button>
         </div>
         <div id="profile-body" class="profile-body"></div>
+      </form>
+    </dialog>
+
+    <dialog id="plans" class="wide-dialog plans-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Training plans</h2>
+          <button value="cancel" class="icon" aria-label="Close">✕</button>
+        </div>
+        <div id="plans-body"></div>
+      </form>
+    </dialog>
+
+    <dialog id="onboarding" class="onboarding-dialog">
+      <form method="dialog">
+        <div class="ob-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <section class="ob-step">
+          <h2>Welcome, rider!</h2>
+          <p class="muted">Three quick steps and you’re riding. First, a little about you, so speeds and workouts fit you.</p>
+          <label>Units
+            <select name="ob-units">
+              <option value="metric">Metric (kg, km)</option>
+              <option value="imperial">Imperial (mi, mph) · weight still in kg</option>
+            </select>
+          </label>
+          <label>Your weight (kg) <input name="ob-weight" type="number" min="30" max="200" step="0.5" />
+            <span class="hint">Heavier riders go slower uphill and faster downhill, just like outside.</span>
+          </label>
+          <label>FTP (watts) <input name="ob-ftp" type="number" min="50" max="600" step="1" />
+            <span class="hint" id="ob-ftp-note">The power you can hold for about an hour. Workouts are set from it. <button type="button" id="ob-ftp-guess" class="link">I don’t know mine</button></span>
+          </label>
+          <div class="ob-row">
+            <label>Age (optional) <input name="ob-age" type="number" min="10" max="100" step="1" placeholder="e.g. 42" /></label>
+            <label>Max heart rate <input name="ob-maxhr" type="number" min="120" max="230" step="1" /></label>
+          </div>
+          <div class="dialog-actions">
+            <button type="button" id="ob-skip" class="link">Skip setup</button>
+            <button type="button" class="primary" data-ob-next>Next</button>
+          </div>
+        </section>
+        <section class="ob-step" hidden>
+          <h2>Your trainer</h2>
+          <p class="muted">Wake your smart trainer by pedalling a few strokes, then connect. Any Bluetooth FTMS trainer works (Wahoo KICKR, Tacx, Elite, Saris, Zwift Hub and more).</p>
+          <div class="ob-devices">
+            <button type="button" id="ob-trainer" class="primary">🚲 Connect trainer</button>
+            <button type="button" id="ob-hr">❤️ Connect heart rate strap</button>
+          </div>
+          <p id="ob-device-status" class="muted small">No trainer yet? Skip this step: you can try a demo ride.</p>
+          <div class="dialog-actions">
+            <button type="button" data-ob-back>Back</button>
+            <button type="button" class="primary" data-ob-next>Next</button>
+          </div>
+        </section>
+        <section class="ob-step" hidden>
+          <h2>Your first ride</h2>
+          <div class="ob-choices">
+            <button type="button" id="ob-ramp"><strong>📈 Ramp FTP Test</strong><span>20 minutes to measure your FTP, so every workout fits.</span></button>
+            <button type="button" id="ob-hotw"><strong>🏔 Hell of the West</strong><span>The final stage from American Flyers, up to Echo Lake.</span></button>
+            <button type="button" id="ob-plan"><strong>📅 Follow a plan</strong><span>Get Started, FTP Builder, or train for Hell of the West.</span></button>
+            <button type="button" id="ob-free"><strong>🌾 Free ride</strong><span>Endless rolling farmland. Just ride.</span></button>
+            <button type="button" id="ob-demo"><strong>🎮 Demo ride</strong><span>No trainer? Set the power with a slider.</span></button>
+          </div>
+          <div class="dialog-actions">
+            <button type="button" data-ob-back>Back</button>
+          </div>
+        </section>
       </form>
     </dialog>
 
