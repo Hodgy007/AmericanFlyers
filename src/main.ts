@@ -449,7 +449,9 @@ function updateDraftPanel() {
   const inDraft = draftSaving > 0.03;
   panel.classList.toggle('on', inDraft);
   panel.classList.toggle('sweet', draft.gap <= DRAFT_SWEET_SPOT);
-  $('draft-title').textContent = inDraft ? `In ${draft.name}’s draft` : `${draft.name} ahead`;
+  const who = draft.team ?? draft.name;
+  const group = draft.riders > 1 ? ` · ${draft.riders} riders` : '';
+  $('draft-title').textContent = inDraft ? `In ${who}’s draft${group}` : `${who} ahead${group}`;
   $('draft-gap').textContent = gapText;
   $('draft-hint').textContent = inDraft
     ? `−${Math.round(draftSaving * 100)}% drag${watts >= 5 ? ` · saving ~${Math.round(watts)} W` : ''}${draft.gap > DRAFT_SWEET_SPOT ? ` · closer than ${imperial ? '7 ft' : `${DRAFT_SWEET_SPOT} m`} for the most` : ''}`
