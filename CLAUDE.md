@@ -14,3 +14,8 @@ Browser-based 3D indoor cycling app (Vite + TypeScript + Three.js) that connects
 ## Deployment
 
 - Vercel project `americanflyers` (team "hodgy007's projects") builds `main` automatically on every push.
+
+## Backend
+
+- Neon project `americanflyers` (`quiet-morning-27044210`, branch `br-wandering-queen-zaoadzw1`, db `neondb`): Neon Auth (Google + Apple sign-in) and the Data API, called from the browser via `@neon/neon-js` (`src/cloud/`).
+- Every table has row-level security; admin-only data goes through security-definer functions that check `public.is_admin()`. Keep `db/schema.sql` in step with any database change.

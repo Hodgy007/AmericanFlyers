@@ -4,6 +4,7 @@ export interface Settings {
   riderKg: number;
   bikeKg: number;
   ftp: number;
+  maxHr: number; // beats per minute, for heart-rate zones
   units: Units;
   difficulty: number; // 0–100, percentage of road grade sent to the trainer
   dataFields: string[]; // data blocks shown across the top, in order
@@ -15,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   riderKg: 75,
   bikeKg: 8,
   ftp: 200,
+  maxHr: 185,
   units: 'metric',
   difficulty: 50,
   dataFields: ['power', 'cadence', 'speed', 'hr', 'distance', 'time', 'grade', 'climbed'],

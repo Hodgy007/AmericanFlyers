@@ -18,6 +18,32 @@ function load(): StoredRoute[] {
 let routes = load();
 const built = new Map<string, Stage>();
 
+/** Called after local changes so a signed-in rider's account stays in sync. */
+export const routeSync = {
+  saved: (_r: StoredRoute) => {},
+  deleted: (_id: string) => {},
+};
+
+function persist() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(routes));
+    return true;
+  } catch {
+    return false; // too big or storage blocked: still rideable this session
+  }
+}
+
+export function ownRoutes() {
+  return routes;
+}
+
+/** Replaces the local copies with the account's routes (after sign-in). */
+export function setLocalRoutes(list: StoredRoute[]) {
+  routes = list;
+  for (const id of built.keys()) if (!list.some((r) => r.id === id)) built.delete(id);
+  persist();
+}
+
 function stageFor(r: StoredRoute) {
   let s = built.get(r.id);
   if (!s) {
@@ -38,21 +64,14 @@ export function stageById(id: string | null): Stage {
 /** Saves an uploaded route. Returns its stage, and whether it was persisted. */
 export function addRoute(r: StoredRoute): { stage: Stage; saved: boolean } {
   routes = [...routes, r];
-  let saved = true;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(routes));
-  } catch {
-    saved = false; // too big or storage blocked: still rideable this session
-  }
+  const saved = persist();
+  routeSync.saved(r);
   return { stage: stageFor(r), saved };
 }
 
 export function deleteRoute(id: string) {
   routes = routes.filter((r) => r.id !== id);
   built.delete(id);
-  try {
-    localStorage.setItem(KEY, JSON.stringify(routes));
-  } catch {
-    // ignore
-  }
+  persist();
+  routeSync.deleted(id);
 }

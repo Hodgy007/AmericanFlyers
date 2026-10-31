@@ -25,7 +25,16 @@ An indoor cycling app that runs in your browser. Connect a Wahoo smart trainer o
 - **Workout creator**: build workouts from steady, ramp, interval and free-ride blocks with a live preview, TSS estimate and watts at your FTP; save them to your library or export as `.zwo`.
 - **Heart-rate strap** support (optional).
 - **Demo ride** mode for trying it without a trainer: set power with a slider or the ↑/↓ keys.
-- Metric and imperial units. Settings are saved in the browser.
+- Metric and imperial units. Settings are saved in the browser (and in your account when signed in).
+- **Accounts** (👤 button): sign in with Google or Apple. Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
+- **Profile:**
+  - *Stats*: totals, personal bests (5 s, 1, 5 and 20 min power), distance per week, FTP progress, and time in heart-rate and power zones across all rides.
+  - *Achievements*: badges for finishing the stages, distance and climbing milestones, streaks, power targets, ramp tests and FTP gains.
+  - *Rides*: every saved ride with power and heart-rate graphs, zones, best efforts, `.tcx` export (for Strava, TrainingPeaks, Garmin Connect) and delete.
+- **Heart-rate and power zones** after every ride, based on your max HR (5 zones) and FTP (6 zones), both set in ⚙ Settings.
+- **FTP history**: every change (by hand, from a ramp test, or at sign-up) is recorded and charted.
+- **Feedback** (💬 button): riders send ideas and bug reports and see the status and any reply.
+- **Admin dashboard** (🛠, admins only): registered and active riders, rides, hours, distance, signups and rides per day, top stages and workouts, the rider list with ban/unban, and the feedback inbox (status, replies, delete). Admin access is checked in the database.
 
 ## Browser support
 
@@ -54,7 +63,16 @@ To pick a stage or start partway along it, add `?stage=` and `?start=` (km), e.g
 
 ## Deploy
 
-Pushing to `main` builds the app and deploys it to GitHub Pages through `.github/workflows/deploy.yml`. Turn this on once under **Settings → Pages → Build and deployment → Source: GitHub Actions**. (Pages on a private repo needs a paid GitHub plan.)
+Vercel (project `americanflyers`) builds and deploys `main` on every push.
+
+## Backend (Neon)
+
+Accounts and data live in Neon (project `americanflyers`, eu-west-2):
+
+- **Neon Auth** handles sign-in with Google and Apple. Add each site URL under *Auth → Trusted domains*. Apple needs your own Apple Developer credentials (Services ID, Team ID, Key ID and the `.p8` key) under *Auth → OAuth providers*, with the return URL `…/neondb/auth/callback/apple`.
+- The **Data API** lets the browser read and write the tables directly; row-level security limits each rider to their own rows, and admin functions check `public.is_admin()`.
+- The schema is in `db/schema.sql`. Admins are listed in `public.admins` (by email).
+- The endpoints default to the production project; override with `VITE_NEON_AUTH_URL` and `VITE_NEON_DATA_API_URL`.
 
 ## Project layout
 
@@ -63,7 +81,10 @@ src/
   ble/trainer.ts     FTMS + Cycling Power connection, packet parsing, grade control
   ble/heartRate.ts   Heart-rate strap
   physics.ts         Power → speed model
-  stats.ts           Ride statistics (averages, normalized power, TSS, best minute)
+  stats.ts           Ride statistics (averages, normalized power, TSS, best efforts, zones)
+  zones.ts           Heart-rate and power zones, zone breakdown bars
+  cloud/             Neon client, sign-in, sync, ride recorder + .tcx export, achievements,
+                     charts, and the profile / feedback / admin UI
   hud.ts             Data blocks and the data-block chooser
   workouts/          Workout model, built-ins, .zwo/.erg/.mrc import + .zwo export,
                      library (browser storage), player, graph, library + creator UI
