@@ -14,6 +14,7 @@ This page lists every setting, its default and range, and what it changes. Open 
 | Trainer difficulty (%) | 50 | 0 to 100, step 5 | How much of the road's grade the trainer simulates. 100% feels like the real hill. 0% means no grade resistance. |
 | Virtual shifting | Off | On or off | Choose your own gear with − / + (see [Sound and virtual shifting](sound-and-shifting.md)). |
 | Race my best ride | On | On or off | On a stage you've finished, a ghost of your fastest ride rides with you. See [Leaderboards and ghosts](leaderboards-and-ghosts.md). |
+| Pro teams on the road | On | On or off | Computer-ridden teams riding the stage at different paces. See [Riding together](riding-together.md#pro-teams). |
 | Ride together | On | On or off | Show you to other signed-in riders on the same stage, and them to you. See [Riding together](riding-together.md). |
 
 Changing **FTP** in Settings adds an entry to your FTP history when you're signed in. See [Zones and FTP](zones-and-ftp.md).

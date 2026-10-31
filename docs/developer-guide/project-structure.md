@@ -39,6 +39,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `main.ts` | Entry point. Owns the ride state, runs the frame loop, controls the trainer, handles the top bar, ☰ menu and dialogs, saves rides, and wires up sign-in, riding together, ghosts, plans, sound, virtual shifting and drafting. |
 | `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up, and *Ride without an account*. |
 | `drivetrain.ts` | The virtual drivetrain: automatic gears that keep leg speed in step with road speed, the 24 virtual-shifting gears, crank angle and bike rock. |
+| `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish. |
 | `draft.ts` | Drafting: the drag saved at a given gap behind another rider, and the rider just ahead. |
 | `ghost.ts` | Replays a past whole-stage ride as a ghost, and formats race times. |
 | `sound.ts` | Ride sounds made with Web Audio: wind, tyre hum, freewheel, crowds, beeps, shift clicks and the finish fanfare. |

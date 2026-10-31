@@ -9,10 +9,13 @@ const KM_PER_MI = 1.609344;
 interface Options {
   presence: Presence;
   me: () => { distance: number; stageName: string; imperial: boolean; enabled: boolean };
-  rideWith: (distance: number, name: string) => void;
+  rideWith: (distance: number, name: string, speedMs?: number) => void;
   openSignIn: (why: string) => void;
   openSettings: () => void;
   toast: (msg: string, ms?: number) => void;
+  /** Computer-ridden pro teams on the road (empty when switched off). */
+  teams: () => { id: string; name: string; color: string; wkg: number; riders: number; distance: number; back: number; speedMs: number }[];
+  riderKg: () => number;
 }
 
 function gapText(gap: number, imperial: boolean) {
@@ -52,14 +55,48 @@ export function initRidersUi(o: Options) {
     if (dialog.open) render();
   };
 
+  /**
+   * Rows are kept between refreshes (keyed by id) and only their text changes,
+   * so a button doesn't vanish under the pointer as the list updates.
+   */
+  type RowInfo = { name: string; gap: string; stats: string; button?: { label: string; title: string; onClick: () => void }; color?: string };
+  function syncRows(container: HTMLElement, items: [string, RowInfo][], className: string) {
+    const keep = new Set(items.map(([id]) => id));
+    for (const el of [...container.children] as HTMLElement[]) if (!keep.has(el.dataset.id!)) el.remove();
+    items.forEach(([id, info], i) => {
+      let row = container.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
+      if (!row) {
+        row = document.createElement('li');
+        row.className = className;
+        row.dataset.id = id;
+        row.innerHTML = '<span class="rider-dot"></span><span class="rider-name"></span><span class="rider-gap"></span><span class="rider-stats"></span>';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.addEventListener('click', () => (row as HTMLElement & { act?: () => void }).act?.());
+        row.append(b);
+      }
+      if (info.color) row.style.setProperty('--team', info.color);
+      row.querySelector('.rider-name')!.textContent = info.name;
+      row.querySelector('.rider-gap')!.textContent = info.gap;
+      row.querySelector('.rider-stats')!.textContent = info.stats;
+      const b = row.querySelector('button')!;
+      b.hidden = !info.button;
+      if (info.button) { b.textContent = info.button.label; b.title = info.button.title; }
+      (row as HTMLElement & { act?: () => void }).act = info.button?.onClick;
+      if (container.children[i] !== row) container.insertBefore(row, container.children[i] ?? null);
+    });
+  }
+
   function render() {
     const me = o.me();
-    list.replaceChildren();
+    renderTeams(me);
     if (!account()) {
-      note.textContent = 'Sign in (free) to see and ride with everyone on the same stage.';
+      list.replaceChildren();
+      note.textContent = 'Sign in (free) to see and ride with real riders on the same stage too.';
       return;
     }
     if (!me.enabled) {
+      list.replaceChildren();
       note.textContent = 'Riding together is switched off in Settings, so nobody sees you and you don’t see them.';
       return;
     }
@@ -67,35 +104,49 @@ export function initRidersUi(o: Options) {
     note.textContent = riders.length
       ? `Everyone signed in and riding ${me.stageName} right now. They see you too.`
       : `Nobody else is riding ${me.stageName} right now. Share the link and ride together: anyone on this stage appears on the road with you.`;
-    for (const r of riders) {
-      const row = document.createElement('li');
-      row.className = 'rider-row';
+    syncRows(list, riders.map((r) => {
       const gap = r.distance - me.distance;
       const kmh = r.speedMs * 3.6;
-      row.innerHTML = '<span class="rider-dot"></span><span class="rider-name"></span><span class="rider-gap"></span><span class="rider-stats"></span>';
-      row.querySelector('.rider-name')!.textContent = r.name;
-      row.querySelector('.rider-gap')!.textContent = gapText(gap, me.imperial);
-      row.querySelector('.rider-stats')!.textContent =
-        `${Math.round(r.power)} W · ${(me.imperial ? kmh / KM_PER_MI : kmh).toFixed(1)} ${me.imperial ? 'mph' : 'km/h'}`;
-      if (Math.abs(gap) >= 15) {
-        const join = document.createElement('button');
-        join.textContent = 'Ride with';
-        join.title = `Start a new ride next to ${r.name}`;
-        join.addEventListener('click', () => {
-          dialog.close();
-          o.rideWith(r.distance, r.name);
-        });
-        row.append(join);
-      }
-      list.append(row);
-    }
+      return [r.id, {
+        name: r.name,
+        gap: gapText(gap, me.imperial),
+        stats: `${Math.round(r.power)} W · ${(me.imperial ? kmh / KM_PER_MI : kmh).toFixed(1)} ${me.imperial ? 'mph' : 'km/h'}`,
+        button: Math.abs(gap) >= 15 ? {
+          label: 'Ride with',
+          title: `Start a new ride next to ${r.name}`,
+          onClick: () => { dialog.close(); o.rideWith(r.distance, r.name); },
+        } : undefined,
+      }];
+    }), 'rider-row');
+  }
+
+  /** The pro teams, with their pace in watts for you, and a Join button. */
+  function renderTeams(me: ReturnType<Options['me']>) {
+    const teamsEl = document.getElementById('riders-teams')!;
+    const teams = o.teams().sort((a, b) => b.distance - a.distance);
+    (document.getElementById('riders-teams-head') as HTMLElement).hidden = !teams.length;
+    syncRows(teamsEl, teams.map((t) => {
+      const kmh = t.speedMs * 3.6;
+      const watts = Math.round(t.wkg * o.riderKg());
+      return [t.id, {
+        name: t.name,
+        color: t.color,
+        gap: gapText(t.distance - me.distance, me.imperial),
+        stats: `${t.riders} riders · ${t.wkg.toFixed(1)} W/kg (≈${watts} W for you) · ${(me.imperial ? kmh / KM_PER_MI : kmh).toFixed(1)} ${me.imperial ? 'mph' : 'km/h'}`,
+        button: {
+          label: 'Join',
+          title: `Start a new ride on the back of ${t.name}`,
+          onClick: () => {
+            const now = o.teams().find((x) => x.id === t.id) ?? t; // where they are at the moment of the click
+            dialog.close();
+            o.rideWith(now.back, now.name, now.speedMs);
+          },
+        },
+      }];
+    }), 'rider-row team-row');
   }
 
   btn.addEventListener('click', () => {
-    if (!account()) {
-      o.openSignIn('Sign in (free) to ride with other riders. Anyone on the same stage appears on the road with you.');
-      return;
-    }
     render();
     dialog.showModal();
     clearInterval(refresh);

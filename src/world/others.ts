@@ -15,12 +15,19 @@ export interface OtherRider {
   power: number;
   cadence: number;
   ghost?: boolean;
+  /** Computer-ridden pro team riders: their team, kit colours and lane. */
+  team?: string;
+  /** Name tag text, if different from `name` ('' for no tag). */
+  tag?: string;
+  jersey?: string;
+  frame?: string;
+  lane?: number;
 }
 
 const PLAYER_LANE = 1.9; // keep in step with RIDER_LANE_OFFSET in world.ts
 const SHOW_BEHIND = 300;
 const SHOW_AHEAD = 900;
-const MAX_SHOWN = 12;
+const MAX_SHOWN = 24;
 const FRAMES = ['#1f3c88', '#0f7b5f', '#c2410c', '#6d28d9', '#0e7490', '#b91c1c', '#ca8a04', '#334155'];
 const JERSEYS = ['#2563eb', '#16a34a', '#f97316', '#9333ea', '#0891b2', '#dc2626', '#eab308', '#475569'];
 
@@ -30,7 +37,7 @@ function hash(s: string) {
   return h >>> 0;
 }
 
-function label(text: string, ghost: boolean) {
+function label(text: string, ghost: boolean, accent?: string) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   const font = '600 40px Inter, system-ui, sans-serif';
@@ -43,6 +50,13 @@ function label(text: string, ghost: boolean) {
   ctx.beginPath();
   ctx.roundRect(2, 2, w - 4, 60, 30);
   ctx.fill();
+  if (accent) {
+    // A stripe of team colour down the left of the tag.
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(2, 2, 14, 60, [30, 0, 0, 30]);
+    ctx.fill();
+  }
   ctx.fillStyle = ghost ? '#cfe0ff' : '#ffffff';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 22, 34);
@@ -87,10 +101,16 @@ export class OtherRiders {
       let s = this.shown.get(o.id);
       if (!s) {
         const h = hash(o.id);
-        const model = new RiderModel(o.ghost ? { ghost: true } : { frame: FRAMES[h % FRAMES.length], jersey: JERSEYS[(h >>> 3) % JERSEYS.length] });
-        const tag = label(o.name, !!o.ghost);
-        model.group.add(tag);
-        const lane = o.ghost ? PLAYER_LANE - 1.1 : 0.9 + ((h >>> 6) % 5) * 0.6;
+        const model = new RiderModel(o.ghost ? { ghost: true } : {
+          frame: o.frame ?? FRAMES[h % FRAMES.length],
+          jersey: o.jersey ?? JERSEYS[(h >>> 3) % JERSEYS.length],
+          kit: o.jersey && o.frame ? [o.jersey, o.frame] : undefined,
+        });
+        const text = o.tag ?? o.name;
+        const tag = label(text || ' ', !!o.ghost, o.jersey);
+        tag.visible = !!text;
+        if (text) model.group.add(tag);
+        const lane = o.lane ?? (o.ghost ? PLAYER_LANE - 1.1 : 0.9 + ((h >>> 6) % 5) * 0.6);
         s = { model, drivetrain: new Drivetrain(), tag, distance: o.distance, lane, lateral: lane, seen: now };
         this.shown.set(o.id, s);
         this.group.add(model.group);
@@ -108,7 +128,7 @@ export class OtherRiders {
       let target = s.lane;
       if (!o.ghost && Math.abs(gap) < 2.6 && Math.abs(s.lane - PLAYER_LANE) < 0.9) {
         target = s.lane < PLAYER_LANE ? PLAYER_LANE - 1 : PLAYER_LANE + 1;
-      } else if (!o.ghost && gap >= 2.6 && gap < 14) {
+      } else if (!o.ghost && !o.team && gap >= 2.6 && gap < 14) {
         target = PLAYER_LANE; // you're on their wheel: line up in front of you, as in a paceline
       }
       s.lateral += (target - s.lateral) * (1 - Math.exp(-dt / 0.6));
@@ -126,7 +146,7 @@ export class OtherRiders {
       if (Math.abs(gap) < 220) s.model.poseRider();
       // Name tags: hidden right by the camera and far up the road.
       const fromCam = g.position.distanceTo(camera.position);
-      s.tag.visible = fromCam > 3.5 && fromCam < 260;
+      s.tag.visible = !!(o.tag ?? o.name) && fromCam > 3.5 && fromCam < 260;
     }
 
     // Drop riders who've left, gone out of range, or haven't been heard from.

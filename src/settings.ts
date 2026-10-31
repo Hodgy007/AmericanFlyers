@@ -16,6 +16,7 @@ export interface Settings {
   virtualShifting: boolean; // choose your gear; the trainer's resistance follows it
   plan: PlanProgress | null; // the training plan being followed
   hudPosition: 'left' | 'center' | 'right'; // where the data blocks sit
+  proTeams: boolean; // computer-ridden pro teams on the road
 }
 
 const KEY = 'americanflyers.settings';
@@ -34,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   virtualShifting: false,
   plan: null,
   hudPosition: 'center',
+  proTeams: true,
 };
 
 export function loadSettings(): Settings {

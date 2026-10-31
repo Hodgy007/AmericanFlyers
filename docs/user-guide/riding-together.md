@@ -27,13 +27,23 @@ When someone joins your stage, a message says so.
 2. Open the same stage. Send the link from **Copy link to this stage**.
 3. Start pedalling. If you're far apart on the road, open 👥 and press **Ride with** next to your friend's name.
 
+## Pro teams
+
+Five computer-ridden pro teams ride every stage with you, signed in or not. Each rides two by two in its own kit at a steady pace: 2.0, 2.6, 3.1, 3.6 and 4.2 W/kg, slowing on the climbs and flying down the descents like you do. The front rider's tag shows the team and its pace.
+
+The team names are affectionate near-misses of the real ones (*Plasma | Lease-a-Trike*, *INEPTOS Grenadines*, *Scandal Quick-Slip*, *UAE Team Emigrates* and more). The riders are made up.
+
+Open 👥 to see them under **Pro teams on the road**: how far ahead or behind each one is, its pace in watts for your weight, and its speed. **Join** starts a new ride on the back of the group, rolling at their speed, so you're straight into their draft. Hold their watts (a little less, thanks to the draft) and you'll stay with them.
+
+On a stage with a finish, teams that cross the line start the stage again. Switch them off with **Pro teams on the road** in ⚙ Settings.
+
 ## Drafting
 
 Ride close behind another rider and you're in their slipstream: you need fewer watts for the same speed, just like outside.
 
 - About a third less air drag right on their wheel, about a quarter at 2–3 m, fading to nothing by 12 m.
 - With a smart trainer, the trainer gets lighter too.
-- Ghosts don't make a draft; only real riders do.
+- Ghosts don't make a draft; real riders and the pro teams do.
 - On a steep climb you're slow, so drag (and the draft) matters much less than on the flat.
 
 ### The draft gauge
