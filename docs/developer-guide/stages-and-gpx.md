@@ -65,7 +65,7 @@ How it works:
 ### Published figures and the approximation
 
 - **Alpe d'Huez.** The per-kilometer gradients come from swi-cycling.com. The base is 723 m, and the 1,118 m gain puts the summit at 1,841 m.
-- **Stelvio Pass.** No per-kilometer source was found, so the shape is an approximation: an easier valley start, then 8 to 9%, with the hairpins bunched toward the top. The base is 915 m, and the gain is 1,824 m. The tagline gives the summit as 2,758 m. Base plus gain is 2,739 m, so the tagline and the stage data don't quite agree.
+- **Stelvio Pass.** No per-kilometer source was found, so the shape is an approximation: an easier valley start, then 8 to 9%, with the hairpins bunched toward the top. The base is 915 m and the gain is 1,843 m, so the summit is at 2,758 m.
 
 ## Routes from GPX
 

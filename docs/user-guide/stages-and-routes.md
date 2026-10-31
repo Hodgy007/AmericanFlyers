@@ -15,7 +15,7 @@ Choosing a stage resets the ride. If your current ride is at least a minute long
 | **Heartland Rollers** | Endless | Rolling farmland with no finish line. A free ride. Farm buildings, a covered bridge and a start arch line the road. |
 | **Route 66 Flats** | 25 km | A time-trial along a flat, fast stretch of highway past diners and gas stations. Finishes at a checkered line under an arch. |
 | **Alpe d'Huez** | 14 km | Climbs from Le Bourg-d'Oisans (723 m) up 1,118 m of gain, at an average of about 8%. It has 21 numbered hairpins, marked with **Virage** plaques. The gradients follow published per-kilometer figures from swi-cycling.com. |
-| **Stelvio Pass** | 24.5 km | Climbs from Prato allo Stelvio (about 915 m) at an average of 7.5%, through 48 numbered hairpins marked **Tornante**. The tagline gives the summit as 2,758 m. The per-kilometer shape is an approximation, because no per-kilometer source was found. |
+| **Stelvio Pass** | 24.5 km | Climbs from Prato allo Stelvio (about 915 m) at an average of 7.5%, through 48 numbered hairpins marked **Tornante**. The summit is at 2,758 m. The per-kilometer shape is an approximation, because no per-kilometer source was found. |
 
 On Alpe d'Huez and Stelvio Pass the elevation readout shows real altitude. Hairpins count down from the bottom: the first you reach is the highest number.
 

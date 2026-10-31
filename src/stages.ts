@@ -346,7 +346,7 @@ const alpe = buildClimb({
   },
 });
 
-// From Prato allo Stelvio (~915 m) to the pass (2758 m): 24.5 km, ~1824 m,
+// From Prato allo Stelvio (~915 m) to the pass (2758 m): 24.5 km, 1843 m,
 // 7.5% average, max ~9.5% (mycols.app, climbfinder.com). No per-kilometre
 // source was found, so the shape is approximated: an easier valley start past
 // Gomagoi and Trafoi, then a steady 8–9% up the 48 numbered hairpins, which
@@ -357,7 +357,7 @@ const stelvio = buildClimb({
   tagline: '24.5 km at 7.5% from Prato to 2758 m, through 48 numbered hairpins.',
   kmGrades: [4.5, 5.0, 5.5, 6.0, 6.0, 6.5, 6.5, 7.0, 7.5, 8.0, 8.0, 8.5, 8.5, 8.0, 8.5, 8.5, 9.0, 8.5, 8.5, 8.0, 8.5, 8.5, 8.0, 8.0, 7.5],
   length: 24500,
-  gain: 1824,
+  gain: 1843, // 915 m + 1843 m = 2758 m at the pass
   hairpins: 48,
   firstHairpin: 8600,
   lastHairpin: 24150,
