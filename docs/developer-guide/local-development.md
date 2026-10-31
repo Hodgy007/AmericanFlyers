@@ -4,7 +4,7 @@ This page covers installing dependencies, running the dev server, building, runn
 
 ## Requirements
 
-- **Node.js.** The repository doesn't pin a version. The GitHub Pages workflow uses Node 22, so use that or newer.
+- **Node.js.** The repository doesn't pin a version; use a current LTS release (Node 22 or newer).
 - **npm.** The repository has a `package-lock.json`, so install with `npm`.
 - **Chrome or Edge** for trainer work. Other browsers can run the demo ride.
 
@@ -77,7 +77,7 @@ The URL parameters are described in [Keyboard and URL parameters](../reference/k
 
 ## Working on the 3D scene
 
-The scene's assets load from `public/`. The app uses `import.meta.env.BASE_URL` to find them, so the same code works under the GitHub Pages sub-path. If you add a model, follow [3D world](3d-world.md#adding-a-model).
+The scene's assets load from `public/`. The app uses `import.meta.env.BASE_URL` to find them, so the same code works if the app is ever served from a sub-path. If you add a model, follow [3D world](3d-world.md#adding-a-model).
 
 ## Editor and checks
 

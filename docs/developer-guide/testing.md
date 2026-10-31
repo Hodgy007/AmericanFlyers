@@ -7,7 +7,7 @@ This page covers what the repository checks automatically (the type check and th
 The repository has no test suite. `package.json` has no test script, and there are no test files. The automated checks are:
 
 - **`npm run build`.** This runs `tsc --noEmit` on everything under `src/`, with strict mode, unused-variable checks and the Web Bluetooth types, and then `vite build`. A build that passes has no type errors and bundles every module.
-- **The deploy workflow.** `.github/workflows/deploy.yml` runs `npm ci` and `npm run build` on every push to `main`, before publishing.
+- **The Vercel build.** Vercel runs `npm run build` for every push, so a branch that doesn't build won't deploy.
 
 Run the build before every commit:
 
