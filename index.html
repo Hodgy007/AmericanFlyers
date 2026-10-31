@@ -13,6 +13,7 @@
     <header class="topbar">
       <div class="brand"><span class="star">★</span> American Flyers</div>
       <nav class="actions">
+        <button id="btn-stage" title="Choose a stage">🏁 Stage</button>
         <button id="btn-trainer" class="primary">Connect trainer</button>
         <button id="btn-hr">Heart rate</button>
         <button id="btn-demo">Demo ride</button>
@@ -44,11 +45,34 @@
     </div>
 
     <footer class="bottom">
-      <div class="status"><span id="trainer-dot" class="dot"></span><span id="trainer-status">No trainer connected</span></div>
+      <div class="status">
+        <span id="trainer-dot" class="dot"></span><span id="trainer-status">No trainer connected</span>
+        <span id="stage-name" class="stage-name"></span>
+      </div>
       <canvas id="profile" aria-label="Elevation profile ahead"></canvas>
     </footer>
 
     <div id="toast" class="toast" role="status"></div>
+
+    <dialog id="stages" class="stages-dialog">
+      <form method="dialog">
+        <h2>Choose a stage</h2>
+        <div id="stage-list" class="stage-list"></div>
+        <div class="dialog-actions"><button value="cancel">Close</button></div>
+      </form>
+    </dialog>
+
+    <div id="finish" class="finish" hidden>
+      <div class="finish-card">
+        <div class="finish-flag">🏁</div>
+        <h2 id="finish-title">Finished!</h2>
+        <div id="finish-stats" class="finish-stats"></div>
+        <div class="dialog-actions">
+          <button id="finish-close">Keep riding</button>
+          <button id="finish-again" class="primary">Ride it again</button>
+        </div>
+      </div>
+    </div>
 
     <dialog id="settings">
       <form method="dialog">

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ensureRoad, roadPoint, gradeAt } from '../course';
+import { currentStage, ensureRoad, roadPoint, gradeAt } from '../course';
 import { Landmarks } from './landmarks';
 import { RiderModel } from './rider';
 import { Road, type MarkerConfig } from './road';
@@ -24,7 +24,7 @@ export class World {
   private readonly rider = new RiderModel();
   private readonly terrain: Terrain;
   private readonly road: Road;
-  private readonly sky = new Sky();
+  private readonly sky = new Sky(currentStage().scenery.mountainScale);
   private readonly landmarks = new Landmarks();
   private mode: CameraMode = 'chase';
   private readonly camTarget = new THREE.Vector3();
@@ -65,7 +65,7 @@ export class World {
 
   cycleCamera(): CameraMode {
     this.mode = CAMERA_MODES[(CAMERA_MODES.indexOf(this.mode) + 1) % CAMERA_MODES.length];
-    this.rider.person.visible = this.mode !== 'rider';
+    this.rider.setPersonVisible(this.mode !== 'rider');
     this.firstFrame = true;
     return this.mode;
   }
@@ -78,6 +78,15 @@ export class World {
 
   setMarkers(markers: MarkerConfig) {
     this.road.setMarkers(markers);
+  }
+
+  /** Rebuilds the world for the current stage (call after course.setStage). */
+  restage(markers: MarkerConfig) {
+    this.terrain.clear();
+    this.landmarks.clear();
+    this.road.setMarkers(markers);
+    this.sky.setMountainScale(currentStage().scenery.mountainScale);
+    this.jumped();
   }
 
   private resize() {
@@ -102,6 +111,8 @@ export class World {
     this.rider.group.rotation.y = -p.heading;
     this.rider.body.rotation.z = Math.atan(gradeAt(state.distance));
     this.rider.update(state.distance, state.crankAngle);
+    this.rider.group.updateMatrixWorld(true);
+    this.rider.poseRider();
 
     // Build everything in view on the first frame, then a couple of tiles per frame.
     this.terrain.update(riderPos.x, riderPos.z, this.terrainReady ? 2 : Infinity);

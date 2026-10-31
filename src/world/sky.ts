@@ -10,13 +10,25 @@ export class Sky {
   readonly group = new THREE.Group();
   private readonly clouds = new THREE.Group();
 
-  constructor() {
-    this.group.add(this.dome(), this.mountains(), this.clouds);
+  private ring: THREE.Mesh;
+
+  constructor(mountainScale = 1) {
+    this.ring = this.mountains(mountainScale);
+    this.group.add(this.dome(), this.ring, this.clouds);
     this.buildClouds();
   }
 
+  /** Rebuilds the distant mountain ring at a new height scale (per stage). */
+  setMountainScale(scale: number) {
+    this.group.remove(this.ring);
+    this.ring.geometry.dispose();
+    this.ring = this.mountains(scale);
+    this.group.add(this.ring);
+  }
+
   update(camera: THREE.Camera, dt: number) {
-    this.group.position.set(camera.position.x, 0, camera.position.z);
+    // Follow the camera, including most of its climb, so the horizon stays put.
+    this.group.position.set(camera.position.x, camera.position.y - 60, camera.position.z);
     this.clouds.rotation.y += dt * 0.002;
   }
 
@@ -58,7 +70,7 @@ export class Sky {
   }
 
   /** A jagged ring of far-off mountains, tinted towards the haze colour. */
-  private mountains() {
+  private mountains(scale: number) {
     const segs = 160;
     const radius = 3600;
     const pos: number[] = [];
@@ -70,13 +82,13 @@ export class Sky {
       const a = (i / segs) * Math.PI * 2;
       // Sample noise around a circle so the ring joins up seamlessly.
       const n = fbm(Math.cos(a) * 3 + 10, Math.sin(a) * 3, 4);
-      const h = 220 + n * 420 + Math.abs(fbm(Math.cos(a) * 25 + 5, Math.sin(a) * 25, 2)) * 160;
+      const h = (220 + n * 420 + Math.abs(fbm(Math.cos(a) * 25 + 5, Math.sin(a) * 25, 2)) * 160) * scale;
       const x = Math.cos(a) * radius;
       const z = Math.sin(a) * radius;
       // Three vertices per column so snow only caps the top of each peak.
       pos.push(x, -80, z, x, h * 0.72, z, x, h, z);
       col.push(base.r, base.g, base.b, base.r, base.g, base.b);
-      c.copy(base).lerp(peak, Math.min(1, Math.max(0, (h - 380) / 260)));
+      c.copy(base).lerp(peak, Math.min(1, Math.max(0, (h / scale - 380) / 260)));
       col.push(c.r, c.g, c.b);
     }
     const index: number[] = [];

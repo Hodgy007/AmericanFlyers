@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Bike and rider built from primitives. Local frame: +x forward, +y up,
 // +z to the rider's right (the drive side). Units are metres; the origin is
@@ -100,12 +101,33 @@ export class RiderModel {
   private readonly bb = v(0, 0.27);
   private readonly legs: { side: number; thigh: Segment; shin: Segment; sock: Segment; shoe: Segment; knee: THREE.Mesh; crank: Segment; pedal: THREE.Mesh }[] = [];
   private readonly tmp = { knee: v(0, 0), ankle: v(0, 0), pedal: v(0, 0), toe: v(0, 0), sock: v(0, 0), crankEnd: v(0, 0), crankStart: v(0, 0) };
+  private readonly pedals = new Map<number, THREE.Vector3>([[-1, v(0, 0)], [1, v(0, 0)]]);
+  private rig: Rig | null = null;
+  private personVisible = true;
 
   constructor() {
     this.group.add(this.body);
     this.body.add(this.person);
     this.buildBike();
     this.buildRider();
+    // Swap in the rigged 3D rider when it loads; the primitive rider stays as a fallback.
+    new GLTFLoader().load(
+      `${import.meta.env.BASE_URL}models/rider.glb`,
+      (gltf) => {
+        this.rig = new Rig(gltf.scene);
+        this.body.add(this.rig.root);
+        this.setPersonVisible(this.personVisible);
+      },
+      undefined,
+      () => console.info('Rider model not found: models/rider.glb (using the built-in rider)'),
+    );
+  }
+
+  /** Shows or hides the rider (hidden in the rider's-eye camera). */
+  setPersonVisible(visible: boolean) {
+    this.personVisible = visible;
+    this.person.visible = visible && !this.rig;
+    if (this.rig) this.rig.root.visible = visible;
   }
 
   /** `crankAngle` decreases as the rider pedals forward; `distance` spins the wheels. */
@@ -123,6 +145,8 @@ export class RiderModel {
       t.crankEnd.set(t.pedal.x, t.pedal.y, 0.08 * leg.side);
       leg.crank.set(t.crankStart, t.crankEnd);
       leg.pedal.position.copy(t.pedal);
+      this.pedals.get(leg.side)!.copy(t.pedal);
+      if (this.rig) continue;
 
       t.ankle.set(t.pedal.x - 0.04, t.pedal.y + 0.06, t.pedal.z);
       const h = hip(leg.side);
@@ -135,6 +159,11 @@ export class RiderModel {
       t.toe.set(t.pedal.x + 0.1, t.pedal.y + 0.025, t.pedal.z);
       leg.shoe.set(t.ankle, t.toe);
     }
+  }
+
+  /** Poses the rigged rider (after `update`, once the bike is placed in the world). */
+  poseRider() {
+    if (this.rig?.root.visible) this.rig.pose(this.body, this.pedals);
   }
 
   private buildBike() {
@@ -248,4 +277,122 @@ export class RiderModel {
     glasses.position.copy(head).add(v(0.085, 0.0));
     p.add(helmet, stripe, glasses);
   }
+}
+
+// ----------------------------------------------------------- rigged rider ----
+
+// Targets in the bike's frame (+x forward, +y up, +z right).
+const RIDER_SCALE = 1.06; // fits the model's 0.80 m legs to this bike
+const HIP_CENTRE = v(-0.17, 0.93); // midpoint between the hip joints, just above the saddle
+const NECK = v(0.26, 1.2); // base of the neck: sets the riding lean
+const HAND = (side: number) => v(0.6, 0.865, 0.2 * side); // on the brake hoods
+const HEAD_UP = v(0.42, 0.91).normalize(); // head tilted up to look along the road
+const ELBOW_POLE = (side: number) => v(-0.2, -1, 0.5 * side); // elbows bend down and out
+const KNEE_POLE = (side: number) => v(1, 0.15, 0.12 * side); // knees point forward
+
+/**
+ * A skinned humanoid (Hips / Spine02 / Spine01 / Spine / neck / Head,
+ * Left|Right Arm / ForeArm / Hand, Left|Right UpLeg / Leg / Foot / ToeBase)
+ * posed by aiming bones at targets, starting from the bind pose each frame.
+ */
+class Rig {
+  readonly root = new THREE.Group();
+  private readonly bones = new Map<string, THREE.Object3D>();
+  private readonly rest = new Map<THREE.Object3D, THREE.Quaternion>();
+  private readonly len = new Map<string, number>();
+  private readonly wq = new THREE.Quaternion();
+  private readonly pq = new THREE.Quaternion();
+
+  constructor(scene: THREE.Object3D) {
+    const holder = new THREE.Group();
+    holder.rotation.y = Math.PI / 2; // model faces +z; the bike faces +x
+    holder.scale.setScalar(RIDER_SCALE);
+    holder.add(scene);
+    this.root.add(holder);
+    scene.traverse((o) => {
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) {
+        o.frustumCulled = false; // bounds are from the bind pose
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+      if ((o as THREE.Bone).isBone) {
+        this.bones.set(o.name, o);
+        this.rest.set(o, o.quaternion.clone());
+      }
+    });
+
+    // Measure limbs and seat the hips over the saddle.
+    this.root.updateMatrixWorld(true);
+    const at = (name: string) => this.bone(name).getWorldPosition(new THREE.Vector3());
+    for (const s of ['Left', 'Right']) {
+      this.len.set(`${s}Thigh`, at(`${s}UpLeg`).distanceTo(at(`${s}Leg`)));
+      this.len.set(`${s}Shin`, at(`${s}Leg`).distanceTo(at(`${s}Foot`)));
+      this.len.set(`${s}Upper`, at(`${s}Arm`).distanceTo(at(`${s}ForeArm`)));
+      this.len.set(`${s}Fore`, at(`${s}ForeArm`).distanceTo(at(`${s}Hand`)));
+    }
+    const hips = at('LeftUpLeg').add(at('RightUpLeg')).multiplyScalar(0.5);
+    this.root.position.copy(HIP_CENTRE).sub(hips);
+  }
+
+  private bone(name: string) {
+    const b = this.bones.get(name);
+    if (!b) throw new Error(`rider.glb has no bone named ${name}`);
+    return b;
+  }
+
+  pose(body: THREE.Object3D, pedals: Map<number, THREE.Vector3>) {
+    for (const [b, q] of this.rest) b.quaternion.copy(q);
+    this.root.updateMatrixWorld(true);
+    const world = (p: THREE.Vector3) => body.localToWorld(p.clone());
+    const dir = (p: THREE.Vector3) => p.clone().normalize().applyQuaternion(body.getWorldQuaternion(this.wq));
+    const pos = (name: string) => this.bone(name).getWorldPosition(new THREE.Vector3());
+
+    // Lean the back over three joints so it curves instead of hinging.
+    const neck = world(NECK);
+    this.aim('Spine02', 'neck', neck, 1 / 3);
+    this.aim('Spine01', 'neck', neck, 1 / 2);
+    this.aim('Spine', 'neck', neck, 1);
+    const head = pos('Head');
+    this.aim('Head', 'head_end', head.add(dir(HEAD_UP).multiplyScalar(0.2)));
+
+    for (const [side, s] of [[-1, 'Left'], [1, 'Right']] as const) {
+      // Arms to the hoods.
+      const hand = world(HAND(side));
+      const elbow = ik3(pos(`${s}Arm`), hand, this.len.get(`${s}Upper`)!, this.len.get(`${s}Fore`)!, dir(ELBOW_POLE(side)));
+      this.aim(`${s}Arm`, `${s}ForeArm`, elbow);
+      this.aim(`${s}ForeArm`, `${s}Hand`, hand);
+
+      // Legs to the pedals: ball of the foot on the pedal, ankle above and behind.
+      const pedal = pedals.get(side)!;
+      const ankle = world(v(pedal.x - 0.075, pedal.y + 0.075, pedal.z));
+      const toe = world(v(pedal.x + 0.035, pedal.y + 0.02, pedal.z));
+      const knee = ik3(pos(`${s}UpLeg`), ankle, this.len.get(`${s}Thigh`)!, this.len.get(`${s}Shin`)!, dir(KNEE_POLE(side)));
+      this.aim(`${s}UpLeg`, `${s}Leg`, knee);
+      this.aim(`${s}Leg`, `${s}Foot`, ankle);
+      this.aim(`${s}Foot`, `${s}ToeBase`, toe);
+    }
+  }
+
+  /** Rotates `name` (by `fraction` of the way) so that `child` points at `target`. */
+  private aim(name: string, child: string, target: THREE.Vector3, fraction = 1) {
+    const b = this.bone(name);
+    const from = this.bone(child).getWorldPosition(new THREE.Vector3()).sub(b.getWorldPosition(new THREE.Vector3())).normalize();
+    const to = target.clone().sub(b.getWorldPosition(new THREE.Vector3())).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(from, to);
+    if (fraction < 1) q.slerp(new THREE.Quaternion(), 1 - fraction);
+    b.getWorldQuaternion(this.wq);
+    b.parent!.getWorldQuaternion(this.pq);
+    b.quaternion.copy(this.pq.invert().multiply(q.multiply(this.wq)));
+    b.updateMatrixWorld(true);
+  }
+}
+
+/** Two-bone IK in 3D: middle joint position, bending towards `pole`. */
+function ik3(a: THREE.Vector3, c: THREE.Vector3, l1: number, l2: number, pole: THREE.Vector3) {
+  const u = c.clone().sub(a);
+  const d = Math.min(Math.max(u.length(), 1e-3), l1 + l2 - 1e-4);
+  u.normalize();
+  const cos = Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)));
+  const w = pole.clone().addScaledVector(u, -pole.dot(u)).normalize();
+  return a.clone().addScaledVector(u, l1 * cos).addScaledVector(w, l1 * Math.sqrt(1 - cos * cos));
 }

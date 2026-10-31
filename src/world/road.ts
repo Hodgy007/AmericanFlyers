@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { roadPoint } from '../course';
+import { currentStage, roadPoint } from '../course';
 
 const CHUNK = 100; // metres of road per mesh
 const STEP = 2;
@@ -11,7 +11,7 @@ const AHEAD = 1600;
 
 export interface MarkerConfig {
   every: number; // metres between labelled signs
-  label: (n: number) => string;
+  label: (n: number) => string | null; // null skips that sign
 }
 
 // The road texture spans the full road width (shoulder to shoulder) and one
@@ -171,32 +171,46 @@ export class Road {
     // Labelled sign every `markers.every` metres.
     const n = Math.ceil(d0 / this.markers.every);
     const signD = n * this.markers.every;
-    if (n > 0 && signD < d0 + CHUNK) {
-      const sign = this.buildSign(this.markers.label(n), disposables);
-      place(sign, signD, ROAD_HALF_WIDTH + 2);
+    const label = n > 0 && signD < d0 + CHUNK ? this.markers.label(n) : null;
+    if (label) place(this.buildSign(label, disposables, 'distance'), signD, ROAD_HALF_WIDTH + 2);
+
+    // The stage's own signs (e.g. numbered hairpins).
+    for (const s of currentStage().signs) {
+      if (s.d >= d0 && s.d < d0 + CHUNK) place(this.buildSign(s.label, disposables, s.style), s.d, ROAD_HALF_WIDTH + 2);
     }
 
     return { group, dispose: () => disposables.forEach((d) => d.dispose()) };
   }
 
-  private buildSign(label: string, disposables: { dispose(): void }[]) {
+  private buildSign(label: string, disposables: { dispose(): void }[], style: 'distance' | 'hairpin') {
+    const hairpin = style === 'hairpin';
     const c = document.createElement('canvas');
     c.width = 256;
-    c.height = 128;
+    c.height = hairpin ? 256 : 128;
     const g = c.getContext('2d')!;
-    g.fillStyle = '#1f6f43';
-    g.fillRect(0, 0, 256, 128);
+    g.fillStyle = hairpin ? '#1d3f8f' : '#1f6f43';
+    g.fillRect(0, 0, c.width, c.height);
     g.strokeStyle = '#ffffff';
     g.lineWidth = 6;
-    g.strokeRect(8, 8, 240, 112);
+    g.strokeRect(8, 8, c.width - 16, c.height - 16);
     g.fillStyle = '#ffffff';
-    g.font = '700 64px system-ui, sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(label, 128, 68);
+    if (hairpin) {
+      // Numbered hairpin plaque: "VIRAGE" over a big number.
+      g.font = '700 34px system-ui, sans-serif';
+      g.fillText('VIRAGE', 128, 58);
+      g.font = '800 130px system-ui, sans-serif';
+      g.fillText(label, 128, 160);
+    } else {
+      let size = 64;
+      do g.font = `700 ${size}px system-ui, sans-serif`;
+      while (g.measureText(label).width > 220 && (size -= 4) > 20);
+      g.fillText(label, 128, 68);
+    }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const boardGeo = new THREE.PlaneGeometry(1.6, 0.8);
+    const boardGeo = hairpin ? new THREE.PlaneGeometry(1.1, 1.1) : new THREE.PlaneGeometry(1.6, 0.8);
     const boardMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, side: THREE.DoubleSide });
     disposables.push(tex, boardGeo, boardMat);
 

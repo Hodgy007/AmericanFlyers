@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { elevationAt, ROAD_ORIGIN, ROAD_STEP, roadX, roadZ } from '../course';
+import { currentStage, elevationAt, ROAD_ORIGIN, ROAD_STEP, roadX, roadZ } from '../course';
 import { nearLandmark } from './landmarks';
 import { fbm, rng, smoothstep } from './noise';
 
@@ -18,22 +18,30 @@ const GRASS_TILE_M = 7; // grass texture repeats every 7 m
 interface Near {
   dist: number; // metres from the road centreline
   d: number; // course distance of the closest road point
+  /** Closest point on a different stretch of road (e.g. the next hairpin straight up). */
+  other?: { dist: number; d: number };
 }
+
+const SECTION_GAP = 120; // road points this far apart along the course count as different stretches
 
 // ------------------------------------------------------------ height ----
 
-/** Rolling hills and mountains that ignore the road. */
-function wildHeight(x: number, z: number): number {
-  const hills = fbm(x / 850, z / 850, 4) * 105;
-  const ridges = (1 - Math.abs(fbm(x / 320 + 41, z / 320 - 7, 3))) * 28;
-  return 6 + hills + ridges;
-}
-
-/** Ground height: the road's own elevation in a valley along it, blending out to wild hills. */
+/**
+ * Ground height: the road's own elevation in a valley along it, blending out
+ * to the stage's wild terrain. Between two stretches of road (stacked
+ * hairpins) the road level is blended between them, giving a smooth slope.
+ */
 export function heightAt(x: number, z: number, near: Near | null): number {
-  const bumps = fbm(x / 70, z / 70, 3) * 6;
+  const { wildHeight, bumpAmp } = currentStage().scenery;
+  const bumps = fbm(x / 70, z / 70, 3) * bumpAmp;
   if (!near || near.dist >= ROAD_INFLUENCE) return wildHeight(x, z) + bumps;
-  const road = elevationAt(near.d) - 0.15;
+  let road = elevationAt(near.d);
+  if (near.other) {
+    const wa = 1 / (near.dist + 1) ** 4;
+    const wb = 1 / (near.other.dist + 1) ** 4;
+    road = (road * wa + elevationAt(near.other.d) * wb) / (wa + wb);
+  }
+  road -= 0.15;
   const w = smoothstep(9, ROAD_INFLUENCE, near.dist);
   return road * (1 - w) + wildHeight(x, z) * w + bumps * smoothstep(9, 45, near.dist);
 }
@@ -61,8 +69,25 @@ function nearestRoad(cands: number[], x: number, z: number): Near | null {
   }
   const limit = ROAD_INFLUENCE + COARSE * ROAD_STEP;
   if (best < 0 || bestD2 > limit * limit) return null;
+  const near = refine(best, bestD2, x, z);
 
-  // Refine among the fine samples around the coarse hit, then project onto segments.
+  // Second-closest stretch of road, at least SECTION_GAP along the course away.
+  let second = -1;
+  let secondD2 = Infinity;
+  const gap = SECTION_GAP / ROAD_STEP;
+  for (const i of cands) {
+    if (Math.abs(i - best) < gap) continue;
+    const dx = roadX[i] - x;
+    const dz = roadZ[i] - z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < secondD2) { secondD2 = d2; second = i; }
+  }
+  if (second >= 0 && secondD2 < limit * limit) near.other = refine(second, secondD2, x, z);
+  return near;
+}
+
+/** Refines a coarse nearest sample to the exact closest point on the centreline. */
+function refine(best: number, bestD2: number, x: number, z: number): Near {
   let bi = best;
   for (let i = Math.max(0, best - COARSE); i <= Math.min(roadX.length - 1, best + COARSE); i++) {
     const dx = roadX[i] - x;
@@ -97,13 +122,37 @@ const COL = {
 const tmp = new THREE.Color();
 
 function groundColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color) {
+  const sc = currentStage().scenery;
   out.copy(COL.grassA).lerp(COL.grassB, fbm(x / 140, z / 140, 3) * 0.5 + 0.5);
   const fields = fbm(x / 380 + 9, z / 380, 2);
-  if (fields > 0.28) out.lerp(COL.field, smoothstep(0.28, 0.4, fields) * 0.8);
-  const rockLine = 78 + fbm(x / 60, z / 60, 2) * 12;
-  if (h > rockLine) out.lerp(COL.rock, smoothstep(rockLine, rockLine + 14, h));
-  if (h > rockLine + 30) out.lerp(COL.snow, smoothstep(rockLine + 30, rockLine + 40, h));
+  if (sc.fields && fields > 0.28) out.lerp(COL.field, smoothstep(0.28, 0.4, fields) * 0.8);
+  const band = Math.max(14, (sc.snowLine - sc.rockLine) * 0.4);
+  const rockLine = sc.rockLine + fbm(x / 60, z / 60, 2) * band;
+  if (h > rockLine) out.lerp(COL.rock, smoothstep(rockLine, rockLine + band, h));
+  const snowLine = sc.snowLine + fbm(x / 90 + 5, z / 90, 2) * band;
+  if (h > snowLine) out.lerp(COL.snow, smoothstep(snowLine, snowLine + band * 0.6, h));
   if (near && near.dist < 9) out.lerp(COL.verge, 1 - smoothstep(6, 9, near.dist));
+}
+
+/** Darkens steep grass and turns cliffs to rock, using the tile's own height grid. */
+function shadeSlopes(pos: THREE.BufferAttribute, colors: Float32Array) {
+  const n = SEG + 1;
+  const step = TILE / SEG;
+  const h = (ix: number, iz: number) => pos.getY(Math.min(n - 1, Math.max(0, iz)) * n + Math.min(n - 1, Math.max(0, ix)));
+  const c = new THREE.Color();
+  for (let iz = 0; iz < n; iz++) {
+    for (let ix = 0; ix < n; ix++) {
+      const gx = (h(ix + 1, iz) - h(ix - 1, iz)) / (2 * step);
+      const gz = (h(ix, iz + 1) - h(ix, iz - 1)) / (2 * step);
+      const slope = Math.hypot(gx, gz);
+      if (slope < 0.35) continue;
+      const i = (iz * n + ix) * 3;
+      c.setRGB(colors[i], colors[i + 1], colors[i + 2]);
+      c.multiplyScalar(1 - 0.25 * smoothstep(0.35, 0.8, slope)); // shadier, rougher grass
+      c.lerp(COL.rock, smoothstep(0.75, 1.1, slope)); // bare rock on cliffs
+      colors.set([c.r, c.g, c.b], i);
+    }
+  }
 }
 
 // ------------------------------------------------------------- trees ----
@@ -161,6 +210,15 @@ export class Terrain {
   private readonly conifer = makeConifer();
   private readonly broadleaf = makeBroadleaf();
 
+  /** Drops every tile (after a stage change). */
+  clear() {
+    for (const tile of this.tiles.values()) {
+      this.group.remove(tile.group);
+      tile.dispose();
+    }
+    this.tiles.clear();
+  }
+
   /** Builds the closest missing tiles (at most `budget`) and drops far ones. */
   update(x: number, z: number, budget = 2) {
     const needed: { key: string; ix: number; iz: number; d: number }[] = [];
@@ -211,6 +269,7 @@ export class Terrain {
       colors.set([tmp.r, tmp.g, tmp.b], i * 3);
       uvs.set([x / GRASS_TILE_M, z / GRASS_TILE_M], i * 2); // world-space, so tiles line up
     }
+    shadeSlopes(pos, colors);
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geo.computeVertexNormals();
@@ -234,15 +293,16 @@ export class Terrain {
       const z = lz + cz;
       const forest = fbm(x / 240 - 13, z / 240 + 5, 3);
       const keep = rand();
-      if (forest < 0.05 && keep > 0.06) continue;
+      if (forest < 0.05 - currentStage().scenery.forestCover && keep > 0.06) continue;
       const near = nearestRoad(cands, x, z);
       if (near && (near.dist < 12 || nearLandmark(x, z, near.d))) continue;
       const h = heightAt(x, z, near);
-      if (h > 82) continue; // tree line
+      const sc = currentStage().scenery;
+      if (h > sc.treeLine + forest * 40) continue; // tree line
       const s = 0.75 + rand() * 0.7;
       q.setFromAxisAngle(up, rand() * Math.PI * 2);
       const m = new THREE.Matrix4().compose(new THREE.Vector3(lx, h - 0.3, lz), q, new THREE.Vector3(s, s * (0.85 + rand() * 0.35), s));
-      (h > 45 || forest > 0.3 || rand() < 0.4 ? conifers : broadleaves).push(m);
+      (rand() < sc.coniferBias || forest > 0.3 ? conifers : broadleaves).push(m);
     }
     const meshes = [this.instanced(this.conifer, conifers, rand), this.instanced(this.broadleaf, broadleaves, rand)];
     for (const m of meshes) if (m) group.add(m);

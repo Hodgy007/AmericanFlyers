@@ -1,7 +1,8 @@
 import './style.css';
 import { bluetoothAvailable, connectTrainer, type Trainer, type TrainerReading } from './ble/trainer';
 import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
-import { elevationAt, gradeAt } from './course';
+import { currentStage, elevationAt, gradeAt, setStage } from './course';
+import { STAGES, stageById, type Stage } from './stages';
 import { stepSpeed, DEFAULT_PARAMS } from './physics';
 import { drawProfile, gradeColor } from './profile';
 import { World, type CameraMode } from './world/world';
@@ -22,7 +23,7 @@ let demo = false;
 let demoPower = 150;
 
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
-const ride = { distance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0 };
+const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0, work: 0, finished: false };
 const powerSamples: { t: number; p: number }[] = [];
 
 // ------------------------------------------------------------- devices ----
@@ -115,18 +116,28 @@ function setDemoPower(p: number) {
 
 function markerConfig() {
   const imperial = settings.units === 'imperial';
+  const every = imperial ? KM_PER_MI * 1000 : 1000;
+  const finish = currentStage().finish;
   return {
-    every: imperial ? KM_PER_MI * 1000 : 1000,
-    label: (n: number) => (imperial ? `${n} mi` : `${n} km`),
+    every,
+    label: (n: number) => {
+      if (finish === null) return imperial ? `${n} mi` : `${n} km`;
+      // On a stage with a finish line, count down instead.
+      const left = Math.round((finish - n * every) / every);
+      if (left <= 0) return null;
+      return `${left} ${imperial ? 'mi' : 'km'} to go`;
+    },
   };
 }
 
+// `?stage=alpe-dhuez` picks the stage; the stage picker updates it.
+setStage(stageById(new URLSearchParams(location.search).get('stage')));
 const world = new World($<HTMLCanvasElement>('scene'), markerConfig());
 const profileCanvas = $<HTMLCanvasElement>('profile');
 // `?start=12` begins the ride 12 km in, handy for jumping to the hills.
 const startKm = Number(new URLSearchParams(location.search).get('start'));
 if (startKm > 0) {
-  ride.distance = startKm * 1000;
+  ride.distance = ride.startDistance = startKm * 1000;
   ride.lastElev = elevationAt(ride.distance);
 }
 
@@ -153,9 +164,14 @@ function frame(now: number) {
     massKg: settings.riderKg + settings.bikeKg,
   });
   ride.distance += ride.speed * dt;
-  if (ride.speed > 0.3) ride.movingTime += dt;
+  if (ride.speed > 0.3 && !ride.finished) {
+    ride.movingTime += dt;
+    ride.work += live.power * dt;
+  }
+  const finish = currentStage().finish;
+  if (finish !== null && !ride.finished && ride.distance >= finish) showFinish();
   const elev = elevationAt(ride.distance);
-  if (elev > ride.lastElev) ride.climbed += elev - ride.lastElev;
+  if (elev > ride.lastElev && !ride.finished) ride.climbed += elev - ride.lastElev;
   ride.lastElev = elev;
   ride.crankAngle -= (live.cadence / 60) * 2 * Math.PI * dt;
 
@@ -167,7 +183,8 @@ function frame(now: number) {
   if (now - lastHud > 200) {
     lastHud = now;
     updateHud(grade);
-    drawProfile(profileCanvas, ride.distance);
+    const stageFinish = currentStage().finish;
+    drawProfile(profileCanvas, ride.distance, stageFinish === null ? undefined : [0, stageFinish + 200]);
   }
   requestAnimationFrame(frame);
 }
@@ -178,6 +195,7 @@ function updateHud(grade: number) {
   const speedKmh = ride.speed * 3.6;
   const hr = performance.now() - live.lastHrAt < STALE_MS ? live.heartRate || live.trainerHr : 0;
 
+  $('stage-name').textContent = stageProgress();
   $('m-power').textContent = String(Math.round(avgPower));
   const zone = powerZone(avgPower / settings.ftp);
   $('m-zone').textContent = zone.label;
@@ -236,10 +254,96 @@ function cycleCamera() {
 }
 
 function resetRide() {
-  Object.assign(ride, { distance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0 });
+  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0, work: 0, finished: false });
   powerSamples.length = 0;
   lastSentGrade = NaN;
+  $('finish').hidden = true;
   world.jumped();
+}
+
+// --------------------------------------------------------------- stages ----
+
+/** Total climbing in metres over a stage (or its first 20 km if endless). */
+function stageClimbing(stage: Stage) {
+  let total = 0;
+  let last = stage.elevationAt(0);
+  for (let d = 10; d <= (stage.finish ?? 20000); d += 10) {
+    const e = stage.elevationAt(d);
+    if (e > last) total += e - last;
+    last = e;
+  }
+  return total;
+}
+
+function chooseStage(stage: Stage) {
+  setStage(stage);
+  const url = new URL(location.href);
+  url.searchParams.set('stage', stage.id);
+  url.searchParams.delete('start');
+  history.replaceState(null, '', url);
+  world.restage(markerConfig());
+  resetRide();
+  $('stage-name').textContent = stage.name;
+  toast(`${stage.name}: ${stage.tagline}`, 5000);
+}
+
+function openStages() {
+  const dialog = $<HTMLDialogElement>('stages');
+  const list = $('stage-list');
+  list.replaceChildren();
+  const imperial = settings.units === 'imperial';
+  for (const stage of STAGES) {
+    const card = document.createElement('button');
+    card.className = 'stage-card' + (stage === currentStage() ? ' current' : '');
+    const km = stage.finish === null ? null : stage.finish / 1000;
+    const dist = km === null ? 'Endless' : imperial ? `${(km / KM_PER_MI).toFixed(1)} mi` : `${km.toFixed(1)} km`;
+    const climb = Math.round(stageClimbing(stage) * (imperial ? 3.28084 : 1));
+    card.innerHTML = `
+      <canvas class="stage-profile"></canvas>
+      <strong></strong>
+      <span class="stage-meta">${dist} · ${climb.toLocaleString()} ${imperial ? 'ft' : 'm'} climbing${stage.finish === null ? ' per 20 km' : ''}</span>
+      <span class="stage-tagline"></span>`;
+    card.querySelector('strong')!.textContent = stage.name;
+    card.querySelector('.stage-tagline')!.textContent = stage.tagline;
+    card.addEventListener('click', () => {
+      dialog.close();
+      if (stage !== currentStage()) chooseStage(stage);
+    });
+    list.append(card);
+  }
+  dialog.showModal();
+  // Draw each card's profile now that it has a size.
+  STAGES.forEach((stage, i) => {
+    drawProfile(list.querySelectorAll('canvas')[i] as HTMLCanvasElement, null, [0, stage.finish ?? 20000], stage.elevationAt);
+  });
+}
+
+function showFinish() {
+  ride.finished = true;
+  const imperial = settings.units === 'imperial';
+  const finish = currentStage().finish!;
+  const avgPower = ride.movingTime > 0 ? Math.round(ride.work / ride.movingTime) : 0;
+  const avgKmh = ride.movingTime > 0 ? ((finish - ride.startDistance) / ride.movingTime) * 3.6 : 0;
+  $('finish-title').textContent = `${currentStage().name}: finished!`;
+  $('finish-stats').innerHTML = `
+    <div><span>Time</span><strong>${formatTime(ride.movingTime)}</strong></div>
+    <div><span>Avg power</span><strong>${avgPower} W</strong></div>
+    <div><span>Avg speed</span><strong>${(imperial ? avgKmh / KM_PER_MI : avgKmh).toFixed(1)} ${imperial ? 'mph' : 'km/h'}</strong></div>
+    <div><span>Climbed</span><strong>${Math.round(imperial ? ride.climbed * 3.28084 : ride.climbed)} ${imperial ? 'ft' : 'm'}</strong></div>`;
+  $('finish').hidden = false;
+}
+
+/** "8.4 km to go · next: Virage 14 in 230 m" for stages with a finish. */
+function stageProgress() {
+  const stage = currentStage();
+  if (stage.finish === null) return stage.name;
+  if (ride.finished) return `${stage.name} · finished`;
+  const imperial = settings.units === 'imperial';
+  const left = (stage.finish - ride.distance) / 1000;
+  const parts = [stage.name, `${(imperial ? left / KM_PER_MI : left).toFixed(1)} ${imperial ? 'mi' : 'km'} to go`];
+  const next = stage.signs.find((s) => s.d > ride.distance);
+  if (next?.style === 'hairpin') parts.push(`next: Virage ${next.label} in ${Math.round(next.d - ride.distance)} m`);
+  return parts.join(' · ');
 }
 
 function openSettings() {
@@ -282,6 +386,10 @@ $('btn-demo').addEventListener('click', () => setDemo(!demo));
 $('btn-reset').addEventListener('click', resetRide);
 $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);
+$('btn-stage').addEventListener('click', openStages);
+$('finish-again').addEventListener('click', resetRide);
+$('finish-close').addEventListener('click', () => { $('finish').hidden = true; });
+$('stage-name').textContent = currentStage().name;
 $<HTMLInputElement>('demo-power').addEventListener('input', (e) => setDemoPower(Number((e.target as HTMLInputElement).value)));
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('dialog')) return;

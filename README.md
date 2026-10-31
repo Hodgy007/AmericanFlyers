@@ -6,8 +6,9 @@ An indoor cycling app that runs in your browser. Connect a Wahoo smart trainer o
 
 - **Bluetooth trainer connection.** Uses the standard FTMS (Fitness Machine) profile, so it works with Wahoo KICKR, KICKR CORE and KICKR SNAP on current firmware, as well as most other smart trainers. Trainers that only expose a Cycling Power service still work in read-only mode.
 - **Resistance follows the road.** The current grade is sent to the trainer once a second, scaled by a *trainer difficulty* setting (default 50%).
+- **Stages** (🏁 button): *Heartland Rollers* (endless farmland), *Route 66 Flats* (25 km time trial) and *Alpe d'Huez*: 14 km at 8% from Le Bourg-d'Oisans with real per-kilometre gradients (swi-cycling.com) and all 21 numbered hairpins. Stages with a finish line count down the distance, show the next hairpin, and finish with your time, average power and speed.
 - **3D world (Three.js).** A winding road through low-poly hills, forests, fields and distant mountains, with sunlight, shadows, haze and clouds. The terrain is generated on the fly as you ride, so the road never ends.
-- **3D rider.** The legs pedal at your real cadence (solved with inverse kinematics) and the wheels turn at your virtual speed.
+- **3D rider.** A rigged rider model (generated with Higgsfield) posed on the bike every frame: legs follow the pedals at your real cadence, hands on the hoods, head up. The wheels turn at your virtual speed.
 - **Roadside landmarks:** a start/finish arch, red barn, farmhouse, windmill, retro diner and water tower, generated with Higgsfield (image → 3D) and placed along the route. See `public/models/README.md` to add or swap models.
 - **Three camera views:** chase, side-on and the rider's own view. Switch with the 🎥 button or the **C** key.
 - **Realistic speed.** Your watts become speed through a physics model with gravity, rolling resistance, air drag and momentum, using your weight.
@@ -39,7 +40,7 @@ npm run dev
 
 Open the URL it prints (http://localhost:5173) in Chrome. Click **Connect trainer**, pick your KICKR from the list, and start pedalling.
 
-To start partway along the course, add `?start=` with a distance in km, e.g. http://localhost:5173/?start=7 drops you onto a descent.
+To pick a stage or start partway along it, add `?stage=` and `?start=` (km), e.g. http://localhost:5173/?stage=alpe-dhuez&start=6 drops you halfway up the Alpe.
 
 ## Deploy
 
@@ -52,7 +53,8 @@ src/
   ble/trainer.ts     FTMS + Cycling Power connection, packet parsing, grade control
   ble/heartRate.ts   Heart-rate strap
   physics.ts         Power → speed model
-  course.ts          Endless winding road: elevation, grade, heading, centreline
+  stages.ts          Stage definitions: profiles, bends, scenery, landmarks, signs
+  course.ts          The current stage's road: elevation, grade, heading, centreline
   world/world.ts     Three.js renderer, lighting, cameras; places the rider each frame
   world/terrain.ts   Hills and forests built in tiles around the rider
   world/road.ts      Road surface, marker posts and distance signs

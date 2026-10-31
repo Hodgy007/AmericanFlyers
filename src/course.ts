@@ -1,40 +1,26 @@
-// An endless rolling, winding road.
-//
-// Elevation and heading are deterministic sums of sine waves at different
-// wavelengths (long climbs, medium rollers, short kickers; sweeping bends and
-// tighter curves). The road's ground-plane centreline is integrated from the
-// heading and cached in 2 m steps. For d ≤ 0 the road runs straight along -x,
-// so there is road behind the start line.
+// The road being ridden, for the current stage: elevation, grade, heading,
+// and a cached ground-plane centreline integrated from the heading in 2 m
+// steps. For d ≤ 0 the road runs straight back from the start, so there is
+// road behind the start line.
 
-const ELEVATION_WAVES = [
-  { amp: 34, length: 5200, phase: 0.0 },
-  { amp: 9, length: 1300, phase: 1.7 },
-  { amp: 2.2, length: 340, phase: 4.1 },
-  { amp: 0.25, length: 90, phase: 2.3 },
-];
+import { stageById, type Stage } from './stages';
 
-const HEADING_WAVES = [
-  { amp: 0.55, length: 2800, phase: 0.5 },
-  { amp: 0.3, length: 1100, phase: 2.0 },
-  { amp: 0.1, length: 430, phase: 1.0 },
-];
+let stage: Stage = stageById(null);
 
-const FLAT_START_M = 400; // ease in so the ride starts flat and straight
-
-function waves(list: typeof ELEVATION_WAVES, d: number) {
-  let v = 0;
-  for (const w of list) v += w.amp * Math.sin((2 * Math.PI * d) / w.length + w.phase);
-  return v;
+export function currentStage(): Stage {
+  return stage;
 }
 
-function startRamp(d: number) {
-  const t = Math.min(1, Math.max(0, d / FLAT_START_M));
-  return t * t * (3 - 2 * t);
+/** Switches stage and clears the cached centreline. */
+export function setStage(next: Stage) {
+  stage = next;
+  roadX.length = 1;
+  roadZ.length = 1;
 }
 
 /** Elevation above the start, in metres, at distance `d` metres. */
 export function elevationAt(d: number): number {
-  return (waves(ELEVATION_WAVES, d) - waves(ELEVATION_WAVES, 0)) * startRamp(d);
+  return stage.elevationAt(d);
 }
 
 /** Road grade as a fraction (0.05 = 5 %) at distance `d`. */
@@ -45,7 +31,7 @@ export function gradeAt(d: number): number {
 
 /** Direction of travel in radians on the ground plane (0 = +x). */
 export function headingAt(d: number): number {
-  return (waves(HEADING_WAVES, d) - waves(HEADING_WAVES, 0)) * startRamp(d);
+  return d <= 0 ? stage.headingAt(0) : stage.headingAt(d);
 }
 
 // ---------------------------------------------------------- centreline ----
@@ -54,11 +40,17 @@ export const ROAD_STEP = 2;
 export const ROAD_ORIGIN = -1000; // distance of sample 0
 
 /** Cached centreline samples: sample i is at distance ROAD_ORIGIN + i * ROAD_STEP. */
-export const roadX: number[] = [ROAD_ORIGIN];
+export const roadX: number[] = [0];
 export const roadZ: number[] = [0];
 
 /** Makes sure centreline samples exist up to distance `d`. */
 export function ensureRoad(d: number) {
+  if (roadX.length === 1) {
+    // Sample 0 sits so that the road passes through the origin at d = 0.
+    const h = headingAt(0);
+    roadX[0] = Math.cos(h) * ROAD_ORIGIN;
+    roadZ[0] = Math.sin(h) * ROAD_ORIGIN;
+  }
   while (ROAD_ORIGIN + (roadX.length - 1) * ROAD_STEP < d + ROAD_STEP) {
     const i = roadX.length - 1;
     const h = headingAt(ROAD_ORIGIN + (i + 0.5) * ROAD_STEP);

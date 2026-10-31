@@ -1,36 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { gradeAt, roadPoint } from '../course';
+import { currentStage, gradeAt, roadPoint } from '../course';
+import { STAGES, type LandmarkKind } from '../stages';
 import { heightAt } from './terrain';
 
-// Roadside landmarks loaded from GLB models in public/models/. Each kind
-// repeats along the endless course at a fixed spacing. A missing model file
-// is skipped quietly, so the ride works with any subset of models present.
-
-interface LandmarkKind {
-  file: string;
-  every: number; // metres between repeats
-  first: number; // distance of the first one
-  side: -1 | 0 | 1; // -1 left, 1 right, 0 on the road itself
-  /** For side 0: 'across' spans the road like an arch; 'along' is ridden through lengthwise (a bridge). */
-  span?: 'across' | 'along';
-  offset: number; // metres from the road centre
-  size: number; // target height in metres; width for side-0 kinds
-  yaw?: number; // extra turn in radians after facing the road
-  clearance: number; // keep trees this far away
-}
-
-const KINDS: LandmarkKind[] = [
-  { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 },
-  { file: 'covered-bridge.glb', every: 6000, first: 4000, side: 0, span: 'along', offset: 0, size: 12.5, clearance: 22 },
-  { file: 'windmill.glb', every: 1900, first: 600, side: -1, offset: 26, size: 15, yaw: 0.4, clearance: 24 },
-  { file: 'barn.glb', every: 2300, first: 950, side: 1, offset: 34, size: 10, yaw: -0.6, clearance: 26 },
-  { file: 'farmhouse.glb', every: 2300, first: 1200, side: -1, offset: 32, size: 9, yaw: 0.6, clearance: 26 },
-  { file: 'diner.glb', every: 3700, first: 1900, side: -1, offset: 24, size: 6.5, yaw: 0.5, clearance: 24 },
-  { file: 'water-tower.glb', every: 4100, first: 2700, side: 1, offset: 46, size: 26, clearance: 18 },
-  { file: 'gas-station.glb', every: 4300, first: 1550, side: 1, offset: 23, size: 6.5, yaw: -0.5, clearance: 24 },
-  { file: 'silos.glb', every: 3100, first: 2150, side: 1, offset: 40, size: 18, yaw: -0.3, clearance: 26 },
-];
+// Roadside landmarks loaded from GLB models in public/models/. Each stage
+// lists the kinds it uses; each kind repeats along the course at a fixed
+// spacing. A missing model file is skipped quietly.
 
 const BEHIND = 250;
 const AHEAD = 1500;
@@ -55,7 +31,7 @@ function siteAt(kind: LandmarkKind, d: number): Site {
 /** Landmark sites whose course distance lies in [from, to]. */
 function sitesBetween(from: number, to: number): Site[] {
   const out: Site[] = [];
-  for (const kind of KINDS) {
+  for (const kind of currentStage().landmarks) {
     for (let k = Math.max(0, Math.ceil((from - kind.first) / kind.every)); kind.first + k * kind.every <= to; k++) {
       out.push(siteAt(kind, kind.first + k * kind.every));
     }
@@ -73,22 +49,41 @@ export function nearLandmark(x: number, z: number, d: number): boolean {
 
 export class Landmarks {
   readonly group = new THREE.Group();
-  private readonly models = new Map<string, THREE.Object3D | null>();
+  private readonly sources = new Map<string, THREE.Object3D | null>(); // file → loaded scene
+  private readonly prepared = new Map<LandmarkKind, THREE.Object3D>(); // kind → scaled model
   private readonly placed = new Map<string, THREE.Object3D>();
 
   constructor() {
     const loader = new GLTFLoader();
-    for (const kind of KINDS) {
+    const files = new Set(STAGES.flatMap((s) => s.landmarks.map((k) => k.file)));
+    for (const file of files) {
       loader.load(
-        `${import.meta.env.BASE_URL}models/${kind.file}`,
-        (gltf) => this.models.set(kind.file, normalise(gltf.scene, kind)),
+        `${import.meta.env.BASE_URL}models/${file}`,
+        (gltf) => this.sources.set(file, gltf.scene),
         undefined,
         () => {
-          this.models.set(kind.file, null);
-          console.info(`Landmark model not found: models/${kind.file} (skipped)`);
+          this.sources.set(file, null);
+          console.info(`Landmark model not found: models/${file} (skipped)`);
         },
       );
     }
+  }
+
+  /** Removes everything placed (after a stage change). */
+  clear() {
+    for (const obj of this.placed.values()) this.group.remove(obj);
+    this.placed.clear();
+  }
+
+  private model(kind: LandmarkKind) {
+    let m = this.prepared.get(kind);
+    if (!m) {
+      const src = this.sources.get(kind.file);
+      if (!src) return null; // still loading, or missing
+      m = normalise(src.clone(true), kind);
+      this.prepared.set(kind, m);
+    }
+    return m;
   }
 
   update(distance: number) {
@@ -97,8 +92,8 @@ export class Landmarks {
       const key = `${site.kind.file}@${site.d}`;
       keep.add(key);
       if (this.placed.has(key)) continue;
-      const model = this.models.get(site.kind.file);
-      if (!model) continue; // still loading, or missing
+      const model = this.model(site.kind);
+      if (!model) continue;
       const obj = model.clone(true);
       this.position(obj, site);
       this.placed.set(key, obj);

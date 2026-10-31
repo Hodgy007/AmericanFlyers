@@ -1,0 +1,319 @@
+// Stage definitions: each stage supplies its own elevation profile, road
+// bends, scenery style, roadside landmarks and signs.
+
+import { fbm, smoothstep } from './world/noise';
+
+export interface LandmarkKind {
+  file: string;
+  every: number; // metres between repeats
+  first: number; // distance of the first one
+  side: -1 | 0 | 1; // -1 left, 1 right, 0 on the road itself
+  /** For side 0: 'across' spans the road like an arch; 'along' is ridden through lengthwise (a bridge). */
+  span?: 'across' | 'along';
+  offset: number; // metres from the road centre
+  size: number; // target height in metres; width for side-0 kinds
+  yaw?: number; // extra turn in radians after facing the road
+  clearance: number; // keep trees this far away
+}
+
+export interface Scenery {
+  /** Ground height far from the road. */
+  wildHeight(x: number, z: number): number;
+  bumpAmp: number; // small-scale ground roughness, metres
+  rockLine: number; // heights (same datum as the road) where rock, snow and the tree line start
+  snowLine: number;
+  treeLine: number;
+  coniferBias: number; // 0 = mostly broadleaf, 1 = all conifers
+  forestCover: number; // 0 = farmland with woods, higher = more forest
+  fields: boolean; // patches of farmland
+  mountainScale: number; // height of the distant mountain ring
+}
+
+export interface StageSign {
+  d: number;
+  label: string;
+  style: 'hairpin';
+}
+
+export interface Stage {
+  id: string;
+  name: string;
+  tagline: string;
+  finish: number | null; // metres; null = endless
+  elevationAt(d: number): number;
+  headingAt(d: number): number;
+  scenery: Scenery;
+  landmarks: LandmarkKind[];
+  signs: StageSign[];
+}
+
+// --------------------------------------------------------------- helpers ----
+
+type Wave = { amp: number; length: number; phase: number };
+
+function waves(list: Wave[], d: number) {
+  let v = 0;
+  for (const w of list) v += w.amp * Math.sin((2 * Math.PI * d) / w.length + w.phase);
+  return v;
+}
+
+/** Eases a course in from flat and straight over the first `m` metres. */
+function startRamp(d: number, m = 400) {
+  return smoothstep(0, m, d);
+}
+
+const lowlandHills = (x: number, z: number) =>
+  6 + fbm(x / 850, z / 850, 4) * 105 + (1 - Math.abs(fbm(x / 320 + 41, z / 320 - 7, 3))) * 28;
+
+const GANTRY: LandmarkKind = { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 };
+const finishArch = (at: number): LandmarkKind => ({ ...GANTRY, first: at, every: 1e9 });
+
+// ------------------------------------------------------------- Heartland ----
+
+const H_ELEV: Wave[] = [
+  { amp: 34, length: 5200, phase: 0.0 },
+  { amp: 9, length: 1300, phase: 1.7 },
+  { amp: 2.2, length: 340, phase: 4.1 },
+  { amp: 0.25, length: 90, phase: 2.3 },
+];
+const H_HEAD: Wave[] = [
+  { amp: 0.55, length: 2800, phase: 0.5 },
+  { amp: 0.3, length: 1100, phase: 2.0 },
+  { amp: 0.1, length: 430, phase: 1.0 },
+];
+
+const heartland: Stage = {
+  id: 'heartland',
+  name: 'Heartland Rollers',
+  tagline: 'Endless rolling farmland. Free ride, no finish line.',
+  finish: null,
+  elevationAt: (d) => (waves(H_ELEV, d) - waves(H_ELEV, 0)) * startRamp(d),
+  headingAt: (d) => (waves(H_HEAD, d) - waves(H_HEAD, 0)) * startRamp(d),
+  scenery: {
+    wildHeight: lowlandHills,
+    bumpAmp: 6,
+    rockLine: 78,
+    snowLine: 108,
+    treeLine: 82,
+    coniferBias: 0.4,
+    forestCover: 0,
+    fields: true,
+    mountainScale: 1,
+  },
+  landmarks: [
+    GANTRY,
+    { file: 'covered-bridge.glb', every: 6000, first: 4000, side: 0, span: 'along', offset: 0, size: 12.5, clearance: 22 },
+    { file: 'windmill.glb', every: 1900, first: 600, side: -1, offset: 26, size: 15, yaw: 0.4, clearance: 24 },
+    { file: 'barn.glb', every: 2300, first: 950, side: 1, offset: 34, size: 10, yaw: -0.6, clearance: 26 },
+    { file: 'farmhouse.glb', every: 2300, first: 1200, side: -1, offset: 32, size: 9, yaw: 0.6, clearance: 26 },
+    { file: 'diner.glb', every: 3700, first: 1900, side: -1, offset: 24, size: 6.5, yaw: 0.5, clearance: 24 },
+    { file: 'water-tower.glb', every: 4100, first: 2700, side: 1, offset: 46, size: 26, clearance: 18 },
+    { file: 'gas-station.glb', every: 4300, first: 1550, side: 1, offset: 23, size: 6.5, yaw: -0.5, clearance: 24 },
+    { file: 'silos.glb', every: 3100, first: 2150, side: 1, offset: 40, size: 18, yaw: -0.3, clearance: 26 },
+  ],
+  signs: [],
+};
+
+// ------------------------------------------------------------- Route 66 ----
+
+const R_ELEV: Wave[] = [
+  { amp: 6, length: 7000, phase: 0.3 },
+  { amp: 1.5, length: 1600, phase: 2.2 },
+];
+const R_HEAD: Wave[] = [
+  { amp: 0.35, length: 6000, phase: 0.2 },
+  { amp: 0.08, length: 1500, phase: 1.3 },
+];
+const R66_FINISH = 25000;
+
+const route66: Stage = {
+  id: 'route66',
+  name: 'Route 66 Flats',
+  tagline: '25 km of fast, flat highway past diners and gas stations. A time-trial.',
+  finish: R66_FINISH,
+  elevationAt: (d) => (waves(R_ELEV, d) - waves(R_ELEV, 0)) * startRamp(d, 800),
+  headingAt: (d) => (waves(R_HEAD, d) - waves(R_HEAD, 0)) * startRamp(d, 800),
+  scenery: {
+    wildHeight: (x, z) => 2 + fbm(x / 1400, z / 1400, 3) * 40 + Math.max(0, fbm(x / 500 + 3, z / 500, 3)) * 30,
+    bumpAmp: 2.5,
+    rockLine: 45,
+    snowLine: 1e9,
+    treeLine: 30,
+    coniferBias: 0.15,
+    forestCover: -0.15,
+    fields: true,
+    mountainScale: 0.8,
+  },
+  landmarks: [
+    GANTRY,
+    finishArch(R66_FINISH),
+    { file: 'gas-station.glb', every: 3000, first: 800, side: 1, offset: 23, size: 6.5, yaw: -0.5, clearance: 24 },
+    { file: 'diner.glb', every: 3500, first: 1700, side: -1, offset: 24, size: 6.5, yaw: 0.5, clearance: 24 },
+    { file: 'water-tower.glb', every: 5000, first: 2600, side: 1, offset: 46, size: 26, clearance: 18 },
+    { file: 'windmill.glb', every: 2200, first: 1200, side: -1, offset: 26, size: 15, yaw: 0.4, clearance: 24 },
+    { file: 'silos.glb', every: 4100, first: 3300, side: 1, offset: 40, size: 18, yaw: -0.3, clearance: 26 },
+  ],
+  signs: [],
+};
+
+// --------------------------------------------------------- Alpe d'Huez ----
+//
+// From Le Bourg-d'Oisans (723 m) to the top (1841 m): 14 km, 1118 m of
+// climbing. Per-kilometre gradients from swi-cycling.com. The 21 hairpins are
+// numbered 21 at the bottom down to 1 near the top, as on the real road; their
+// exact positions are approximated. The bends themselves are flatter than the
+// straights between them, so the straights are steepened to keep each
+// kilometre's average.
+
+const ALPE_KM_GRADES = [9.3, 10.2, 8.6, 8.2, 8.6, 8.0, 8.6, 8.9, 7.3, 8.4, 8.8, 8.7, 5.8, 2.4];
+const ALPE_GAIN = 1118;
+const ALPE_FINISH = 14000;
+const ALPE_STEP = 1;
+const HAIRPINS = 21;
+const HAIRPIN_R = 12; // metres, centreline radius
+const LEG_ALPHA = 0.12; // straights angle up the mountainside (rad)
+const TURN = Math.PI - 2 * LEG_ALPHA;
+const ARC = HAIRPIN_R * TURN;
+const FIRST_HAIRPIN = 1150;
+const LAST_HAIRPIN = 12100;
+
+function buildAlpe(): Stage {
+  // Hairpin start positions, with legs of uneven length.
+  const legs = Array.from({ length: HAIRPINS - 1 }, (_, i) => 0.7 + 0.6 * ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1);
+  const legTotal = LAST_HAIRPIN - FIRST_HAIRPIN - (HAIRPINS - 1) * ARC;
+  const legSum = legs.reduce((a, b) => a + b, 0);
+  const pins: number[] = [FIRST_HAIRPIN];
+  for (let i = 0; i < HAIRPINS - 1; i++) pins.push(pins[i] + ARC + (legs[i] / legSum) * legTotal);
+
+  /** Small zero-ended meander so straights aren't ruler-straight. */
+  const meander = (d: number, a: number, b: number, amp: number) => amp * Math.sin((2 * Math.PI * (d - a)) / (b - a));
+
+  const headingAt = (d: number): number => {
+    if (d <= 0) return LEG_ALPHA;
+    if (d < pins[0]) return LEG_ALPHA + meander(d, 0, pins[0], 0.08);
+    for (let i = 0; i < HAIRPINS; i++) {
+      const start = i % 2 === 0 ? LEG_ALPHA : Math.PI - LEG_ALPHA;
+      const turn = i % 2 === 0 ? TURN : -TURN;
+      const arcEnd = pins[i] + ARC;
+      if (d < arcEnd) return start + turn * ((d - pins[i]) / ARC);
+      const next = i + 1 < HAIRPINS ? pins[i + 1] : Infinity;
+      if (d < next) {
+        const h = start + turn;
+        if (next === Infinity) {
+          // Into the village: a long sweeping bend, then straight to the line.
+          return h + 0.6 * smoothstep(arcEnd + 300, arcEnd + 1300, d) + meander(Math.min(d, ALPE_FINISH), arcEnd, ALPE_FINISH, 0.06);
+        }
+        return h + meander(d, arcEnd, next, 0.05);
+      }
+    }
+    return LEG_ALPHA;
+  };
+
+  // Raw gradient: interpolated between kilometre midpoints, halved in bends.
+  const inBend = (d: number) => pins.some((p) => d >= p && d < p + ARC);
+  const kmGrade = (d: number) => {
+    const f = Math.min(Math.max(d / 1000 - 0.5, 0), ALPE_KM_GRADES.length - 1);
+    const i = Math.floor(f);
+    const t = f - i;
+    const a = ALPE_KM_GRADES[i];
+    const b = ALPE_KM_GRADES[Math.min(i + 1, ALPE_KM_GRADES.length - 1)];
+    return (a + (b - a) * t) / 100;
+  };
+  const n = Math.round(ALPE_FINISH / ALPE_STEP);
+  const raw = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const d = (i + 0.5) * ALPE_STEP;
+    raw[i] = kmGrade(d) * (inBend(d) ? 0.5 : 1);
+  }
+  // Rescale each kilometre to its published average, then the whole climb to the published gain.
+  for (let k = 0; k < ALPE_KM_GRADES.length; k++) {
+    const a = Math.floor((k * 1000) / ALPE_STEP);
+    const b = Math.min(n, Math.floor(((k + 1) * 1000) / ALPE_STEP));
+    let sum = 0;
+    for (let i = a; i < b; i++) sum += raw[i];
+    const target = (ALPE_KM_GRADES[k] / 100) * (b - a);
+    for (let i = a; i < b; i++) raw[i] *= target / sum;
+  }
+  const elev = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) elev[i + 1] = elev[i] + raw[i] * ALPE_STEP;
+  const scale = ALPE_GAIN / elev[n];
+  for (let i = 0; i <= n; i++) elev[i] *= scale;
+
+  const elevationAt = (d: number): number => {
+    if (d <= 0) return 0;
+    if (d >= ALPE_FINISH) return elev[n] + Math.min(d - ALPE_FINISH, 60) * 0.01; // level run-out at the top
+    const f = d / ALPE_STEP;
+    const i = Math.floor(f);
+    return elev[i] + (elev[i + 1] - elev[i]) * (f - i);
+  };
+
+  // Fit a plane to the road's rise across the mountainside, so the land far
+  // from the road climbs with it instead of the road sitting on a pillar.
+  let x = 0, z = 0;
+  const pts: [number, number, number][] = [];
+  for (let d = 0; d < ALPE_FINISH; d += ALPE_STEP * 2) {
+    const h = headingAt(d + ALPE_STEP);
+    x += Math.cos(h) * ALPE_STEP * 2;
+    z += Math.sin(h) * ALPE_STEP * 2;
+    if (d % 50 === 0) pts.push([x, z, elevationAt(d)]);
+  }
+  const plane = fitPlane(pts);
+
+  const wildHeight = (wx: number, wz: number) => {
+    const base = Math.max(-40, Math.min(ALPE_GAIN + 150, plane(wx, wz)));
+    const massif = fbm(wx / 1300, wz / 1300, 4) * 260;
+    const ridges = (1 - Math.abs(fbm(wx / 420 + 7, wz / 420 - 3, 3))) * 170;
+    return base + 60 + massif + ridges;
+  };
+
+  return {
+    id: 'alpe-dhuez',
+    name: "Alpe d'Huez",
+    tagline: "14 km at 8% from Le Bourg-d'Oisans, up all 21 hairpins. Real gradients.",
+    finish: ALPE_FINISH,
+    elevationAt,
+    headingAt,
+    scenery: {
+      wildHeight,
+      bumpAmp: 10,
+      rockLine: 1250,
+      snowLine: 1650,
+      treeLine: 760,
+      coniferBias: 0.9,
+      forestCover: 0.3,
+      fields: false,
+      mountainScale: 2.6,
+    },
+    landmarks: [GANTRY, finishArch(ALPE_FINISH)],
+    signs: pins.map((p, i) => ({ d: p - 12, label: String(HAIRPINS - i), style: 'hairpin' as const })),
+  };
+}
+
+/** Least-squares plane e = a + b·x + c·z through the points. */
+function fitPlane(pts: [number, number, number][]) {
+  let n = 0, sx = 0, sz = 0, se = 0, sxx = 0, szz = 0, sxz = 0, sxe = 0, sze = 0;
+  for (const [x, z, e] of pts) {
+    n++; sx += x; sz += z; se += e; sxx += x * x; szz += z * z; sxz += x * z; sxe += x * e; sze += z * e;
+  }
+  // Solve the 3×3 normal equations by Cramer's rule.
+  const m = [
+    [n, sx, sz],
+    [sx, sxx, sxz],
+    [sz, sxz, szz],
+  ];
+  const r = [se, sxe, sze];
+  const det = (a: number[][]) =>
+    a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) -
+    a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+    a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+  const D = det(m);
+  const col = (k: number) => det(m.map((row, i) => row.map((v, j) => (j === k ? r[i] : v))));
+  const a = col(0) / D, b = col(1) / D, c = col(2) / D;
+  return (x: number, z: number) => a + b * x + c * z;
+}
+
+export const STAGES: Stage[] = [heartland, route66, buildAlpe()];
+
+export function stageById(id: string | null): Stage {
+  return STAGES.find((s) => s.id === id) ?? heartland;
+}

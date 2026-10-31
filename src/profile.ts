@@ -1,7 +1,15 @@
-import { elevationAt } from './course';
+import { elevationAt as currentElevation } from './course';
 
-/** Elevation profile strip: 0.5 km behind to 4.5 km ahead, coloured by grade. */
-export function drawProfile(canvas: HTMLCanvasElement, distance: number) {
+/**
+ * Elevation profile coloured by grade. Shows `span` (e.g. a whole stage) or,
+ * by default, 0.5 km behind to 4.5 km ahead. `distance` null draws no marker.
+ */
+export function drawProfile(
+  canvas: HTMLCanvasElement,
+  distance: number | null,
+  span?: [number, number],
+  elevationAt: (d: number) => number = currentElevation,
+) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
@@ -13,8 +21,8 @@ export function drawProfile(canvas: HTMLCanvasElement, distance: number) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
-  const from = Math.max(0, distance - 500);
-  const to = from + 5000;
+  const from = span ? span[0] : Math.max(0, (distance ?? 0) - 500);
+  const to = span ? span[1] : from + 5000;
   const samples: { x: number; e: number; g: number }[] = [];
   let lo = Infinity;
   let hi = -Infinity;
@@ -40,8 +48,9 @@ export function drawProfile(canvas: HTMLCanvasElement, distance: number) {
     ctx.lineTo(b.x, h);
     ctx.fill();
   }
+  if (distance === null) return;
   ctx.fillStyle = 'rgba(10, 15, 30, 0.45)';
-  const px = ((distance - from) / (to - from)) * w;
+  const px = Math.min(w, ((distance - from) / (to - from)) * w);
   ctx.fillRect(0, 0, px, h);
   ctx.fillStyle = '#ffffff';
   ctx.strokeStyle = '#d62839';
