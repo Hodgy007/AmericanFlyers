@@ -48,6 +48,22 @@ The saving follows wind-tunnel and CFD studies of two riders in line: about a th
 | 8 m | 6% |
 | 12 m+ | 0% |
 
+**Behind a group the draft is bigger.** Every rider from the wheel you're on to 15 m beyond it counts as the group, and the saving is scaled up from the one-wheel figure to the group's maximum:
+
+`saving = one-wheel saving(gap) × groupMax(n) / 0.36`, with `groupMax(n) = 0.36 + 0.19 × (1 − e^(−(n − 1) / 1.6))`
+
+| Riders in the group | Best saving | At 1 m | At 3 m |
+| --- | --- | --- | --- |
+| 1 | 36% | 30% | 19% |
+| 2 | 45% | 38% | 24% |
+| 3 | 50% | 42% | 26% |
+| 4 | 52% | 44% | 27% |
+| 6 | 54% | 46% | 28% |
+
+These follow measurements of pacelines and small groups (third wheel 40–45%, back of a group of five or six 50–55%). Big pelotons shelter riders in the middle far more (90% or more), but groups here are small.
+
+**Speed.** The percentage hardly changes with speed, but the watts it saves do, because air drag power grows with the cube of speed: on one wheel about 133 W at 45 km/h, 23 W at 25 km/h and 2 W on a 12 km/h climb.
+
 The frame loop eases the saving over about 0.6 s (so it doesn't jump with each 2-second position update), and multiplies `cda` by `1 − saving` in `stepSpeed()`. With a smart trainer, the wind-resistance coefficient sent with the grade is scaled the same way, so the trainer gets lighter too (see [Bluetooth and FTMS](bluetooth-and-ftms.md)).
 
 The draft gauge shows the gap to the rider ahead (within 60 m), the drag saved, and the watts that saves: `½ × ρ × CdA × v³ × saving / 0.976`. Riders you're following line up in your lane from 14 m back, as in a paceline, and pull aside when you overlap.

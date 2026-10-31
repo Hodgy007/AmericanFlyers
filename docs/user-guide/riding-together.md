@@ -41,7 +41,9 @@ On a stage with a finish, teams that cross the line start the stage again. Switc
 
 Ride close behind another rider and you're in their slipstream: you need fewer watts for the same speed, just like outside.
 
-- About a third less air drag right on their wheel, about a quarter at 2–3 m, fading to nothing by 12 m.
+- About a third less air drag right on one rider's wheel, about a quarter at 2–3 m, fading to nothing by 12 m.
+- **Behind a group it's more**: about 45% behind two riders, 50% behind three, and up to about 54% on the back of a pro team.
+- The percentage is the same at any speed, but the watts it saves grow fast with speed: on one wheel about 130 W at 45 km/h, 25 W at 25 km/h, and almost nothing on a steep climb.
 - With a smart trainer, the trainer gets lighter too.
 - Ghosts don't make a draft; real riders and the pro teams do.
 - On a steep climb you're slow, so drag (and the draft) matters much less than on the flat.
@@ -51,7 +53,7 @@ Ride close behind another rider and you're in their slipstream: you need fewer w
 When a rider is within 60 m ahead, a gauge appears above the bottom of the screen:
 
 - **"Marcus S. ahead · 28 m"** and *Close to 12 m to get in the draft*: the bar fills as you close in, and the blue end is the draft zone.
-- **"In Marcus S.'s draft · 2.4 m"**, with *−21% drag · saving ~35 W*: you're in. The bar turns green within 2 m, the sweet spot for the biggest saving.
+- **"In Marcus S.'s draft · 2.4 m"**, with *−21% drag · saving ~35 W*: you're in. Behind a group it says how many, for example *In Coffeedis's draft · 5 riders*. The bar turns green within 2 m, the sweet spot for the biggest saving.
 
 Riders you're following move into your lane, so you can see you're on their wheel. Get within about 2.6 m and they move aside a little so you can come past.
 
