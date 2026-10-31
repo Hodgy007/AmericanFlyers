@@ -45,6 +45,7 @@ export interface Stage {
   scenery: Scenery;
   landmarks: LandmarkKind[];
   signs: StageSign[];
+  hairpinWord?: string; // local word for a numbered hairpin, e.g. "Virage" or "Tornante"
 }
 
 // --------------------------------------------------------------- helpers ----
@@ -66,6 +67,7 @@ const lowlandHills = (x: number, z: number) =>
   6 + fbm(x / 850, z / 850, 4) * 105 + (1 - Math.abs(fbm(x / 320 + 41, z / 320 - 7, 3))) * 28;
 
 const GANTRY: LandmarkKind = { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 };
+const startArch: LandmarkKind = { ...GANTRY, every: 1e9 };
 const finishArch = (at: number): LandmarkKind => ({ ...GANTRY, first: at, every: 1e9 });
 
 // ------------------------------------------------------------- Heartland ----
@@ -145,7 +147,7 @@ const route66: Stage = {
     mountainScale: 0.8,
   },
   landmarks: [
-    GANTRY,
+    startArch,
     finishArch(R66_FINISH),
     { file: 'gas-station.glb', every: 3000, first: 800, side: 1, offset: 23, size: 6.5, yaw: -0.5, clearance: 24 },
     { file: 'diner.glb', every: 3500, first: 1700, side: -1, offset: 24, size: 6.5, yaw: 0.5, clearance: 24 },
@@ -156,52 +158,71 @@ const route66: Stage = {
   signs: [],
 };
 
-// --------------------------------------------------------- Alpe d'Huez ----
+// -------------------------------------------------------- mountain climbs ----
 //
-// From Le Bourg-d'Oisans (723 m) to the top (1841 m): 14 km, 1118 m of
-// climbing. Per-kilometre gradients from swi-cycling.com. The 21 hairpins are
-// numbered 21 at the bottom down to 1 near the top, as on the real road; their
-// exact positions are approximated. The bends themselves are flatter than the
-// straights between them, so the straights are steepened to keep each
-// kilometre's average.
+// A climb is built from published figures: per-kilometre gradients, total
+// gain, and where its numbered hairpins sit. Hairpins are 180° bends of 12 m
+// radius joined by straights that angle up the mountainside; the bends
+// themselves are flatter than the straights, so the straights are steepened to
+// keep each kilometre's average.
 
-const ALPE_KM_GRADES = [9.3, 10.2, 8.6, 8.2, 8.6, 8.0, 8.6, 8.9, 7.3, 8.4, 8.8, 8.7, 5.8, 2.4];
-const ALPE_GAIN = 1118;
-const ALPE_FINISH = 14000;
-const ALPE_STEP = 1;
-const HAIRPINS = 21;
+interface ClimbSpec {
+  id: string;
+  name: string;
+  tagline: string;
+  kmGrades: number[]; // % per kilometre; the last entry may cover a part-kilometre
+  length: number; // metres
+  gain: number; // metres
+  hairpins: number;
+  firstHairpin: number; // metres
+  lastHairpin: number; // metres
+  /** >1 bunches the hairpins towards the top (shorter straights higher up). */
+  bunching: number;
+  approachBends: number; // radians of gentle valley bends before the first hairpin
+  finalBend: number; // radians of sweeping bend after the last hairpin
+  hairpinWord: string;
+  scenery: Omit<Scenery, 'wildHeight'>;
+}
+
 const HAIRPIN_R = 12; // metres, centreline radius
 const LEG_ALPHA = 0.12; // straights angle up the mountainside (rad)
 const TURN = Math.PI - 2 * LEG_ALPHA;
 const ARC = HAIRPIN_R * TURN;
-const FIRST_HAIRPIN = 1150;
-const LAST_HAIRPIN = 12100;
+const CLIMB_STEP = 1;
 
-function buildAlpe(): Stage {
-  // Hairpin start positions, with legs of uneven length.
-  const legs = Array.from({ length: HAIRPINS - 1 }, (_, i) => 0.7 + 0.6 * ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1);
-  const legTotal = LAST_HAIRPIN - FIRST_HAIRPIN - (HAIRPINS - 1) * ARC;
+function buildClimb(spec: ClimbSpec): Stage {
+  const { length, hairpins } = spec;
+
+  // Hairpin start positions, with uneven straights that shorten towards the top.
+  const legs = Array.from({ length: hairpins - 1 }, (_, i) => {
+    const jitter = 0.75 + 0.5 * ((((Math.sin((i + 1) * 12.9898) * 43758.5453) % 1) + 1) % 1);
+    return jitter * Math.pow(1 - (i / hairpins) * 0.85, spec.bunching);
+  });
+  const legTotal = spec.lastHairpin - spec.firstHairpin - (hairpins - 1) * ARC;
   const legSum = legs.reduce((a, b) => a + b, 0);
-  const pins: number[] = [FIRST_HAIRPIN];
-  for (let i = 0; i < HAIRPINS - 1; i++) pins.push(pins[i] + ARC + (legs[i] / legSum) * legTotal);
+  const pins: number[] = [spec.firstHairpin];
+  for (let i = 0; i < hairpins - 1; i++) pins.push(pins[i] + ARC + (legs[i] / legSum) * legTotal);
 
-  /** Small zero-ended meander so straights aren't ruler-straight. */
-  const meander = (d: number, a: number, b: number, amp: number) => amp * Math.sin((2 * Math.PI * (d - a)) / (b - a));
+  /** Zero-ended meander so straights aren't ruler-straight; longer stretches get more waves. */
+  const meander = (d: number, a: number, b: number, amp: number) => {
+    const waves = Math.max(1, Math.round((b - a) / 1500));
+    return amp * Math.sin((2 * Math.PI * waves * (d - a)) / (b - a));
+  };
 
   const headingAt = (d: number): number => {
     if (d <= 0) return LEG_ALPHA;
-    if (d < pins[0]) return LEG_ALPHA + meander(d, 0, pins[0], 0.08);
-    for (let i = 0; i < HAIRPINS; i++) {
+    if (d < pins[0]) return LEG_ALPHA + meander(d, 0, pins[0], Math.max(0.08, spec.approachBends));
+    for (let i = 0; i < hairpins; i++) {
       const start = i % 2 === 0 ? LEG_ALPHA : Math.PI - LEG_ALPHA;
       const turn = i % 2 === 0 ? TURN : -TURN;
       const arcEnd = pins[i] + ARC;
       if (d < arcEnd) return start + turn * ((d - pins[i]) / ARC);
-      const next = i + 1 < HAIRPINS ? pins[i + 1] : Infinity;
+      const next = i + 1 < hairpins ? pins[i + 1] : Infinity;
       if (d < next) {
         const h = start + turn;
         if (next === Infinity) {
-          // Into the village: a long sweeping bend, then straight to the line.
-          return h + 0.6 * smoothstep(arcEnd + 300, arcEnd + 1300, d) + meander(Math.min(d, ALPE_FINISH), arcEnd, ALPE_FINISH, 0.06);
+          const span = Math.max(1, length - arcEnd);
+          return h + spec.finalBend * smoothstep(arcEnd + span * 0.15, arcEnd + span * 0.7, d) + meander(Math.min(d, length), arcEnd, Math.max(length, arcEnd + 1), 0.05);
         }
         return h + meander(d, arcEnd, next, 0.05);
       }
@@ -211,38 +232,38 @@ function buildAlpe(): Stage {
 
   // Raw gradient: interpolated between kilometre midpoints, halved in bends.
   const inBend = (d: number) => pins.some((p) => d >= p && d < p + ARC);
+  const grades = spec.kmGrades;
   const kmGrade = (d: number) => {
-    const f = Math.min(Math.max(d / 1000 - 0.5, 0), ALPE_KM_GRADES.length - 1);
+    const f = Math.min(Math.max(d / 1000 - 0.5, 0), grades.length - 1);
     const i = Math.floor(f);
     const t = f - i;
-    const a = ALPE_KM_GRADES[i];
-    const b = ALPE_KM_GRADES[Math.min(i + 1, ALPE_KM_GRADES.length - 1)];
-    return (a + (b - a) * t) / 100;
+    return (grades[i] + (grades[Math.min(i + 1, grades.length - 1)] - grades[i]) * t) / 100;
   };
-  const n = Math.round(ALPE_FINISH / ALPE_STEP);
+  const n = Math.round(length / CLIMB_STEP);
   const raw = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    const d = (i + 0.5) * ALPE_STEP;
+    const d = (i + 0.5) * CLIMB_STEP;
     raw[i] = kmGrade(d) * (inBend(d) ? 0.5 : 1);
   }
   // Rescale each kilometre to its published average, then the whole climb to the published gain.
-  for (let k = 0; k < ALPE_KM_GRADES.length; k++) {
-    const a = Math.floor((k * 1000) / ALPE_STEP);
-    const b = Math.min(n, Math.floor(((k + 1) * 1000) / ALPE_STEP));
+  for (let k = 0; k < grades.length; k++) {
+    const a = Math.floor((k * 1000) / CLIMB_STEP);
+    const b = Math.min(n, Math.floor(((k + 1) * 1000) / CLIMB_STEP));
+    if (b <= a) continue;
     let sum = 0;
     for (let i = a; i < b; i++) sum += raw[i];
-    const target = (ALPE_KM_GRADES[k] / 100) * (b - a);
+    const target = (grades[k] / 100) * (b - a);
     for (let i = a; i < b; i++) raw[i] *= target / sum;
   }
   const elev = new Float64Array(n + 1);
-  for (let i = 0; i < n; i++) elev[i + 1] = elev[i] + raw[i] * ALPE_STEP;
-  const scale = ALPE_GAIN / elev[n];
+  for (let i = 0; i < n; i++) elev[i + 1] = elev[i] + raw[i] * CLIMB_STEP;
+  const scale = spec.gain / elev[n];
   for (let i = 0; i <= n; i++) elev[i] *= scale;
 
   const elevationAt = (d: number): number => {
     if (d <= 0) return 0;
-    if (d >= ALPE_FINISH) return elev[n] + Math.min(d - ALPE_FINISH, 60) * 0.01; // level run-out at the top
-    const f = d / ALPE_STEP;
+    if (d >= length) return elev[n] + Math.min(d - length, 60) * 0.01; // level run-out at the top
+    const f = d / CLIMB_STEP;
     const i = Math.floor(f);
     return elev[i] + (elev[i + 1] - elev[i]) * (f - i);
   };
@@ -251,43 +272,93 @@ function buildAlpe(): Stage {
   // from the road climbs with it instead of the road sitting on a pillar.
   let x = 0, z = 0;
   const pts: [number, number, number][] = [];
-  for (let d = 0; d < ALPE_FINISH; d += ALPE_STEP * 2) {
-    const h = headingAt(d + ALPE_STEP);
-    x += Math.cos(h) * ALPE_STEP * 2;
-    z += Math.sin(h) * ALPE_STEP * 2;
+  for (let d = 0; d < length; d += CLIMB_STEP * 2) {
+    const h = headingAt(d + CLIMB_STEP);
+    x += Math.cos(h) * CLIMB_STEP * 2;
+    z += Math.sin(h) * CLIMB_STEP * 2;
     if (d % 50 === 0) pts.push([x, z, elevationAt(d)]);
   }
   const plane = fitPlane(pts);
 
   const wildHeight = (wx: number, wz: number) => {
-    const base = Math.max(-40, Math.min(ALPE_GAIN + 150, plane(wx, wz)));
+    const base = Math.max(-40, Math.min(spec.gain + 150, plane(wx, wz)));
     const massif = fbm(wx / 1300, wz / 1300, 4) * 260;
     const ridges = (1 - Math.abs(fbm(wx / 420 + 7, wz / 420 - 3, 3))) * 170;
     return base + 60 + massif + ridges;
   };
 
   return {
-    id: 'alpe-dhuez',
-    name: "Alpe d'Huez",
-    tagline: "14 km at 8% from Le Bourg-d'Oisans, up all 21 hairpins. Real gradients.",
-    finish: ALPE_FINISH,
+    id: spec.id,
+    name: spec.name,
+    tagline: spec.tagline,
+    finish: length,
     elevationAt,
     headingAt,
-    scenery: {
-      wildHeight,
-      bumpAmp: 10,
-      rockLine: 1250,
-      snowLine: 1650,
-      treeLine: 760,
-      coniferBias: 0.9,
-      forestCover: 0.3,
-      fields: false,
-      mountainScale: 2.6,
-    },
-    landmarks: [GANTRY, finishArch(ALPE_FINISH)],
-    signs: pins.map((p, i) => ({ d: p - 12, label: String(HAIRPINS - i), style: 'hairpin' as const })),
+    scenery: { ...spec.scenery, wildHeight },
+    landmarks: [startArch, finishArch(length)],
+    signs: pins.map((p, i) => ({ d: p - 12, label: String(hairpins - i), style: 'hairpin' as const })),
+    hairpinWord: spec.hairpinWord,
   };
 }
+
+// From Le Bourg-d'Oisans (723 m) to the top (1841 m). Per-kilometre gradients
+// from swi-cycling.com; hairpin positions approximated.
+const alpe = buildClimb({
+  id: 'alpe-dhuez',
+  name: "Alpe d'Huez",
+  tagline: "14 km at 8% from Le Bourg-d'Oisans, up all 21 hairpins. Real gradients.",
+  kmGrades: [9.3, 10.2, 8.6, 8.2, 8.6, 8.0, 8.6, 8.9, 7.3, 8.4, 8.8, 8.7, 5.8, 2.4],
+  length: 14000,
+  gain: 1118,
+  hairpins: 21,
+  firstHairpin: 1150,
+  lastHairpin: 12100,
+  bunching: 0,
+  approachBends: 0.08,
+  finalBend: 0.6,
+  hairpinWord: 'Virage',
+  scenery: {
+    bumpAmp: 10,
+    rockLine: 1250,
+    snowLine: 1650,
+    treeLine: 760,
+    coniferBias: 0.9,
+    forestCover: 0.3,
+    fields: false,
+    mountainScale: 2.6,
+  },
+});
+
+// From Prato allo Stelvio (~915 m) to the pass (2758 m): 24.5 km, ~1824 m,
+// 7.5% average, max ~9.5% (mycols.app, climbfinder.com). No per-kilometre
+// source was found, so the shape is approximated: an easier valley start past
+// Gomagoi and Trafoi, then a steady 8–9% up the 48 numbered hairpins, which
+// bunch into the famous wall below the summit.
+const stelvio = buildClimb({
+  id: 'stelvio',
+  name: 'Stelvio Pass',
+  tagline: '24.5 km at 7.5% from Prato to 2758 m, through 48 numbered hairpins.',
+  kmGrades: [4.5, 5.0, 5.5, 6.0, 6.0, 6.5, 6.5, 7.0, 7.5, 8.0, 8.0, 8.5, 8.5, 8.0, 8.5, 8.5, 9.0, 8.5, 8.5, 8.0, 8.5, 8.5, 8.0, 8.0, 7.5],
+  length: 24500,
+  gain: 1824,
+  hairpins: 48,
+  firstHairpin: 8600,
+  lastHairpin: 24150,
+  bunching: 1.6,
+  approachBends: 0.3,
+  finalBend: 0.2,
+  hairpinWord: 'Tornante',
+  scenery: {
+    bumpAmp: 12,
+    rockLine: 1150,
+    snowLine: 1760,
+    treeLine: 1050,
+    coniferBias: 0.95,
+    forestCover: 0.35,
+    fields: false,
+    mountainScale: 3.4,
+  },
+});
 
 /** Least-squares plane e = a + b·x + c·z through the points. */
 function fitPlane(pts: [number, number, number][]) {
@@ -312,7 +383,7 @@ function fitPlane(pts: [number, number, number][]) {
   return (x: number, z: number) => a + b * x + c * z;
 }
 
-export const STAGES: Stage[] = [heartland, route66, buildAlpe()];
+export const STAGES: Stage[] = [heartland, route66, alpe, stelvio];
 
 export function stageById(id: string | null): Stage {
   return STAGES.find((s) => s.id === id) ?? heartland;

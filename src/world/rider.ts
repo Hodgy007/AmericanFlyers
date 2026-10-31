@@ -284,7 +284,8 @@ export class RiderModel {
 // Targets in the bike's frame (+x forward, +y up, +z right).
 const RIDER_SCALE = 1.06; // fits the model's 0.80 m legs to this bike
 const HIP_CENTRE = v(-0.17, 0.93); // midpoint between the hip joints, just above the saddle
-const NECK = v(0.26, 1.2); // base of the neck: sets the riding lean
+const BACK_ANGLE = (40 * Math.PI) / 180; // hip-to-shoulder line, measured from horizontal
+const PELVIS_TILT = (28 * Math.PI) / 180; // pelvis rolled forward on the saddle
 const HAND = (side: number) => v(0.6, 0.865, 0.2 * side); // on the brake hoods
 const HEAD_UP = v(0.42, 0.91).normalize(); // head tilted up to look along the road
 const ELBOW_POLE = (side: number) => v(-0.2, -1, 0.5 * side); // elbows bend down and out
@@ -300,6 +301,7 @@ class Rig {
   private readonly bones = new Map<string, THREE.Object3D>();
   private readonly rest = new Map<THREE.Object3D, THREE.Quaternion>();
   private readonly len = new Map<string, number>();
+  private torso = 0.5; // hip joints to base of neck, metres
   private readonly wq = new THREE.Quaternion();
   private readonly pq = new THREE.Quaternion();
 
@@ -331,6 +333,7 @@ class Rig {
       this.len.set(`${s}Fore`, at(`${s}ForeArm`).distanceTo(at(`${s}Hand`)));
     }
     const hips = at('LeftUpLeg').add(at('RightUpLeg')).multiplyScalar(0.5);
+    this.torso = hips.distanceTo(at('neck'));
     this.root.position.copy(HIP_CENTRE).sub(hips);
   }
 
@@ -347,10 +350,13 @@ class Rig {
     const dir = (p: THREE.Vector3) => p.clone().normalize().applyQuaternion(body.getWorldQuaternion(this.wq));
     const pos = (name: string) => this.bone(name).getWorldPosition(new THREE.Vector3());
 
-    // Lean the back over three joints so it curves instead of hinging.
-    const neck = world(NECK);
-    this.aim('Spine02', 'neck', neck, 1 / 3);
-    this.aim('Spine01', 'neck', neck, 1 / 2);
+    // Roll the pelvis forward, then lean the back over three joints so it
+    // curves instead of hinging, ending with the neck on a BACK_ANGLE line
+    // from the hip joints.
+    this.aim('Hips', 'Spine02', pos('Hips').add(dir(v(Math.sin(PELVIS_TILT), Math.cos(PELVIS_TILT)))));
+    const neck = world(v(HIP_CENTRE.x + this.torso * Math.cos(BACK_ANGLE), HIP_CENTRE.y + this.torso * Math.sin(BACK_ANGLE)));
+    this.aim('Spine02', 'neck', neck, 0.6);
+    this.aim('Spine01', 'neck', neck, 0.8);
     this.aim('Spine', 'neck', neck, 1);
     const head = pos('Head');
     this.aim('Head', 'head_end', head.add(dir(HEAD_UP).multiplyScalar(0.2)));

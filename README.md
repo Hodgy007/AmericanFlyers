@@ -6,7 +6,13 @@ An indoor cycling app that runs in your browser. Connect a Wahoo smart trainer o
 
 - **Bluetooth trainer connection.** Uses the standard FTMS (Fitness Machine) profile, so it works with Wahoo KICKR, KICKR CORE and KICKR SNAP on current firmware, as well as most other smart trainers. Trainers that only expose a Cycling Power service still work in read-only mode.
 - **Resistance follows the road.** The current grade is sent to the trainer once a second, scaled by a *trainer difficulty* setting (default 50%).
-- **Stages** (🏁 button): *Heartland Rollers* (endless farmland), *Route 66 Flats* (25 km time trial) and *Alpe d'Huez*: 14 km at 8% from Le Bourg-d'Oisans with real per-kilometre gradients (swi-cycling.com) and all 21 numbered hairpins. Stages with a finish line count down the distance, show the next hairpin, and finish with your time, average power and speed.
+- **Stages** (🏁 button):
+  - *Heartland Rollers*: endless farmland, free ride.
+  - *Route 66 Flats*: 25 km time trial.
+  - *Alpe d'Huez*: 14 km at 8% from Le Bourg-d'Oisans with real per-kilometre gradients (swi-cycling.com) and all 21 numbered hairpins.
+  - *Stelvio Pass*: 24.5 km at 7.5% from Prato allo Stelvio to 2758 m through 48 numbered hairpins. Totals match published figures; the per-kilometre shape is approximated.
+
+  Stages with a finish line count down the distance, show the next hairpin, and end at a checkered line under the arch with your time, average power and speed.
 - **3D world (Three.js).** A winding road through low-poly hills, forests, fields and distant mountains, with sunlight, shadows, haze and clouds. The terrain is generated on the fly as you ride, so the road never ends.
 - **3D rider.** A rigged rider model (generated with Higgsfield) posed on the bike every frame: legs follow the pedals at your real cadence, hands on the hoods, head up. The wheels turn at your virtual speed.
 - **Roadside landmarks:** a start/finish arch, red barn, farmhouse, windmill, retro diner and water tower, generated with Higgsfield (image → 3D) and placed along the route. See `public/models/README.md` to add or swap models.

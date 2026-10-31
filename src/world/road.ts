@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { currentStage, roadPoint } from '../course';
+import { currentStage, gradeAt, roadPoint } from '../course';
 
 const CHUNK = 100; // metres of road per mesh
 const STEP = 2;
@@ -56,6 +56,24 @@ function roadTexture(renderer: THREE.WebGLRenderer): THREE.Texture {
   return tex;
 }
 
+/** Black-and-white chequers: 5 squares along the road, 18 across. */
+function checkerTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = 5 * 32;
+  c.height = 18 * 32;
+  const g = c.getContext('2d')!;
+  for (let x = 0; x < 5; x++) {
+    for (let y = 0; y < 18; y++) {
+      g.fillStyle = (x + y) % 2 ? '#111318' : '#f4f6fa';
+      g.fillRect(x * 32, y * 32, 32, 32);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  return tex;
+}
+
 function postGeometry() {
   const paint = (geo: THREE.BufferGeometry, color: string) => {
     const g = geo.toNonIndexed();
@@ -82,6 +100,15 @@ export class Road {
   private readonly postGeo = postGeometry();
   private readonly postMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
   private readonly signPostMat = new THREE.MeshStandardMaterial({ color: '#8a8f99', roughness: 0.5, metalness: 0.4 });
+  // 2.5 m deep (along the road, +x) by the full road width (+z), lying flat.
+  private readonly finishGeo = new THREE.PlaneGeometry(2.5, ROAD_HALF_WIDTH * 2).rotateX(-Math.PI / 2);
+  private readonly finishMat = new THREE.MeshStandardMaterial({
+    map: checkerTexture(),
+    roughness: 0.8,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  });
 
   constructor(renderer: THREE.WebGLRenderer, private markers: MarkerConfig) {
     this.material = new THREE.MeshStandardMaterial({
@@ -174,15 +201,26 @@ export class Road {
     const label = n > 0 && signD < d0 + CHUNK ? this.markers.label(n) : null;
     if (label) place(this.buildSign(label, disposables, 'distance'), signD, ROAD_HALF_WIDTH + 2);
 
+    // Checkered finish line painted across the road.
+    const finish = currentStage().finish;
+    if (finish !== null && finish >= d0 && finish < d0 + CHUNK) {
+      const p = roadPoint(finish);
+      const line = new THREE.Mesh(this.finishGeo, this.finishMat);
+      line.position.set(p.x - origin.x, p.y + 0.04, p.z - origin.z);
+      line.rotation.set(0, -p.heading, Math.atan(gradeAt(finish)), 'YXZ');
+      line.receiveShadow = true;
+      group.add(line);
+    }
+
     // The stage's own signs (e.g. numbered hairpins).
     for (const s of currentStage().signs) {
-      if (s.d >= d0 && s.d < d0 + CHUNK) place(this.buildSign(s.label, disposables, s.style), s.d, ROAD_HALF_WIDTH + 2);
+      if (s.d >= d0 && s.d < d0 + CHUNK) place(this.buildSign(s.label, disposables, s.style, currentStage().hairpinWord), s.d, ROAD_HALF_WIDTH + 2);
     }
 
     return { group, dispose: () => disposables.forEach((d) => d.dispose()) };
   }
 
-  private buildSign(label: string, disposables: { dispose(): void }[], style: 'distance' | 'hairpin') {
+  private buildSign(label: string, disposables: { dispose(): void }[], style: 'distance' | 'hairpin', word = 'Virage') {
     const hairpin = style === 'hairpin';
     const c = document.createElement('canvas');
     c.width = 256;
@@ -197,9 +235,9 @@ export class Road {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     if (hairpin) {
-      // Numbered hairpin plaque: "VIRAGE" over a big number.
+      // Numbered hairpin plaque: the local word ("VIRAGE", "TORNANTE") over a big number.
       g.font = '700 34px system-ui, sans-serif';
-      g.fillText('VIRAGE', 128, 58);
+      g.fillText(word.toUpperCase(), 128, 58, 220);
       g.font = '800 130px system-ui, sans-serif';
       g.fillText(label, 128, 160);
     } else {

@@ -342,7 +342,7 @@ function stageProgress() {
   const left = (stage.finish - ride.distance) / 1000;
   const parts = [stage.name, `${(imperial ? left / KM_PER_MI : left).toFixed(1)} ${imperial ? 'mi' : 'km'} to go`];
   const next = stage.signs.find((s) => s.d > ride.distance);
-  if (next?.style === 'hairpin') parts.push(`next: Virage ${next.label} in ${Math.round(next.d - ride.distance)} m`);
+  if (next?.style === 'hairpin') parts.push(`next: ${stage.hairpinWord ?? 'Hairpin'} ${next.label} in ${Math.round(next.d - ride.distance)} m`);
   return parts.join(' · ');
 }
 
