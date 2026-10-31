@@ -1,0 +1,20 @@
+{
+  "name": "americanflyers",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "@types/web-bluetooth": "^0.0.22",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  }
+}
