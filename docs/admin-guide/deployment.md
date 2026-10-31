@@ -1,6 +1,6 @@
 # Deployment
 
-This page covers how the app is deployed: the Vercel project and automatic deploys from `main`, the GitHub Pages workflow that's also in the repository, environment variables, and the Deployment Protection setting.
+This page covers how the app is deployed: the Vercel project and automatic deploys from `main`, environment variables, and the Deployment Protection setting.
 
 ## Vercel
 
@@ -20,11 +20,7 @@ Vercel also builds other branches. These are preview deployments, with their own
 
 Vercel's Deployment Protection can require a login to view deployments. It must be **off** for public sign-ups to work. Check it in the Vercel dashboard for the `americanflyers` project. The repository doesn't set this, so this is a dashboard check.
 
-## GitHub Pages workflow
-
-The repository also contains a GitHub Actions workflow, `.github/workflows/deploy.yml`. On every push to `main` it runs `npm ci`, `npm run build`, and publishes `dist/` to GitHub Pages. The build uses a relative base (`base: './'` in `vite.config.ts`), so it works under a sub-path.
-
-The README and `CLAUDE.md` name Vercel as the deploy target. The GitHub Pages workflow is also active in the repository, so a push to `main` triggers both. Check that GitHub Pages is still wanted before you rely on either address.
+Vercel is the only deploy target. (An earlier GitHub Pages workflow was removed.)
 
 ## Environment variables
 

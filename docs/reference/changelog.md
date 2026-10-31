@@ -23,7 +23,7 @@ Merge commit `ffcf874`. American Flyers: 3D indoor cycling app with Bluetooth tr
 - **Per-stage scenery.** Terrain, rock, snow and tree lines, forest cover and mountain height are set per stage. Steep slopes shade darker, and turn to rock.
 - **Rider.** A rigged rider posed by inverse kinematics each frame, with the back, head and hands set for a riding position. Falls back to a built-in rider if the model is missing.
 
-Pull request #1 also added the GitHub Pages deploy workflow.
+Pull request #1 also added a GitHub Pages deploy workflow, since removed in favor of Vercel.
 
 ## Pull request #2: workouts, data blocks, GPX routes and project memory (merged 2026-10-31)
 
