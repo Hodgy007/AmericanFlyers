@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { roadPoint } from '../course';
+import { gradeAt, roadPoint } from '../course';
 import { heightAt } from './terrain';
 
 // Roadside landmarks loaded from GLB models in public/models/. Each kind
@@ -11,20 +11,25 @@ interface LandmarkKind {
   file: string;
   every: number; // metres between repeats
   first: number; // distance of the first one
-  side: -1 | 0 | 1; // -1 left, 1 right, 0 spanning the road
+  side: -1 | 0 | 1; // -1 left, 1 right, 0 on the road itself
+  /** For side 0: 'across' spans the road like an arch; 'along' is ridden through lengthwise (a bridge). */
+  span?: 'across' | 'along';
   offset: number; // metres from the road centre
-  size: number; // target height in metres (width for road-spanning kinds)
+  size: number; // target height in metres; width for side-0 kinds
   yaw?: number; // extra turn in radians after facing the road
   clearance: number; // keep trees this far away
 }
 
 const KINDS: LandmarkKind[] = [
-  { file: 'gantry.glb', every: 5000, first: 30, side: 0, offset: 0, size: 13, clearance: 12 },
+  { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 },
+  { file: 'covered-bridge.glb', every: 6000, first: 4000, side: 0, span: 'along', offset: 0, size: 12.5, clearance: 22 },
   { file: 'windmill.glb', every: 1900, first: 600, side: -1, offset: 26, size: 15, yaw: 0.4, clearance: 24 },
   { file: 'barn.glb', every: 2300, first: 950, side: 1, offset: 34, size: 10, yaw: -0.6, clearance: 26 },
   { file: 'farmhouse.glb', every: 2300, first: 1200, side: -1, offset: 32, size: 9, yaw: 0.6, clearance: 26 },
   { file: 'diner.glb', every: 3700, first: 1900, side: -1, offset: 24, size: 6.5, yaw: 0.5, clearance: 24 },
   { file: 'water-tower.glb', every: 4100, first: 2700, side: 1, offset: 46, size: 26, clearance: 18 },
+  { file: 'gas-station.glb', every: 4300, first: 1550, side: 1, offset: 23, size: 6.5, yaw: -0.5, clearance: 24 },
+  { file: 'silos.glb', every: 3100, first: 2150, side: 1, offset: 40, size: 18, yaw: -0.3, clearance: 26 },
 ];
 
 const BEHIND = 250;
@@ -112,7 +117,11 @@ export class Landmarks {
     const { kind } = site;
     const y = kind.side === 0 ? p.y : heightAt(site.x, site.z, { dist: kind.offset, d: site.d });
     obj.position.set(site.x, y - 0.4, site.z); // sink slightly so slopes don't show a gap
-    if (kind.side === 0) {
+    if (kind.span === 'along') {
+      // Long axis follows the road, pitched to match the grade.
+      obj.rotation.set(0, -p.heading, Math.atan(gradeAt(site.d)), 'YXZ');
+      obj.position.y = p.y; // sits on the road, not sunk
+    } else if (kind.side === 0) {
       // Face back down the road towards the approaching rider.
       obj.rotation.y = Math.atan2(-Math.cos(p.heading), -Math.sin(p.heading));
     } else {
@@ -126,17 +135,28 @@ export class Landmarks {
 function normalise(scene: THREE.Object3D, kind: LandmarkKind): THREE.Object3D {
   const box = new THREE.Box3().setFromObject(scene);
   const size = box.getSize(new THREE.Vector3());
-  const scale = kind.side === 0 ? kind.size / Math.max(size.x, size.z) : kind.size / size.y;
+  const scale =
+    kind.span === 'along' ? kind.size / Math.min(size.x, size.z)
+    : kind.side === 0 ? kind.size / Math.max(size.x, size.z)
+    : kind.size / size.y;
   const centre = box.getCenter(new THREE.Vector3());
   scene.position.set(-centre.x * scale, -box.min.y * scale, -centre.z * scale);
   scene.scale.setScalar(scale);
+  const holder = new THREE.Group();
+  if (kind.span === 'along' && size.z > size.x) {
+    // Turn the model so its long axis lies along the holder's +x (the road direction).
+    const turn = new THREE.Group();
+    turn.rotation.y = Math.PI / 2;
+    turn.add(scene);
+    holder.add(turn);
+  } else {
+    holder.add(scene);
+  }
   scene.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true;
       o.receiveShadow = true;
     }
   });
-  const holder = new THREE.Group();
-  holder.add(scene);
   return holder;
 }
