@@ -1,4 +1,4 @@
-// Neon: Managed Better Auth (sign in with Google / Apple) and the Data API.
+// Neon: Managed Better Auth (sign in with Google, or email and password) and the Data API.
 // These URLs are public; each rider's rows are protected by row-level
 // security in the database (see db/schema.sql).
 

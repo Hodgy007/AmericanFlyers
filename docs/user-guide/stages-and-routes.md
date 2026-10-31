@@ -14,10 +14,15 @@ Choosing a stage resets the ride. If your current ride is at least a minute long
 | --- | --- | --- |
 | **Heartland Rollers** | Endless | Rolling farmland with no finish line. A free ride. Farm buildings, a covered bridge and a start arch line the road. |
 | **Route 66 Flats** | 25 km | A time-trial along a flat, fast stretch of highway past diners and gas stations. Finishes at a checkered line under an arch. |
+| **Hell of the West** | 20.8 km | The final stage of the 1985 film *American Flyers*, filmed on Colorado 103 from Idaho Springs (2,293 m) up Chicago Creek to the sprint at Echo Lake (3,235 m), below Mount Evans. About 3.5% for the first 11 km, then 5.8%, with switchbacks in the upper half and a flat finish at the lake. Totals from published figures; the per-kilometer shape is approximated. |
 | **Alpe d'Huez** | 14 km | Climbs from Le Bourg-d'Oisans (723 m) up 1,118 m of gain, at an average of about 8%. It has 21 numbered hairpins, marked with **Virage** plaques. The gradients follow published per-kilometer figures from swi-cycling.com. |
 | **Stelvio Pass** | 24.5 km | Climbs from Prato allo Stelvio (about 915 m) at an average of 7.5%, through 48 numbered hairpins marked **Tornante**. The summit is at 2,758 m. The per-kilometer shape is an approximation, because no per-kilometer source was found. |
 
-On Alpe d'Huez and Stelvio Pass the elevation readout shows real altitude. Hairpins count down from the bottom: the first you reach is the highest number.
+| **Mont Ventoux** | 21.4 km | From Bédoin (300 m) to the summit (1,910 m) at 7.5%: vineyards, then 9–10% through the forest to Chalet Reynard, then the bare white limestone to the top. Per-kilometer shape approximated. |
+| **Col du Tourmalet** | 19 km | From Luz-Saint-Sauveur (711 m) to the col (2,115 m) at 7.4%, steeper through the hairpins above Barèges (**Virage**). Per-kilometer shape approximated. |
+| **Monte Zoncolan** | 10.1 km | From Ovaro (525 m) to 1,735 m at 11.9%, with long stretches at 13–15% and hairpins marked **Tornante**. Per-kilometer shape approximated. |
+
+On every climb the elevation readout shows real altitude. Hairpins count down from the bottom: the first you reach is the highest number.
 
 ## Finish lines
 
@@ -26,7 +31,9 @@ On a stage with a finish line:
 - The status line counts down the distance to go, and shows the next numbered hairpin with the distance to it.
 - The **To go** data block shows the same distance, if you've added it.
 - A checkered line runs across the road under the finish arch.
+- Crowds cheer over the last 700 m, and a fanfare plays at the line.
 - When you cross the line, the ride ends with a finish screen. The ride is saved when you're signed in.
+- If you rode from the start line, your time goes on the stage's leaderboard, and the summary compares it with the ghost you were racing. See [Leaderboards and ghosts](leaderboards-and-ghosts.md).
 
 You can carry on riding after the finish screen with **Keep riding**. **Ride it again** starts the stage over.
 

@@ -49,9 +49,9 @@ The app bundles these values, and they're all public:
 
 - the Neon Auth and Data API endpoints in `src/cloud/client.ts`,
 - the settings, workout and route data in `localStorage`, and
-- the Google and Apple sign-in flows, which run through Neon Auth.
+- the Google and email sign-in flows, which run through Neon Auth.
 
-The Apple `.p8` private key belongs only in the Neon Console. It must not appear in the repository, in chat, or in any file the app reads. The app never sees it.
+Passwords go straight to Neon Auth and are never stored by the app. OAuth client secrets (for example your own Google client) belong only in the Neon Console, never in the repository, chat, or any file the app reads.
 
 Don't add a service-role key, a database password or an API key to the client code. Anything in the bundle can be read by anyone who opens the page.
 
@@ -59,14 +59,26 @@ Don't add a service-role key, a database password or an API key to the client co
 
 `localStorage` holds settings, workouts, routes, and a ride held back until sign-in. It's readable by any script on the same origin, so don't store secrets there. Routes include GPS coordinates, which are personal data. They stay on the device unless you're signed in, and then they're in your account.
 
+## Riding together, leaderboards and ghosts
+
+- `live_riders` can't be read or written directly. `ride_presence()` writes only the caller's own row, clamps every value, and returns other riders' **hashed** ids and **short names** (*First L.*), never emails or full names.
+- `stage_ghost()` returns only a ride's distance trace and time, never its power, heart rate or other samples.
+- Positions are shared only while a rider is signed in, on a stage, and has **Ride together** on. Hiding the tab removes the row; stale rows are deleted after 10 minutes.
+
+## Email accounts
+
+- Sign-up asks only for a rider name, email, password, weight and (optionally) FTP. No phone number or address is collected anywhere.
+- Passwords are handled by Neon Auth (Better Auth); the app never stores them.
+- **Email verification is off**, so an email account doesn't prove the rider owns the address. Admin access needs a verified email (`is_admin()` checks `emailVerified`), so an email account can't become an admin by using an admin's address. Turn on verification in Neon Auth if that matters for other features.
+
 ## Known gaps
 
 These are things the code doesn't enforce. Fix them or work around them before relying on the behavior.
 
-- **Admins can ban other admins through the database.** The dashboard doesn't show **Ban** on admin rows, but `admin_set_ban` only refuses banning yourself. An admin who calls the function directly, or uses SQL, can ban another admin.
 - **The ban relies on Neon Auth.** The app sets the `banned` flag and removes sessions. Whether the banned rider can sign in again depends on Neon Auth honoring that flag.
 - **No account deletion.** Riders can delete their own rides, but nothing in the app removes the account or its rows.
 - **Feedback context is sent with every report.** It includes the browser user agent and screen size. That's useful for debugging, but it's visible to admins.
+- **Riding together trusts the client's position and speed.** Values are clamped, but a rider could report a made-up position. Leaderboard times also come from the client.
 - **No rate limiting in the app.** The app doesn't limit how often riders send feedback, save rides or sync. Any limits come from the database and Neon.
 
 ## Reviewing a change

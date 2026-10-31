@@ -16,7 +16,8 @@ export interface Trainer {
   readonly name: string;
   /** True when the trainer accepts resistance (grade) commands. */
   readonly canControl: boolean;
-  setGrade(gradePercent: number): Promise<void>;
+  /** Grade in %, and an optional wind-resistance factor (below 1 in a draft). */
+  setGrade(gradePercent: number, windFactor?: number): Promise<void>;
   /** ERG mode: the trainer holds this power regardless of cadence. */
   setTargetPower(watts: number): Promise<void>;
   disconnect(): void;
@@ -90,14 +91,14 @@ async function connectFtms(
       buf.setInt16(1, Math.round(clamp(watts, 0, 2000)), true); // 1 W resolution
       await control.send(new Uint8Array(buf.buffer));
     },
-    async setGrade(gradePercent: number) {
+    async setGrade(gradePercent: number, windFactor = 1) {
       if (!canControl) return;
       const buf = new DataView(new ArrayBuffer(7));
       buf.setUint8(0, OP_SET_SIM_PARAMS);
       buf.setInt16(1, 0, true); // wind speed, 0.001 m/s
       buf.setInt16(3, Math.round(clamp(gradePercent, -20, 20) * 100), true); // grade, 0.01 %
       buf.setUint8(5, 40); // rolling resistance coefficient, 0.0001 → 0.004
-      buf.setUint8(6, 51); // wind resistance coefficient, 0.01 kg/m → 0.51
+      buf.setUint8(6, Math.round(51 * clamp(windFactor, 0.3, 1))); // wind resistance coefficient, 0.01 kg/m → 0.51 (less in a draft)
       await control.send(new Uint8Array(buf.buffer));
     },
     disconnect: () => device.gatt?.disconnect(),

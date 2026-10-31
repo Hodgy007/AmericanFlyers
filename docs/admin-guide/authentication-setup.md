@@ -1,64 +1,69 @@
 # Authentication setup
 
-This page covers setting up sign-in for the site with Neon Auth: trusted domains, Google, and Apple (Services ID, Team ID, Key ID, the `.p8` key and the return URL).
+This page covers sign-in for the site with Neon Auth: trusted domains, Google, and email and password (sign-up, sign-in and password reset).
 
 ## Overview
 
-Sign-in is handled by **Neon Auth**, which is managed Better Auth in the `americanflyers` Neon project. The app offers **Continue with Google** and **Continue with Apple**. The app's Neon client is in [`src/cloud/client.ts`](../../src/cloud/client.ts), and the sign-in logic is in [`src/cloud/account.ts`](../../src/cloud/account.ts).
+Sign-in is handled by **Neon Auth**, which is managed Better Auth in the `americanflyers` Neon project. Riders can:
 
-Neon Auth's settings live in the **Neon Console**, under the project's **Auth** section. Work through the steps below in order.
+- **Continue with Google**, or
+- **Create an account with email**: a rider name, email, password (8+ characters), weight, and FTP if they know it. No phone number or address is ever asked for.
 
-## 1. Add trusted domains
+The app's Neon client is in [`src/cloud/client.ts`](../../src/cloud/client.ts), the sign-in calls are in [`src/cloud/account.ts`](../../src/cloud/account.ts), and the email form is [`src/cloud/emailAuth.ts`](../../src/cloud/emailAuth.ts).
 
-Neon Auth only returns users to sites it trusts. Add each site URL the app runs on:
+Neon Auth's settings live in the **Neon Console**, under the project's branch **Settings → Auth**.
 
-1. Open the project in the Neon Console, then **Auth → Trusted domains**.
-2. Add the live site, for example `https://americanflyers.vercel.app`.
-3. For local development, also add `http://localhost:5173`, the address `npm run dev` prints.
+Sign in with Apple was removed: it needs a paid Apple Developer membership.
 
-The app returns users to the page they signed in from, so each site's address needs to be on the list.
+## 1. Trusted domains
+
+Neon Auth only returns users to sites it trusts. The list currently holds:
+
+- `https://americanflyers.vercel.app` (the live site)
+- `http://localhost:5173` (`npm run dev`)
+- `http://localhost:4173` (`npm run preview`)
+
+Add any new domain (for example a custom domain) under **Auth → Trusted domains** before riders use it.
 
 ## 2. Google
 
-Neon Auth provides Google sign-in. Open **Auth → OAuth providers** in the Neon Console and check the Google provider's settings.
+Google sign-in uses Neon's **shared** Google credentials. That works, but Google's consent screen shows Neon's name rather than American Flyers. To show your own name and logo, create a Google OAuth client (Web application) with the redirect URI `https://ep-winter-voice-za03vb20.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth/callback/google`, then add its Client ID and secret under **Auth → OAuth providers → Google**. See Neon's [Set up OAuth](https://neon.com/docs/auth/guides/setup-oauth) guide.
 
-Neon Auth can use its own shared Google credentials, or your own Google OAuth client. The repository doesn't record which option the project uses, so check the Google provider settings in the Neon Console before you change anything.
+## 3. Email and password
 
-## 3. Apple
+These are the current settings (Neon Console → **Auth**):
 
-Apple needs your own Apple Developer credentials. In the Apple Developer portal, you need:
+| Setting | Value | Why |
+| --- | --- | --- |
+| Email and password | On | Riders can create accounts without Google. |
+| Allow sign-up | On | |
+| Verify email on sign-up | Off | No code to type in; riders start riding straight away. |
+| App name | *American Flyers* | Shown in password reset emails. |
+| Email sender | Neon's shared sender (`auth@mail.myneon.app`) | Fine to start with. For better delivery, add your own email provider in the Neon Console. |
 
-- a **Services ID** for sign-in,
-- your **Team ID**,
-- a **Key ID**, for a key with Sign in with Apple enabled, and
-- the **`.p8`** private key file for that key.
+### Password reset
 
-Then, in the Neon Console, open **Auth → OAuth providers**, select Apple, and fill in:
+**Forgot password?** on the sign-in form emails a link that's valid for 15 minutes. The link returns to the site with `?token=…`, the app opens **Set a new password**, and then asks the rider to sign in with the new password.
 
-| Field | Value |
-| --- | --- |
-| Services ID | Your Apple Services ID. |
-| Team ID | Your Apple Team ID. |
-| Key ID | The Key ID of your Sign in with Apple key. |
-| Private key | The contents of your `.p8` file. Enter it in the Neon Console yourself. |
-| Return URL | `https://ep-winter-voice-za03vb20.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth/callback/apple` |
+### Turning on email verification
 
-Apple requires an HTTPS return URL. The return URL above is already HTTPS.
+If you want proof that riders own their email address, turn on **Verify email on sign-up** in the Neon Console. The app would then need a step to enter the code Neon emails; ask a developer to add it first, or new riders won't be able to finish signing up.
 
-**Keep the `.p8` key private.** Enter it only in the Neon Console. Don't paste it into chat, a ticket, a commit or the repository, and don't put it in any file the app reads.
+Admins need a verified email (see [Managing admins](managing-admins.md)). Google accounts are verified; email accounts aren't while verification is off.
 
 ## 4. Check sign-in
 
-1. Open the site in a browser where you haven't signed in.
-2. Click **👤 Sign in**, then **Continue with Google** (and Apple, once set up).
-3. Check you're returned to the same page, signed in, with your first name on the button.
-
-If Apple sign-in isn't set up, the app shows *Sign in with Apple isn't switched on yet*. Google still works.
+1. Open the site in a private window.
+2. Try **Continue with Google**: you should come back signed in, with your first name on the 👤 button.
+3. Sign out, then **Sign up with email** with a new address. You should be signed in straight away, with the weight and FTP you entered in ⚙ Settings.
+4. Sign out and sign back in with that email and password.
+5. Try **Forgot password?**, follow the email link, and set a new password.
 
 ## Troubleshooting
 
-- **Returned with an error.** The app shows *Sign-in didn't finish:* and the message from the provider. Check the trusted domains and provider settings.
-- **Apple rejects the return URL.** Check the Services ID's return URL matches the one above exactly, including `/neondb/auth/callback/apple`.
+- **Returned with an error.** The app shows *Sign-in didn't finish:* and the message from Google. Check the trusted domains.
+- **"There's already an account with this email."** That address has an account (maybe made with Google). Sign in instead, or use **Forgot password?**.
+- **No reset email.** Check spam. The shared sender is rate-limited; set up your own email provider for production.
 - **Works on localhost but not on the live site (or the other way round).** Each address needs to be on the trusted domains list.
 
 See [Troubleshooting](../user-guide/troubleshooting.md#sign-in-problems) for what riders see.

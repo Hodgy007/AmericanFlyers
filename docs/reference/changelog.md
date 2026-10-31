@@ -52,9 +52,52 @@ Merge commit `bfd10f5`. Accounts, profiles, achievements, HR zones, feedback and
 - **Admin dashboard.** Riders, activity, signups and rides per day, top stages and workouts, ban and unban, and the feedback inbox.
 - **Schema.** `db/schema.sql` added.
 
+## Pull request #4: admin check fix (merged 2026-10-31)
+
+- **Admin button.** The admin check now retries while the session settles after returning from Google, so admins reliably see 🛠 Admin.
+
+## Pull request #5: realistic pedalling, home page and a visual refresh (merged 2026-10-31)
+
+- **Virtual drivetrain.** Leg speed now follows road speed through real gearing (50/34 × 11–34) with automatic shifting, slow heavy strokes on a standing start, freewheeling, and a bike rock that grows with pedal force.
+- **Home page.** A welcome screen with a cyclist hero (still and looping video made with Higgsfield) and free sign-in.
+- **Visual refresh.** Sharper buttons, fields, sliders and dialogs.
+
+## Pull request #6: documentation library (merged 2026-10-31)
+
+- The `docs/` library: user, admin and developer guides, and reference pages.
+
+## Pull request #7: headline, deploys and the Stelvio (merged 2026-10-31)
+
+- Home headline: *Welcome to the free American Flyers Training Program*.
+- Removed the GitHub Pages workflow; Vercel is the only deploy target.
+- Stelvio Pass climbs to 2,758 m.
+
+## Pull request #8: ride together, new climbs, and much more (merged 2026-10-31)
+
+- **Riding together.** Signed-in riders on the same stage see each other on the road with name tags; 👥 *Riding now* list with gaps and *Ride with*.
+- **New stages.** Hell of the West (the film's final stage, Idaho Springs to Echo Lake), Mont Ventoux, Col du Tourmalet, Monte Zoncolan.
+- **Leaderboards and ghosts.** Weekly and all-time leaderboards from whole-stage rides (`activities.finish_s`); race your best or any leaderboard ride as a ghost.
+- **Sound.** Wind, tyre hum, freewheel, crowds, interval beeps and a finish fanfare.
+- **Virtual shifting.** 24 gears with on-screen and keyboard shifting; the gear changes the trainer's resistance.
+- **Training plans.** Get Started, FTP Builder and Hell of the West, with five new built-in workouts.
+- **First-ride setup**, **installable app** (manifest, service worker, icons), full screen and bigger numbers on TVs.
+- **Tidier screen.** A ☰ Menu for everything but Stage, Workouts, 👥, Connect trainer and the account; data blocks across the top or in a column on the left or right.
+- **Rider.** Shoes sit level instead of pointing up, with a little ankling.
+
+## Pull request #9: home page copy (merged 2026-10-31)
+
+- The home page leads with the Hell of the West, riding together, leaderboards and ghosts, and training plans.
+
+## Unreleased (in review)
+
+- **Email sign-up and sign-in.** Create an account with a rider name, email, password, weight and optional FTP; no phone number or address. Sign in, and reset a forgotten password by email. Sign in with Apple removed.
+- **Drafting.** Riding behind another rider cuts your air drag by up to about a third (and lightens a smart trainer); a slipstream gauge shows the gap to the rider ahead, the drag saved and the watts it saves.
+- **Second home hero.** A looping pit bull chase, taking turns with the original rider hero.
+- **Docs.** Every guide updated for the latest features, and the languages and technologies listed in [Architecture](../developer-guide/architecture.md#languages-and-technologies).
+
 ## Full commit list
 
-For reference, every commit on `origin/main`, in order:
+For reference, every commit on `origin/main` up to pull request #3, in order. For later commits, run `git log --oneline origin/main`.
 
 | Commit | Date | Subject |
 | --- | --- | --- |

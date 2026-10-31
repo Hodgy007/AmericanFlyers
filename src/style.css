@@ -362,8 +362,8 @@ dialog h3 { font-size: 15px; margin: 18px 0 8px; }
 .provider svg { width: 20px; height: 20px; }
 .provider.google { background: #fff; color: #1f1f1f; border-color: #dadce0; }
 .provider.google:hover:not(:disabled) { background: #f2f2f2; }
-.provider.apple { background: #000; color: #fff; border-color: #000; }
-.provider.apple:hover:not(:disabled) { background: #222; }
+.provider.email { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+.provider.email:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
 
 /* Profile */
 .profile-dialog { width: min(96vw, 980px); max-height: 94vh; }
@@ -625,6 +625,7 @@ dialog h3 { font-family: var(--font-display); font-weight: 700; font-size: 18px;
 .home[hidden] { display: none; }
 .home-bg, .home-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 70% center; }
 .home-bg { background: url('/images/hero.jpg') 70% center / cover no-repeat; }
+:root[data-hero='dog'] .home-bg { background-image: url('/images/hero-dog.jpg'); }
 .home-video { opacity: 0; transition: opacity 0.6s ease; }
 .home-video.ready { opacity: 1; }
 .home-scrim {
@@ -668,6 +669,7 @@ body.at-home .toast { bottom: 24px; }
 
 @media (max-width: 768px) {
   .home-bg { background-image: url('/images/hero-768.jpg'); background-position: 72% top; background-size: auto 62vh; background-color: #080d1e; }
+  :root[data-hero='dog'] .home-bg { background-image: url('/images/hero-dog-768.jpg'); }
   .home-video { height: 62vh; object-position: 72% center; }
   .home-scrim { background: linear-gradient(180deg, rgba(6, 10, 26, 0.35) 0%, rgba(6, 10, 26, 0.15) 30%, rgba(6, 10, 26, 0.85) 52%, #080d1e 64%); }
   .home-inner { gap: 20px; }
@@ -838,3 +840,63 @@ body.at-home .gear-panel { display: none; }
   body.hud-left .hud-wrap, body.hud-right .hud-wrap { width: 330px; }
 }
 @media (min-width: 769px) and (max-width: 1100px) { .home-features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ----------------------------------------------------- email sign-in ---- */
+.signin-dialog { width: min(94vw, 440px); }
+.signin-body { display: grid; }
+.or-rule { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.or-rule::before, .or-rule::after { content: ''; flex: 1; height: 1px; background: var(--line, rgba(255, 255, 255, 0.12)); }
+.email-auth { display: grid; gap: 0; }
+.email-auth label { display: block; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.email-auth label[hidden], .email-auth [hidden] { display: none !important; }
+.email-auth input { display: block; width: 100%; margin-top: 4px; box-sizing: border-box; }
+.ea-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; margin-bottom: 12px; border-radius: 10px; background: var(--field, rgba(255, 255, 255, 0.05)); border: 1px solid var(--line, rgba(255, 255, 255, 0.08)); }
+.ea-tabs button { padding: 7px 10px; font-size: 13px; background: transparent; border-color: transparent; box-shadow: none; }
+.ea-tabs button[aria-selected='true'] { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.ea-title { margin: 0 0 10px; font-weight: 700; color: var(--text, #fff); }
+.ea-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ea-optional { font-size: 11px; opacity: 0.7; }
+.ea-note { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+.ea-ok { margin: 0 0 8px; font-size: 13px; color: #86efac; }
+.ea-ok:empty, .ea-error:empty { display: none; }
+.ea-submit { width: 100%; margin-top: 4px; }
+.ea-links { display: flex; justify-content: center; margin-top: 8px; }
+.ea-links .link { font-size: 13px; }
+/* On the home page the inputs sit on the dark glass card. */
+.home .email-auth input { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 10px; padding: 10px 12px; color: #fff; font-size: 15px; }
+.home .email-auth label { color: #c3cbdc; }
+.home .ea-tabs { background: rgba(255, 255, 255, 0.06); }
+.home .ea-tabs button { color: #c3cbdc; }
+.home .ea-note { color: #b9c2d6; }
+#home-email { margin-top: 4px; }
+
+/* ----------------------------------------------------------- drafting ---- */
+.draft-panel {
+  position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 5;
+  width: min(360px, calc(100vw - 32px)); padding: 9px 14px 10px; border-radius: 14px;
+  background: var(--glass); border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.draft-panel[hidden] { display: none; }
+.gear-panel:not([hidden]) ~ .draft-panel { bottom: 192px; }
+.draft-panel.on { border-color: rgba(56, 189, 248, 0.7); box-shadow: 0 0 22px rgba(56, 189, 248, 0.25); }
+.draft-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: var(--muted); }
+.draft-panel.on .draft-top span { color: #7dd3fc; font-weight: 700; }
+.draft-top strong { font-family: var(--font-display); font-size: 26px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.draft-bar { position: relative; height: 6px; margin: 4px 0 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+/* The draft zone (last stretch of the bar) is tinted blue; the fill shows how close you are. */
+.draft-bar::before { content: ''; position: absolute; top: 0; bottom: 0; left: calc(var(--zone, 0.82) * 100%); right: 0; background: rgba(56, 189, 248, 0.28); }
+.draft-bar span { position: absolute; inset: 0 auto 0 0; width: calc(var(--fill, 0) * 100%); background: linear-gradient(90deg, #64748b, #38bdf8); border-radius: 3px; transition: width 0.2s linear; }
+.draft-panel.sweet .draft-bar span { background: linear-gradient(90deg, #38bdf8, #4ade80); }
+.draft-hint { font-size: 12px; color: var(--muted); }
+body.at-home .draft-panel { display: none; }
+@media (max-width: 560px) { .draft-panel { bottom: 190px; } .gear-panel:not([hidden]) ~ .draft-panel { bottom: 262px; } }
+.email-auth input:not([type='checkbox']) {
+  background: var(--field, rgba(255, 255, 255, 0.06)); border: 1px solid var(--line, rgba(255, 255, 255, 0.14));
+  border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 15px; color: var(--text, #fff);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.email-auth input:focus-visible { outline: none; border-color: var(--blue, #4c8df6); box-shadow: var(--ring, 0 0 0 3px rgba(76, 141, 246, 0.35)); }
+#home-email-toggle { width: 100%; margin-top: 10px; padding: 12px 16px; border-radius: 12px; }
+#signin-reason:empty { display: none; }

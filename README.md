@@ -32,7 +32,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Heart-rate strap** support (optional).
 - **Demo ride** mode for trying it without a trainer: set power with a slider or the ↑/↓ keys.
 - Metric and imperial units. Settings are saved in the browser (and in your account when signed in).
-- **Accounts** (👤 button): sign in with Google or Apple. Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
+- **Accounts** (👤 button): sign in with Google, or create a free account with your email (rider name, email, password, weight and optional FTP; never a phone number or address), with password reset by email. Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
 - **Profile:**
   - *Stats*: totals, personal bests (5 s, 1, 5 and 20 min power), distance per week, FTP progress, and time in heart-rate and power zones across all rides.
   - *Achievements*: badges for finishing the stages, distance and climbing milestones, streaks, power targets, ramp tests and FTP gains.
@@ -41,6 +41,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **FTP history**: every change (by hand, from a ramp test, or at sign-up) is recorded and charted.
 - **Feedback** (💬 button): riders send ideas and bug reports and see the status and any reply.
 - **Riding together** (👥 button): signed-in riders on the same stage see each other on the road, with name tags, a *Riding now* list with gaps, and *Ride with* to join someone. Switch it off in Settings.
+- **Drafting**: ride close behind someone and you save up to about a third of your air drag (and a smart trainer gets lighter). A slipstream gauge shows the gap to the wheel ahead and the watts you're saving.
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
 - **Training plans** (📅 in Workouts): Get Started, FTP Builder and Hell of the West, with sessions that tick off as you ride.
 - **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
@@ -48,6 +49,15 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **First-ride setup**, **install as an app** (⬇ Install app, or Add to Home Screen), full screen (**F**), and bigger numbers on TVs.
 - **Tidy top bar**: Stage, Workouts, 👥, Connect trainer and your account stay in view; everything else is in the **☰ Menu**. The data blocks can sit across the top or in a column on the left or right (✎ → Position).
 - **Admin dashboard** (☰ Menu → 🛠, admins only): registered and active riders, rides, hours, distance, signups and rides per day, top stages and workouts, the rider list with ban/unban, and the feedback inbox (status, replies, delete). Admin access is checked in the database.
+
+## Built with
+
+- **TypeScript** (strict) for all app code in `src/`, with **HTML** (`index.html`) and plain **CSS** (`src/style.css`).
+- **SQL** (PostgreSQL and PL/pgSQL) for the database: `db/schema.sql`.
+- **Three.js** for the 3D world, **Web Bluetooth** for the trainer and heart-rate strap, **Web Audio** for sound, and a small **JavaScript** service worker (`public/sw.js`) to make it installable.
+- **Vite** to build, **Vercel** to host, and **Neon** (Postgres, Neon Auth and the Data API) for accounts and data. No server code of our own.
+
+See [Architecture](docs/developer-guide/architecture.md#languages-and-technologies) for the full list.
 
 ## Browser support
 
@@ -82,7 +92,7 @@ Vercel (project `americanflyers`) builds and deploys `main` on every push.
 
 Accounts and data live in Neon (project `americanflyers`, eu-west-2):
 
-- **Neon Auth** handles sign-in with Google and Apple. Add each site URL under *Auth → Trusted domains*. Apple needs your own Apple Developer credentials (Services ID, Team ID, Key ID and the `.p8` key) under *Auth → OAuth providers*, with the return URL `…/neondb/auth/callback/apple`.
+- **Neon Auth** handles sign-in with Google, and with email and password (sign-up on, verification off, password reset by email). Add each site URL under *Auth → Trusted domains*.
 - The **Data API** lets the browser read and write the tables directly; row-level security limits each rider to their own rows, and admin functions check `public.is_admin()`.
 - The schema is in `db/schema.sql`. Admins are listed in `public.admins` (by email).
 - The endpoints default to the production project; override with `VITE_NEON_AUTH_URL` and `VITE_NEON_DATA_API_URL`.

@@ -4,7 +4,7 @@ Everyone who is signed in and riding the same stage at the same time appears on 
 
 ## How it works
 
-- Sign in (free) with Google or Apple. Signed-out riders ride alone.
+- Sign in (free) with Google or your email. Signed-out riders ride alone.
 - Pick a stage. Everyone on that stage, anywhere along it, is in the same ride.
 - Riders within about 300 m behind and 900 m ahead are drawn on the road (up to 12 at once). Riders further away still count in the list.
 - Names are shortened to first name and last initial, for example *Steve H.*
@@ -26,6 +26,24 @@ When someone joins your stage, a message says so.
 1. Both sign in.
 2. Open the same stage. Send the link from **Copy link to this stage**.
 3. Start pedalling. If you're far apart on the road, open 👥 and press **Ride with** next to your friend's name.
+
+## Drafting
+
+Ride close behind another rider and you're in their slipstream: you need fewer watts for the same speed, just like outside.
+
+- About a third less air drag right on their wheel, about a quarter at 2–3 m, fading to nothing by 12 m.
+- With a smart trainer, the trainer gets lighter too.
+- Ghosts don't make a draft; only real riders do.
+- On a steep climb you're slow, so drag (and the draft) matters much less than on the flat.
+
+### The draft gauge
+
+When a rider is within 60 m ahead, a gauge appears above the bottom of the screen:
+
+- **"Marcus S. ahead · 28 m"** and *Close to 12 m to get in the draft*: the bar fills as you close in, and the blue end is the draft zone.
+- **"In Marcus S.'s draft · 2.4 m"**, with *−21% drag · saving ~35 W*: you're in. The bar turns green within 2 m, the sweet spot for the biggest saving.
+
+Riders you're following move into your lane, so you can see you're on their wheel. Get within about 2.6 m and they move aside a little so you can come past.
 
 ## Privacy
 

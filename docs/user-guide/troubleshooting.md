@@ -59,13 +59,21 @@ If you cancel the picker, nothing happens. That's expected.
 
 ## Sign-in problems
 
-**Symptom:** *Sign-in didn't finish:* followed by a message, after you return from Google or Apple.
+**Symptom:** *Sign-in didn't finish:* followed by a message, after you return from Google.
 
 **Fix:** Try again. Check the message in the toast. If the same error keeps happening, the site may not be set up for sign-in. See [Authentication setup](../admin-guide/authentication-setup.md).
 
-**Symptom:** *Sign in with Apple isn't switched on yet.*
+**Symptom:** *There's already an account with this email.*
 
-**Fix:** Use **Continue with Google**. Apple sign-in needs setup by the site owner.
+**Fix:** You already have an account with that address (perhaps through Google). Choose **Sign in**, use **Continue with Google**, or reset your password with **Forgot password?**.
+
+**Symptom:** *That email and password don't match.*
+
+**Fix:** Check for typos and caps lock, or use **Forgot password?**. If you first signed up with Google, use **Continue with Google**.
+
+**Symptom:** No password reset email.
+
+**Fix:** Check your spam folder, and wait a minute. Links last 15 minutes; ask for a new one if it has expired.
 
 **Symptom:** Signed in, but the profile is empty or your rides are missing.
 

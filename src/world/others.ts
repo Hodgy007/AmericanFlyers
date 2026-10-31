@@ -108,6 +108,8 @@ export class OtherRiders {
       let target = s.lane;
       if (!o.ghost && Math.abs(gap) < 2.6 && Math.abs(s.lane - PLAYER_LANE) < 0.9) {
         target = s.lane < PLAYER_LANE ? PLAYER_LANE - 1 : PLAYER_LANE + 1;
+      } else if (!o.ghost && gap >= 2.6 && gap < 14) {
+        target = PLAYER_LANE; // you're on their wheel: line up in front of you, as in a paceline
       }
       s.lateral += (target - s.lateral) * (1 - Math.exp(-dt / 0.6));
 

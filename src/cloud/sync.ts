@@ -236,7 +236,7 @@ export async function myFeedback(): Promise<Feedback[]> {
 
 /**
  * Whether the signed-in rider is an admin. Retries a few times, because
- * right after returning from Google / Apple the session can still be settling.
+ * right after returning from Google the session can still be settling.
  */
 export async function isAdmin(): Promise<boolean> {
   for (let attempt = 0; attempt < 4; attempt++) {

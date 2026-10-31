@@ -4,9 +4,9 @@ This library covers the American Flyers app: what it does, how to ride with it, 
 
 ## What the app is
 
-American Flyers is a browser-based indoor cycling app. It connects to a Wahoo KICKR (or any smart trainer that speaks the standard FTMS profile) over Bluetooth, and puts you on a 3D bike on a winding road. The trainer's resistance follows the hills. You can ride built-in stages such as Alpe d'Huez and Stelvio Pass, upload your own GPX routes, ride structured workouts, and keep your rides in an account with stats, achievements and a feedback channel.
+American Flyers is a browser-based indoor cycling app. It connects to a Wahoo KICKR (or any smart trainer that speaks the standard FTMS profile) over Bluetooth, and puts you on a 3D bike on a winding road. The trainer's resistance follows the hills. You can ride built-in stages such as the Hell of the West (the film's final stage), Alpe d'Huez, the Stelvio and Mont Ventoux, ride with other people and draft behind them, race ghosts and leaderboards, upload your own GPX routes, follow structured workouts and training plans, and keep your rides in an account (Google, or email and password) with stats, achievements and a feedback channel.
 
-The live app is at https://americanflyers.vercel.app. It is built with Vite, TypeScript and Three.js, uses Web Bluetooth for the trainer, and stores accounts, rides and feedback in Neon (Postgres with Neon Auth and a Data API).
+The live app is at https://americanflyers.vercel.app. It's written in TypeScript, HTML and CSS, built with Vite and Three.js, uses Web Bluetooth for the trainer and Web Audio for sound, and stores accounts, rides and feedback in Neon (Postgres with Neon Auth and a Data API, with SQL for the schema). See [Architecture](developer-guide/architecture.md#languages-and-technologies).
 
 ## Who each section is for
 
@@ -24,7 +24,7 @@ The live app is at https://americanflyers.vercel.app. It is built with Vite, Typ
 - [Riding](user-guide/riding.md): the top bar, data blocks, the elevation strip, camera views, demo controls, and Reset and the ride summary.
 - [Stages and routes](user-guide/stages-and-routes.md): each built-in stage, finish lines, uploading GPX routes, and deleting routes.
 - [Workouts](user-guide/workouts.md): built-in workouts, ERG mode, uploading `.zwo`, `.erg` and `.mrc` files, the ramp test, the workout creator, and `.zwo` export.
-- [Riding together](user-guide/riding-together.md): other riders on your stage, the Riding now list, Ride with, and privacy.
+- [Riding together](user-guide/riding-together.md): other riders on your stage, drafting and the draft gauge, the Riding now list, Ride with, and privacy.
 - [Leaderboards and ghosts](user-guide/leaderboards-and-ghosts.md): what counts, the 🏆 leaderboard, and racing ghosts.
 - [Training plans](user-guide/training-plans.md): the three plans and how sessions tick off.
 - [Sound and virtual shifting](user-guide/sound-and-shifting.md): ride sounds, and choosing your own gears.
@@ -42,7 +42,7 @@ The live app is at https://americanflyers.vercel.app. It is built with Vite, Typ
 
 - [Admin dashboard](admin-guide/admin-dashboard.md): every tile, chart, table and action on the Admin tab, including banning and the feedback inbox.
 - [Managing admins](admin-guide/managing-admins.md): how admin access is decided, and the SQL to add or remove an admin.
-- [Authentication setup](admin-guide/authentication-setup.md): Neon Auth, trusted domains, Google and Apple sign-in.
+- [Authentication setup](admin-guide/authentication-setup.md): Neon Auth, trusted domains, Google, and email and password sign-in with password reset.
 - [Deployment](admin-guide/deployment.md): Vercel, automatic deploys from `main`, environment variables and Deployment Protection.
 
 ## Developer guide
