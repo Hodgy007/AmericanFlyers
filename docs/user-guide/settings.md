@@ -12,6 +12,9 @@ This page lists every setting, its default and range, and what it changes. Open 
 | Max heart rate (bpm) | 185 | 120 to 230, step 1 | Sets the heart-rate zones. The dialog suggests your highest heart rate in a hard effort, with 220 minus your age as a rough guide. |
 | Units | Metric | Metric or Imperial | Changes displayed distances, speeds and heights: metric shows km, km/h and m; imperial shows mi, mph and ft. |
 | Trainer difficulty (%) | 50 | 0 to 100, step 5 | How much of the road's grade the trainer simulates. 100% feels like the real hill. 0% means no grade resistance. |
+| Virtual shifting | Off | On or off | Choose your own gear with − / + (see [Sound and virtual shifting](sound-and-shifting.md)). |
+| Race my best ride | On | On or off | On a stage you've finished, a ghost of your fastest ride rides with you. See [Leaderboards and ghosts](leaderboards-and-ghosts.md). |
+| Ride together | On | On or off | Show you to other signed-in riders on the same stage, and them to you. See [Riding together](riding-together.md). |
 
 Changing **FTP** in Settings adds an entry to your FTP history when you're signed in. See [Zones and FTP](zones-and-ftp.md).
 
@@ -32,3 +35,5 @@ When you sign in on a new browser:
 - If your account has none yet, the settings in the browser are copied up to your account.
 
 See [Accounts and profile](accounts-and-profile.md#what-syncs) for the full rules.
+
+*Run the setup guide again* (a link above the buttons) reopens the first-ride guide. Sound is in the ☰ Menu (or the **M** key), and the training plan you're following is also saved with your settings.

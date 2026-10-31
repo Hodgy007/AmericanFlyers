@@ -9,16 +9,28 @@ Buttons across the top of the screen, from left to right:
 | Button | What it does |
 | --- | --- |
 | **🏁 Stage** | Opens the stage picker. See [Stages and routes](stages-and-routes.md). |
-| **🏋 Workouts** | Opens the workout library. See [Workouts](workouts.md). |
+| **🏋 Workouts** | Opens the workout library and training plans. See [Workouts](workouts.md) and [Training plans](training-plans.md). |
+| **👥** | Who else is riding this stage. See [Riding together](riding-together.md). |
 | **Connect trainer** / **Disconnect** | Connects or disconnects your trainer. See [Connecting devices](connecting-devices.md). |
-| **Heart rate** / **HR ✓** | Connects or disconnects a heart-rate strap. |
-| **Demo ride** / **Stop demo** | Turns the demo ride on or off. See [Getting started](getting-started.md#try-the-demo-ride). |
-| **🎥 Chase view** (or Side view, Rider's view) | Changes the camera. The label shows the current view. Shortcut: **C**. |
-| **Reset** | Ends the ride and shows its summary. See below. |
-| **⚙** | Opens Settings. |
-| **💬** | Opens ideas and bug reports. Requires sign-in. |
-| **🛠 Admin** | Opens the admin dashboard. Only shown to admins. |
+| **☰ Menu** | Everything else, listed below. Click outside it or press Escape to close it. |
 | **👤 Sign in** (or your first name) | Opens sign-in, or your profile when you're signed in. |
+
+The **☰ Menu** holds:
+
+| Item | What it does |
+| --- | --- |
+| **🎮 Demo ride** / **Stop demo** | Turns the demo ride on or off. See [Getting started](getting-started.md#try-the-demo-ride). |
+| **❤️ Heart rate strap** / **Heart rate ✓** | Connects or disconnects a heart-rate strap. |
+| **🎥 Chase view** (or Side view, Rider's view) | Changes the camera. The label shows the current view. Shortcut: **C**. |
+| **🏆 Leaderboard** | The leaderboard for this stage. See [Leaderboards and ghosts](leaderboards-and-ghosts.md). |
+| **📅 Training plans** | See [Training plans](training-plans.md). |
+| **🔊 Sound on** / **🔇 Sound off** | Shortcut: **M**. See [Sound and virtual shifting](sound-and-shifting.md). |
+| **⛶ Full screen** | Shortcut: **F**. |
+| **⬇ Install app** | Shown when your browser can install the app. See [Installing the app](installing-the-app.md). |
+| **↺ End / reset ride** | Ends the ride and shows its summary. See below. |
+| **⚙ Settings** | Opens Settings. |
+| **💬 Ideas & bug reports** | Requires sign-in. |
+| **🛠 Admin dashboard** | Only shown to admins. |
 
 On narrow screens the buttons wrap onto more rows.
 

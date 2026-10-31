@@ -20,7 +20,7 @@ The app reads these parameters when it loads.
 
 | Parameter | Example | What it does |
 | --- | --- | --- |
-| `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `alpe-dhuez` and `stelvio`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
+| `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `hell-of-the-west`, `alpe-dhuez`, `stelvio`, `ventoux`, `tourmalet` and `zoncolan`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
 | `start` | `?start=6` | Starts the ride this many kilometers into the stage. Decimal values work, for example `6.5`. Values of zero or less are ignored. |
 | `error` | `?error=access_denied` | Set by the sign-in provider when sign-in fails. The app shows *Sign-in didn't finish* with the message, then removes the parameter from the address bar. |
 | `error_description` | `?error_description=…` | The message that goes with `error`. Shown and removed the same way. |
@@ -40,3 +40,12 @@ When you choose a stage, the app sets `stage` in the address bar to that stage's
 
 - Uploaded route IDs only work on the browser that holds the route. They're stored in that browser's storage, so the same link doesn't work elsewhere.
 - `start` is applied when the page loads. Choosing a new stage clears it.
+
+## More keys
+
+| Key | What it does |
+| --- | --- |
+| **M** | Sound on or off. |
+| **F** | Full screen on or off. |
+| **−** or **[** | Easier gear (with virtual shifting on). |
+| **+**, **=** or **]** | Harder gear (with virtual shifting on). |

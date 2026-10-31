@@ -131,10 +131,11 @@ export interface Activity {
   hr_zones: number[] | null; // seconds in each heart-rate zone
   power_zones: number[] | null; // seconds in each power zone
   max_hr_setting: number | null; // the max HR the zones were worked out from
+  finish_s?: number | null; // moving time to the finish, for a whole-stage ride
   samples?: Samples | null;
 }
 
-const SUMMARY_COLUMNS = 'id, started_at, title, stage_id, stage_name, finished, workout_name, duration_s, distance_m, climbed_m, avg_power, np, max_power, avg_hr, max_hr, avg_cadence, kj, tss, ftp, best_power, hr_zones, power_zones, max_hr_setting';
+const SUMMARY_COLUMNS = 'id, started_at, title, stage_id, stage_name, finished, workout_name, duration_s, distance_m, climbed_m, avg_power, np, max_power, avg_hr, max_hr, avg_cadence, kj, tss, ftp, best_power, hr_zones, power_zones, max_hr_setting, finish_s';
 
 /** Saves (or updates, using the same id) an activity for the signed-in rider. */
 export async function saveActivity(a: Activity) {
@@ -156,6 +157,32 @@ export async function activitySamples(id: string): Promise<Samples | null> {
 
 export async function deleteActivity(id: string) {
   await check(neon.from('activities').delete().eq('id', id));
+}
+
+// ------------------------------------------------ leaderboards & ghosts ----
+
+export interface LeaderboardRow {
+  rank: number;
+  activity_id: string;
+  name: string;
+  finish_s: number;
+  avg_power: number | null;
+  ridden_at: string;
+  is_me: boolean;
+}
+
+/** Fastest whole-stage ride per rider (top 25, plus yours). */
+export async function stageLeaderboard(stageId: string, since?: Date): Promise<LeaderboardRow[]> {
+  if (!account()) return [];
+  return ((await check(neon.rpc('stage_leaderboard', { p_stage: stageId, p_since: since?.toISOString() ?? null }))) ?? []) as LeaderboardRow[];
+}
+
+export interface GhostTrace { name: string; finish_s: number; distance: number[]; is_me: boolean }
+
+/** The second-by-second distance trace of a leaderboard ride. */
+export async function stageGhost(activityId: string): Promise<GhostTrace | null> {
+  const rows = (await check(neon.rpc('stage_ghost', { p_activity: activityId }))) as GhostTrace[] | null;
+  return rows?.[0]?.distance?.length ? rows[0] : null;
 }
 
 // --------------------------------------------------------- FTP history ----

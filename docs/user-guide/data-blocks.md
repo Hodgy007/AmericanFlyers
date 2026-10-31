@@ -51,3 +51,7 @@ Power is shown as the average over the last 3 seconds, unless the field says oth
 - Put the number you watch most in the first position. It's the big one.
 - **Target**, **Interval left** and **Workout left** are only useful during a workout. They show `--` otherwise.
 - **To go** only has a value on stages with a finish line.
+
+## Position
+
+At the top of the Data blocks dialog, **Position** puts the numbers across the top in the **Middle** (the default), or in a two-column stack down the **Left** or **Right** side of the screen, leaving the road ahead clear. It applies at once and is saved with your settings. With the numbers on one side, the workout panel moves to the other. On phones the numbers always sit across the top.

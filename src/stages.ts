@@ -378,6 +378,131 @@ const stelvio = buildClimb({
   },
 });
 
+// "Hell of the West", the final stage in American Flyers (1985): filmed on
+// Colorado 103 from Idaho Springs (2,293 m) up Chicago Creek to the sprint at
+// Echo Lake (3,235 m), below Mount Evans (fast-rewind.com filming notes).
+// 20.8 km, 942 m: about 3.5% for the first 11 km, 5.8% for the next 9, then
+// the short flat at the lake (pjammcycling.com, summitbiking.org). The
+// switchbacks sit in the steeper upper half.
+const hellOfTheWest = buildClimb({
+  id: 'hell-of-the-west',
+  name: 'Hell of the West',
+  tagline: 'The final stage from American Flyers: 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake, 3,235 m.',
+  kmGrades: [3.0, 3.2, 3.6, 3.8, 3.4, 3.0, 3.8, 4.0, 3.6, 3.4, 3.9, 5.2, 5.8, 6.2, 6.0, 5.8, 6.4, 6.0, 5.6, 5.9, 1.2],
+  length: 20800,
+  gain: 942,
+  hairpins: 5,
+  firstHairpin: 12400,
+  lastHairpin: 18900,
+  bunching: 0.5,
+  approachBends: 0.45,
+  finalBend: 0.5,
+  hairpinWord: 'Switchback',
+  baseAltitude: 2293,
+  scenery: {
+    bumpAmp: 12,
+    rockLine: 1100,
+    snowLine: 1500, // the 4,000 m peaks around Mount Evans keep snow; the road stays below it
+    treeLine: 1220, // Colorado's treeline is near 3,500 m, above Echo Lake
+    coniferBias: 1,
+    forestCover: 0.45,
+    fields: false,
+    mountainScale: 3.2,
+  },
+});
+
+// Mont Ventoux from Bédoin (300 m) to the summit (1,910 m): 21.4 km, 1,610 m,
+// 7.5%. Gentle vineyards to Saint-Estève, then 9–10% through the forest to
+// Chalet Reynard, then the bare white limestone to the top. Per-kilometre
+// figures approximated from published profiles (climbbybike.com,
+// cyclingcols.com). The white scree is drawn with the snow shading.
+const ventoux = buildClimb({
+  id: 'ventoux',
+  name: 'Mont Ventoux',
+  tagline: '21.4 km at 7.5% from Bédoin: the forest at 9–10%, then the bare white moonscape to 1,910 m.',
+  kmGrades: [4.3, 4.8, 3.4, 5.2, 4.4, 7.6, 10.7, 9.4, 9.2, 9.4, 9.7, 9.0, 8.4, 8.9, 9.1, 6.4, 7.4, 7.8, 6.5, 8.1, 9.0, 9.0],
+  length: 21400,
+  gain: 1610,
+  hairpins: 3,
+  firstHairpin: 5900,
+  lastHairpin: 21000,
+  bunching: 0,
+  approachBends: 0.4,
+  finalBend: 0.4,
+  hairpinWord: 'Virage',
+  baseAltitude: 300,
+  scenery: {
+    bumpAmp: 9,
+    rockLine: 1060,
+    snowLine: 1150, // the bald white summit above Chalet Reynard
+    treeLine: 1100,
+    coniferBias: 0.7,
+    forestCover: 0.35,
+    fields: false,
+    mountainScale: 1.6,
+  },
+});
+
+// Col du Tourmalet from Luz-Saint-Sauveur (711 m) to the col (2,115 m):
+// 19 km, 1,404 m, 7.4%; steadier below Barèges, then 8.5–10% through the
+// hairpins of Super-Barèges. Shape approximated from published profiles.
+const tourmalet = buildClimb({
+  id: 'tourmalet',
+  name: 'Col du Tourmalet',
+  tagline: '19 km at 7.4% from Luz-Saint-Sauveur, through Barèges and the hairpins to 2,115 m.',
+  kmGrades: [5.2, 6.4, 7.0, 7.2, 7.0, 7.4, 6.2, 6.8, 7.2, 7.6, 7.8, 7.0, 8.6, 8.8, 9.2, 8.4, 9.0, 9.6, 9.8],
+  length: 19000,
+  gain: 1404,
+  hairpins: 8,
+  firstHairpin: 13300,
+  lastHairpin: 18400,
+  bunching: 0.6,
+  approachBends: 0.35,
+  finalBend: 0.3,
+  hairpinWord: 'Virage',
+  baseAltitude: 711,
+  scenery: {
+    bumpAmp: 12,
+    rockLine: 1150,
+    snowLine: 1650,
+    treeLine: 900,
+    coniferBias: 0.6,
+    forestCover: 0.3,
+    fields: false,
+    mountainScale: 3.0,
+  },
+});
+
+// Monte Zoncolan from Ovaro (525 m) to the top (1,735 m): 10.1 km, 1,210 m,
+// 11.9%, with long stretches at 13–15% and ramps over 20%. Per-kilometre
+// figures approximated from published profiles (salite.ch, climbbybike.com).
+const zoncolan = buildClimb({
+  id: 'zoncolan',
+  name: 'Monte Zoncolan',
+  tagline: '10.1 km at 11.9% from Ovaro, with ramps over 20%. The hardest climb in Italy.',
+  kmGrades: [6.5, 8.8, 12.4, 14.2, 15.0, 14.5, 13.8, 15.4, 13.6, 8.0, 6.0],
+  length: 10100,
+  gain: 1210,
+  hairpins: 9,
+  firstHairpin: 4300,
+  lastHairpin: 9500,
+  bunching: 0.8,
+  approachBends: 0.3,
+  finalBend: 0.25,
+  hairpinWord: 'Tornante',
+  baseAltitude: 525,
+  scenery: {
+    bumpAmp: 11,
+    rockLine: 1150,
+    snowLine: 1500,
+    treeLine: 1000,
+    coniferBias: 0.8,
+    forestCover: 0.4,
+    fields: false,
+    mountainScale: 2.8,
+  },
+});
+
 /** Least-squares plane e = a + b·x + c·z through the points. */
 export function fitPlane(pts: [number, number, number][]) {
   let n = 0, sx = 0, sz = 0, se = 0, sxx = 0, szz = 0, sxz = 0, sxe = 0, sze = 0;
@@ -401,7 +526,7 @@ export function fitPlane(pts: [number, number, number][]) {
   return (x: number, z: number) => a + b * x + c * z;
 }
 
-export const STAGES: Stage[] = [heartland, route66, alpe, stelvio];
+export const STAGES: Stage[] = [heartland, route66, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan];
 
 export function stageById(id: string | null): Stage {
   return STAGES.find((s) => s.id === id) ?? heartland;

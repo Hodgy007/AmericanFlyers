@@ -43,7 +43,7 @@ Your weight drives the speed model. FTP sets the power zones and workout targets
 3. The status line at the bottom left shows your trainer's name and **resistance follows the road** when the app can control it. If it says **power only**, the app can read your power but can't change the resistance.
 4. Start pedaling. The speed and data blocks update straight away.
 5. The trainer's resistance follows the road. On a climb it gets harder; on a descent it eases. The default difficulty is 50%, so you feel half of the road's grade.
-6. When you've finished, press **Reset**. You'll see a ride summary. If you're signed in, the ride is saved.
+6. When you've finished, open **☰ Menu → ↺ End / reset ride**. You'll see a ride summary. If you're signed in, the ride is saved.
 
 ## Try the demo ride
 

@@ -56,6 +56,7 @@ create table public.activities (
   power_zones jsonb,     -- seconds in each of the 6 power zones
   max_hr_setting integer,
   samples jsonb,         -- 1 s samples: power, cadence, hr, speed, distance, elevation
+  finish_s integer check (finish_s > 0), -- moving time to the finish line, for rides of a whole stage
   created_at timestamptz not null default now()
 );
 create index activities_user_started_idx on public.activities (user_id, started_at desc);
@@ -228,3 +229,107 @@ end $$;
 
 revoke execute on function public.is_admin(), public.admin_overview(), public.admin_users(), public.admin_set_ban(text, boolean, text), public.admin_feedback() from public, anonymous;
 grant execute on function public.is_admin(), public.admin_overview(), public.admin_users(), public.admin_set_ban(text, boolean, text), public.admin_feedback() to authenticated;
+
+-- ----------------------------------------------------- riding together ----
+-- Where each signed-in rider is right now, so riders on the same stage see
+-- each other on the road. The browser calls ride_presence() every couple of
+-- seconds: it records the caller's position and returns the other riders on
+-- that stage seen in the last 15 s (names shortened to "First L.", ids
+-- hashed). No direct table access.
+
+create table public.live_riders (
+  user_id text primary key,
+  stage_id text not null,
+  distance real not null,
+  speed real not null default 0,
+  power smallint not null default 0,
+  cadence smallint not null default 0,
+  updated_at timestamptz not null default now()
+);
+create index live_riders_stage_idx on public.live_riders (stage_id, updated_at);
+alter table public.live_riders enable row level security; -- no grants: only the functions below touch it
+
+create or replace function public.short_name(full_name text) returns text
+language sql immutable set search_path = '' as $$
+  select case
+    when coalesce(trim(full_name), '') = '' then 'Rider'
+    when position(' ' in trim(full_name)) = 0 then left(trim(full_name), 20)
+    else left(split_part(trim(full_name), ' ', 1), 20) || ' ' || upper(left(split_part(trim(full_name), ' ', 2), 1)) || '.'
+  end
+$$;
+
+create or replace function public.ride_presence(p_stage text, p_distance real, p_speed real, p_power integer, p_cadence integer, p_visible boolean default true)
+returns table (id text, name text, distance real, speed real, power integer, cadence integer, age_ms integer)
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare me text := auth.user_id();
+begin
+  if me is null then raise exception 'Sign in to ride with others' using errcode = '42501'; end if;
+  if p_visible then
+    insert into public.live_riders as l (user_id, stage_id, distance, speed, power, cadence, updated_at)
+    values (me, left(p_stage, 80), greatest(-1000, least(p_distance, 1000000)), greatest(0, least(p_speed, 40)),
+            greatest(0, least(p_power, 3000)), greatest(0, least(p_cadence, 250)), now())
+    on conflict (user_id) do update set stage_id = excluded.stage_id, distance = excluded.distance, speed = excluded.speed,
+      power = excluded.power, cadence = excluded.cadence, updated_at = excluded.updated_at;
+  else
+    delete from public.live_riders where user_id = me;
+  end if;
+  -- Riders who closed the tab without saying goodbye.
+  delete from public.live_riders where updated_at < now() - interval '10 minutes';
+  return query
+    select md5(l.user_id), public.short_name(u.name), l.distance, l.speed, l.power::integer, l.cadence::integer,
+           (extract(epoch from now() - l.updated_at) * 1000)::integer
+    from public.live_riders l
+    join neon_auth."user" u on u.id::text = l.user_id
+    where l.stage_id = left(p_stage, 80) and l.user_id <> me and l.updated_at > now() - interval '15 seconds'
+      and not coalesce(u.banned, false)
+    order by abs(l.distance - p_distance)
+    limit 30;
+end $$;
+
+create or replace function public.leave_ride() returns void
+language sql security definer set search_path = '' as $$
+  delete from public.live_riders where user_id = auth.user_id()
+$$;
+
+revoke all on public.live_riders from public, anonymous, authenticated;
+revoke execute on function public.ride_presence(text, real, real, integer, integer, boolean), public.leave_ride(), public.short_name(text) from public, anonymous;
+grant execute on function public.ride_presence(text, real, real, integer, integer, boolean), public.leave_ride() to authenticated;
+
+-- -------------------------------------------------- leaderboards & ghosts ----
+-- A rider's fastest whole-stage ride counts on that stage's leaderboard
+-- (finish_s: moving time from the start line to the finish). Any signed-in
+-- rider can race the ghost of a leaderboard ride: only its distance trace is
+-- shared.
+
+create index activities_stage_finish_idx on public.activities (stage_id, finish_s) where finish_s is not null;
+
+create or replace function public.stage_leaderboard(p_stage text, p_since timestamptz default null)
+returns table (rank bigint, activity_id uuid, name text, finish_s integer, avg_power real, ridden_at timestamptz, is_me boolean)
+language sql stable security definer set search_path = '' as $$
+  with best as (
+    select distinct on (a.user_id) a.user_id, a.id, a.finish_s, a.avg_power, a.started_at
+    from public.activities a
+    join neon_auth."user" u on u.id::text = a.user_id and not coalesce(u.banned, false)
+    where a.stage_id = p_stage and a.finish_s is not null and (p_since is null or a.started_at >= p_since)
+    order by a.user_id, a.finish_s, a.started_at
+  ), ranked as (
+    select rank() over (order by b.finish_s) as rank, b.* from best b
+  )
+  select r.rank, r.id, public.short_name(u.name), r.finish_s, r.avg_power, r.started_at, r.user_id = auth.user_id()
+  from ranked r join neon_auth."user" u on u.id::text = r.user_id
+  where r.rank <= 25 or r.user_id = auth.user_id()
+  order by r.rank, r.started_at
+$$;
+
+create or replace function public.stage_ghost(p_activity uuid)
+returns table (name text, finish_s integer, distance jsonb, is_me boolean)
+language sql stable security definer set search_path = '' as $$
+  select public.short_name(u.name), a.finish_s, a.samples -> 'distance', a.user_id = auth.user_id()
+  from public.activities a
+  join neon_auth."user" u on u.id::text = a.user_id and not coalesce(u.banned, false)
+  where a.id = p_activity and a.finish_s is not null and auth.user_id() is not null
+$$;
+
+revoke execute on function public.stage_leaderboard(text, timestamptz), public.stage_ghost(uuid) from public, anonymous;
+grant execute on function public.stage_leaderboard(text, timestamptz), public.stage_ghost(uuid) to authenticated;

@@ -1,0 +1,18 @@
+{
+  "name": "American Flyers",
+  "short_name": "Flyers",
+  "description": "Free 3D indoor cycling: ride famous climbs on your smart trainer, follow workouts and plans, and race friends and ghosts.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#0b1220",
+  "theme_color": "#14213d",
+  "categories": ["sports", "health", "fitness"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

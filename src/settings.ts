@@ -1,3 +1,5 @@
+import type { PlanProgress } from './plans';
+
 export type Units = 'metric' | 'imperial';
 
 export interface Settings {
@@ -8,6 +10,12 @@ export interface Settings {
   units: Units;
   difficulty: number; // 0–100, percentage of road grade sent to the trainer
   dataFields: string[]; // data blocks shown across the top, in order
+  rideTogether: boolean; // see, and be seen by, other riders on the same stage
+  ghost: boolean; // race the ghost of your best ride on the stage
+  sound: boolean; // wind, crowds, beeps
+  virtualShifting: boolean; // choose your gear; the trainer's resistance follows it
+  plan: PlanProgress | null; // the training plan being followed
+  hudPosition: 'left' | 'center' | 'right'; // where the data blocks sit
 }
 
 const KEY = 'americanflyers.settings';
@@ -20,6 +28,12 @@ export const DEFAULT_SETTINGS: Settings = {
   units: 'metric',
   difficulty: 50,
   dataFields: ['power', 'cadence', 'speed', 'hr', 'distance', 'time', 'grade', 'climbed'],
+  rideTogether: true,
+  ghost: true,
+  sound: true,
+  virtualShifting: false,
+  plan: null,
+  hudPosition: 'center',
 };
 
 export function loadSettings(): Settings {
