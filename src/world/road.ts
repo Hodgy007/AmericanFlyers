@@ -5,7 +5,7 @@ import { roadPoint } from '../course';
 const CHUNK = 100; // metres of road per mesh
 const STEP = 2;
 export const ROAD_HALF_WIDTH = 4.6;
-const TEXTURE_REPEAT_M = 12; // road texture tiles every 12 m along the road
+const TEXTURE_REPEAT_M = ROAD_HALF_WIDTH * 2; // square texels: one texture length = road width
 const BEHIND = 150;
 const AHEAD = 1600;
 
@@ -14,31 +14,45 @@ export interface MarkerConfig {
   label: (n: number) => string;
 }
 
+// The road texture spans the full road width (shoulder to shoulder) and one
+// road-width of length, 512 × 512 px. The asphalt photo-texture is tiled 2 × 2
+// underneath; until it loads, a flat grey stands in.
 function roadTexture(renderer: THREE.WebGLRenderer): THREE.Texture {
   const c = document.createElement('canvas');
-  c.width = 256;
+  c.width = 512;
   c.height = 512;
   const g = c.getContext('2d')!;
-  // Gravel shoulders, asphalt with speckle, edge lines, dashed centre line.
-  g.fillStyle = '#7d7462';
-  g.fillRect(0, 0, 256, 512);
-  g.fillStyle = '#3d4048';
-  g.fillRect(22, 0, 212, 512);
-  for (let i = 0; i < 5000; i++) {
-    const v = 40 + Math.random() * 40;
-    g.fillStyle = `rgba(${v},${v},${v + 4},0.5)`;
-    g.fillRect(22 + Math.random() * 212, Math.random() * 512, 1.5, 1.5);
-  }
-  g.fillStyle = '#eef0f2';
-  g.fillRect(30, 0, 5, 512);
-  g.fillRect(221, 0, 5, 512);
-  g.fillStyle = '#f2c14e';
-  g.fillRect(124, 0, 4, 200);
-  g.fillRect(130, 0, 4, 200);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  const paint = (asphalt?: HTMLImageElement) => {
+    if (asphalt) {
+      for (let x = 0; x < 512; x += 256) for (let y = 0; y < 512; y += 256) g.drawImage(asphalt, x, y, 256, 256);
+    } else {
+      g.fillStyle = '#3d4048';
+      g.fillRect(0, 0, 512, 512);
+    }
+    // Gravel shoulders over the outer 0.8 m each side.
+    g.fillStyle = 'rgba(125, 116, 98, 0.85)';
+    g.fillRect(0, 0, 44, 512);
+    g.fillRect(468, 0, 44, 512);
+    // Slightly worn edge lines and a dashed double centre line.
+    g.globalAlpha = 0.9;
+    g.fillStyle = '#eef0f2';
+    g.fillRect(58, 0, 9, 512);
+    g.fillRect(445, 0, 9, 512);
+    g.fillStyle = '#f2c14e';
+    g.fillRect(247, 0, 7, 200);
+    g.fillRect(258, 0, 7, 200);
+    g.globalAlpha = 1;
+    tex.needsUpdate = true;
+  };
+  paint();
+  const img = new Image();
+  img.onload = () => paint(img);
+  img.src = `${import.meta.env.BASE_URL}textures/asphalt.jpg`;
   return tex;
 }
 

@@ -22,7 +22,7 @@ export class World {
   private readonly camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
   private readonly sun = new THREE.DirectionalLight('#fff4e0', 2.6);
   private readonly rider = new RiderModel();
-  private readonly terrain = new Terrain();
+  private readonly terrain: Terrain;
   private readonly road: Road;
   private readonly sky = new Sky();
   private readonly landmarks = new Landmarks();
@@ -54,6 +54,7 @@ export class World {
     this.scene.add(this.sun, this.sun.target);
 
     this.road = new Road(this.renderer, markers);
+    this.terrain = new Terrain(this.renderer);
     this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.rider.group);
 
     this.resize();

@@ -13,6 +13,7 @@ const SEG = 50; // 4 m grid
 const RANGE = 1150; // build tiles whose centre is within this distance
 const ROAD_INFLUENCE = 260; // beyond this the road no longer shapes the land
 const COARSE = 5; // coarse nearest-road search stride, in samples (10 m)
+const GRASS_TILE_M = 7; // grass texture repeats every 7 m
 
 interface Near {
   dist: number; // metres from the road centreline
@@ -144,6 +145,18 @@ export class Terrain {
   readonly group = new THREE.Group();
   private readonly tiles = new Map<string, Tile>();
   private readonly groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
+
+  constructor(renderer: THREE.WebGLRenderer) {
+    // Grass detail, multiplied over the land colours. Stored as plain data (not sRGB)
+    // so its ~0.92 average only darkens the colours slightly.
+    new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/grass.jpg`, (tex) => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.colorSpace = THREE.NoColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      this.groundMat.map = tex;
+      this.groundMat.needsUpdate = true;
+    });
+  }
   private readonly treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
   private readonly conifer = makeConifer();
   private readonly broadleaf = makeBroadleaf();
@@ -185,9 +198,9 @@ export class Terrain {
     const cands = candidatesFor(cx - TILE / 2, cx + TILE / 2, cz - TILE / 2, cz + TILE / 2);
 
     const geo = new THREE.PlaneGeometry(TILE, TILE, SEG, SEG).rotateX(-Math.PI / 2);
-    geo.deleteAttribute('uv');
     const pos = geo.attributes.position as THREE.BufferAttribute;
     const colors = new Float32Array(pos.count * 3);
+    const uvs = new Float32Array(pos.count * 2);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i) + cx;
       const z = pos.getZ(i) + cz;
@@ -196,8 +209,10 @@ export class Terrain {
       pos.setY(i, h);
       groundColor(x, z, h, near, tmp);
       colors.set([tmp.r, tmp.g, tmp.b], i * 3);
+      uvs.set([x / GRASS_TILE_M, z / GRASS_TILE_M], i * 2); // world-space, so tiles line up
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geo.computeVertexNormals();
     const ground = new THREE.Mesh(geo, this.groundMat);
     ground.receiveShadow = true;
