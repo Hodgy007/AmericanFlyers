@@ -39,7 +39,12 @@ This page lists every file and folder in the repository, with a one-line summary
 | `main.ts` | Entry point. Owns the ride state, runs the frame loop, controls the trainer, handles the top bar, ☰ menu and dialogs, saves rides, and wires up sign-in, riding together, ghosts, plans, sound, virtual shifting and drafting. |
 | `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up, and *Ride without an account*. |
 | `drivetrain.ts` | The virtual drivetrain: automatic gears that keep leg speed in step with road speed, the 24 virtual-shifting gears, crank angle and bike rock. |
-| `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish. |
+| `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish; and race mode (`startRace`, `makeRoster`, `RaceField`) that hands the field to the race engine. |
+| `raceSim.ts` | The race engine: riders in groups, attacks, breaks, chases, cracks, merges, sprints, lines and points. No DOM or Three.js. |
+| `race.ts` | The race you are riding: countdown, live panel numbers, jersey holders and results. |
+| `raceUi.ts` | The 3-2-1, the live race panel, and the result tables. |
+| `tour.ts` | The Hell of the West tour: progress in `settings.tour`, classifications, `tourJersey()`, and "simulate this stage". |
+| `tourUi.ts` | The tour dialog. |
 | `draft.ts` | Drafting: the drag saved at a given gap behind another rider, and the rider just ahead. |
 | `ghost.ts` | Replays a past whole-stage ride as a ghost, and formats race times. |
 | `sound.ts` | Ride sounds made with Web Audio: wind, tyre hum, freewheel, crowds, beeps, shift clicks and the finish fanfare. |
@@ -55,7 +60,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `zones.ts` | Heart-rate and power zone definitions, zone lookup, and the zone bar display. |
 | `physics.ts` | The power-to-speed model: gravity, rolling resistance, air drag (reduced in a draft), drivetrain loss and momentum. |
 | `course.ts` | The current stage's road: elevation, grade, heading and a cached centerline. |
-| `stages.ts` | Built-in stages (Heartland Rollers, Route 66 Flats, Hell of the West, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet, Monte Zoncolan), the climb builder, landmark kinds, and the stage list. |
+| `stages.ts` | Built-in stages (Heartland Rollers, Route 66 Flats, the three Hell of the West tour stages, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet, Monte Zoncolan), the climb builder, landmark kinds, and the stage list. |
 | `profile.ts` | The elevation strip, and the grade-to-color function. |
 | `ble/trainer.ts` | Trainer connection: FTMS and Cycling Power, parsing, and the control point (grade with a wind-resistance factor, and target power). |
 | `ble/heartRate.ts` | Heart-rate strap connection and parsing. |

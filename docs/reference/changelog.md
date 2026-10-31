@@ -99,6 +99,8 @@ Merge commit `bfd10f5`. Accounts, profiles, achievements, HR zones, feedback and
 
 - **Sentry error reporting** (pull request #11), and the pit bull hero shown on every visit (`?hero=rider` for the original).
 - **Pro teams**: five computer-ridden teams with comedic near-miss names ride each stage two by two at 2.0–4.2 W/kg, in their own kit, with **Join** in 👥.
+- **Hell of the West tour.** Two new stages from the film: Stage 1 *Morgul-Bismark* (two laps of the Boulder circuit, up The Wall) and Stage 2 *Tour of the Moon* (Rim Rock Drive, Colorado National Monument, with red rock desert scenery: `Scenery.palette = 'desert'`). The existing stage is now *Hell of the West · Stage 3: Echo Lake* (same id). **☰ Menu → 🏆 Hell of the West tour** races the three in order, with stage results and the general, points and mountains classifications (yellow, green and polka-dot jerseys), saved in `settings.tour`. Stages can be simulated. `tourJersey()` exposes the jersey colours for the kit.
+- **Racing.** **🏁 Race this stage** on any stage with a finish: 12 pro teams of three riders on the start line, a 3-2-1 countdown, attacks on the climbs, an early breakaway, chases, cracks, merging groups and a sprint in the last 400 m, scaled to your FTP. A live race panel (position, gap, groups, next sprint or summit, jerseys) and results tables (top 20 and you). Same engine for "simulate this stage". `?timescale=` runs the clock faster for testing.
 
 ## Full commit list
 

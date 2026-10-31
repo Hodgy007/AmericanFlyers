@@ -4,7 +4,7 @@ This page covers the built-in stages, how finish lines work, how to upload your 
 
 ## Choosing a stage
 
-Click **🏁 Stage** to open the stage picker. Each card shows the stage's profile, name, distance, climbing and a one-line description. The stage you're on is highlighted. Click a card to ride it.
+Click **🏁 Stage** to open the stage picker. Each card shows the stage's profile, name, distance, climbing and a one-line description. The stage you're on is highlighted. Click a card to ride it, or press **🏁 Race this stage** to race the pro teams over it (see [Racing and the tour](racing-and-the-tour.md)). The 🏆 card at the top starts the Hell of the West tour.
 
 Choosing a stage resets the ride. If your current ride is at least a minute long and not yet saved, it's saved first (when you're signed in).
 
@@ -14,7 +14,9 @@ Choosing a stage resets the ride. If your current ride is at least a minute long
 | --- | --- | --- |
 | **Heartland Rollers** | Endless | Rolling farmland with no finish line. A free ride. Farm buildings, a covered bridge and a start arch line the road. |
 | **Route 66 Flats** | 25 km | A time-trial along a flat, fast stretch of highway past diners and gas stations. Finishes at a checkered line under an arch. |
-| **Hell of the West** | 20.8 km | The final stage of the 1985 film *American Flyers*, filmed on Colorado 103 from Idaho Springs (2,293 m) up Chicago Creek to the sprint at Echo Lake (3,235 m), below Mount Evans. About 3.5% for the first 11 km, then 5.8%, with switchbacks in the upper half and a flat finish at the lake. Totals from published figures; the per-kilometer shape is approximated. |
+| **Hell of the West · Stage 1: Morgul-Bismark** | 42.3 km | The first race in the film: two laps of the 21 km Morgul-Bismark circuit south of Boulder, Colorado (Highway 128, 93 and 170, then up McCaslin Boulevard), finishing each lap up **The Wall**, a mile-long climb that kicks up to 18%. Distances from published figures; the bends and rolling profile are approximated. Prairie scenery with the Front Range behind. |
+| **Hell of the West · Stage 2: Tour of the Moon** | 37 km | Rim Rock Drive through Colorado National Monument, from the Grand Junction entrance to Fruita, as in the Coors Classic and the film. Switchbacks up the canyon wall (about 4 miles at 6 to 8%), rolling uphill to the 2,024 m (6,640 ft) high point, a rise at Black Ridge, then a fast drop to Fruita. About 630 m of climbing here (the Park Service quotes 2,300 ft for the whole loop). **Red rock desert** scenery: banded red and orange sandstone, mesas, sparse junipers. The exact grades are approximated. |
+| **Hell of the West · Stage 3: Echo Lake** | 20.8 km | The final stage of the 1985 film *American Flyers*, filmed on Colorado 103 from Idaho Springs (2,293 m) up Chicago Creek to the sprint at Echo Lake (3,235 m), below Mount Evans. About 3.5% for the first 11 km, then 5.8%, with switchbacks in the upper half and a flat finish at the lake. Totals from published figures; the per-kilometer shape is approximated. |
 | **Alpe d'Huez** | 14 km | Climbs from Le Bourg-d'Oisans (723 m) up 1,118 m of gain, at an average of about 8%. It has 21 numbered hairpins, marked with **Virage** plaques. The gradients follow published per-kilometer figures from swi-cycling.com. |
 | **Stelvio Pass** | 24.5 km | Climbs from Prato allo Stelvio (about 915 m) at an average of 7.5%, through 48 numbered hairpins marked **Tornante**. The summit is at 2,758 m. The per-kilometer shape is an approximation, because no per-kilometer source was found. |
 

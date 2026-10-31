@@ -144,7 +144,7 @@ Each frame, `frame(now)` in `src/main.ts` does this, in order:
 
 1. Clamps the frame time to 0–0.1 s, so a tab that was in the background can't jump ahead.
 2. In demo mode, sets the power from the demo slider (or from the workout target, with a small wobble). Otherwise it checks the trainer's last reading, and zeroes power and cadence after 3 seconds of silence.
-3. Gets the other riders on the stage (predicted for now from their last update) and works out the draft from the rider just ahead (`draft.ts`).
+3. Gets the other riders on the stage (predicted for now from their last update) and works out the draft from the rider just ahead (`draft.ts`). In a race (see [Racing and the tour](racing-and-tour.md)) it first steps the race (`race.update()`), and the pro teams are the racers; during the countdown your speed is held at zero.
 4. Reads the road's grade at the rider's distance, and advances speed with `stepSpeed()` from [Physics and stats](physics-and-stats.md), with the drag area reduced by the draft.
 5. Advances distance, moving time and work. It checks for the finish line, and totals climbing from the elevation at the rider's distance.
 6. Updates the drivetrain (`drivetrain.ts`): the gear (automatic, or the rider's virtual gear), crank angle and bike rock, so the legs turn at a speed the wheels could produce.
@@ -180,6 +180,10 @@ When you sign in, the account is the source of truth. The browser's copies are a
 `src/cloud/` talks to Neon. `client.ts` builds the client from `@neon/neon-js`. `account.ts` holds the current user and signs in with Google or with email and password (sign-up, sign-in, password reset). `emailAuth.ts` draws the email form. `presence.ts` runs riding together. `sync.ts` reads and writes every table the browser can touch, including the admin functions. `recorder.ts` records rides and writes `.tcx` files. `achievements.ts` works out badges from rides and FTP history. `ui.ts` draws the sign-in, profile, feedback and admin dialogs, and `charts.ts` draws their charts.
 
 Nothing in the cloud layer runs on the frame loop. Every call is triggered by a user action, a ride event, the 2-second riding-together update, or the 5-minute autosave.
+
+## Racing
+
+`src/raceSim.ts` is a self-contained race engine (riders in groups, attacks, breakaways, chases, sprints, classifications). `src/peloton.ts` hands the field to it in race mode, `src/race.ts` runs the countdown and the live panel's numbers, `src/raceUi.ts` draws them, and `src/tour.ts` / `src/tourUi.ts` keep the Hell of the West tour in `settings.tour`. See [Racing and the tour](racing-and-tour.md).
 
 ## Where to start reading
 

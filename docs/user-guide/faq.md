@@ -85,3 +85,7 @@ No. An email account needs only a rider name, email, password, weight and (optio
 ## Why is the Hell of the West stage in Colorado?
 
 It's the final stage of the 1985 film *American Flyers*, filmed between Idaho Springs and Echo Lake on the road to Mount Evans. See [Stages and routes](stages-and-routes.md).
+
+## How do I race the pro teams?
+
+Press **🏁 Race this stage** on a stage card, or start the Hell of the West tour from **☰ Menu → 🏆**. See [Racing and the tour](racing-and-the-tour.md).

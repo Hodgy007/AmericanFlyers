@@ -905,3 +905,94 @@ body.at-home .draft-panel { display: none; }
 .riders-sub { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .riders-sub[hidden] { display: none; }
 .team-row .rider-dot { background: var(--team, #888); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+
+/* ----------------------------------------------- racing and the tour ---- */
+.jersey-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid rgba(255, 255, 255, 0.45); vertical-align: -1px; }
+.jersey-dot.yellow { background: #ffd51e; }
+.jersey-dot.green { background: #1fa24a; }
+.jersey-dot.polka { background: radial-gradient(circle at 30% 30%, #e0263c 0 2px, transparent 2.5px), radial-gradient(circle at 70% 65%, #e0263c 0 2px, transparent 2.5px), #fff; }
+
+/* The live race panel, down the left side (or the right when the data blocks are on the left). */
+.race-panel {
+  position: fixed; left: 14px; top: 150px; z-index: 5; width: min(268px, calc(100vw - 28px)); padding: 10px 12px 11px; border-radius: 14px;
+  background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font-size: 12px; color: var(--muted);
+}
+.race-panel[hidden] { display: none; }
+body.hud-left .race-panel { left: auto; right: 14px; }
+body.at-home .race-panel, body.at-home .race-count { display: none; }
+.rp-head { display: flex; justify-content: space-between; align-items: baseline; }
+.rp-place strong { font-family: var(--font-display); font-size: 40px; font-weight: 800; line-height: 1; color: var(--text); }
+.rp-place small { margin-left: 4px; font-size: 14px; color: var(--muted); }
+.rp-time { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.rp-gap { margin: 1px 0 7px; font-size: 12px; }
+.rp-groups { display: grid; gap: 3px; margin-bottom: 7px; }
+.rp-group { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: baseline; padding: 3px 7px; border-radius: 7px; background: rgba(255, 255, 255, 0.05); }
+.rp-group em { font-style: normal; font-size: 11px; opacity: 0.8; }
+.rp-group b { min-width: 52px; text-align: right; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.rp-group.you { background: rgba(236, 61, 77, 0.22); box-shadow: inset 0 0 0 1px rgba(236, 61, 77, 0.55); color: var(--text); }
+.rp-next { margin-bottom: 7px; padding: 4px 8px; border-radius: 7px; background: rgba(61, 123, 247, 0.2); color: #cfe0ff; font-weight: 600; }
+.rp-next[hidden], .rp-msg[hidden] { display: none; }
+.rp-jerseys { display: grid; gap: 2px; }
+.rp-jersey { display: flex; gap: 7px; align-items: center; }
+.rp-jersey span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-jersey.you span { color: #fff; font-weight: 700; }
+.rp-msg { margin-top: 8px; padding: 5px 8px; border-radius: 7px; background: rgba(255, 190, 40, 0.18); color: #ffe39a; font-weight: 600; }
+@media (max-width: 560px) {
+  .race-panel { top: auto; bottom: 238px; left: 8px; width: 214px; padding: 7px 9px; }
+  .rp-place strong { font-size: 28px; }
+  .rp-groups .rp-group:not(.you), .rp-jerseys { display: none; }
+  .rp-gap { margin-bottom: 4px; }
+}
+
+/* 3-2-1 */
+.race-count {
+  position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; pointer-events: none;
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(120px, 28vw, 260px); color: #fff;
+  text-shadow: 0 6px 40px rgba(0, 0, 0, 0.6), 0 0 80px rgba(236, 61, 77, 0.55);
+}
+.race-count[hidden] { display: none; }
+.race-count.pulse { animation: count-pop 0.9s ease-out both; }
+@keyframes count-pop { from { opacity: 0; transform: scale(1.6); } 25% { opacity: 1; } to { opacity: 0.85; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .race-count.pulse { animation: none; } }
+
+/* The stage picker */
+.stage-race { margin-top: 2px; align-self: flex-start; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 8px; background: rgba(236, 61, 77, 0.28); border: 1px solid rgba(236, 61, 77, 0.55); color: #fff; }
+.stage-race:hover { background: rgba(236, 61, 77, 0.55); }
+.tour-card { grid-column: 1 / -1; background: linear-gradient(90deg, rgba(255, 213, 30, 0.16), rgba(31, 162, 74, 0.12) 55%, rgba(224, 38, 60, 0.14)), #0f1830; border-color: rgba(255, 213, 30, 0.4); }
+
+/* The tour dialog */
+.tour-dialog { width: min(94vw, 640px); max-height: 92vh; overflow: auto; }
+.tour-stages { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
+.tour-stage { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: #0f1830; border: 1px solid rgba(255, 255, 255, 0.07); }
+.tour-stage.next { border-color: var(--red); box-shadow: inset 0 0 0 1px var(--red); }
+.tour-stage.done .ts-num { background: #1fa24a; }
+.ts-num { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); font-weight: 700; }
+.ts-main { display: grid; gap: 2px; min-width: 0; }
+.ts-main small { color: var(--muted); font-size: 12px; }
+.ts-status { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.tour-jerseys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.tour-jerseys[hidden] { display: none; }
+.tour-jersey { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: #0f1830; font-size: 13px; min-width: 0; }
+.tour-jersey .jersey-dot { width: 18px; height: 18px; }
+.tour-jersey span { display: grid; min-width: 0; }
+.tour-jersey small { color: var(--muted); font-size: 11px; }
+.tour-jersey b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tour-jersey.you { box-shadow: inset 0 0 0 1px rgba(255, 213, 30, 0.7); }
+@media (max-width: 560px) { .tour-jerseys { grid-template-columns: 1fr; } }
+
+/* Result tables on the finish card and in the tour dialog */
+.finish-card.race { width: min(94vw, 600px); }
+.race-results { text-align: left; margin: 4px 0 10px; }
+.rr-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.rr-tabs button { padding: 5px 12px; font-size: 13px; }
+.rr-tabs button[aria-selected='true'] { background: linear-gradient(180deg, var(--red-hi), #b51b2b); border-color: rgba(255, 120, 132, 0.45); }
+.rr-scroll { max-height: 32vh; overflow: auto; border-radius: 10px; background: #0f1830; }
+.rr-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.rr-table th { position: sticky; top: 0; background: #17213f; text-align: left; padding: 6px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.rr-table td { padding: 5px 8px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.rr-table .num { text-align: right; }
+.rr-table tr.you td { background: rgba(236, 61, 77, 0.2); font-weight: 700; color: #fff; }
+.rr-rider { display: inline-flex; align-items: center; gap: 7px; }
+.team-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.45); }
+.team-dot.me { background: #fff; border-color: var(--red); }

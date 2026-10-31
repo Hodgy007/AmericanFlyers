@@ -20,8 +20,9 @@ The app reads these parameters when it loads.
 
 | Parameter | Example | What it does |
 | --- | --- | --- |
-| `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `hell-of-the-west`, `alpe-dhuez`, `stelvio`, `ventoux`, `tourmalet` and `zoncolan`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
+| `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `hotw-morgul-bismark`, `hotw-tour-of-the-moon`, `hell-of-the-west`, `alpe-dhuez`, `stelvio`, `ventoux`, `tourmalet` and `zoncolan`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
 | `start` | `?start=6` | Starts the ride this many kilometers into the stage. Decimal values work, for example `6.5`. Values of zero or less are ignored. |
+| `timescale` | `?timescale=8` | Runs the ride clock this many times faster (1 to 20), for testing whole races quickly. Not for normal riding: the physics and the field step in bigger jumps. |
 | `error` | `?error=access_denied` | Set by the sign-in provider when sign-in fails. The app shows *Sign-in didn't finish* with the message, then removes the parameter from the address bar. |
 | `error_description` | `?error_description=…` | The message that goes with `error`. Shown and removed the same way. |
 

@@ -118,11 +118,34 @@ const COL = {
   field: new THREE.Color('#c2b75a'),
   rock: new THREE.Color('#878274'),
   snow: new THREE.Color('#f1f4f8'),
+  // Red-rock desert (Stage.scenery.palette = 'desert'): layered sandstone, pale sand, grey-green sage.
+  strataA: new THREE.Color('#b4532f'),
+  strataB: new THREE.Color('#cf7a47'),
+  strataC: new THREE.Color('#e0a06a'),
+  strataD: new THREE.Color('#8f3b25'),
+  sand: new THREE.Color('#dbb98a'),
+  sage: new THREE.Color('#8f9568'),
+  desertRock: new THREE.Color('#a24a2c'),
 };
 const tmp = new THREE.Color();
 
+/** Banded red sandstone, sandy flats and the odd patch of sage. */
+function desertColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color) {
+  const band = h * 0.11 + fbm(x / 160, z / 160, 2) * 0.7; // layers a few metres thick, wobbling a little
+  const f = band - Math.floor(band);
+  const k = Math.floor(band) & 3;
+  const layer = [COL.strataA, COL.strataB, COL.strataC, COL.strataD][k];
+  const next = [COL.strataB, COL.strataC, COL.strataD, COL.strataA][k];
+  out.copy(layer).lerp(next, smoothstep(0.7, 1, f));
+  out.lerp(COL.sand, 0.12 + 0.12 * fbm(x / 90 + 3, z / 90, 2)); // wind-blown sand over the rock
+  const sage = fbm(x / 120 - 20, z / 120 + 11, 3);
+  if (sage > 0.2) out.lerp(COL.sage, smoothstep(0.2, 0.5, sage) * 0.4);
+  if (near && near.dist < 9) out.lerp(COL.verge, 1 - smoothstep(6, 9, near.dist));
+}
+
 function groundColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color) {
   const sc = currentStage().scenery;
+  if (sc.palette === 'desert') return desertColor(x, z, h, near, out);
   out.copy(COL.grassA).lerp(COL.grassB, fbm(x / 140, z / 140, 3) * 0.5 + 0.5);
   const fields = fbm(x / 380 + 9, z / 380, 2);
   if (sc.fields && fields > 0.28) out.lerp(COL.field, smoothstep(0.28, 0.4, fields) * 0.8);
@@ -136,6 +159,7 @@ function groundColor(x: number, z: number, h: number, near: Near | null, out: TH
 
 /** Darkens steep grass and turns cliffs to rock, using the tile's own height grid. */
 function shadeSlopes(pos: THREE.BufferAttribute, colors: Float32Array) {
+  const rock = currentStage().scenery.palette === 'desert' ? COL.desertRock : COL.rock;
   const n = SEG + 1;
   const step = TILE / SEG;
   const h = (ix: number, iz: number) => pos.getY(Math.min(n - 1, Math.max(0, iz)) * n + Math.min(n - 1, Math.max(0, ix)));
@@ -149,7 +173,7 @@ function shadeSlopes(pos: THREE.BufferAttribute, colors: Float32Array) {
       const i = (iz * n + ix) * 3;
       c.setRGB(colors[i], colors[i + 1], colors[i + 2]);
       c.multiplyScalar(1 - 0.25 * smoothstep(0.35, 0.8, slope)); // shadier, rougher grass
-      c.lerp(COL.rock, smoothstep(0.75, 1.1, slope)); // bare rock on cliffs
+      c.lerp(rock, smoothstep(0.75, 1.1, slope)); // bare rock on cliffs
       colors.set([c.r, c.g, c.b], i);
     }
   }
@@ -183,6 +207,15 @@ function makeBroadleaf() {
   ])!;
 }
 
+/** A juniper: a squat, dark grey-green tree with a short trunk, for the red-rock desert. */
+function makeJuniper() {
+  return mergeGeometries([
+    painted(new THREE.CylinderGeometry(0.16, 0.26, 1.6, 5).translate(0, 0.8, 0), '#6b4a32'),
+    painted(new THREE.IcosahedronGeometry(1.6, 0).scale(1, 0.9, 1).translate(0, 2.3, 0), '#55704a'),
+    painted(new THREE.IcosahedronGeometry(1.1, 0).translate(0.9, 1.9, 0.5), '#617c52'),
+  ])!;
+}
+
 // ------------------------------------------------------------- tiles ----
 
 interface Tile {
@@ -209,6 +242,7 @@ export class Terrain {
   private readonly treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
   private readonly conifer = makeConifer();
   private readonly broadleaf = makeBroadleaf();
+  private readonly juniper = makeJuniper();
 
   /** Drops every tile (after a stage change). */
   clear() {
@@ -286,14 +320,16 @@ export class Terrain {
     const broadleaves: THREE.Matrix4[] = [];
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
-    for (let n = 0; n < 260; n++) {
+    const desert = currentStage().scenery.palette === 'desert';
+    const junipers: THREE.Matrix4[] = [];
+    for (let n = 0; n < (desert ? 70 : 260); n++) {
       const lx = (rand() - 0.5) * TILE;
       const lz = (rand() - 0.5) * TILE;
       const x = lx + cx;
       const z = lz + cz;
       const forest = fbm(x / 240 - 13, z / 240 + 5, 3);
       const keep = rand();
-      if (forest < 0.05 - currentStage().scenery.forestCover && keep > 0.06) continue;
+      if (desert ? forest < 0.0 && keep > 0.08 : forest < 0.05 - currentStage().scenery.forestCover && keep > 0.06) continue;
       const near = nearestRoad(cands, x, z);
       if (near && (near.dist < 12 || nearLandmark(x, z, near.d))) continue;
       const h = heightAt(x, z, near);
@@ -302,9 +338,9 @@ export class Terrain {
       const s = 0.75 + rand() * 0.7;
       q.setFromAxisAngle(up, rand() * Math.PI * 2);
       const m = new THREE.Matrix4().compose(new THREE.Vector3(lx, h - 0.3, lz), q, new THREE.Vector3(s, s * (0.85 + rand() * 0.35), s));
-      (rand() < sc.coniferBias || forest > 0.3 ? conifers : broadleaves).push(m);
+      (desert ? junipers : rand() < sc.coniferBias || forest > 0.3 ? conifers : broadleaves).push(m);
     }
-    const meshes = [this.instanced(this.conifer, conifers, rand), this.instanced(this.broadleaf, broadleaves, rand)];
+    const meshes = [this.instanced(this.conifer, conifers, rand), this.instanced(this.broadleaf, broadleaves, rand), this.instanced(this.juniper, junipers, rand)];
     for (const m of meshes) if (m) group.add(m);
 
     return {

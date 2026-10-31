@@ -35,7 +35,7 @@ The team names are affectionate near-misses of the real ones (*Plasma | Lease-a-
 
 Open 👥 to see them under **Pro teams on the road**: how far ahead or behind each one is, its pace in watts for your weight, and its speed. **Join** starts a new ride on the back of the group, rolling at their speed, so you're straight into their draft. Hold their watts (a little less, thanks to the draft) and you'll stay with them.
 
-On a stage with a finish, teams that cross the line start the stage again. Switch them off with **Pro teams on the road** in ⚙ Settings.
+On a stage with a finish, teams that cross the line start the stage again. Switch them off with **Pro teams on the road** in ⚙ Settings. For a race against them (attacks, breakaways and sprints) see [Racing and the tour](racing-and-the-tour.md).
 
 ## Drafting
 
