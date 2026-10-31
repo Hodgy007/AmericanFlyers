@@ -21,6 +21,20 @@ The 👥 button in the top bar shows how many other riders are on your stage. It
 
 When someone joins your stage, a message says so.
 
+## Ride-ons
+
+Give another rider a quick thumbs up. A ride-on is one of four emoji, 👍 🔥 💪 👋, with no typing and no chat.
+
+- **From the list:** open 👥 and press an emoji under a rider's name.
+- **From the saddle:** press **R** to send a 👍 to the rider just ahead of you, the one whose draft you're in or closing on.
+- **When you get one:** a message says who sent it, and the emoji floats up over their rider on the road (if they're in view).
+
+You can send each rider one every 20 seconds, and 20 a minute in all. Ride-ons only go to real riders who are on the stage right now. You need to be signed in and have **Ride together** on.
+
+The pro team riders get them too: press **R** behind a team, or one of their riders will do. They're computer-ridden, so nothing is sent anywhere, but every now and then one of them sends one back after a few seconds.
+
+Ride-ons you haven't seen are kept for a day at most. Banned riders' ride-ons are never delivered.
+
 ## Riding with a friend
 
 1. Both sign in.
@@ -61,7 +75,7 @@ When you're close behind a rider but off to one side, the hint reads *Move ◀ i
 ## Privacy
 
 - Turn off **Ride together** in ⚙ Settings to ride alone. Then nobody sees you, and you don't see them.
-- Only your short name, stage, position, speed, power and cadence are shared, and only while you're riding. Closing or hiding the tab takes you off the road.
+- Only your short name, stage, position, speed, power, cadence and kit colours (see [My kit](my-kit.md)) are shared, and only while you're riding. Closing or hiding the tab takes you off the road.
 - Banned accounts never appear.
 
 ## Notes

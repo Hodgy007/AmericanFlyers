@@ -1,4 +1,5 @@
 import type { PlanProgress } from './plans';
+import type { Kit } from './kit';
 
 export type Units = 'metric' | 'imperial';
 export type TimeOfDay = 'auto' | 'dawn' | 'day' | 'dusk' | 'night';
@@ -22,6 +23,7 @@ export interface Settings {
   autoSteer: boolean; // ease into the draft of a rider just ahead when you haven't steered
   timeOfDay: TimeOfDay; // 'auto' starts at the stage's usual time and slowly moves on
   weather: Weather; // 'auto' uses the stage's weather, changing now and then
+  kit: Kit | null; // your jersey and bike colours (null = the default stars and stripes)
 }
 
 const KEY = 'americanflyers.settings';
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoSteer: true,
   timeOfDay: 'auto',
   weather: 'auto',
+  kit: null,
 };
 
 export function loadSettings(): Settings {

@@ -3,6 +3,7 @@
 
 import { account } from './cloud/account';
 import type { Presence } from './cloud/presence';
+import { EMOTES } from './cloud/rideOns';
 
 const KM_PER_MI = 1.609344;
 
@@ -16,6 +17,8 @@ interface Options {
   /** Computer-ridden pro teams on the road (empty when switched off). */
   teams: () => { id: string; name: string; color: string; wkg: number; riders: number; distance: number; back: number; speedMs: number }[];
   riderKg: () => number;
+  /** Sends a ride-on (an emoji) to a rider on the list; see rideOnsUi.ts. */
+  sendRideOn: (id: string, name: string, emote: string) => void;
 }
 
 function gapText(gap: number, imperial: boolean) {
@@ -59,7 +62,7 @@ export function initRidersUi(o: Options) {
    * Rows are kept between refreshes (keyed by id) and only their text changes,
    * so a button doesn't vanish under the pointer as the list updates.
    */
-  type RowInfo = { name: string; gap: string; stats: string; button?: { label: string; title: string; onClick: () => void }; color?: string };
+  type RowInfo = { name: string; gap: string; stats: string; button?: { label: string; title: string; onClick: () => void }; color?: string; emotes?: boolean };
   function syncRows(container: HTMLElement, items: [string, RowInfo][], className: string) {
     const keep = new Set(items.map(([id]) => id));
     for (const el of [...container.children] as HTMLElement[]) if (!keep.has(el.dataset.id!)) el.remove();
@@ -74,6 +77,21 @@ export function initRidersUi(o: Options) {
         b.type = 'button';
         b.addEventListener('click', () => (row as HTMLElement & { act?: () => void }).act?.());
         row.append(b);
+        if (info.emotes) {
+          // Ride-ons: a quick emoji to this rider.
+          const bar = document.createElement('span');
+          bar.className = 'rider-emotes';
+          for (const emote of EMOTES) {
+            const e = document.createElement('button');
+            e.type = 'button';
+            e.className = 'emote';
+            e.textContent = emote;
+            e.title = `Send ${emote} to this rider`;
+            e.addEventListener('click', () => o.sendRideOn(row!.dataset.id!, row!.querySelector('.rider-name')!.textContent ?? '', emote));
+            bar.append(e);
+          }
+          row.append(bar);
+        }
       }
       if (info.color) row.style.setProperty('--team', info.color);
       row.querySelector('.rider-name')!.textContent = info.name;
@@ -116,6 +134,7 @@ export function initRidersUi(o: Options) {
           title: `Start a new ride next to ${r.name}`,
           onClick: () => { dialog.close(); o.rideWith(r.distance, r.name); },
         } : undefined,
+        emotes: true,
       }];
     }), 'rider-row');
   }

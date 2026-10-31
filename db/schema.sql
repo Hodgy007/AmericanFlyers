@@ -235,7 +235,8 @@ grant execute on function public.is_admin(), public.admin_overview(), public.adm
 -- each other on the road. The browser calls ride_presence() every couple of
 -- seconds: it records the caller's position and returns the other riders on
 -- that stage seen in the last 15 s (names shortened to "First L.", ids
--- hashed). No direct table access.
+-- hashed), with the kit (jersey, accent and frame colours) each is wearing.
+-- No direct table access.
 
 create table public.live_riders (
   user_id text primary key,
@@ -244,6 +245,7 @@ create table public.live_riders (
   speed real not null default 0,
   power smallint not null default 0,
   cadence smallint not null default 0,
+  kit text, -- "#jersey,#accent,#frame", validated by ride_presence(); null = the default kit
   updated_at timestamptz not null default now()
 );
 create index live_riders_stage_idx on public.live_riders (stage_id, updated_at);
@@ -258,19 +260,22 @@ language sql immutable set search_path = '' as $$
   end
 $$;
 
-create or replace function public.ride_presence(p_stage text, p_distance real, p_speed real, p_power integer, p_cadence integer, p_visible boolean default true)
-returns table (id text, name text, distance real, speed real, power integer, cadence integer, age_ms integer)
+-- p_kit is optional, so clients from before kits existed (six arguments) still work.
+create or replace function public.ride_presence(p_stage text, p_distance real, p_speed real, p_power integer, p_cadence integer, p_visible boolean default true, p_kit text default null)
+returns table (id text, name text, distance real, speed real, power integer, cadence integer, age_ms integer, kit text)
 language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_column
-declare me text := auth.user_id();
+declare
+  me text := auth.user_id();
+  my_kit text := case when p_kit ~ '^#[0-9a-fA-F]{6},#[0-9a-fA-F]{6},#[0-9a-fA-F]{6}$' then lower(p_kit) else null end;
 begin
   if me is null then raise exception 'Sign in to ride with others' using errcode = '42501'; end if;
   if p_visible then
-    insert into public.live_riders as l (user_id, stage_id, distance, speed, power, cadence, updated_at)
+    insert into public.live_riders as l (user_id, stage_id, distance, speed, power, cadence, kit, updated_at)
     values (me, left(p_stage, 80), greatest(-1000, least(p_distance, 1000000)), greatest(0, least(p_speed, 40)),
-            greatest(0, least(p_power, 3000)), greatest(0, least(p_cadence, 250)), now())
+            greatest(0, least(p_power, 3000)), greatest(0, least(p_cadence, 250)), my_kit, now())
     on conflict (user_id) do update set stage_id = excluded.stage_id, distance = excluded.distance, speed = excluded.speed,
-      power = excluded.power, cadence = excluded.cadence, updated_at = excluded.updated_at;
+      power = excluded.power, cadence = excluded.cadence, kit = excluded.kit, updated_at = excluded.updated_at;
   else
     delete from public.live_riders where user_id = me;
   end if;
@@ -278,7 +283,7 @@ begin
   delete from public.live_riders where updated_at < now() - interval '10 minutes';
   return query
     select md5(l.user_id), public.short_name(u.name), l.distance, l.speed, l.power::integer, l.cadence::integer,
-           (extract(epoch from now() - l.updated_at) * 1000)::integer
+           (extract(epoch from now() - l.updated_at) * 1000)::integer, l.kit
     from public.live_riders l
     join neon_auth."user" u on u.id::text = l.user_id
     where l.stage_id = left(p_stage, 80) and l.user_id <> me and l.updated_at > now() - interval '15 seconds'
@@ -293,8 +298,71 @@ language sql security definer set search_path = '' as $$
 $$;
 
 revoke all on public.live_riders from public, anonymous, authenticated;
-revoke execute on function public.ride_presence(text, real, real, integer, integer, boolean), public.leave_ride(), public.short_name(text) from public, anonymous;
-grant execute on function public.ride_presence(text, real, real, integer, integer, boolean), public.leave_ride() to authenticated;
+revoke execute on function public.ride_presence(text, real, real, integer, integer, boolean, text), public.leave_ride(), public.short_name(text) from public, anonymous;
+grant execute on function public.ride_presence(text, real, real, integer, integer, boolean, text), public.leave_ride() to authenticated;
+
+-- ---------------------------------------------------------- ride-ons ----
+-- A quick 👍 🔥 💪 👋 sent to another rider on the road (no free text). The
+-- target is named by the md5 id that ride_presence() returns, and must have
+-- been seen in the last 15 s. Limits: one per target per 20 s, 20 a minute.
+-- No direct table access; my_ride_ons() also clears rows older than a day.
+
+create table public.ride_ons (
+  id bigserial primary key,
+  from_user text not null,
+  to_user text not null,
+  emote text not null check (emote in ('👍','🔥','💪','👋')),
+  created_at timestamptz not null default now()
+);
+create index ride_ons_to_idx on public.ride_ons (to_user, created_at);
+create index ride_ons_from_idx on public.ride_ons (from_user, created_at);
+alter table public.ride_ons enable row level security; -- no grants: only the functions below touch it
+revoke all on public.ride_ons from public, anonymous, authenticated;
+revoke all on sequence public.ride_ons_id_seq from public, anonymous, authenticated;
+
+create or replace function public.send_ride_on(p_to text, p_emote text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  me text := auth.user_id();
+  target text;
+begin
+  if me is null then raise exception 'Sign in to send ride-ons' using errcode = '42501'; end if;
+  if p_emote is null or p_emote not in ('👍','🔥','💪','👋') then raise exception 'Unknown ride-on'; end if;
+  select l.user_id into target
+  from public.live_riders l
+  left join neon_auth."user" u on u.id::text = l.user_id
+  where md5(l.user_id) = p_to and l.updated_at > now() - interval '15 seconds' and not coalesce(u.banned, false)
+  limit 1;
+  if target is null then raise exception 'That rider isn''t riding right now'; end if;
+  if target = me then raise exception 'You can''t send a ride-on to yourself'; end if;
+  if exists (select 1 from public.ride_ons where from_user = me and to_user = target and created_at > now() - interval '20 seconds') then
+    raise exception 'You just sent them one. Give it a few seconds';
+  end if;
+  if (select count(*) from public.ride_ons where from_user = me and created_at > now() - interval '1 minute') >= 20 then
+    raise exception 'Easy there: too many ride-ons this minute';
+  end if;
+  insert into public.ride_ons (from_user, to_user, emote) values (me, target, p_emote);
+end $$;
+
+create or replace function public.my_ride_ons(p_since timestamptz default null)
+returns table (id bigint, from_id text, name text, emote text, created_at timestamptz)
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare me text := auth.user_id();
+begin
+  if me is null then raise exception 'Sign in to get ride-ons' using errcode = '42501'; end if;
+  delete from public.ride_ons where created_at < now() - interval '1 day';
+  return query
+    select r.id, md5(r.from_user), public.short_name(u.name), r.emote, r.created_at
+    from public.ride_ons r
+    left join neon_auth."user" u on u.id::text = r.from_user
+    where r.to_user = me and r.created_at > coalesce(p_since, now() - interval '1 minute') and not coalesce(u.banned, false)
+    order by r.created_at
+    limit 20;
+end $$;
+
+revoke execute on function public.send_ride_on(text, text), public.my_ride_ons(timestamptz) from public, anonymous;
+grant execute on function public.send_ride_on(text, text), public.my_ride_ons(timestamptz) to authenticated;
 
 -- -------------------------------------------------- leaderboards & ghosts ----
 -- A rider's fastest whole-stage ride counts on that stage's leaderboard

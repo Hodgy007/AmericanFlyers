@@ -112,6 +112,16 @@ export class World {
     this.firstFrame = true;
   }
 
+  /** Changes what your rider wears (kit and bike colours) at runtime; see src/kit.ts. */
+  setPlayerLook(look: { frame?: string; jersey?: string; kit?: [string, string] | null }) {
+    this.rider.setLook(look);
+  }
+
+  /** A short-lived emoji floating above another rider (ride-ons). False if they aren't drawn. */
+  showEmote(riderId: string, emoji: string) {
+    return this.others.showEmote(riderId, emoji);
+  }
+
   /** Other riders on this stage (live riders and ghosts), positions predicted for now. */
   setOthers(list: OtherRider[]) {
     this.others.set(list);

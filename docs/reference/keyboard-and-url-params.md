@@ -8,6 +8,7 @@ This page lists every keyboard shortcut and URL parameter the app reads, with wh
 | --- | --- | --- |
 | **C** (or **c**) | Anywhere on the page, except inside a dialog | Cycles the camera: Chase view, Side view, Rider's view. |
 | **←** / **→** | Anywhere on the page, except inside a dialog | Steers left or right across the road, 0.7 m a press; hold to keep going. |
+| **R** (or **r**) | Anywhere on the page, except inside a dialog | Sends a 👍 ride-on to the rider just ahead of you (a live rider or a pro team rider). See [Riding together](../user-guide/riding-together.md#ride-ons). |
 | **↑** | Demo ride on, not inside a dialog | Adds 10 W to the demo power, up to 600 W. |
 | **↓** | Demo ride on, not inside a dialog | Takes 10 W from the demo power, down to 0 W. |
 
