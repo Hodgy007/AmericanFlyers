@@ -11,6 +11,7 @@ import { World, type CameraMode } from './world/world';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { formatTime, Hud, openDataBlocks } from './hud';
 import { RideStats } from './stats';
+import { Drivetrain } from './drivetrain';
 import { drawWorkout } from './workouts/graph';
 import { RAMP_TEST_ID, zoneColor, type Workout } from './workouts/model';
 import { WorkoutPlayer } from './workouts/player';
@@ -20,6 +21,7 @@ import { account, onAccountChange, restoreSession } from './cloud/account';
 import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, syncOnSignIn, type Activity } from './cloud/sync';
 import { RideRecorder } from './cloud/recorder';
 import { initAccountUi } from './cloud/ui';
+import { initHome } from './home';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -36,7 +38,8 @@ let demo = false;
 let demoPower = 150;
 
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
-const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0, work: 0, finished: false };
+const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false };
+const drivetrain = new Drivetrain(); // keeps the legs in step with the wheels
 const powerSamples: { t: number; p: number }[] = [];
 const zoneRefs = () => settings;
 let stats = new RideStats(zoneRefs); // whole ride
@@ -207,7 +210,7 @@ function frame(now: number) {
   const elev = elevationAt(ride.distance);
   if (elev > ride.lastElev && !ride.finished) ride.climbed += elev - ride.lastElev;
   ride.lastElev = elev;
-  ride.crankAngle -= (live.cadence / 60) * 2 * Math.PI * dt;
+  drivetrain.update(dt, ride.speed, live.cadence, live.power);
 
   powerSamples.push({ t: now, p: live.power });
   while (powerSamples.length && now - powerSamples[0].t > 3000) powerSamples.shift();
@@ -228,7 +231,7 @@ function frame(now: number) {
     if (player.done) finishWorkout(); // reached the end, or skipped past the last step
   }
 
-  world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: ride.crankAngle }, dt);
+  world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: drivetrain.crankAngle, rock: drivetrain.rock }, dt);
 
   if (now - lastHud > 200) {
     lastHud = now;
@@ -545,7 +548,8 @@ function resetRide() {
   lastSavedSeconds = 0;
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
-  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0, work: 0, finished: false });
+  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false });
+  drivetrain.reset();
   powerSamples.length = 0;
   stats = new RideStats(zoneRefs);
   lastSentGrade = NaN;
@@ -754,6 +758,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown') { setDemoPower(demoPower - 10); e.preventDefault(); }
 });
 
+let bluetoothNote = () => {};
 if (!bluetoothAvailable()) {
   for (const id of ['btn-trainer', 'btn-hr']) {
     const b = $<HTMLButtonElement>(id);
@@ -761,7 +766,7 @@ if (!bluetoothAvailable()) {
     b.title = 'Web Bluetooth is not available in this browser';
   }
   setStatus('Bluetooth unavailable in this browser. Use Chrome or Edge (or Bluefy on iPhone/iPad)', 'off');
-  toast('This browser can’t use Bluetooth. Open in Chrome or Edge to connect your trainer. Demo ride works anywhere.', 7000);
+  bluetoothNote = () => toast('This browser can’t use Bluetooth. Open in Chrome or Edge to connect your trainer. Demo ride works anywhere.', 7000);
 } else {
   setStatus('No trainer connected', 'off');
 }
@@ -804,6 +809,7 @@ onAccountChange(async (a) => {
     toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
   }
 });
+initHome({ onEnterApp: () => bluetoothNote() }); // the Bluetooth note waits until the rider leaves the home page
 restoreSession();
 
 requestAnimationFrame(frame);

@@ -207,6 +207,9 @@ language plpgsql security definer set search_path = '' as $$
 begin
   if not public.is_admin() then raise exception 'Admins only' using errcode = '42501'; end if;
   if target = auth.user_id() then raise exception 'You can''t ban yourself'; end if;
+  if ban and exists (select 1 from neon_auth."user" u join public.admins a on lower(a.email) = lower(u.email) where u.id::text = target) then
+    raise exception 'Admins can''t be banned. Remove them from public.admins first.';
+  end if;
   update neon_auth."user" set banned = ban, "banReason" = case when ban then reason end, "banExpires" = null where id::text = target;
   if ban then delete from neon_auth.session where "userId"::text = target; end if;
 end $$;

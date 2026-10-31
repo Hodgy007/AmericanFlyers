@@ -4,14 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#14213d" />
-    <title>American Flyers</title>
+    <title>American Flyers: free indoor cycling</title>
+    <meta name="description" content="Free 3D indoor cycling in your browser. Ride Alpe d'Huez, the Stelvio and Route 66 on your Wahoo or any smart trainer, follow ERG workouts and track every ride." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="preload" as="image" href="/images/hero.jpg" media="(min-width: 769px)" />
+    <link rel="preload" as="image" href="/images/hero-768.jpg" media="(max-width: 768px)" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>" />
   </head>
   <body>
     <canvas id="scene" aria-label="Virtual bike ride"></canvas>
 
+    <section id="home" class="home" aria-labelledby="home-title">
+      <div class="home-bg" role="img" aria-label="A cyclist sprinting along a desert highway at sunset"></div>
+      <div class="home-scrim"></div>
+      <div class="home-inner">
+        <div class="home-brand"><span class="star">★</span> American Flyers</div>
+        <div class="home-copy">
+          <p class="home-eyebrow"><span class="stripe"></span>Free indoor cycling</p>
+          <h1 id="home-title">Welcome to the free <span>American Flyers</span> bike app</h1>
+          <p class="home-lead">Ride Alpe d'Huez, the Stelvio and Route 66 in 3D on your Wahoo or any smart trainer. Follow ERG workouts, upload your own routes and track every ride, right in your browser.</p>
+          <div class="home-cta">
+            <p class="home-cta-title">Sign in for free</p>
+            <div class="home-signin">
+              <button type="button" class="provider google" data-provider="google"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
+              <button type="button" class="provider apple" data-provider="apple"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4.1zM13.9 5c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.3 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5z"/></svg>Continue with Apple</button>
+            </div>
+            <p id="home-error" class="error" role="alert"></p>
+            <p class="home-small">Free to use: no subscription, no card. Signing in saves your rides, settings and achievements.</p>
+            <button type="button" id="home-ride" class="home-skip">Ride without an account →</button>
+          </div>
+        </div>
+        <ul class="home-features">
+          <li><strong>⛰ Real climbs</strong><span>Alpe d'Huez's 21 hairpins, the Stelvio's 48, and your own GPX routes</span></li>
+          <li><strong>⚡ ERG workouts</strong><span>Your trainer holds the watts. Built-ins, Zwift files or your own</span></li>
+          <li><strong>🏅 Track progress</strong><span>Personal bests, FTP history, heart-rate zones and achievements</span></li>
+        </ul>
+      </div>
+    </section>
+
     <header class="topbar">
-      <div class="brand"><span class="star">★</span> American Flyers</div>
+      <button type="button" class="brand" id="btn-home" title="Home"><span class="star">★</span> American Flyers</button>
       <nav class="actions">
         <button id="btn-stage" title="Choose a stage">🏁 Stage</button>
         <button id="btn-workouts" title="Workouts">🏋 Workouts</button>
