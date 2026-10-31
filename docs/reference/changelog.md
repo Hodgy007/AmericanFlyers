@@ -95,14 +95,27 @@ Merge commit `bfd10f5`. Accounts, profiles, achievements, HR zones, feedback and
 - **Second home hero.** A looping pit bull chase, taking turns with the original rider hero.
 - **Docs.** Every guide updated for the latest features, and the languages and technologies listed in [Architecture](../developer-guide/architecture.md#languages-and-technologies).
 
+## Pull request #11: Sentry and the pit bull hero (merged 2026-10-31)
+
+- **Sentry error reporting** with `@sentry/browser`, on when the build has a DSN.
+- The home page shows the pit bull hero on every visit (`?hero=rider` for the original).
+
+## Pull request #12: pro teams (merged 2026-10-31)
+
+- **Pro teams**: five computer-ridden teams with comedic near-miss names ride each stage two by two at 2.0–4.2 W/kg, in their own kit, with **Join** in 👥.
+
+## Pull request #13: bigger draft behind a group (merged 2026-10-31)
+
+- The draft counts the whole group ahead: up to about 54% on the back of a pro team, against 36% on one wheel.
+
 ## Unreleased (in review)
 
-- **Sentry error reporting** (pull request #11), and the pit bull hero shown on every visit (`?hero=rider` for the original).
 - **Steering**: steer across the road with **←** / **→** (or on-screen ◀ ▶ buttons on touch screens); the bike eases across over about 0.8 s and the cameras follow. **Auto-steer** (Settings, on by default) eases you onto the wheel of a rider just ahead if you haven't steered for 3 s. The draft is now lateral: full on their line, fading to nothing about 1.1 m across, and the draft gauge says which way to move when you're behind but off their line.
 - **Time of day and weather** (☰ Menu → 🌤 Time & weather): Auto, dawn, day, dusk and night; Auto, clear, cloudy and rain. Night has a moon, stars and a front-light pool on the road; rain adds streaks, a wet glossy road, thicker fog and a soft rain sound. On Auto the stage sets the start (Route 66 and Hell of the West at dusk, Tourmalet cloudy), the light moves on about an hour per two minutes of riding, and the weather changes now and then. New module `src/world/atmosphere.ts` (and `rain.ts`).
-- **Pro teams**: five computer-ridden teams with comedic near-miss names ride each stage two by two at 2.0–4.2 W/kg, in their own kit, with **Join** in 👥.
 - **Ride-ons**: send 👍 🔥 💪 👋 to a rider from 👥 or press **R** for the rider ahead; received ones show as a message and an emoji floating over the sender. Pro team riders sometimes reply. New table `ride_ons` and functions `send_ride_on()` and `my_ride_ons()`.
 - **My kit** (☰ Menu → 🎨): jersey, second colour and bike frame, with presets, saved in `settings.kit`. Other riders see your kit: `ride_presence()` takes an optional `p_kit` (the old six-argument call still works) and `live_riders` has a `kit` column. `setTourJersey()` in `src/kit.ts` lays a tour jersey over your kit.
+- **Hell of the West tour.** Two new stages from the film: Stage 1 *Morgul-Bismark* (two laps of the Boulder circuit, up The Wall) and Stage 2 *Tour of the Moon* (Rim Rock Drive, Colorado National Monument, with red rock desert scenery: `Scenery.palette = 'desert'`). The existing stage is now *Hell of the West · Stage 3: Echo Lake* (same id). **☰ Menu → 🏆 Hell of the West tour** races the three in order, with stage results and the general, points and mountains classifications (yellow, green and polka-dot jerseys), saved in `settings.tour`. Stages can be simulated. On a tour stage, lead a classification and your rider wears its jersey colours over your kit (`tourJersey()` → `setTourJersey()`).
+- **Racing.** **🏁 Race this stage** on any stage with a finish: 12 pro teams of three riders on the start line, a 3-2-1 countdown, attacks on the climbs, an early breakaway, chases, cracks, merging groups and a sprint in the last 400 m, scaled to your FTP. A live race panel (position, gap, groups, next sprint or summit, jerseys) and results tables (top 20 and you). Same engine for "simulate this stage". `?timescale=` runs the clock faster for testing.
 
 ## Full commit list
 

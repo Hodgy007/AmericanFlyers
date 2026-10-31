@@ -39,10 +39,15 @@ import { workoutById } from './workouts/library';
 import type { OtherRider } from './world/others';
 import { Steering } from './steering';
 import { initAtmosphereUi } from './atmosphereUi';
-import { kitString, onLookChange, playerLook, setPlayerKit } from './kit';
+import { kitString, onLookChange, playerLook, setPlayerKit, setTourJersey } from './kit';
 import { initKitUi } from './kitUi';
 import { RideOns } from './cloud/rideOns';
 import { initRideOnsUi } from './rideOnsUi';
+// Racing and the Hell of the West tour (race.ts, raceUi.ts, tour.ts, tourUi.ts).
+import { LiveRace, raceSetup, type ResultRow } from './race';
+import { initRaceUi, resultsNode } from './raceUi';
+import { initTourUi } from './tourUi';
+import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChange, priorTotals, recordStage, refWkg, simulateStage, tourComplete, tourJersey, tourStageNumber } from './tour';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -70,6 +75,8 @@ let recorder = new RideRecorder(); // second-by-second samples for the saved rid
 const sound = new Sound(settings.sound);
 const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
+let race: LiveRace | null = null; // the race being ridden, if any
+const raceUi = initRaceUi();
 let draft: Draft | null = null; // the rider just ahead, if any
 let draftSaving = 0; // fraction of air drag saved, eased
 let roadRiders: OtherRider[] = []; // live riders and pro teams on the road now (for ride-ons)
@@ -241,6 +248,8 @@ if (startKm > 0) {
   ride.lastElev = elevationAt(ride.distance);
 }
 
+// `?timescale=8` runs the clock 8× faster (up to 20×), for testing whole races in a minute.
+const TIME_SCALE = Math.min(20, Math.max(1, Number(new URLSearchParams(location.search).get('timescale')) || 1));
 let lastFrame = performance.now();
 let lastHud = 0;
 
@@ -248,7 +257,7 @@ const lateralOf = (id: string) => world.lateralOf(id);
 
 function frame(now: number) {
   // rAF timestamps can precede the load-time clock reading, so clamp at 0.
-  const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
+  const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000)) * TIME_SCALE;
   lastFrame = now;
 
   if (demo) {
@@ -267,7 +276,8 @@ function frame(now: number) {
 
   // Other riders on the road, and the draft from the one just ahead.
   const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders() : [];
-  if (settings.proTeams) {
+  if (race) race.update(dt, ride.distance, ride.speed); // the field races with you
+  if (settings.proTeams || race) {
     peloton.update(dt);
     liveRiders.push(...peloton.riders());
   }
@@ -283,6 +293,7 @@ function frame(now: number) {
     massKg: settings.riderKg + settings.bikeKg,
     cda: DEFAULT_PARAMS.cda * (1 - draftSaving),
   });
+  if (race?.holding) ride.speed = 0; // waiting on the line for the start
   ride.distance += ride.speed * dt;
   if (ride.speed > 0.3 && !ride.finished) {
     ride.movingTime += dt;
@@ -318,7 +329,7 @@ function frame(now: number) {
   sound.update(dt, { speedMs: ride.speed, pedalling: live.power > 0 || live.cadence > 0, crowd: crowdNear(ride.distance) });
 
   const others = liveRiders;
-  const g = ghostRider();
+  const g = race ? null : ghostRider(); // no ghost in a race
   if (g) others.push(g);
   world.setOthers(others);
   world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: drivetrain.crankAngle, rock: drivetrain.rock }, dt);
@@ -330,6 +341,8 @@ function frame(now: number) {
       planDone({ stage: currentStage().id });
     }
     updateHud(grade);
+    raceUi.countdown(race?.countText ?? null);
+    raceUi.panel(race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null, settings.units === 'imperial');
     if (player) {
       drawWorkout(profileCanvas, player.steps, { elapsed: player.elapsed, trace: player.trace });
     } else {
@@ -763,6 +776,7 @@ function resetRide() {
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false });
+  if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); } // starting afresh ends a race
   drivetrain.reset();
   powerSamples.length = 0;
   stats = new RideStats(zoneRefs);
@@ -793,6 +807,7 @@ function chooseStage(stage: Stage) {
   url.searchParams.delete('start');
   history.replaceState(null, '', url);
   world.restage(markerConfig());
+  updateTourJersey();
   resetRide();
   presence.restage();
   peloton.reset(0);
@@ -808,6 +823,12 @@ function openStages() {
   list.replaceChildren();
   const imperial = settings.units === 'imperial';
   const stages = allStages();
+  // The Hell of the West tour, at the top of the list.
+  const tourCard = document.createElement('button');
+  tourCard.className = 'stage-card tour-card';
+  tourCard.innerHTML = '<strong>🏆 Hell of the West tour</strong><span class="stage-tagline">Race the three stages of American Flyers in order against the pro teams: Morgul-Bismark, the Tour of the Moon, then Echo Lake. Yellow, green and polka-dot jerseys.</span>';
+  tourCard.addEventListener('click', () => { dialog.close(); tourUi.open(); });
+  list.append(tourCard);
   for (const stage of stages) {
     if (stage.uploaded && !list.querySelector('.stage-section')) {
       const h = document.createElement('h3');
@@ -831,6 +852,20 @@ function openStages() {
       dialog.close();
       if (stage !== currentStage()) chooseStage(stage);
     });
+    if (stage.finish !== null) {
+      // A race against the pro teams, from the start line.
+      const raceBtn = document.createElement('span');
+      raceBtn.className = 'stage-race';
+      raceBtn.setAttribute('role', 'button');
+      raceBtn.title = 'Race the pro teams over this stage';
+      raceBtn.textContent = '🏁 Race this stage';
+      raceBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dialog.close();
+        beginRace(stage, tourStageNumber(stage.id));
+      });
+      card.append(raceBtn);
+    }
     if (stage.uploaded) {
       const del = document.createElement('span');
       del.className = 'stage-delete';
@@ -856,28 +891,116 @@ function openStages() {
   });
 }
 
+// ----------------------------------------------------------------- racing ----
+
+/** Lines the pro teams up against you on a stage: a 3-2-1 countdown, then a race to the finish. */
+function beginRace(stage: Stage, tourStage: number | null = null) {
+  if (stage.finish === null) return;
+  if (stage !== currentStage()) chooseStage(stage);
+  else resetRide();
+  const tour = tourStage ? getTour() : null;
+  const seed = tour ? tour.seed : Math.floor(Math.random() * 1e9);
+  const { roster, course } = raceSetup(stage, seed);
+  const field = peloton.startRace(course, roster, refWkg(settings.ftp, settings.riderKg), seed);
+  race = new LiveRace(stage, field, priorTotals(tour, stage.id), tourStage);
+  race.onBeep = (last) => sound.beep(last);
+  const stageNo = tourStage ? `Stage ${tourStage} of the tour · ` : '';
+  toast(`${stageNo}${stage.name.replace('Hell of the West · ', '')}: roll up to the line.`, 4000);
+}
+
+/** The rider has crossed the line: lets the field finish, saves a tour stage, and builds the buttons. */
+function finishRace(r: LiveRace) {
+  const rows: ResultRow[] = r.results();
+  const me = rows.find((x) => x.you) ?? { id: 'me', name: 'You', team: -1, time: r.time, sprint: 0, kom: 0, you: true };
+  const place = rows.findIndex((x) => x.you) + 1;
+  const stage = r.stage;
+  let tour = getTour();
+  const tourN = tourStageNumber(stage.id);
+  const actions: SummaryAction[] = [{ label: 'Keep riding', onClick: () => {} }];
+  if (tour && tourN) {
+    recordStage(stage.id, rows);
+    tour = getTour();
+    const worn = myJerseys(tour);
+    if (worn.length) window.setTimeout(() => toast(`You lead the tour: ${worn.map((j) => JERSEY_NAMES[j].toLowerCase()).join(' and ')}!`, 6000), 1200);
+    const next = TOUR_STAGE_IDS[tourN];
+    if (next && tour && !tourComplete(tour)) actions.push({ label: `Next: stage ${tourN + 1}`, primary: true, onClick: () => beginRace(stageById(next), tourN + 1) });
+    else actions.push({ label: 'Tour standings', primary: true, onClick: () => tourUi.open() });
+  } else {
+    actions.push({ label: 'Race again', primary: true, onClick: () => beginRace(stage, tourN) });
+  }
+  return { rows, me, place, tour: tour && tourN ? tour : null, actions };
+}
+
+const tourUi = initTourUi({
+  race: (n) => beginRace(stageById(TOUR_STAGE_IDS[n - 1]), n),
+  simulate: (n) => {
+    const tour = getTour();
+    if (!tour) return;
+    const id = TOUR_STAGE_IDS[n - 1];
+    const rows = simulateStage(tour, id, settings);
+    recordStage(id, rows);
+    const you = rows.findIndex((x) => x.you) + 1;
+    toast(`Stage ${n} simulated: you finished ${ordinal(you)} of ${rows.length}.`, 5000);
+  },
+  imperial: () => settings.units === 'imperial',
+});
+$('btn-tour').addEventListener('click', () => tourUi.open());
+// Progress is saved with the settings, so it follows the account.
+loadTour(settings.tour);
+onTourChange((p) => {
+  settings = { ...settings, tour: p };
+  saveSettings(settings);
+  pushSettings(settings);
+  updateTourJersey();
+});
+
+/** On a tour stage, lead a classification and you wear its jersey (yellow, green or polka dots) over your kit. */
+function updateTourJersey() {
+  setTourJersey((TOUR_STAGE_IDS as readonly string[]).includes(currentStage().id) ? tourJersey() : null);
+}
+updateTourJersey();
+
 function showFinish() {
   ride.finished = true;
   sound.fanfare();
   // Only rides of the whole stage (from the start line) count for the leaderboard.
   ride.finishTime = ride.startDistance === 0 ? ride.movingTime : 0;
   planDone({ stage: currentStage().id });
-  const vsGhost = ghost && ride.finishTime ? ride.finishTime - ghost.finishS : null;
+  const racing = race && race.phase !== 'countdown' ? race : null;
+  const vsGhost = ghost && ride.finishTime && !racing ? ride.finishTime - ghost.finishS : null;
   const imperial = settings.units === 'imperial';
   const finish = currentStage().finish!;
   const avgPower = ride.movingTime > 0 ? Math.round(ride.work / ride.movingTime) : 0;
   const avgKmh = ride.movingTime > 0 ? ((finish - ride.startDistance) / ride.movingTime) * 3.6 : 0;
-  showSummary('🏁', `${currentStage().name}: finished!`, [
+  const items: [string, string][] = [
     ['Time', formatTime(ride.movingTime)],
     ['Avg power', `${avgPower} W`],
     ['Avg speed', `${(imperial ? avgKmh / KM_PER_MI : avgKmh).toFixed(1)} ${imperial ? 'mph' : 'km/h'}`],
     ['Climbed', `${Math.round(imperial ? ride.climbed * 3.28084 : ride.climbed)} ${imperial ? 'ft' : 'm'}`],
     ['Avg HR', stats.avgHr ? `${Math.round(stats.avgHr)} bpm` : '--'],
     ['Norm. power', `${Math.round(stats.np)} W`],
-  ], [
+  ];
+  let actions: SummaryAction[] = [
     { label: 'Keep riding', onClick: () => {} },
     { label: 'Ride it again', primary: true, onClick: resetRide },
-  ], zoneSummary(stats));
+  ];
+  let extra: Node[] = zoneSummary(stats);
+  let title = `${currentStage().name}: finished!`;
+  if (racing) {
+    racing.update(0.001, ride.distance, ride.speed); // make sure the line is recorded for this frame
+    const r = finishRace(racing);
+    items.splice(0, 1, ['Place', `${ordinal(r.place)} of ${r.rows.length}`], ['Race time', raceTime(r.me.time)]);
+    items.splice(2, 0, ['Points', `${r.me.sprint} sprint · ${r.me.kom} mountain`]);
+    items.length = Math.min(items.length, 6);
+    title = `${currentStage().name}: ${ordinal(r.place)}`;
+    extra = [resultsNode(r.rows, r.tour), ...extra];
+    actions = r.actions;
+    race = null; // the race is over: the teams go back to riding the road
+    peloton.endRace(ride.distance);
+    raceUi.panel(null, false);
+  }
+  showSummary('🏁', title, items, actions, extra);
+  $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
   if (vsGhost !== null && ghost) {
     const who = ghost.isMe ? 'your best' : `${ghost.name}’s ghost`;
     $('finish-title').textContent = vsGhost < 0 && ghost.isMe
@@ -918,6 +1041,7 @@ function stageProgress() {
   const imperial = settings.units === 'imperial';
   const left = (stage.finish - ride.distance) / 1000;
   const parts = [stage.name, `${(imperial ? left / KM_PER_MI : left).toFixed(1)} ${imperial ? 'mi' : 'km'} to go`];
+  if (stage.lapLength) parts.splice(1, 0, `lap ${Math.min(Math.floor(ride.distance / stage.lapLength) + 1, Math.round(stage.finish / stage.lapLength))}/${Math.round(stage.finish / stage.lapLength)}`);
   const next = stage.signs.find((s) => s.d > ride.distance);
   if (next?.style === 'hairpin') parts.push(`next: ${stage.hairpinWord ?? 'Hairpin'} ${next.label} in ${Math.round(next.d - ride.distance)} m`);
   const g = ghostRider();
@@ -1295,6 +1419,8 @@ onAccountChange(async (a) => {
       settings = { ...settings, ...remote };
       saveSettings(settings);
       setPlayerKit(settings.kit);
+      loadTour(settings.tour);
+      updateTourJersey();
       hud.setFields(settings.dataFields);
       world.setMarkers(markerConfig());
       placeWorkoutPanel();

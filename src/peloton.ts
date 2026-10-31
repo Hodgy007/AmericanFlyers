@@ -6,8 +6,10 @@
 import { gradeAt, currentStage } from './course';
 import { DEFAULT_PARAMS, stepSpeed } from './physics';
 import type { OtherRider } from './world/others';
+import { RaceSim, type RaceCourse, type RosterEntry } from './raceSim';
+import { rng } from './world/noise';
 
-interface Team {
+export interface Team {
   name: string;
   short: string; // on name tags
   color: string; // jersey and frame
@@ -62,7 +64,27 @@ function pick<T>(list: T[], n: number, seed: number) {
 
 export class Peloton {
   groups: Group[] = [];
+  /** Set while a race is on: the whole field races (race mode) instead of the steady groups. */
+  race: RaceField | null = null;
   private time = 0;
+
+  get racing() {
+    return this.race !== null;
+  }
+
+  /** Lines everyone up for a race. The sim itself is stepped by the race controller (race.ts). */
+  startRace(course: RaceCourse, roster: RosterEntry[], refWkg: number, seed: number): RaceField {
+    this.race = new RaceField(course, roster, refWkg, seed);
+    this.groups = [];
+    return this.race;
+  }
+
+  /** Back to the free-ride groups. */
+  endRace(around = 0) {
+    if (!this.race) return;
+    this.race = null;
+    this.reset(around);
+  }
 
   /** New groups spread around the rider, as when a stage is chosen. */
   reset(around: number) {
@@ -88,6 +110,7 @@ export class Peloton {
   }
 
   update(dt: number) {
+    if (this.race) return;
     this.time += dt;
     const finish = currentStage().finish;
     for (const g of this.groups) {
@@ -107,6 +130,7 @@ export class Peloton {
 
   /** Every pro rider as an "other rider" for the world, drafting and the riders list. */
   riders(): OtherRider[] {
+    if (this.race) return this.raceRiders(this.race);
     const out: OtherRider[] = [];
     for (const g of this.groups) {
       const power = Math.round(g.wkg * RIDER_KG);
@@ -129,8 +153,74 @@ export class Peloton {
     return out;
   }
 
+  /** The racers, as other riders for the world and the draft. */
+  private raceRiders(race: RaceField): OtherRider[] {
+    const out: OtherRider[] = [];
+    for (const s of race.sim.states()) {
+      if (s.gone) continue;
+      const team = TEAMS[s.team];
+      out.push({
+        id: s.id,
+        name: `${s.name} (${team.short})`,
+        tag: s.leader ? `${s.name} · ${team.short}` : '',
+        distance: s.pos,
+        speedMs: s.speed,
+        power: Math.round(s.power),
+        cadence: 84 + (s.team * 3 + s.id.length) % 9,
+        team: team.name,
+        jersey: team.color,
+        frame: team.frame,
+        lane: s.lane,
+      });
+    }
+    return out;
+  }
+
   /** The back of a group, for "Join". */
   back(g: Group) {
     return g.distance - (Math.ceil(g.riders.length / 2) - 1) * ROW;
+  }
+}
+
+// ------------------------------------------------------------------ racing ----
+
+const RACE_NAMES = ['Aksel', 'Dario', 'Elias', 'Finn', 'Gael', 'Ivo', 'Jonas', 'Kai', 'Leo', 'Mads', 'Nico', 'Remy', 'Stan', 'Timo', 'Yann', 'Zeno'];
+
+/**
+ * The field for a race: every team fields three riders, a climbing captain, an
+ * all-rounder and a sprinter, each with their own strengths. Seeded, so the same
+ * seed is the same field (the tour keeps its seed so the same riders race every stage).
+ */
+export function makeRoster(seed: number): RosterEntry[] {
+  const r = rng(seed ^ 0x5eed);
+  const out: RosterEntry[] = [];
+  // 36 different first names, shuffled by the seed.
+  const allNames = [...FIRST_NAMES, ...RACE_NAMES].map((n) => ({ n, k: r() })).sort((a, b) => a.k - b.k).map((x) => x.n);
+  TEAMS.forEach((_team, t) => {
+    const strength = 0.8 + 0.2 * r();
+    for (let i = 0; i < 3; i++) {
+      const u = r();
+      const ability = Math.min(1, (i === 0 ? 0.62 + 0.38 * u : i === 1 ? 0.3 + 0.45 * u : 0.2 + 0.5 * u) * strength);
+      out.push({
+        id: `p${t}-${i}`,
+        name: allNames[t * 3 + i],
+        team: t,
+        ability,
+        climb: i === 0 ? 1.02 + 0.05 * r() : i === 1 ? 0.98 + 0.05 * r() : 0.92 + 0.05 * r(),
+        sprint: i === 0 ? 1.7 + 0.25 * r() : i === 1 ? 2.0 + 0.2 * r() : 2.2 + 0.3 * r(),
+        leader: i === 0,
+      });
+    }
+  });
+  return out;
+}
+
+/** A race on the road: the sim, with the whole field lined up just behind the start line. */
+export class RaceField {
+  readonly sim: RaceSim;
+  readonly roster: RosterEntry[];
+  constructor(course: RaceCourse, roster: RosterEntry[], refWkg: number, seed: number) {
+    this.roster = roster;
+    this.sim = new RaceSim(course, roster, { refWkg, seed, startFront: -2.2 });
   }
 }

@@ -23,6 +23,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [Connecting devices](user-guide/connecting-devices.md): the trainer (full control or power only), heart-rate straps, and how ERG and grade modes differ.
 - [Riding](user-guide/riding.md): the top bar, data blocks, the elevation strip, camera views, demo controls, and Reset and the ride summary.
 - [Stages and routes](user-guide/stages-and-routes.md): each built-in stage, finish lines, uploading GPX routes, and deleting routes.
+- [Racing and the tour](user-guide/racing-and-the-tour.md): racing the pro teams, the race panel, points and jerseys, and the three-stage Hell of the West tour.
 - [Workouts](user-guide/workouts.md): built-in workouts, ERG mode, uploading `.zwo`, `.erg` and `.mrc` files, the ramp test, the workout creator, and `.zwo` export.
 - [Riding together](user-guide/riding-together.md): other riders on your stage, drafting and the draft gauge, the Riding now list, Ride with, and privacy.
 - [My kit](user-guide/my-kit.md): design your jersey and bike colours, presets, and how other riders see them.
@@ -54,7 +55,8 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [Bluetooth and FTMS](developer-guide/bluetooth-and-ftms.md): services, characteristics, opcodes, parsing and the control loop.
 - [Physics and stats](developer-guide/physics-and-stats.md): the power-to-speed model and how ride statistics are computed.
 - [3D world](developer-guide/3d-world.md): renderer, terrain, road, rider, sky, landmarks and cameras.
-- [Stages and GPX](developer-guide/stages-and-gpx.md): stage definitions, how the climbs are built, and GPX parsing.
+- [Stages and GPX](developer-guide/stages-and-gpx.md): stage definitions, how the climbs are built, the tour stages, and GPX parsing.
+- [Racing and the tour](developer-guide/racing-and-tour.md): the race engine, the live race, the classifications and the tour.
 - [Workouts format](developer-guide/workouts-format.md): the workout model, file import rules and `.zwo` export.
 - [Backend and database](developer-guide/backend-and-database.md): Neon, the browser client, sync rules, activities and `.tcx` export.
 - [Security](developer-guide/security.md): what protects what, and what doesn't.

@@ -81,6 +81,7 @@
             <button id="btn-weather" role="menuitem" title="Time of day and weather">🌤 Time &amp; weather</button>
             <button id="btn-menu-plans" role="menuitem">📅 Training plans</button>
             <button id="btn-menu-kit" role="menuitem" title="Design your jersey and bike">🎨 My kit</button>
+            <button id="btn-tour" role="menuitem" title="Race the three stages of American Flyers">🏆 Hell of the West tour</button>
             <hr />
             <button id="btn-sound" role="menuitem" title="Sound on/off (M)">🔊 Sound on</button>
             <button id="btn-fullscreen" role="menuitem" title="Full screen (F)">⛶ Full screen</button>
@@ -136,6 +137,16 @@
     <!-- Steering buttons: shown on touch screens (keys: ← and →). -->
     <button id="steer-left" class="steer-btn steer-left" aria-label="Steer left" title="Steer left (←)">◀</button>
     <button id="steer-right" class="steer-btn steer-right" aria-label="Steer right" title="Steer right (→)">▶</button>
+    <!-- Racing: the live race panel and the 3-2-1 start. -->
+    <aside id="race-panel" class="race-panel" hidden aria-live="off">
+      <div class="rp-head"><span class="rp-place"><strong id="rp-place">1</strong><small id="rp-total">/ 37</small></span><span class="rp-time" id="rp-time">0:00</span></div>
+      <div class="rp-gap" id="rp-gap"></div>
+      <div id="rp-groups" class="rp-groups"></div>
+      <div id="rp-next" class="rp-next" hidden></div>
+      <div id="rp-jerseys" class="rp-jerseys"></div>
+      <div id="rp-msg" class="rp-msg" hidden></div>
+    </aside>
+    <div id="race-count" class="race-count" hidden aria-live="assertive"></div>
 
     <div id="demo-panel" class="demo-panel" hidden>
       <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
@@ -162,6 +173,17 @@
         <p class="hint">Practise any route: export it as a <code>.gpx</code> file from Strava, Komoot, RideWithGPS or Garmin and upload it. Its climbs and bends become the road. Routes are saved in this browser.</p>
         <div id="stage-list" class="stage-list"></div>
         <div class="dialog-actions"><button value="cancel">Close</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="tour" class="tour-dialog">
+      <form method="dialog">
+        <div class="dialog-head"><h2>🏆 Hell of the West tour</h2></div>
+        <p class="hint" id="tour-intro"></p>
+        <ol id="tour-stages" class="tour-stages"></ol>
+        <div id="tour-jerseys" class="tour-jerseys" hidden></div>
+        <div id="tour-standings"></div>
+        <div id="tour-actions" class="dialog-actions"></div>
       </form>
     </dialog>
 
