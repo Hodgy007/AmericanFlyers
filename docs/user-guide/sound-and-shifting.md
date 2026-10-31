@@ -10,7 +10,7 @@ Rides have sound, made in the browser with no downloads:
 - Beeps at 3, 2 and 1 seconds before a workout step changes, and a long beep as it changes.
 - A fanfare at the finish line.
 
-Turn sound on or off with the 🔊 button or the **M** key. Browsers start sound only after your first click or key press.
+Turn sound on or off with **☰ Menu → 🔊 Sound** or the **M** key. Browsers start sound only after your first click or key press.
 
 ## Virtual shifting
 

@@ -15,6 +15,7 @@ export interface Settings {
   sound: boolean; // wind, crowds, beeps
   virtualShifting: boolean; // choose your gear; the trainer's resistance follows it
   plan: PlanProgress | null; // the training plan being followed
+  hudPosition: 'left' | 'center' | 'right'; // where the data blocks sit
 }
 
 const KEY = 'americanflyers.settings';
@@ -32,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   virtualShifting: false,
   plan: null,
+  hudPosition: 'center',
 };
 
 export function loadSettings(): Settings {

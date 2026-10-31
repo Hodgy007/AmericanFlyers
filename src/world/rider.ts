@@ -338,6 +338,8 @@ const HAND = (side: number) => v(0.6, 0.865, 0.2 * side); // on the brake hoods
 const HEAD_UP = v(0.42, 0.91).normalize(); // head tilted up to look along the road
 const ELBOW_POLE = (side: number) => v(-0.2, -1, 0.5 * side); // elbows bend down and out
 const KNEE_POLE = (side: number) => v(1, 0.15, 0.12 * side); // knees point forward
+const BB_HEIGHT = 0.27; // bottom bracket height, as in RiderModel
+const TOE_DROP = 0.045; // toe target below the pedal: a level shoe over the top of the stroke
 
 /**
  * A skinned humanoid (Hips / Spine02 / Spine01 / Spine / neck / Head,
@@ -417,9 +419,14 @@ class Rig {
       this.aim(`${s}ForeArm`, `${s}Hand`, hand);
 
       // Legs to the pedals: ball of the foot on the pedal, ankle above and behind.
+      // The model's foot bone runs well above the sole, so the toe target sits
+      // below the pedal to keep the shoe level. Ankling: the toes dip a little
+      // more through the bottom of the stroke than over the top.
       const pedal = pedals.get(side)!;
+      const crank = Math.atan2(pedal.y - BB_HEIGHT, pedal.x);
+      const dip = TOE_DROP + 0.025 * (0.5 - 0.5 * Math.sin(crank));
       const ankle = world(v(pedal.x - 0.075, pedal.y + 0.075, pedal.z));
-      const toe = world(v(pedal.x + 0.035, pedal.y + 0.02, pedal.z));
+      const toe = world(v(pedal.x + 0.035, pedal.y - dip, pedal.z));
       const knee = ik3(pos(`${s}UpLeg`), ankle, this.len.get(`${s}Thigh`)!, this.len.get(`${s}Shin`)!, dir(KNEE_POLE(side)));
       this.aim(`${s}UpLeg`, `${s}Leg`, knee);
       this.aim(`${s}Leg`, `${s}Foot`, ankle);

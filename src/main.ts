@@ -110,9 +110,9 @@ async function toggleHeartRate() {
   try {
     hrm = await connectHeartRate(
       (bpm) => { live.heartRate = bpm; live.lastHrAt = performance.now(); },
-      () => { hrm = null; live.heartRate = 0; $('btn-hr').textContent = 'Heart rate'; toast('Heart rate strap disconnected'); },
+      () => { hrm = null; live.heartRate = 0; $('btn-hr').textContent = '❤️ Heart rate strap'; toast('Heart rate strap disconnected'); },
     );
-    $('btn-hr').textContent = 'HR ✓';
+    $('btn-hr').textContent = '❤️ Heart rate ✓';
     toast(`Connected to ${hrm.name}`);
   } catch (err) {
     hrm = null;
@@ -177,7 +177,7 @@ function setDemo(on: boolean) {
   demo = on;
   $('demo-panel').hidden = !on;
   $('btn-demo').classList.toggle('active', on);
-  $('btn-demo').textContent = on ? 'Stop demo' : 'Demo ride';
+  $('btn-demo').textContent = on ? '🎮 Stop demo' : '🎮 Demo ride';
   if (on) setStatus('Demo ride · power from the slider', 'on');
   else if (!trainer) setStatus('No trainer connected', 'off');
 }
@@ -356,6 +356,36 @@ function currentHr() {
 const hud = new Hud($('hud'));
 hud.setFields(settings.dataFields);
 
+// ------------------------------------------------------- menu & layout ----
+
+const menu = $('menu');
+const menuBtn = $('btn-menu');
+function setMenu(open: boolean) {
+  menu.hidden = !open;
+  menuBtn.setAttribute('aria-expanded', String(open));
+  menuBtn.classList.toggle('active', open);
+}
+menuBtn.addEventListener('click', (e) => { e.stopPropagation(); setMenu(menu.hidden); });
+menu.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('button')) setMenu(false); });
+document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !(e.target as HTMLElement).closest('.menu-wrap')) setMenu(false); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) setMenu(false); });
+
+/** Numbers across the top (middle), or in a column down the left or right. */
+function applyHudPosition(pos: Settings['hudPosition']) {
+  document.body.classList.toggle('hud-left', pos === 'left');
+  document.body.classList.toggle('hud-right', pos === 'right');
+  document.querySelectorAll<HTMLButtonElement>('[data-hud-pos]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.hudPos === pos)));
+  requestAnimationFrame(() => placeWorkoutPanel());
+}
+applyHudPosition(settings.hudPosition);
+document.querySelectorAll<HTMLButtonElement>('[data-hud-pos]').forEach((b) => b.addEventListener('click', () => {
+  const pos = b.dataset.hudPos as Settings['hudPosition'];
+  settings = { ...settings, hudPosition: pos };
+  saveSettings(settings);
+  pushSettings(settings);
+  applyHudPosition(pos);
+}));
+
 function updateHud(grade: number) {
   const power3s = powerSamples.reduce((a, s) => a + s.p, 0) / Math.max(1, powerSamples.length);
   const finish = currentStage().finish;
@@ -386,7 +416,10 @@ function updateHud(grade: number) {
 /** Keeps the workout panel just below the data blocks, however many rows they take. */
 function placeWorkoutPanel() {
   if (window.innerWidth <= 560) return; // docked at the bottom on phones (CSS)
-  $('workout-panel').style.top = `${Math.round(document.querySelector('.hud-wrap')!.getBoundingClientRect().bottom + 10)}px`;
+  // With the numbers in a side column, the panel sits on the other side, just under the top bar.
+  const side = settings.hudPosition !== 'center';
+  const above = side ? document.querySelector('.topbar')! : document.querySelector('.hud-wrap')!;
+  $('workout-panel').style.top = `${Math.round(above.getBoundingClientRect().bottom + 10)}px`;
 }
 window.addEventListener('resize', placeWorkoutPanel);
 
@@ -876,8 +909,7 @@ $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);
 function setSound(on: boolean) {
   sound.setEnabled(on);
-  $('btn-sound').textContent = on ? '🔊' : '🔇';
-  $('btn-sound').setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
+  $('btn-sound').textContent = on ? '🔊 Sound on' : '🔇 Sound off';
   if (on !== settings.sound) {
     settings = { ...settings, sound: on };
     saveSettings(settings);
@@ -1022,6 +1054,7 @@ function rideSession(session: Session) {
 
 const plansUi = initPlansUi({ progress: () => settings.plan, setProgress: setPlan, ride: rideSession, toast });
 $('btn-plans').addEventListener('click', () => { $<HTMLDialogElement>('workouts').close(); plansUi.open(); });
+$('btn-menu-plans').addEventListener('click', () => plansUi.open());
 
 // ---------------------------------------------------------- first ride ----
 
@@ -1122,6 +1155,7 @@ onAccountChange(async (a) => {
       lastSentGrade = NaN;
       setSound(settings.sound);
       updateGearPanel();
+      applyHudPosition(settings.hudPosition);
       // A returning rider on a new device: they've done the setup before.
       try { localStorage.setItem('americanflyers.onboarded', '1'); } catch { /* fine */ }
       const ob = $<HTMLDialogElement>('onboarding');

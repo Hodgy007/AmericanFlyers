@@ -793,3 +793,47 @@ body.at-home .gear-panel { display: none; }
 @media (display-mode: standalone), (display-mode: fullscreen) {
   #btn-fullscreen { display: none; }
 }
+
+/* ------------------------------------------------------------- menu ---- */
+.topbar { z-index: 30; } /* the menu opens over the data blocks */
+.menu-wrap { position: relative; display: flex; }
+.menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  min-width: 240px; padding: 6px; display: grid; gap: 2px;
+  background: rgba(12, 19, 40, 0.94); border: 1px solid var(--glass-border); border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  animation: menu-in 0.14s ease-out;
+}
+.menu[hidden] { display: none; }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-4px); } }
+.actions .menu button {
+  display: block; width: 100%; text-align: left; padding: 9px 12px; font-size: 14px; font-weight: 600;
+  background: transparent; border-color: transparent; box-shadow: none; border-radius: 9px; white-space: nowrap;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.actions .menu button:hover:not(:disabled), .actions .menu button:focus-visible { background: rgba(255, 255, 255, 0.08); }
+.actions .menu button.active { background: rgba(75, 136, 255, 0.25); }
+.actions .menu button[hidden] { display: none; }
+.menu hr { border: 0; border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08)); margin: 4px 6px; }
+@media (max-width: 560px) {
+  /* The bar scrolls sideways on phones, so the menu hangs from the right edge of the screen. */
+  .menu { position: fixed; top: 92px; right: 12px; left: auto; }
+}
+
+/* ------------------------------------------------- data block position ---- */
+.hud-pos { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; font-size: 13px; color: var(--muted); }
+.seg { display: inline-flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--field, rgba(255, 255, 255, 0.05)); border: 1px solid var(--line, rgba(255, 255, 255, 0.08)); }
+.seg button { padding: 6px 12px; font-size: 13px; background: transparent; border-color: transparent; box-shadow: none; }
+.seg button[aria-checked='true'] { background: linear-gradient(180deg, var(--red-hi, #e23a4b), #b51b2b); color: #fff; }
+
+@media (min-width: 561px) {
+  body.hud-left .hud-wrap, body.hud-right .hud-wrap { width: 290px; max-width: none; margin: 0; }
+  body.hud-left .hud-wrap { right: auto; left: 16px; }
+  body.hud-right .hud-wrap { left: auto; right: 16px; flex-direction: row-reverse; }
+  body.hud-left .hud, body.hud-right .hud { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  body.hud-left .hud .tile.hero, body.hud-right .hud .tile.hero { grid-column: 1 / -1; grid-row: auto !important; }
+  body.hud-right .workout-panel { right: auto; left: 16px; }
+}
+@media (min-width: 1800px) {
+  body.hud-left .hud-wrap, body.hud-right .hud-wrap { width: 330px; }
+}

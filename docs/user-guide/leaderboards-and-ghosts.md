@@ -6,7 +6,7 @@ Every stage with a finish line has a leaderboard, and you can race a ghost of yo
 
 A ride counts when you start on the start line and ride to the finish. Rides that start partway along (with **Ride with** or a `?start=` link) don't count. Times are moving time from the start line to the finish line. Each rider's fastest ride is listed. You need to be signed in.
 
-## The 🏆 button
+## The leaderboard (☰ Menu → 🏆 Leaderboard)
 
 Opens the leaderboard for the stage you're on:
 

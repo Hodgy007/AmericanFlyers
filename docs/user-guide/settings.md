@@ -36,4 +36,4 @@ When you sign in on a new browser:
 
 See [Accounts and profile](accounts-and-profile.md#what-syncs) for the full rules.
 
-*Run the setup guide again* (a link above the buttons) reopens the first-ride guide. Sound has its own 🔊 button in the top bar (or the **M** key), and the training plan you're following is also saved with your settings.
+*Run the setup guide again* (a link above the buttons) reopens the first-ride guide. Sound is in the ☰ Menu (or the **M** key), and the training plan you're following is also saved with your settings.

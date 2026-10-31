@@ -41,12 +41,13 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **FTP history**: every change (by hand, from a ramp test, or at sign-up) is recorded and charted.
 - **Feedback** (💬 button): riders send ideas and bug reports and see the status and any reply.
 - **Riding together** (👥 button): signed-in riders on the same stage see each other on the road, with name tags, a *Riding now* list with gaps, and *Ride with* to join someone. Switch it off in Settings.
-- **Leaderboards and ghosts** (🏆 button): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
+- **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
 - **Training plans** (📅 in Workouts): Get Started, FTP Builder and Hell of the West, with sessions that tick off as you ride.
-- **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (🔊 or **M**).
+- **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
 - **Virtual shifting** (Settings): 24 virtual gears with on-screen −/+ buttons and keys; harder gears push back harder.
-- **First-ride setup**, **install as an app** (⬇ Install app, or Add to Home Screen), full screen (⛶ or **F**), and bigger numbers on TVs.
-- **Admin dashboard** (🛠, admins only): registered and active riders, rides, hours, distance, signups and rides per day, top stages and workouts, the rider list with ban/unban, and the feedback inbox (status, replies, delete). Admin access is checked in the database.
+- **First-ride setup**, **install as an app** (⬇ Install app, or Add to Home Screen), full screen (**F**), and bigger numbers on TVs.
+- **Tidy top bar**: Stage, Workouts, 👥, Connect trainer and your account stay in view; everything else is in the **☰ Menu**. The data blocks can sit across the top or in a column on the left or right (✎ → Position).
+- **Admin dashboard** (☰ Menu → 🛠, admins only): registered and active riders, rides, hours, distance, signups and rides per day, top stages and workouts, the rider list with ban/unban, and the feedback inbox (status, replies, delete). Admin access is checked in the database.
 
 ## Browser support
 
