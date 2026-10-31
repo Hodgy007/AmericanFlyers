@@ -4,9 +4,15 @@ import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
 import { currentStage, elevationAt, gradeAt, setStage } from './course';
 import { STAGES, stageById, type Stage } from './stages';
 import { stepSpeed, DEFAULT_PARAMS } from './physics';
-import { drawProfile, gradeColor } from './profile';
+import { drawProfile } from './profile';
 import { World, type CameraMode } from './world/world';
 import { loadSettings, saveSettings, type Settings } from './settings';
+import { formatTime, Hud, openDataBlocks } from './hud';
+import { RideStats } from './stats';
+import { drawWorkout } from './workouts/graph';
+import { RAMP_TEST_ID, zoneColor, type Workout } from './workouts/model';
+import { WorkoutPlayer } from './workouts/player';
+import { initWorkoutUi } from './workouts/ui';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -25,6 +31,9 @@ let demoPower = 150;
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
 const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0, work: 0, finished: false };
 const powerSamples: { t: number; p: number }[] = [];
+let stats = new RideStats(); // whole ride
+let player: WorkoutPlayer | null = null;
+let workoutStats = new RideStats(); // just the current workout
 
 // ------------------------------------------------------------- devices ----
 
@@ -55,6 +64,7 @@ async function toggleTrainer() {
     if (demo) setDemo(false);
     lastSentGrade = NaN;
     $('btn-trainer').textContent = 'Disconnect';
+    lastSentWatts = NaN;
     setStatus(
       `${trainer.name} · ${trainer.canControl ? 'resistance follows the road' : 'power only (no resistance control)'}`,
       'on',
@@ -85,13 +95,24 @@ async function toggleHeartRate() {
   }
 }
 
-// Push the road grade to the trainer, scaled by the difficulty setting.
+// Control the trainer once a second: ERG (hold the workout's target watts)
+// during a workout, otherwise the road grade scaled by the difficulty setting.
 let lastSentGrade = NaN;
+let lastSentWatts = NaN;
 setInterval(() => {
   if (!trainer?.canControl) return;
+  const watts = player && !player.done ? player.targetWatts() : null;
+  if (watts !== null) {
+    if (Math.abs(watts - lastSentWatts) < 1) return;
+    lastSentWatts = watts;
+    lastSentGrade = NaN; // resend the grade when ERG ends
+    trainer.setTargetPower(watts).catch(() => { lastSentWatts = NaN; });
+    return;
+  }
   const target = Math.round(gradeAt(ride.distance) * 100 * (settings.difficulty / 100) * 10) / 10;
   if (Math.abs(target - lastSentGrade) < 0.1) return;
   lastSentGrade = target;
+  lastSentWatts = NaN;
   trainer.setGrade(target).catch(() => { lastSentGrade = NaN; });
 }, 1000);
 
@@ -150,6 +171,9 @@ function frame(now: number) {
   lastFrame = now;
 
   if (demo) {
+    // In a workout the demo rider follows the target, with a little wobble.
+    const target = player && !player.done && !player.paused ? player.targetWatts() : null;
+    if (target !== null) setDemoPower(Math.round(target + Math.sin(now / 900) * 4));
     live.power = demoPower;
     live.cadence = demoPower > 0 ? Math.round(78 + demoPower / 25 + Math.sin(now / 1700) * 3) : 0;
     live.lastReadingAt = now;
@@ -178,57 +202,161 @@ function frame(now: number) {
   powerSamples.push({ t: now, p: live.power });
   while (powerSamples.length && now - powerSamples[0].t > 3000) powerSamples.shift();
 
+  const moving = ride.speed > 0.3 || live.power > 0;
+  stats.add(dt, live.power, live.cadence, currentHr(), moving);
+  if (player) {
+    const pedalling = live.power > 0 || live.cadence > 0;
+    if (!player.done) {
+      player.tick(dt, pedalling, live.power);
+      if (pedalling && !player.paused) workoutStats.add(dt, live.power, live.cadence, currentHr(), true);
+    }
+    if (player.done) finishWorkout(); // reached the end, or skipped past the last step
+  }
+
   world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: ride.crankAngle }, dt);
 
   if (now - lastHud > 200) {
     lastHud = now;
     updateHud(grade);
-    const stageFinish = currentStage().finish;
-    drawProfile(profileCanvas, ride.distance, stageFinish === null ? undefined : [0, stageFinish + 200]);
+    if (player) {
+      drawWorkout(profileCanvas, player.steps, { elapsed: player.elapsed, trace: player.trace });
+    } else {
+      const stageFinish = currentStage().finish;
+      drawProfile(profileCanvas, ride.distance, stageFinish === null ? undefined : [0, stageFinish + 200]);
+    }
   }
   requestAnimationFrame(frame);
 }
 
+function currentHr() {
+  return performance.now() - live.lastHrAt < STALE_MS ? live.heartRate || live.trainerHr : 0;
+}
+
+const hud = new Hud($('hud'));
+hud.setFields(settings.dataFields);
+
 function updateHud(grade: number) {
-  const imperial = settings.units === 'imperial';
-  const avgPower = powerSamples.reduce((a, s) => a + s.p, 0) / Math.max(1, powerSamples.length);
-  const speedKmh = ride.speed * 3.6;
-  const hr = performance.now() - live.lastHrAt < STALE_MS ? live.heartRate || live.trainerHr : 0;
-
+  const power3s = powerSamples.reduce((a, s) => a + s.p, 0) / Math.max(1, powerSamples.length);
+  const finish = currentStage().finish;
   $('stage-name').textContent = stageProgress();
-  $('m-power').textContent = String(Math.round(avgPower));
-  const zone = powerZone(avgPower / settings.ftp);
-  $('m-zone').textContent = zone.label;
-  document.documentElement.style.setProperty('--zone', zone.color);
-  $('m-cadence').textContent = String(Math.round(live.cadence));
-  $('m-speed').textContent = (imperial ? speedKmh / KM_PER_MI : speedKmh).toFixed(1);
-  $('m-hr').textContent = hr ? String(hr) : '--';
-  $('m-distance').textContent = ((ride.distance / 1000) / (imperial ? KM_PER_MI : 1)).toFixed(2);
-  $('m-time').textContent = formatTime(ride.movingTime);
-  $('m-grade').textContent = (Math.abs(grade) < 0.0005 ? 0 : grade * 100).toFixed(1);
-  $('m-grade').style.color = gradeColor(grade);
-  $('m-climb').textContent = String(Math.round(imperial ? ride.climbed * 3.28084 : ride.climbed));
-  $('u-speed').textContent = imperial ? 'mph' : 'km/h';
-  $('u-distance').textContent = imperial ? 'mi' : 'km';
-  $('u-climb').textContent = imperial ? 'ft' : 'm';
+  hud.update({
+    settings,
+    power3s,
+    power1s: live.power,
+    cadence: live.cadence,
+    speedMs: ride.speed,
+    hr: currentHr(),
+    distance: ride.distance - ride.startDistance,
+    toGo: finish === null ? null : finish - ride.distance,
+    movingTime: ride.movingTime,
+    grade,
+    climbed: ride.climbed,
+    elevation: elevationAt(ride.distance),
+    stats,
+    workout: player && !player.done
+      ? { target: player.targetWatts(), stepLeft: player.stepRemaining(), workoutLeft: player.duration - player.elapsed, label: player.step?.label ?? '' }
+      : null,
+  });
+  updateWorkoutPanel();
 }
 
-function powerZone(ratio: number) {
-  if (ratio < 0.55) return { label: 'Z1 Recovery', color: '#9aa5b1' };
-  if (ratio < 0.75) return { label: 'Z2 Endurance', color: '#3e8ed0' };
-  if (ratio < 0.9) return { label: 'Z3 Tempo', color: '#48c774' };
-  if (ratio < 1.05) return { label: 'Z4 Threshold', color: '#f2c14e' };
-  if (ratio < 1.2) return { label: 'Z5 VO2 max', color: '#f08a4b' };
-  return { label: 'Z6 Anaerobic', color: '#e5383b' };
+// ------------------------------------------------------------- workouts ----
+
+/** Keeps the workout panel just below the data blocks, however many rows they take. */
+function placeWorkoutPanel() {
+  if (window.innerWidth <= 560) return; // docked at the bottom on phones (CSS)
+  $('workout-panel').style.top = `${Math.round(document.querySelector('.hud-wrap')!.getBoundingClientRect().bottom + 10)}px`;
+}
+window.addEventListener('resize', placeWorkoutPanel);
+
+function startWorkout(w: Workout) {
+  player = new WorkoutPlayer(w, settings.ftp);
+  workoutStats = new RideStats();
+  lastSentWatts = NaN;
+  $('workout-panel').hidden = false;
+  placeWorkoutPanel();
+  $('wp-name').textContent = w.name;
+  $('finish').hidden = true;
+  const erg = trainer?.canControl;
+  $('wp-mode').textContent = erg
+    ? 'ERG mode: your trainer holds the target power.'
+    : trainer ? 'This trainer can’t take power targets; ride to the numbers.'
+    : demo ? 'Demo ride: power follows the target.' : 'Connect your trainer for ERG mode, or start a demo ride.';
+  toast(`Workout: ${w.name}. The clock runs while you pedal.`, 4500);
 }
 
-function formatTime(sec: number) {
-  const s = Math.floor(sec);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = String(s % 60).padStart(2, '0');
-  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+function stopWorkout() {
+  player = null;
+  $('workout-panel').hidden = true;
+  lastSentGrade = NaN; // back to road resistance
 }
+
+function updateWorkoutPanel() {
+  if (!player) return;
+  const step = player.step;
+  const target = player.targetWatts();
+  $('wp-step').textContent = player.paused ? 'Paused' : step?.label ?? '';
+  $('wp-target').textContent = target === null ? 'Free' : String(target);
+  $('wp-target').parentElement!.style.setProperty('--accent', target === null ? '' : zoneColor(target / settings.ftp));
+  $('wp-left').textContent = formatTime(player.stepRemaining());
+  const next = player.next;
+  $('wp-next').textContent = next
+    ? `Next: ${formatTime(next.duration)} ${next.free ? 'free ride' : `@ ${player.stepWatts(next)} W`} · ${formatTime(player.duration - player.elapsed)} left`
+    : `Last step · ${formatTime(player.duration - player.elapsed)} left`;
+  $('wp-intensity').textContent = `${Math.round(player.intensity * 100)}%`;
+  $('wp-pause').textContent = player.paused ? '▶' : '⏸';
+}
+
+function finishWorkout() {
+  if (!player) return;
+  const w = player.workout;
+  const items: [string, string][] = [
+    ['Time', formatTime(workoutStats.seconds)],
+    ['Avg power', `${Math.round(workoutStats.avgPower)} W`],
+    ['Norm. power', `${Math.round(workoutStats.np)} W`],
+    ['TSS', String(Math.round(workoutStats.tss(settings.ftp)))],
+    ['Energy', `${Math.round(workoutStats.work / 1000)} kJ`],
+    ['Avg HR', workoutStats.avgHr ? `${Math.round(workoutStats.avgHr)} bpm` : '--'],
+  ];
+  const actions: SummaryAction[] = [{ label: 'Done', onClick: () => {} }];
+  if (w.id === RAMP_TEST_ID && workoutStats.best60 > 0) {
+    // Ramp test: FTP ≈ 75 % of the best one-minute power.
+    const ftp = Math.round(workoutStats.best60 * 0.75);
+    items.unshift(['Est. FTP', `${ftp} W`], ['Best minute', `${Math.round(workoutStats.best60)} W`]);
+    actions.unshift({
+      label: `Set my FTP to ${ftp} W`,
+      primary: true,
+      onClick: () => { settings = { ...settings, ftp }; saveSettings(settings); toast(`FTP set to ${ftp} W`); },
+    });
+  }
+  stopWorkout();
+  showSummary('💪', `${w.name}: complete!`, items, actions);
+}
+
+interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
+
+function showSummary(flag: string, title: string, items: [string, string][], actions: SummaryAction[]) {
+  $('finish').querySelector('.finish-flag')!.textContent = flag;
+  $('finish-title').textContent = title;
+  const statsEl = $('finish-stats');
+  statsEl.replaceChildren(...items.map(([k, v]) => {
+    const d = document.createElement('div');
+    d.innerHTML = '<span></span><strong></strong>';
+    d.querySelector('span')!.textContent = k;
+    d.querySelector('strong')!.textContent = v;
+    return d;
+  }));
+  $('finish-actions').replaceChildren(...actions.map((a) => {
+    const b = document.createElement('button');
+    b.textContent = a.label;
+    if (a.primary) b.className = 'primary';
+    b.addEventListener('click', () => { $('finish').hidden = true; a.onClick(); });
+    return b;
+  }));
+  $('finish').hidden = false;
+}
+
+const workoutUi = initWorkoutUi({ ftp: () => settings.ftp, ride: startWorkout, toast });
 
 // ------------------------------------------------------------------- UI ----
 
@@ -256,6 +384,7 @@ function cycleCamera() {
 function resetRide() {
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0, work: 0, finished: false });
   powerSamples.length = 0;
+  stats = new RideStats();
   lastSentGrade = NaN;
   $('finish').hidden = true;
   world.jumped();
@@ -324,13 +453,15 @@ function showFinish() {
   const finish = currentStage().finish!;
   const avgPower = ride.movingTime > 0 ? Math.round(ride.work / ride.movingTime) : 0;
   const avgKmh = ride.movingTime > 0 ? ((finish - ride.startDistance) / ride.movingTime) * 3.6 : 0;
-  $('finish-title').textContent = `${currentStage().name}: finished!`;
-  $('finish-stats').innerHTML = `
-    <div><span>Time</span><strong>${formatTime(ride.movingTime)}</strong></div>
-    <div><span>Avg power</span><strong>${avgPower} W</strong></div>
-    <div><span>Avg speed</span><strong>${(imperial ? avgKmh / KM_PER_MI : avgKmh).toFixed(1)} ${imperial ? 'mph' : 'km/h'}</strong></div>
-    <div><span>Climbed</span><strong>${Math.round(imperial ? ride.climbed * 3.28084 : ride.climbed)} ${imperial ? 'ft' : 'm'}</strong></div>`;
-  $('finish').hidden = false;
+  showSummary('🏁', `${currentStage().name}: finished!`, [
+    ['Time', formatTime(ride.movingTime)],
+    ['Avg power', `${avgPower} W`],
+    ['Avg speed', `${(imperial ? avgKmh / KM_PER_MI : avgKmh).toFixed(1)} ${imperial ? 'mph' : 'km/h'}`],
+    ['Climbed', `${Math.round(imperial ? ride.climbed * 3.28084 : ride.climbed)} ${imperial ? 'ft' : 'm'}`],
+  ], [
+    { label: 'Keep riding', onClick: () => {} },
+    { label: 'Ride it again', primary: true, onClick: resetRide },
+  ]);
 }
 
 /** "8.4 km to go · next: Virage 14 in 230 m" for stages with a finish. */
@@ -366,6 +497,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     return Number.isFinite(v) && v > 0 ? v : fallback;
   };
   settings = {
+    ...settings,
     riderKg: num('riderKg', settings.riderKg),
     bikeKg: num('bikeKg', settings.bikeKg),
     ftp: num('ftp', settings.ftp),
@@ -387,8 +519,20 @@ $('btn-reset').addEventListener('click', resetRide);
 $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);
 $('btn-stage').addEventListener('click', openStages);
-$('finish-again').addEventListener('click', resetRide);
-$('finish-close').addEventListener('click', () => { $('finish').hidden = true; });
+$('btn-workouts').addEventListener('click', () => workoutUi.openLibrary());
+$('btn-data').addEventListener('click', () =>
+  openDataBlocks($<HTMLDialogElement>('data-blocks'), settings.dataFields, (ids) => {
+    settings = { ...settings, dataFields: ids };
+    saveSettings(settings);
+    hud.setFields(ids);
+    placeWorkoutPanel();
+  }),
+);
+$('wp-stop').addEventListener('click', () => { if (player && confirm('End this workout?')) stopWorkout(); });
+$('wp-pause').addEventListener('click', () => { if (player) { player.paused = !player.paused; updateWorkoutPanel(); } });
+$('wp-skip').addEventListener('click', () => player?.skip());
+$('wp-down').addEventListener('click', () => { player?.nudge(-0.05); updateWorkoutPanel(); });
+$('wp-up').addEventListener('click', () => { player?.nudge(0.05); updateWorkoutPanel(); });
 $('stage-name').textContent = currentStage().name;
 $<HTMLInputElement>('demo-power').addEventListener('input', (e) => setDemoPower(Number((e.target as HTMLInputElement).value)));
 window.addEventListener('keydown', (e) => {

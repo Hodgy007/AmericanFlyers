@@ -17,6 +17,8 @@ export interface Trainer {
   /** True when the trainer accepts resistance (grade) commands. */
   readonly canControl: boolean;
   setGrade(gradePercent: number): Promise<void>;
+  /** ERG mode: the trainer holds this power regardless of cadence. */
+  setTargetPower(watts: number): Promise<void>;
   disconnect(): void;
 }
 
@@ -33,6 +35,7 @@ const CPS_MEASUREMENT = 0x2a63;
 
 const OP_REQUEST_CONTROL = 0x00;
 const OP_START_RESUME = 0x07;
+const OP_SET_TARGET_POWER = 0x05;
 const OP_SET_SIM_PARAMS = 0x11;
 const OP_RESPONSE = 0x80;
 const RESULT_SUCCESS = 0x01;
@@ -80,6 +83,13 @@ async function connectFtms(
   return {
     name: device.name ?? 'Smart trainer',
     canControl,
+    async setTargetPower(watts: number) {
+      if (!canControl) return;
+      const buf = new DataView(new ArrayBuffer(3));
+      buf.setUint8(0, OP_SET_TARGET_POWER);
+      buf.setInt16(1, Math.round(clamp(watts, 0, 2000)), true); // 1 W resolution
+      await control.send(new Uint8Array(buf.buffer));
+    },
     async setGrade(gradePercent: number) {
       if (!canControl) return;
       const buf = new DataView(new ArrayBuffer(7));
@@ -168,6 +178,7 @@ async function connectCyclingPower(
     name: device.name ?? 'Power meter',
     canControl: false,
     setGrade: async () => {},
+    setTargetPower: async () => {},
     disconnect: () => device.gatt?.disconnect(),
   };
 }
