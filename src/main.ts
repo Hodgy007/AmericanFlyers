@@ -30,6 +30,7 @@ import { initRidersUi } from './ridersUi';
 import { Ghost, raceTime } from './ghost';
 import { initLeaderboardUi } from './leaderboardUi';
 import { Sound } from './sound';
+import { Peloton } from './peloton';
 import { draftFrom, DRAFT_MAX_GAP, DRAFT_SWEET_SPOT, type Draft } from './draft';
 import { complete, nextSession, planById, type Session } from './plans';
 import { initPlansUi } from './plansUi';
@@ -62,6 +63,7 @@ let workoutStats = new RideStats(zoneRefs); // just the current workout
 let recorder = new RideRecorder(); // second-by-second samples for the saved ride
 const sound = new Sound(settings.sound);
 const beeps = { step: undefined as unknown, left: Infinity };
+const peloton = new Peloton(); // computer-ridden pro teams
 let draft: Draft | null = null; // the rider just ahead, if any
 let draftSaving = 0; // fraction of air drag saved, eased
 const rideWorkout = { started: null as string | null, completed: null as string | null };
@@ -251,6 +253,10 @@ function frame(now: number) {
 
   // Other riders on the road, and the draft from the one just ahead.
   const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders() : [];
+  if (settings.proTeams) {
+    peloton.update(dt);
+    liveRiders.push(...peloton.riders());
+  }
   draft = draftFrom(ride.distance, liveRiders);
   draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
 
@@ -764,6 +770,7 @@ function chooseStage(stage: Stage) {
   world.restage(markerConfig());
   resetRide();
   presence.restage();
+  peloton.reset(0);
   ghost = null;
   loadMyGhost();
   $('stage-name').textContent = stage.name;
@@ -927,6 +934,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     units: data.get('units') === 'imperial' ? 'imperial' : 'metric',
     difficulty: Math.max(0, Math.min(100, Number(data.get('difficulty')))),
     rideTogether: data.get('rideTogether') === 'on',
+    proTeams: data.get('proTeams') === 'on',
     ghost: data.get('ghost') === 'on',
     virtualShifting: data.get('virtualShifting') === 'on',
   };
@@ -1065,8 +1073,9 @@ const presence = new Presence(
 );
 
 /** Starts a new ride at another rider's position on this stage. */
-function rideWith(distance: number, name: string) {
+function rideWith(distance: number, name: string, speedMs = 0) {
   resetRide();
+  ride.speed = speedMs; // joining a moving group: start rolling with them
   ride.distance = ride.startDistance = Math.max(0, distance - 6);
   ride.lastElev = elevationAt(ride.distance);
   world.jumped();
@@ -1181,8 +1190,15 @@ initLeaderboardUi({
   openSignIn: (why) => accountUi.openSignIn(why),
 });
 
+peloton.reset(ride.distance);
+
 initRidersUi({
   presence,
+  teams: () => settings.proTeams ? peloton.groups.map((g) => ({
+    id: g.id, name: g.team.name, color: g.team.color, wkg: g.wkg, riders: g.riders.length,
+    distance: g.distance, back: peloton.back(g) + 3.5, speedMs: g.speed,
+  })) : [],
+  riderKg: () => settings.riderKg,
   me: () => ({ distance: ride.distance, stageName: currentStage().name, imperial: settings.units === 'imperial', enabled: settings.rideTogether }),
   rideWith,
   openSignIn: (why) => accountUi.openSignIn(why),

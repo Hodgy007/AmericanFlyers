@@ -69,7 +69,7 @@
       <nav class="actions">
         <button id="btn-stage" title="Choose a stage">🏁 Stage</button>
         <button id="btn-workouts" title="Workouts">🏋 Workouts</button>
-        <button id="btn-riders" title="Riding together">👥</button>
+        <button id="btn-riders" title="Riders and pro teams">👥</button>
         <button id="btn-trainer" class="primary">Connect trainer</button>
         <div class="menu-wrap">
           <button id="btn-menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu" title="More">☰ Menu</button>
@@ -259,6 +259,9 @@
         <label class="check"><input name="ghost" type="checkbox" /> Race my best ride
           <span class="hint">On a stage you’ve finished, a see-through ghost of your fastest ride rides with you.</span>
         </label>
+        <label class="check"><input name="proTeams" type="checkbox" /> Pro teams on the road
+          <span class="hint">Computer-ridden teams riding the stage at different paces. Join one from 👥.</span>
+        </label>
         <label class="check"><input name="rideTogether" type="checkbox" /> Ride together
           <span class="hint">Show me to other signed-in riders on the same stage, and show them to me.</span>
         </label>
@@ -409,6 +412,9 @@
           <h2>Riding now</h2>
           <button value="cancel" class="icon" aria-label="Close">✕</button>
         </div>
+        <h3 id="riders-teams-head" class="riders-sub">Pro teams on the road</h3>
+        <ul id="riders-teams" class="riders-list"></ul>
+        <h3 class="riders-sub">Riders</h3>
         <p id="riders-note" class="muted small"></p>
         <ul id="riders-list" class="riders-list"></ul>
         <div class="dialog-actions">

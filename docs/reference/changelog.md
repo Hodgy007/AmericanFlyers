@@ -88,12 +88,17 @@ Merge commit `bfd10f5`. Accounts, profiles, achievements, HR zones, feedback and
 
 - The home page leads with the Hell of the West, riding together, leaderboards and ghosts, and training plans.
 
-## Unreleased (in review)
+## Pull request #10: email sign-up, drafting, pit bull hero, docs (merged 2026-10-31)
 
 - **Email sign-up and sign-in.** Create an account with a rider name, email, password, weight and optional FTP; no phone number or address. Sign in, and reset a forgotten password by email. Sign in with Apple removed.
 - **Drafting.** Riding behind another rider cuts your air drag by up to about a third (and lightens a smart trainer); a slipstream gauge shows the gap to the rider ahead, the drag saved and the watts it saves.
 - **Second home hero.** A looping pit bull chase, taking turns with the original rider hero.
 - **Docs.** Every guide updated for the latest features, and the languages and technologies listed in [Architecture](../developer-guide/architecture.md#languages-and-technologies).
+
+## Unreleased (in review)
+
+- **Sentry error reporting** (pull request #11), and the pit bull hero shown on every visit (`?hero=rider` for the original).
+- **Pro teams**: five computer-ridden teams with comedic near-miss names ride each stage two by two at 2.0–4.2 W/kg, in their own kit, with **Join** in 👥.
 
 ## Full commit list
 

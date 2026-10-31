@@ -104,6 +104,51 @@ export interface RiderLook {
   frame?: string; // bike frame colour
   jersey?: string; // jersey colour of the built-in rider
   ghost?: boolean; // see-through, for the ghost of a past ride
+  /** Team kit: the rigged rider's navy becomes the first colour and its red the second. */
+  kit?: [string, string];
+}
+
+const kitMats = new Map<string, THREE.Material>();
+/**
+ * Recolours the rigged rider's stars-and-stripes kit for a team. The texture is
+ * navy, red, white, skin and black; a fragment-shader tweak swaps navy and red
+ * for the team colours (keeping the shading), and leaves the rest alone.
+ */
+function applyKit(root: THREE.Object3D, kit: [string, string]) {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const src = mesh.material as THREE.MeshStandardMaterial;
+    const key = `${src.uuid}|${kit.join('|')}`;
+    let m = kitMats.get(key);
+    if (!m) {
+      const mat = src.clone();
+      const a = new THREE.Color(kit[0]);
+      const b = new THREE.Color(kit[1]);
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.kitA = { value: a };
+        shader.uniforms.kitB = { value: b };
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', 'uniform vec3 kitA;\nuniform vec3 kitB;\nvoid main() {')
+          .replace('#include <map_fragment>', `
+#ifdef USE_MAP
+  vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+  vec3 kc = sampledDiffuseColor.rgb;
+  float klum = dot( kc, vec3( 0.2126, 0.7152, 0.0722 ) );
+  float isNavy = step( kc.r * 1.6 + 0.004, kc.b ) * step( kc.g * 1.25 + 0.002, kc.b );
+  float isRed = step( kc.g * 3.0 + 0.02, kc.r ) * step( kc.b * 3.0 + 0.02, kc.r );
+  kc = mix( kc, kitA * clamp( klum / 0.03, 0.45, 1.3 ), isNavy );
+  kc = mix( kc, kitB * clamp( klum / 0.16, 0.45, 1.3 ), isRed );
+  sampledDiffuseColor.rgb = kc;
+  diffuseColor *= sampledDiffuseColor;
+#endif`);
+      };
+      mat.customProgramCacheKey = () => 'team-kit';
+      kitMats.set(key, mat);
+      m = mat;
+    }
+    mesh.material = m;
+  });
 }
 
 const ghostMats = new Map<THREE.Material, THREE.Material>();
@@ -159,6 +204,7 @@ export class RiderModel {
       if (!gltf || this.disposed) return;
       this.rig = new Rig(cloneSkinned(gltf.scene));
       if (look.ghost) makeGhost(this.rig.root, true);
+      else if (look.kit) applyKit(this.rig.root, look.kit);
       this.body.add(this.rig.root);
       this.setPersonVisible(this.personVisible);
     });

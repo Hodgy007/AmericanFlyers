@@ -52,6 +52,12 @@ The frame loop eases the saving over about 0.6 s (so it doesn't jump with each 2
 
 The draft gauge shows the gap to the rider ahead (within 60 m), the drag saved, and the watts that saves: `½ × ρ × CdA × v³ × saving / 0.976`. Riders you're following line up in your lane from 14 m back, as in a paceline, and pull aside when you overlap.
 
+## Pro teams
+
+[`src/peloton.ts`](../../src/peloton.ts) moves each team as one group with `stepSpeed()`: a 68 kg rider on a 7.5 kg bike at the team's W/kg (with slow ±5% surges), a pack drag area of 72% of a solo rider's, and 35% power on descents steeper than 4%. Riders sit two by two, 2.1 m between rows, in lanes just right of the centre line. They count as riders for drafting, so sitting on the back of a team saves you drag. Teams that pass a finish line by 120 m restart the stage. **Join** places you 2.5 m behind the last row at the group's speed.
+
+The kits recolour the rigged rider in a fragment shader: navy texels become the team's first colour and red texels its second, keeping the texture's shading (see `applyKit()` in `src/world/rider.ts`).
+
 ## Virtual drivetrain and shifting
 
 [`src/drivetrain.ts`](../../src/drivetrain.ts) keeps the rider's legs in step with the wheels. Normally it shifts automatically through a 50/34 × 11–34 set of gears toward your real cadence, one gear every 0.45 s with 8% hysteresis, and the cranks turn at `speed / (ratio × 2.105 m)` while you pedal. They ease to a stop when you freewheel.
