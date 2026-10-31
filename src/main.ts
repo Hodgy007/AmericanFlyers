@@ -798,6 +798,7 @@ onAccountChange(async (a) => {
       lastSentGrade = NaN;
     }
     await savePendingRide();
+    accountUi.checkAdmin(); // the session is settled now
     toast(`Signed in as ${a.name}`);
   } catch (e) {
     toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);

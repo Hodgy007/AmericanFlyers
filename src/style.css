@@ -482,7 +482,8 @@ dialog h3 { font-size: 15px; margin: 18px 0 8px; }
 @media (max-width: 560px) {
   .topbar { padding: 10px 16px; }
   .brand { font-size: 16px; }
-  .actions { gap: 5px; flex-wrap: nowrap; width: 100%; }
+  .actions { gap: 5px; flex-wrap: nowrap; width: 100%; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+  .actions::-webkit-scrollbar { display: none; }
   .actions button { padding: 6px 7px; font-size: 12px; flex: 1 1 auto; white-space: nowrap; }
   .hud-wrap { top: 92px; left: 12px; right: 12px; }
   .hud { gap: 6px; }
