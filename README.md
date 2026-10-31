@@ -12,6 +12,8 @@ An indoor cycling app that runs in your browser. Connect a Wahoo smart trainer o
   - *Alpe d'Huez*: 14 km at 8% from Le Bourg-d'Oisans with real per-kilometre gradients (swi-cycling.com) and all 21 numbered hairpins.
   - *Stelvio Pass*: 24.5 km at 7.5% from Prato allo Stelvio to 2758 m through 48 numbered hairpins. Totals match published figures; the per-kilometre shape is approximated.
 
+  - *Your routes*: upload a `.gpx` file (from Strava, Komoot, RideWithGPS, Garmin…) in the stage picker to practise it. The road follows its bends and its smoothed elevation profile (gradients capped at 25 %), with scenery scaled to the route: farmland for flat routes, forests, rock and snow at their real altitudes for mountain ones. Routes are saved in the browser.
+
   Stages with a finish line count down the distance, show the next hairpin, and end at a checkered line under the arch with your time, average power and speed.
 - **3D world (Three.js).** A winding road through low-poly hills, forests, fields and distant mountains, with sunlight, shadows, haze and clouds. The terrain is generated on the fly as you ride, so the road never ends.
 - **3D rider.** A rigged rider model (generated with Higgsfield) posed on the bike every frame: legs follow the pedals at your real cadence, hands on the hoods, head up. The wheels turn at your virtual speed.
@@ -66,6 +68,7 @@ src/
   workouts/          Workout model, built-ins, .zwo/.erg/.mrc import + .zwo export,
                      library (browser storage), player, graph, library + creator UI
   stages.ts          Stage definitions: profiles, bends, scenery, landmarks, signs
+  routes/            GPX parsing, route → stage conversion, saved routes
   course.ts          The current stage's road: elevation, grade, heading, centreline
   world/world.ts     Three.js renderer, lighting, cameras; places the rider each frame
   world/terrain.ts   Hills and forests built in tiles around the rider

@@ -2,7 +2,9 @@ import './style.css';
 import { bluetoothAvailable, connectTrainer, type Trainer, type TrainerReading } from './ble/trainer';
 import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
 import { currentStage, elevationAt, gradeAt, setStage } from './course';
-import { STAGES, stageById, type Stage } from './stages';
+import type { Stage } from './stages';
+import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
+import { parseGpx } from './routes/gpx';
 import { stepSpeed, DEFAULT_PARAMS } from './physics';
 import { drawProfile } from './profile';
 import { World, type CameraMode } from './world/world';
@@ -251,7 +253,7 @@ function updateHud(grade: number) {
     movingTime: ride.movingTime,
     grade,
     climbed: ride.climbed,
-    elevation: elevationAt(ride.distance),
+    elevation: (currentStage().baseAltitude ?? 0) + elevationAt(ride.distance),
     stats,
     workout: player && !player.done
       ? { target: player.targetWatts(), stepLeft: player.stepRemaining(), workoutLeft: player.duration - player.elapsed, label: player.step?.label ?? '' }
@@ -421,7 +423,14 @@ function openStages() {
   const list = $('stage-list');
   list.replaceChildren();
   const imperial = settings.units === 'imperial';
-  for (const stage of STAGES) {
+  const stages = allStages();
+  for (const stage of stages) {
+    if (stage.uploaded && !list.querySelector('.stage-section')) {
+      const h = document.createElement('h3');
+      h.className = 'stage-section';
+      h.textContent = 'Your routes';
+      list.append(h);
+    }
     const card = document.createElement('button');
     card.className = 'stage-card' + (stage === currentStage() ? ' current' : '');
     const km = stage.finish === null ? null : stage.finish / 1000;
@@ -438,11 +447,27 @@ function openStages() {
       dialog.close();
       if (stage !== currentStage()) chooseStage(stage);
     });
+    if (stage.uploaded) {
+      const del = document.createElement('span');
+      del.className = 'stage-delete';
+      del.title = 'Delete this route';
+      del.setAttribute('role', 'button');
+      del.textContent = '🗑';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete the route "${stage.name}"?`)) return;
+        deleteRoute(stage.id);
+        if (stage === currentStage()) chooseStage(stageById(null));
+        dialog.close();
+        openStages();
+      });
+      card.append(del);
+    }
     list.append(card);
   }
-  dialog.showModal();
+  if (!dialog.open) dialog.showModal();
   // Draw each card's profile now that it has a size.
-  STAGES.forEach((stage, i) => {
+  stages.forEach((stage, i) => {
     drawProfile(list.querySelectorAll('canvas')[i] as HTMLCanvasElement, null, [0, stage.finish ?? 20000], stage.elevationAt);
   });
 }
@@ -519,6 +544,23 @@ $('btn-reset').addEventListener('click', resetRide);
 $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);
 $('btn-stage').addEventListener('click', openStages);
+$<HTMLInputElement>('route-upload').addEventListener('change', async (e) => {
+  const input = e.target as HTMLInputElement;
+  let last: Stage | null = null;
+  for (const file of Array.from(input.files ?? [])) {
+    try {
+      const { stage, saved } = addRoute(parseGpx(file.name, await file.text()));
+      if (!saved) toast('Route too large to save in this browser; it’s rideable until you reload.', 6000);
+      last = stage;
+    } catch (err) {
+      toast(`${file.name}: ${(err as Error).message}`, 6000);
+    }
+  }
+  input.value = '';
+  $<HTMLDialogElement>('stages').close();
+  if (last) chooseStage(last);
+  else openStages();
+});
 $('btn-workouts').addEventListener('click', () => workoutUi.openLibrary());
 $('btn-data').addEventListener('click', () =>
   openDataBlocks($<HTMLDialogElement>('data-blocks'), settings.dataFields, (ids) => {

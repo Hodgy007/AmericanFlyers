@@ -62,7 +62,11 @@
 
     <dialog id="stages" class="stages-dialog">
       <form method="dialog">
-        <h2>Choose a stage</h2>
+        <div class="dialog-head">
+          <h2>Choose a stage</h2>
+          <label class="file-button">⬆ Upload GPX route<input type="file" id="route-upload" accept=".gpx,application/gpx+xml" multiple /></label>
+        </div>
+        <p class="hint">Practise any route: export it as a <code>.gpx</code> file from Strava, Komoot, RideWithGPS or Garmin and upload it. Its climbs and bends become the road. Routes are saved in this browser.</p>
         <div id="stage-list" class="stage-list"></div>
         <div class="dialog-actions"><button value="cancel">Close</button></div>
       </form>
