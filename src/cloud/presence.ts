@@ -6,6 +6,7 @@
 import type { OtherRider } from '../world/others';
 import { account, onAccountChange } from './account';
 import { neon } from './client';
+import { parseKitString } from '../kit';
 
 const INTERVAL_MS = 2000;
 const MAX_EXTRAPOLATE_S = 6;
@@ -16,9 +17,11 @@ export interface MyPosition {
   speedMs: number;
   power: number;
   cadence: number;
+  /** Your kit as "#jersey,#accent,#frame", or null for the default. */
+  kit?: string | null;
 }
 
-interface Row { id: string; name: string; distance: number; speed: number; power: number; cadence: number; age_ms: number }
+interface Row { id: string; name: string; distance: number; speed: number; power: number; cadence: number; age_ms: number; kit?: string | null }
 interface Known extends Row { at: number } // performance.now() when received
 
 export class Presence {
@@ -48,7 +51,12 @@ export class Presence {
     const now = performance.now();
     return this.known.map((k) => {
       const t = Math.min(MAX_EXTRAPOLATE_S, (now - k.at + k.age_ms) / 1000);
-      return { id: k.id, name: k.name, distance: k.distance + k.speed * t, speedMs: k.speed, power: k.power, cadence: k.cadence };
+      // Their kit, if they've designed one (colours only from a valid kit string).
+      const kit = parseKitString(k.kit);
+      return {
+        id: k.id, name: k.name, distance: k.distance + k.speed * t, speedMs: k.speed, power: k.power, cadence: k.cadence,
+        ...(kit ? { jersey: kit.jersey, accent: kit.accent, frame: kit.frame } : {}),
+      };
     });
   }
 
@@ -87,6 +95,7 @@ export class Presence {
         p_power: Math.round(me.power),
         p_cadence: Math.round(me.cadence),
         p_visible: this.visible(),
+        p_kit: me.kit ?? null,
       });
       if (error) throw new Error(error.message);
       if (me.stageId !== this.position()?.stageId) return; // changed stage while waiting

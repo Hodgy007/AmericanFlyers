@@ -7,6 +7,8 @@ This page lists every keyboard shortcut and URL parameter the app reads, with wh
 | Key | When | What it does |
 | --- | --- | --- |
 | **C** (or **c**) | Anywhere on the page, except inside a dialog | Cycles the camera: Chase view, Side view, Rider's view. |
+| **←** / **→** | Anywhere on the page, except inside a dialog | Steers left or right across the road, 0.7 m a press; hold to keep going. |
+| **R** (or **r**) | Anywhere on the page, except inside a dialog | Sends a 👍 ride-on to the rider just ahead of you (a live rider or a pro team rider). See [Riding together](../user-guide/riding-together.md#ride-ons). |
 | **↑** | Demo ride on, not inside a dialog | Adds 10 W to the demo power, up to 600 W. |
 | **↓** | Demo ride on, not inside a dialog | Takes 10 W from the demo power, down to 0 W. |
 
@@ -20,8 +22,9 @@ The app reads these parameters when it loads.
 
 | Parameter | Example | What it does |
 | --- | --- | --- |
-| `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `hell-of-the-west`, `alpe-dhuez`, `stelvio`, `ventoux`, `tourmalet` and `zoncolan`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
+| `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `hotw-morgul-bismark`, `hotw-tour-of-the-moon`, `hell-of-the-west`, `alpe-dhuez`, `stelvio`, `ventoux`, `tourmalet` and `zoncolan`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
 | `start` | `?start=6` | Starts the ride this many kilometers into the stage. Decimal values work, for example `6.5`. Values of zero or less are ignored. |
+| `timescale` | `?timescale=8` | Runs the ride clock this many times faster (1 to 20), for testing whole races quickly. Not for normal riding: the physics and the field step in bigger jumps. |
 | `error` | `?error=access_denied` | Set by the sign-in provider when sign-in fails. The app shows *Sign-in didn't finish* with the message, then removes the parameter from the address bar. |
 | `error_description` | `?error_description=…` | The message that goes with `error`. Shown and removed the same way. |
 

@@ -15,7 +15,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
   - *Route 66 Flats*: 25 km time trial.
   - *Alpe d'Huez*: 14 km at 8% from Le Bourg-d'Oisans with real per-kilometre gradients (swi-cycling.com) and all 21 numbered hairpins.
   - *Stelvio Pass*: 24.5 km at 7.5% from Prato allo Stelvio to 2758 m through 48 numbered hairpins. Totals match published figures; the per-kilometre shape is approximated.
-  - *Hell of the West*: the final stage from the film *American Flyers*, 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake (3,235 m), where it was filmed.
+  - *Hell of the West*: the three stages of the film *American Flyers*: Stage 1 *Morgul-Bismark* (two laps of the Boulder circuit, up The Wall), Stage 2 *Tour of the Moon* (Rim Rock Drive through Colorado National Monument, red rock scenery) and Stage 3 *Echo Lake*, 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake (3,235 m), where it was filmed.
   - *Mont Ventoux* (21.4 km at 7.5% from Bédoin), *Col du Tourmalet* (19 km at 7.4% from Luz-Saint-Sauveur) and *Monte Zoncolan* (10.1 km at 11.9% from Ovaro). Totals match published figures; the per-kilometre shapes are approximated.
 
   - *Your routes*: upload a `.gpx` file (from Strava, Komoot, RideWithGPS, Garmin…) in the stage picker to practise it. The road follows its bends and its smoothed elevation profile (gradients capped at 25 %), with scenery scaled to the route: farmland for flat routes, forests, rock and snow at their real altitudes for mountain ones. Routes are saved in the browser.
@@ -41,8 +41,13 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **FTP history**: every change (by hand, from a ramp test, or at sign-up) is recorded and charted.
 - **Feedback** (💬 button): riders send ideas and bug reports and see the status and any reply.
 - **Riding together** (👥 button): signed-in riders on the same stage see each other on the road, with name tags, a *Riding now* list with gaps, and *Ride with* to join someone. Switch it off in Settings.
+- **Ride-ons** (👍 🔥 💪 👋): send a quick emoji to a rider from 👥, or press **R** for a 👍 to the rider ahead. It floats over their head on the road. No free-text chat.
+- **My kit** (☰ Menu → 🎨): choose your jersey, second colour and bike frame, or a preset. Your rider wears it and other riders see it.
+- **Racing and the Hell of the West tour** (🏁 Race this stage; ☰ Menu → 🏆): race 12 pro teams over a stage, with a 3-2-1 start, attacks, breakaways, chases and a sprint, a live race panel and results tables. The tour races the film's three stages in order with general, points and mountains classifications (yellow, green and polka-dot jerseys).
 - **Pro teams**: five computer-ridden teams with comedic near-miss names ride every stage two by two at 2.0–4.2 W/kg, in their own kit. Join one from 👥 and sit in.
 - **Drafting**: ride close behind someone and you save up to about a third of your air drag (and a smart trainer gets lighter). A slipstream gauge shows the gap to the wheel ahead and the watts you're saving.
+- **Steering**: **←** / **→** (or on-screen ◀ ▶ on touch screens) move you across the road; auto-steer eases you onto the wheel ahead. The draft is lateral, so you need to be on their line.
+- **Time of day and weather** (☰ Menu → 🌤): dawn, day, dusk and night (moon, stars, a front light) and clear, cloudy or rain (streaks, wet glossy road, mist, rain sound), or Auto: stages start at their own time and weather, the light moves on as you ride, and the weather changes now and then.
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
 - **Training plans** (📅 in Workouts): Get Started, FTP Builder and Hell of the West, with sessions that tick off as you ride.
 - **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
@@ -119,7 +124,10 @@ src/
   world/terrain.ts   Hills and forests built in tiles around the rider
   world/road.ts      Road surface, marker posts and distance signs
   world/rider.ts     3D bike and rider with pedalling animation
-  world/sky.ts       Sky dome, distant mountains, clouds
+  world/sky.ts       Sky dome (stars, moon), distant mountains, clouds
+  world/atmosphere.ts  Time of day and weather: sky, sun, fog, exposure, headlight, wet road
+  world/rain.ts      Rain streaks that follow the camera
+  steering.ts        Lane steering and auto-steer
   world/noise.ts     Deterministic noise helpers
   profile.ts         Elevation profile strip
   settings.ts        Saved settings

@@ -27,12 +27,21 @@ export interface Scenery {
   forestCover: number; // 0 = farmland with woods, higher = more forest
   fields: boolean; // patches of farmland
   mountainScale: number; // height of the distant mountain ring
+  /** 'desert': red and orange rock, sparse junipers instead of forest (Colorado's red-rock country). */
+  palette?: 'desert';
 }
 
 export interface StageSign {
   d: number;
   label: string;
   style: 'hairpin';
+}
+
+/** Where a race awards points on a stage: intermediate sprints and climbs. */
+export interface RacePoints {
+  sprints?: { d: number; name: string }[]; // intermediate sprint banners (the finish line is always a sprint)
+  /** Climb summits, category 0 = hors catégorie, then 1 (hardest) to 4. Left out: found from the elevation profile. */
+  summits?: { d: number; name: string; cat: 0 | 1 | 2 | 3 | 4 }[];
 }
 
 export interface Stage {
@@ -47,8 +56,17 @@ export interface Stage {
   signs: StageSign[];
   hairpinWord?: string; // local word for a numbered hairpin, e.g. "Virage" or "Tornante"
   baseAltitude?: number; // metres above sea level at the start, for the elevation readout
+  /** What the light and weather are like here when the rider leaves them on Auto (default: day, clear). */
+  timeOfDay?: 'dawn' | 'day' | 'dusk' | 'night';
+  weather?: 'clear' | 'cloudy' | 'rain';
   /** Set for routes the rider uploaded (GPX). */
   uploaded?: boolean;
+  /** Circuits: the length of one lap in metres (the finish is a whole number of laps). */
+  lapLength?: number;
+  /** Intermediate sprints and named summits for races on this stage. */
+  race?: RacePoints;
+  /** Part of the Hell of the West tour, with its stage number. */
+  tourStage?: number;
 }
 
 // --------------------------------------------------------------- helpers ----
@@ -144,6 +162,7 @@ const R66_FINISH = 25000;
 
 const route66: Stage = {
   id: 'route66',
+  timeOfDay: 'dusk',
   name: 'Route 66 Flats',
   tagline: '25 km of fast, flat highway past diners and gas stations. A time-trial.',
   finish: R66_FINISH,
@@ -196,6 +215,8 @@ interface ClimbSpec {
   finalBend: number; // radians of sweeping bend after the last hairpin
   hairpinWord: string;
   baseAltitude: number;
+  timeOfDay?: Stage['timeOfDay'];
+  weather?: Stage['weather'];
   scenery: Omit<Scenery, 'wildHeight'>;
 }
 
@@ -314,6 +335,8 @@ function buildClimb(spec: ClimbSpec): Stage {
     signs: pins.map((p, i) => ({ d: p - 12, label: String(hairpins - i), style: 'hairpin' as const })),
     hairpinWord: spec.hairpinWord,
     baseAltitude: spec.baseAltitude,
+    timeOfDay: spec.timeOfDay,
+    weather: spec.weather,
   };
 }
 
@@ -384,9 +407,9 @@ const stelvio = buildClimb({
 // 20.8 km, 942 m: about 3.5% for the first 11 km, 5.8% for the next 9, then
 // the short flat at the lake (pjammcycling.com, summitbiking.org). The
 // switchbacks sit in the steeper upper half.
-const hellOfTheWest = buildClimb({
-  id: 'hell-of-the-west',
-  name: 'Hell of the West',
+const hellOfTheWestClimb = buildClimb({
+  id: 'hell-of-the-west', // keep this id: leaderboards and plans use it
+  name: 'Hell of the West · Stage 3: Echo Lake',
   tagline: 'The final stage from American Flyers: 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake, 3,235 m.',
   kmGrades: [3.0, 3.2, 3.6, 3.8, 3.4, 3.0, 3.8, 4.0, 3.6, 3.4, 3.9, 5.2, 5.8, 6.2, 6.0, 5.8, 6.4, 6.0, 5.6, 5.9, 1.2],
   length: 20800,
@@ -399,6 +422,7 @@ const hellOfTheWest = buildClimb({
   finalBend: 0.5,
   hairpinWord: 'Switchback',
   baseAltitude: 2293,
+  timeOfDay: 'dusk',
   scenery: {
     bumpAmp: 12,
     rockLine: 1100,
@@ -410,6 +434,14 @@ const hellOfTheWest = buildClimb({
     mountainScale: 3.2,
   },
 });
+
+const hellOfTheWest: Stage = {
+  ...hellOfTheWestClimb,
+  tourStage: 3,
+  // Echo Lake is a summit finish. The mountain prime is where the road leaves
+  // the creek and starts to climb in earnest (approximate: no published prime).
+  race: { summits: [{ d: 14500, name: 'Chicago Creek prime', cat: 3 }, { d: 20800, name: 'Echo Lake', cat: 1 }], sprints: [{ d: 10400, name: 'Mid-stage sprint' }] },
+};
 
 // Mont Ventoux from Bédoin (300 m) to the summit (1,910 m): 21.4 km, 1,610 m,
 // 7.5%. Gentle vineyards to Saint-Estève, then 9–10% through the forest to
@@ -448,6 +480,7 @@ const ventoux = buildClimb({
 // hairpins of Super-Barèges. Shape approximated from published profiles.
 const tourmalet = buildClimb({
   id: 'tourmalet',
+  weather: 'cloudy',
   name: 'Col du Tourmalet',
   tagline: '19 km at 7.4% from Luz-Saint-Sauveur, through Barèges and the hairpins to 2,115 m.',
   kmGrades: [5.2, 6.4, 7.0, 7.2, 7.0, 7.4, 6.2, 6.8, 7.2, 7.6, 7.8, 7.0, 8.6, 8.8, 9.2, 8.4, 9.0, 9.6, 9.8],
@@ -526,7 +559,262 @@ export function fitPlane(pts: [number, number, number][]) {
   return (x: number, z: number) => a + b * x + c * z;
 }
 
-export const STAGES: Stage[] = [heartland, route66, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan];
+// ------------------------------------------------ Hell of the West tour ----
+//
+// American Flyers (1985) has three stages: the Morgul-Bismark circuit near
+// Boulder, the "Tour of the Moon" through Colorado National Monument, and the
+// final climb to Echo Lake (the existing Hell of the West stage). Stages 1 and
+// 2 are shaped from published figures; the road's bends and rolls between the
+// landmarks are approximated.
+
+/** Monotone cubic interpolation (Fritsch–Carlson) through (x, y) knots: no overshoot, no flat spots. */
+function pchip(knots: [number, number][]) {
+  const n = knots.length;
+  const h: number[] = [];
+  const dl: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    h.push(knots[i + 1][0] - knots[i][0]);
+    dl.push((knots[i + 1][1] - knots[i][1]) / h[i]);
+  }
+  const m: number[] = new Array(n);
+  m[0] = dl[0];
+  m[n - 1] = dl[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (dl[i - 1] * dl[i] <= 0) m[i] = 0;
+    else {
+      const w1 = 2 * h[i] + h[i - 1];
+      const w2 = h[i] + 2 * h[i - 1];
+      m[i] = (w1 + w2) / (w1 / dl[i - 1] + w2 / dl[i]);
+    }
+  }
+  return (x: number) => {
+    if (x <= knots[0][0]) return knots[0][1];
+    if (x >= knots[n - 1][0]) return knots[n - 1][1];
+    let i = 0;
+    while (knots[i + 1][0] < x) i++;
+    const t = (x - knots[i][0]) / h[i];
+    const t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * knots[i][1] + (t3 - 2 * t2 + t) * h[i] * m[i] + (-2 * t3 + 3 * t2) * knots[i + 1][1] + (t3 - t2) * h[i] * m[i + 1];
+  };
+}
+
+// ---- Stage 1: Morgul-Bismark ----
+//
+// The Morgul-Bismark loop south of Boulder, used by the Red Zinger and Coors
+// Classics and for the first race in the film: 13.1 miles (21.1 km), starting
+// where Highway 128 meets McCaslin Boulevard, west on 128 to Highway 93, north
+// on 93, east on 170 and back down McCaslin, with "The Wall" at the south end
+// of McCaslin: a mile-long incline that kicks up to 18% (wikipedia.org
+// Morgul-Bismark; coloradohometownweekly.com 2011-05-25 gives 13.3 mi). The
+// Coors Classic riders did eight laps and sprinted to the top of the Wall.
+// Here the lap is ridden the way the Coors Classic finished it: round the
+// rounded-rectangle loop and up the Wall to the line, two laps (42 km). The
+// elevation range is approximated (about 90 m up the Wall, a rolling 128, a
+// gentle rise to Highway 93).
+const MB_R = 40; // corner radius, m
+const MB_A = 5600; // the east–west roads (128 and 170)
+const MB_B1 = 3240; // McCaslin north of the Wall
+const MB_WALL = 1600; // "one mile"
+const MB_B = MB_B1 + MB_WALL; // the north–south roads (McCaslin and 93)
+const MB_ARC = (Math.PI / 2) * MB_R;
+// Opposite straights carry the same bend so the lap closes exactly: the
+// wiggles integrate to nothing sideways, and the along-road loss matches.
+const MB_WIG = 0.045;
+interface LoopSeg { len: number; turn: number; amp: number; waves: number }
+const MB_SEGS: LoopSeg[] = [
+  { len: MB_B1, turn: 0, amp: MB_WIG, waves: 3 }, // McCaslin north of the Wall
+  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
+  { len: MB_A, turn: 0, amp: MB_WIG * 0.9, waves: 4 }, // Highway 170 west
+  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
+  { len: MB_B, turn: 0, amp: MB_WIG * Math.sqrt(MB_B1 / MB_B), waves: 5 }, // Highway 93 south
+  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
+  { len: MB_A, turn: 0, amp: MB_WIG * 0.9, waves: 4 }, // Highway 128 east
+  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
+  { len: MB_WALL, turn: 0, amp: 0, waves: 0 }, // The Wall
+];
+const MB_LAP = MB_SEGS.reduce((a, s) => a + s.len, 0);
+const MB_LAPS = 2;
+const MB_FINISH = MB_LAP * MB_LAPS;
+const MB_START: number[] = [];
+{
+  let a = 0;
+  for (const s of MB_SEGS) { MB_START.push(a); a += s.len; }
+}
+
+function mbHeading(d: number) {
+  if (d <= 0) return 0;
+  const lap = Math.floor(d / MB_LAP);
+  const u = d - lap * MB_LAP;
+  let h = -2 * Math.PI * lap;
+  for (let i = 0; i < MB_SEGS.length; i++) {
+    const s = MB_SEGS[i];
+    if (u < MB_START[i] + s.len) {
+      const t = (u - MB_START[i]) / s.len;
+      return h + s.turn * t + s.amp * Math.sin(2 * Math.PI * s.waves * t);
+    }
+    h += s.turn;
+  }
+  return h;
+}
+
+// Elevation above the line at the top of the Wall, around one lap.
+const MB_WALL_START = MB_LAP - MB_WALL;
+// The Wall: gradient per 80 m, building to 18% and easing again just before the line.
+const MB_WALL_GRADES = [1, 1, 1.5, 1.5, 2, 2, 2.5, 2.5, 3.5, 3.5, 4.5, 4.5, 6, 7, 9, 12, 16, 18, 12, 6];
+const MB_WALL_STEP = MB_WALL / MB_WALL_GRADES.length;
+const MB_WALL_RISE = MB_WALL_GRADES.reduce((a, g) => a + (g / 100) * MB_WALL_STEP, 0); // ≈ 90 m
+const mbWall = (m: number) => {
+  let e = -MB_WALL_RISE;
+  for (let i = 0; i < MB_WALL_GRADES.length; i++) {
+    const seg = Math.min(MB_WALL_STEP, Math.max(0, m - i * MB_WALL_STEP));
+    e += (MB_WALL_GRADES[i] / 100) * seg;
+  }
+  return e;
+};
+const mbBase = pchip([
+  [0, 0], [MB_B1, 12], [5900, 30], [MB_START[4], 36], [11400, 41], [MB_START[6], 24], [16700, -32], [MB_WALL_START, -MB_WALL_RISE],
+]);
+const MB_KNOT_U = [0, MB_B1, 5900, MB_START[4], 11400, MB_START[6], 16700, MB_WALL_START];
+function mbLapElevation(u: number) {
+  if (u >= MB_WALL_START) return mbWall(u - MB_WALL_START);
+  // Rolling swells between the knots, fading to nothing at each knot.
+  let i = 0;
+  while (i < MB_KNOT_U.length - 2 && MB_KNOT_U[i + 1] < u) i++;
+  const f = (u - MB_KNOT_U[i]) / (MB_KNOT_U[i + 1] - MB_KNOT_U[i]);
+  const env = Math.sin(Math.PI * f);
+  return mbBase(u) + env * (4.2 * Math.sin((2 * Math.PI * u) / 1050 + 0.8) + 1.8 * Math.sin((2 * Math.PI * u) / 410 + 2.3));
+}
+const mbElevation = (d: number) => mbLapElevation(((d % MB_LAP) + MB_LAP) % MB_LAP);
+
+/** Farm landmarks whose spacing divides the lap, so the second lap shows the same scenery. */
+const lapFarm = FARM_LANDMARKS.map((k) => ({ ...k, every: MB_LAP / Math.round(MB_LAP / k.every) }));
+
+const morgulBismark: Stage = {
+  id: 'hotw-morgul-bismark',
+  name: 'Hell of the West · Stage 1: Morgul-Bismark',
+  tagline: 'The first race in the film: two 21 km laps of the Boulder circuit, finishing up The Wall (18%) each time.',
+  finish: MB_FINISH,
+  lapLength: MB_LAP,
+  elevationAt: mbElevation,
+  headingAt: mbHeading,
+  scenery: {
+    wildHeight: (x, z) => -18 + fbm(x / 1100, z / 1100, 3) * 30 + Math.max(0, fbm(x / 450 + 3, z / 450, 3)) * 18,
+    bumpAmp: 3,
+    rockLine: 400,
+    snowLine: 1e9,
+    treeLine: 400,
+    coniferBias: 0.1,
+    forestCover: -0.2,
+    fields: true,
+    mountainScale: 1.7, // the Front Range and the Flatirons to the west
+  },
+  landmarks: [startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(11300), finishArch(MB_LAP + 11300), ...lapFarm],
+  signs: [],
+  baseAltitude: 1680, // Superior, Colorado: about 5,500 ft
+  tourStage: 1,
+  race: {
+    sprints: [
+      { d: 11300, name: 'Highway 93 sprint' },
+      { d: MB_LAP + 11300, name: 'Highway 93 sprint' },
+    ],
+    summits: [
+      { d: MB_LAP, name: 'The Wall', cat: 3 },
+      { d: MB_FINISH, name: 'The Wall', cat: 2 },
+    ],
+  },
+};
+
+// ---- Stage 2: the Tour of the Moon ----
+//
+// Rim Rock Drive through Colorado National Monument, the stage the Coors
+// Classic called the Tour of the Moon (1980–88, mtntownmagazine.com
+// "Classic Rides: the Colorado National Monument's Tour of the Moon"). The
+// road is 23 miles (37 km) from the Grand Junction entrance to the Fruita
+// entrance, tops out at 6,640 ft (2,024 m), and has about 2,300 ft (700 m) of
+// climbing in all, most of it on the steep grades just inside either entrance
+// (nps.gov "Road Biking on Rim Rock Drive"). From the Grand Junction side the
+// road switchbacks up about four miles, through a dark tunnel, to the
+// plateau at Cold Shivers; five or six more miles of rolling uphill reach the
+// high point, then a descent with one more rise at Black Ridge, the visitor
+// center, and a rapid drop through two short tunnels to Fruita
+// (mtntownmagazine.com). The knots below follow that story; the exact grades
+// between them are approximated.
+const TM_FINISH = 37000;
+const tmBase = pchip([
+  [0, 0], [600, 3], [1200, 25], [2200, 95], [3200, 170], [4200, 245], [5200, 325], [6200, 405], [6800, 432], [8000, 450],
+  [10000, 482], [12000, 528], [14000, 574], [15500, 590], [17000, 574], [18500, 556], [20000, 540], [22500, 562], [24000, 520],
+  [26000, 478], [28000, 440], [30600, 335], [32000, 300], [33500, 215], [35000, 110], [36300, 25], [TM_FINISH, 0],
+]);
+const tmElevation = (d: number) => {
+  if (d <= 0) return 0;
+  const ramp = smoothstep(0, 1500, d) * (1 - smoothstep(35500, TM_FINISH, d));
+  return tmBase(d) + ramp * (1.3 * Math.sin((2 * Math.PI * d) / 700 + 0.7) + 0.5 * Math.sin((2 * Math.PI * d) / 260 + 1.9));
+};
+const tmHeading = (d: number) => {
+  if (d <= 0) return 0;
+  // Switchbacks up the canyon wall, then bends that follow the rim.
+  const wall = smoothstep(500, 1100, d) * (1 - smoothstep(6000, 6800, d));
+  const rim = smoothstep(6000, 7500, d);
+  return wall * 1.5 * Math.sin((2 * Math.PI * (d - 500)) / 1500) + rim * (0.3 * Math.sin((2 * Math.PI * d) / 2700) + 0.18 * Math.sin((2 * Math.PI * d) / 1130 + 2));
+};
+// Fit a plane to the road, as the climbs do, so the land follows the road's overall rise.
+const tmPlane = (() => {
+  let x = 0, z = 0;
+  const pts: [number, number, number][] = [];
+  for (let d = 0; d < TM_FINISH; d += 4) {
+    const h = tmHeading(d + 2);
+    x += Math.cos(h) * 4;
+    z += Math.sin(h) * 4;
+    if (d % 200 === 0) pts.push([x, z, tmElevation(d)]);
+  }
+  return fitPlane(pts);
+})();
+/** Flat shelves joined by cliffs: the stepped mesas and layered sandstone of the Colorado Plateau. */
+const terrace = (v: number, step: number) => {
+  const f = v / step;
+  const i = Math.floor(f);
+  return (i + smoothstep(0.55, 1, f - i)) * step;
+};
+
+const tourOfTheMoon: Stage = {
+  id: 'hotw-tour-of-the-moon',
+  name: 'Hell of the West · Stage 2: Tour of the Moon',
+  tagline: 'Rim Rock Drive through Colorado National Monument: 37 km of switchbacks, tunnels and red rock canyons, topping out at 2,024 m.',
+  finish: TM_FINISH,
+  elevationAt: tmElevation,
+  headingAt: tmHeading,
+  scenery: {
+    wildHeight: (x, z) => {
+      const base = Math.max(-60, Math.min(700, tmPlane(x, z)));
+      const mesa = fbm(x / 1500 + 4, z / 1500, 3) * 120;
+      const ridge = (1 - Math.abs(fbm(x / 420 + 7, z / 420 - 3, 3))) * 170;
+      return terrace(base + 10 + mesa * 0.6 + ridge * 0.55, 26);
+    },
+    bumpAmp: 5,
+    rockLine: 1e9,
+    snowLine: 1e9,
+    treeLine: 1e9,
+    coniferBias: 1,
+    forestCover: -0.3,
+    fields: false,
+    mountainScale: 1.3, // the Book Cliffs
+    palette: 'desert',
+  },
+  landmarks: [startArch, finishArch(TM_FINISH), finishArch(24500)],
+  signs: [],
+  baseAltitude: 1440, // the Grand Junction entrance, about 4,700 ft
+  tourStage: 2,
+  race: {
+    sprints: [{ d: 24500, name: 'Visitor center sprint' }],
+    summits: [
+      { d: 6600, name: 'Cold Shivers', cat: 1 },
+      { d: 15500, name: 'The high point', cat: 2 },
+      { d: 22500, name: 'Black Ridge', cat: 4 },
+    ],
+  },
+};
+
+export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan];
 
 export function stageById(id: string | null): Stage {
   return STAGES.find((s) => s.id === id) ?? heartland;

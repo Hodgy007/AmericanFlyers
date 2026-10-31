@@ -40,13 +40,25 @@ This page lists every file and folder in the repository, with a one-line summary
 | `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up, and *Ride without an account*. |
 | `drivetrain.ts` | The virtual drivetrain: automatic gears that keep leg speed in step with road speed, the 24 virtual-shifting gears, crank angle and bike rock. |
 | `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish. |
+| `draft.ts` | Drafting: the drag saved at a given gap behind another rider (and how far across from their line), and the rider just ahead. |
+| `steering.ts` | Your lane across the road: ← / → steps, key and button hold-to-repeat, and auto-steer into the draft. |
+| `atmosphereUi.ts` | The ☰ Menu → Time & weather dialog. |
+| `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish; and race mode (`startRace`, `makeRoster`, `RaceField`) that hands the field to the race engine. |
+| `raceSim.ts` | The race engine: riders in groups, attacks, breaks, chases, cracks, merges, sprints, lines and points. No DOM or Three.js. |
+| `race.ts` | The race you are riding: countdown, live panel numbers, jersey holders and results. |
+| `raceUi.ts` | The 3-2-1, the live race panel, and the result tables. |
+| `tour.ts` | The Hell of the West tour: progress in `settings.tour`, classifications, `tourJersey()`, and "simulate this stage". |
+| `tourUi.ts` | The tour dialog. |
 | `draft.ts` | Drafting: the drag saved at a given gap behind another rider, and the rider just ahead. |
 | `ghost.ts` | Replays a past whole-stage ride as a ghost, and formats race times. |
 | `sound.ts` | Ride sounds made with Web Audio: wind, tyre hum, freewheel, crowds, beeps, shift clicks and the finish fanfare. |
 | `plans.ts` | The training plans and their progress logic. |
 | `plansUi.ts` | The training plans dialog. |
 | `onboarding.ts` | The three-step first-ride guide. |
-| `ridersUi.ts` | The 👥 button and the *Riding now* list. |
+| `ridersUi.ts` | The 👥 button and the *Riding now* list, with the ride-on emoji buttons on each rider. |
+| `rideOnsUi.ts` | Ride-ons in the app: sending (from 👥 and the **R** key), the toast for ones you get, the floating emoji, and pro riders replying. |
+| `kit.ts` | Your kit (jersey, second colour, frame): the presets, validation, the kit string sent to the server, and `setTourJersey()` for tours. |
+| `kitUi.ts` | The ☰ Menu → 🎨 *My kit* dialog. |
 | `leaderboardUi.ts` | The 🏆 leaderboard dialog and *Race* buttons. |
 | `style.css` | All styles, including the layout for phones. |
 | `hud.ts` | The 24 data-block fields, the HUD tiles, and the data-block chooser dialog. |
@@ -55,7 +67,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `zones.ts` | Heart-rate and power zone definitions, zone lookup, and the zone bar display. |
 | `physics.ts` | The power-to-speed model: gravity, rolling resistance, air drag (reduced in a draft), drivetrain loss and momentum. |
 | `course.ts` | The current stage's road: elevation, grade, heading and a cached centerline. |
-| `stages.ts` | Built-in stages (Heartland Rollers, Route 66 Flats, Hell of the West, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet, Monte Zoncolan), the climb builder, landmark kinds, and the stage list. |
+| `stages.ts` | Built-in stages (Heartland Rollers, Route 66 Flats, the three Hell of the West tour stages, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet, Monte Zoncolan), the climb builder, landmark kinds, and the stage list. |
 | `profile.ts` | The elevation strip, and the grade-to-color function. |
 | `ble/trainer.ts` | Trainer connection: FTMS and Cycling Power, parsing, and the control point (grade with a wind-resistance factor, and target power). |
 | `ble/heartRate.ts` | Heart-rate strap connection and parsing. |
@@ -73,12 +85,15 @@ This page lists every file and folder in the repository, with a one-line summary
 | `world/road.ts` | Road chunks, distance markers, hairpin plaques, and the finish line. |
 | `world/landmarks.ts` | Loads the landmark models and places them along the road. |
 | `world/rider.ts` | The bike and rider: a built-in fallback, and the rig that poses the rigged rider (shared model, cloned per rider; frame colours and ghost look). |
-| `world/sky.ts` | The sky dome, the mountain ring, and the clouds. |
+| `world/sky.ts` | The sky dome (with stars and moon), the mountain ring, and the clouds, all tinted at runtime by the atmosphere. |
+| `world/atmosphere.ts` | Time of day and weather: keyframed looks, sun and moon, ambient light, fog, exposure, front light, wet road. |
+| `world/rain.ts` | Rain: GPU-animated streaks in a box that follows the camera. |
 | `world/noise.ts` | Deterministic noise (value noise and fractal noise), a seeded random generator, and `smoothstep`. |
 | `cloud/client.ts` | The Neon client, configured from the default endpoints or `VITE_` variables. |
 | `cloud/account.ts` | The signed-in account: session restore, Google sign-in, email sign-up and sign-in, password reset, sign-out and rename. |
 | `cloud/emailAuth.ts` | The email form: *Create account* (name, email, password, weight, optional FTP), *Sign in* and *Forgot password*. |
-| `cloud/presence.ts` | Riding together: sends your position every 2 s and predicts the other riders' positions. |
+| `cloud/presence.ts` | Riding together: sends your position and kit every 2 s and predicts the other riders' positions. |
+| `cloud/rideOns.ts` | Ride-ons: `send_ride_on()` and the 4 s poll of `my_ride_ons()`. |
 | `cloud/sync.ts` | Syncs settings, workouts and routes; saves and reads rides and FTP history; feedback; leaderboards and ghosts; and the admin calls. |
 | `cloud/recorder.ts` | Records one sample per second while moving, and writes `.tcx` files. |
 | `cloud/achievements.ts` | Works out the 17 achievements from rides and FTP history. |

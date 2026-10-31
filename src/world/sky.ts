@@ -1,9 +1,15 @@
 import * as THREE from 'three';
 import { fbm, rng } from './noise';
 
+// Live sky state. These start as a clear mid-morning and are changed in place
+// every frame by the Atmosphere (time of day and weather), never replaced, so
+// the dome shader and the fog keep pointing at the same objects.
 export const SUN_DIRECTION = new THREE.Vector3(0.45, 0.62, -0.64).normalize();
 export const HORIZON_COLOR = new THREE.Color('#cfe0ee');
-const ZENITH_COLOR = new THREE.Color('#2f6db5');
+export const ZENITH_COLOR = new THREE.Color('#2f6db5');
+export const SUN_COLOR = new THREE.Color('#ffe9c0');
+// Where the moon hangs in the sky (low and ahead-right, so it clears the numbers across the top).
+export const MOON_DIRECTION = new THREE.Vector3(Math.cos(0.16) * Math.cos(0.5), Math.sin(0.16), Math.cos(0.16) * Math.sin(0.5)).normalize();
 
 /** Sky dome, distant mountain ring and clouds. Everything here follows the camera. */
 export class Sky {
@@ -11,11 +17,55 @@ export class Sky {
   private readonly clouds = new THREE.Group();
 
   private ring: THREE.Mesh;
+  private readonly domeUniforms = {
+    zenith: { value: ZENITH_COLOR },
+    horizon: { value: HORIZON_COLOR },
+    sunDir: { value: SUN_DIRECTION },
+    sunColor: { value: SUN_COLOR },
+    moonDir: { value: MOON_DIRECTION },
+    glow: { value: 1 }, // strength of the haze around the sun
+    night: { value: 0 }, // 0..1: stars and moon
+  };
+  private readonly cloudMat = new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#c4d2e2', flatShading: true, fog: false });
+  private readonly cloudList: THREE.Group[] = [];
+  private readonly mountainTint = new THREE.Color('#ffffff');
+  private cloudCover = NaN; // nothing applied yet
 
   constructor(mountainScale = 1) {
     this.ring = this.mountains(mountainScale);
     this.group.add(this.dome(), this.ring, this.clouds);
     this.buildClouds();
+    this.setCloudCover(0.35);
+  }
+
+  /** Atmosphere: glow around the sun, stars and moon (0..1). */
+  setSkyLook(glow: number, night: number) {
+    this.domeUniforms.glow.value = glow;
+    this.domeUniforms.night.value = night;
+  }
+
+  /** Atmosphere: colour multiplied over the far mountains (haze, dusk, night). */
+  setMountainTint(c: THREE.Color) {
+    this.mountainTint.copy(c);
+    (this.ring.material as THREE.MeshBasicMaterial).color.copy(c);
+  }
+
+  /** Atmosphere: cloud colours, and how many clouds are out (0 = none, 1 = all, with overcast above). */
+  setClouds(color: THREE.Color, glow: THREE.Color) {
+    this.cloudMat.color.copy(color);
+    this.cloudMat.emissive.copy(glow);
+  }
+
+  setCloudCover(cover: number) {
+    if (Math.abs(cover - this.cloudCover) < 0.002) return;
+    this.cloudCover = cover;
+    const n = this.cloudList.length;
+    for (let i = 0; i < n; i++) {
+      // Each cloud grows in as the cover passes its turn; above 1 they swell into an overcast.
+      const s = Math.min(1, Math.max(0, cover * n - i)) * (1 + 0.5 * Math.max(0, cover - 0.6));
+      this.cloudList[i].scale.setScalar(Math.max(s, 0.0001));
+      this.cloudList[i].visible = s > 0.01;
+    }
   }
 
   /** Rebuilds the distant mountain ring at a new height scale (per stage). */
@@ -23,6 +73,7 @@ export class Sky {
     this.group.remove(this.ring);
     this.ring.geometry.dispose();
     this.ring = this.mountains(scale);
+    (this.ring.material as THREE.MeshBasicMaterial).color.copy(this.mountainTint);
     this.group.add(this.ring);
   }
 
@@ -37,11 +88,7 @@ export class Sky {
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
-      uniforms: {
-        zenith: { value: ZENITH_COLOR },
-        horizon: { value: HORIZON_COLOR },
-        sunDir: { value: SUN_DIRECTION },
-      },
+      uniforms: this.domeUniforms,
       vertexShader: /* glsl */ `
         varying vec3 vDir;
         void main() {
@@ -52,13 +99,34 @@ export class Sky {
         uniform vec3 zenith;
         uniform vec3 horizon;
         uniform vec3 sunDir;
+        uniform vec3 sunColor;
+        uniform vec3 moonDir;
+        uniform float glow;
+        uniform float night;
         varying vec3 vDir;
+        float hash(vec3 p) {
+          p = fract(p * 0.3183099 + 0.1);
+          p *= 17.0;
+          return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+        }
         void main() {
           vec3 dir = normalize(vDir);
           float h = max(dir.y, 0.0);
           vec3 col = mix(horizon, zenith, pow(h, 0.45));
+          // The sun: a hot disc and a soft glow, fading as it drops below the horizon.
+          float up = smoothstep(-0.04, 0.05, sunDir.y);
           float s = max(dot(dir, sunDir), 0.0);
-          col += vec3(1.0, 0.92, 0.75) * (pow(s, 900.0) * 6.0 + pow(s, 14.0) * 0.35);
+          col += sunColor * up * (pow(s, 900.0) * 6.0 + pow(s, 14.0) * 0.35 * glow + pow(s, 4.0) * 0.1 * glow);
+          if (night > 0.01) {
+            // Stars: one per grid cell on the sky, a few per cent of cells, fading towards the horizon.
+            float r = hash(floor(dir * 520.0));
+            float star = step(0.9975, r) * smoothstep(0.02, 0.3, dir.y) * (0.5 + 0.5 * hash(floor(dir * 520.0) + 7.0));
+            // The moon: a pale disc with a faint halo.
+            float m = max(dot(dir, moonDir), 0.0);
+            col += vec3(0.85, 0.9, 1.0) * star * night * 1.4;
+            col += vec3(0.95, 0.97, 1.0) * smoothstep(0.99962, 0.99984, m) * night * 1.6;
+            col += vec3(0.5, 0.6, 0.9) * pow(m, 80.0) * night * 0.35;
+          }
           gl_FragColor = vec4(col, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -108,7 +176,7 @@ export class Sky {
   }
 
   private buildClouds() {
-    const mat = new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#c4d2e2', flatShading: true, fog: false });
+    const mat = this.cloudMat;
     const geo = new THREE.IcosahedronGeometry(1, 1);
     const rand = rng(7);
     for (let i = 0; i < 26; i++) {
@@ -126,6 +194,7 @@ export class Sky {
       cloud.position.set(Math.cos(a) * r, 380 + rand() * 380, Math.sin(a) * r);
       cloud.rotation.y = rand() * Math.PI;
       this.clouds.add(cloud);
+      this.cloudList.push(cloud);
     }
   }
 }

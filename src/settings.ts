@@ -1,6 +1,10 @@
 import type { PlanProgress } from './plans';
+import type { Kit } from './kit';
+import type { TourProgress } from './tour';
 
 export type Units = 'metric' | 'imperial';
+export type TimeOfDay = 'auto' | 'dawn' | 'day' | 'dusk' | 'night';
+export type Weather = 'auto' | 'clear' | 'cloudy' | 'rain';
 
 export interface Settings {
   riderKg: number;
@@ -17,6 +21,11 @@ export interface Settings {
   plan: PlanProgress | null; // the training plan being followed
   hudPosition: 'left' | 'center' | 'right'; // where the data blocks sit
   proTeams: boolean; // computer-ridden pro teams on the road
+  autoSteer: boolean; // ease into the draft of a rider just ahead when you haven't steered
+  timeOfDay: TimeOfDay; // 'auto' starts at the stage's usual time and slowly moves on
+  weather: Weather; // 'auto' uses the stage's weather, changing now and then
+  kit: Kit | null; // your jersey and bike colours (null = the default stars and stripes)
+  tour: TourProgress | null; // the Hell of the West tour in progress
 }
 
 const KEY = 'americanflyers.settings';
@@ -36,6 +45,11 @@ export const DEFAULT_SETTINGS: Settings = {
   plan: null,
   hudPosition: 'center',
   proTeams: true,
+  autoSteer: true,
+  timeOfDay: 'auto',
+  weather: 'auto',
+  kit: null,
+  tour: null,
 };
 
 export function loadSettings(): Settings {

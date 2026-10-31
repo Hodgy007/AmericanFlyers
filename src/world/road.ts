@@ -120,6 +120,12 @@ export class Road {
     });
   }
 
+  /** Rain: 0 dry … 1 soaked. The road darkens and turns glossy. */
+  setWet(wet: number) {
+    this.material.roughness = 0.92 - 0.52 * wet;
+    this.material.color.setScalar(1 - 0.32 * wet);
+  }
+
   setMarkers(markers: MarkerConfig) {
     this.markers = markers;
     for (const [k, c] of this.chunks) {

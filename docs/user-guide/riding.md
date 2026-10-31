@@ -24,6 +24,7 @@ The **☰ Menu** holds:
 | **🎥 Chase view** (or Side view, Rider's view) | Changes the camera. The label shows the current view. Shortcut: **C**. |
 | **🏆 Leaderboard** | The leaderboard for this stage. See [Leaderboards and ghosts](leaderboards-and-ghosts.md). |
 | **📅 Training plans** | See [Training plans](training-plans.md). |
+| **🎨 My kit** | Design your jersey and bike colours. See [My kit](my-kit.md). |
 | **🔊 Sound on** / **🔇 Sound off** | Shortcut: **M**. See [Sound and virtual shifting](sound-and-shifting.md). |
 | **⛶ Full screen** | Shortcut: **F**. |
 | **⬇ Install app** | Shown when your browser can install the app. See [Installing the app](installing-the-app.md). |
@@ -33,6 +34,20 @@ The **☰ Menu** holds:
 | **🛠 Admin dashboard** | Only shown to admins. |
 
 On narrow screens the buttons wrap onto more rows.
+
+## Steering
+
+You ride on the right half of the road and can move across it. Press **←** or **→** to move about 0.7 m (hold to keep going); on a touch screen use the **◀ ▶** buttons in the bottom corners. The bike eases across in under a second and the camera follows. **↑** and **↓** still change the demo power.
+
+Why steer? To line up on someone's wheel for the draft (see [Riding together](riding-together.md#drafting)), or to pass them cleanly. With **Auto-steer into the draft** on in ⚙ Settings (the default), if you haven't steered for about 3 seconds and a rider is within 12 m ahead, you drift onto their line by yourself. Steering yourself pauses it for 3 seconds.
+
+## Time of day and weather
+
+☰ Menu → **🌤 Time & weather** sets the light (Auto, Dawn, Day, Dusk, Night) and the weather (Auto, Clear, Cloudy, Rain). It applies straight away and is saved with your settings.
+
+- **Auto** time starts at the stage's usual time (Route 66 and Hell of the West start at dusk, the others in daylight) and moves on as you ride, about an hour of light every two minutes, so a long ride can run from dusk into night and on to dawn.
+- **Auto** weather uses the stage's own (the Tourmalet is cloudy, the rest clear) and now and then changes.
+- **Night** has a moon and stars and a soft light from your front light on the road ahead. **Rain** brings streaks, thicker mist, a darker, glossier road and a gentle rain sound (with sound on).
 
 ## Data blocks
 
@@ -47,7 +62,8 @@ The bottom-left corner shows two things:
 
 ## Panels at the bottom of the screen
 
-- **Draft gauge**: appears when another rider is within 60 m ahead. It shows the gap to their back wheel and, once you're within 12 m, how much drag you're saving. See [Riding together](riding-together.md#drafting).
+- **Draft gauge**: appears when another rider is within 60 m ahead. It shows the gap to their back wheel and, once you're within 12 m, how much drag you're saving. If you're close but off to one side, it tells you which way to move (*Move ◀ into their wheel*). See [Riding together](riding-together.md#drafting).
+- **Steering buttons (◀ ▶)**: on touch screens, in the bottom corners. See [Steering](#steering).
 - **Gear panel**: with virtual shifting on, your gear and − / + buttons. See [Sound and virtual shifting](sound-and-shifting.md).
 - **Demo power**: in a demo ride, the power slider.
 

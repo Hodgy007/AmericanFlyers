@@ -114,11 +114,13 @@ const kitMats = new Map<string, THREE.Material>();
  * navy, red, white, skin and black; a fragment-shader tweak swaps navy and red
  * for the team colours (keeping the shading), and leaves the rest alone.
  */
-function applyKit(root: THREE.Object3D, kit: [string, string]) {
+function applyKit(root: THREE.Object3D, kit: [string, string] | null) {
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
-    const src = mesh.material as THREE.MeshStandardMaterial;
+    // Remember the model's own material so the kit can change (or be taken off) later.
+    const src = (mesh.userData.kitSrc ??= mesh.material) as THREE.MeshStandardMaterial;
+    if (!kit) { mesh.material = src; return; }
     const key = `${src.uuid}|${kit.join('|')}`;
     let m = kitMats.get(key);
     if (!m) {
@@ -187,13 +189,15 @@ export class RiderModel {
   private rig: Rig | null = null;
   private personVisible = true;
 
-  private readonly frameMat: THREE.Material;
-  private readonly jerseyMat: THREE.Material;
+  private frameMat: THREE.MeshStandardMaterial;
+  private jerseyMat: THREE.MeshStandardMaterial;
+  private kit: [string, string] | null = null;
   private disposed = false;
 
   constructor(look: RiderLook = {}) {
     this.frameMat = look.frame ? mat(look.frame, { metalness: 0.35, roughness: 0.35 }) : M.frame;
     this.jerseyMat = look.jersey ? mat(look.jersey, { roughness: 0.7 }) : M.jersey;
+    this.kit = look.kit ?? null;
     this.group.add(this.body);
     this.body.add(this.person);
     this.buildBike();
@@ -204,7 +208,7 @@ export class RiderModel {
       if (!gltf || this.disposed) return;
       this.rig = new Rig(cloneSkinned(gltf.scene));
       if (look.ghost) makeGhost(this.rig.root, true);
-      else if (look.kit) applyKit(this.rig.root, look.kit);
+      else if (this.kit) applyKit(this.rig.root, this.kit);
       this.body.add(this.rig.root);
       this.setPersonVisible(this.personVisible);
     });
@@ -215,6 +219,32 @@ export class RiderModel {
     this.disposed = true;
     if (this.frameMat !== M.frame) this.frameMat.dispose();
     if (this.jerseyMat !== M.jersey) this.jerseyMat.dispose();
+  }
+
+  /**
+   * Changes what this rider wears without reloading anything: bike frame and
+   * (primitive rider's) jersey colours, and the rigged rider's kit (null puts
+   * the original stars and stripes back). Used for your own rider and for
+   * other riders who change their kit.
+   */
+  setLook(look: { frame?: string; jersey?: string; kit?: [string, string] | null }) {
+    if (look.frame) this.frameMat = this.recolour(this.frameMat, M.frame, look.frame, { metalness: 0.35, roughness: 0.35 });
+    if (look.jersey) this.jerseyMat = this.recolour(this.jerseyMat, M.jersey, look.jersey, { roughness: 0.7 });
+    if (look.kit !== undefined) {
+      this.kit = look.kit;
+      if (this.rig) applyKit(this.rig.root, this.kit);
+    }
+  }
+
+  /** Recolours a material this rider owns; a shared one is swapped for its own copy first. */
+  private recolour(current: THREE.MeshStandardMaterial, shared: THREE.MeshStandardMaterial, color: string, extra: THREE.MeshStandardMaterialParameters) {
+    if (current !== shared) { current.color.set(color); return current; }
+    const own = mat(color, extra);
+    this.body.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh && mesh.material === shared) mesh.material = own;
+    });
+    return own;
   }
 
   /** Shows or hides the rider (hidden in the rider's-eye camera). */
