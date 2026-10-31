@@ -6,14 +6,14 @@ This page covers how to contribute: branch names, commit messages, the project's
 
 - Read [Architecture](architecture.md) and [Project structure](project-structure.md).
 - Run the app with [Local development](local-development.md).
-- Check that `npm run build` passes on a clean checkout.
+- Check that `npm run build` and `npm test` pass on a clean checkout.
 
 ## Project preferences
 
 `CLAUDE.md` records how this project wants work to be done:
 
 - **Use the Haiku model for repository activities.** Git and GitHub housekeeping (staging, committing, pushing, branching, rebasing, opening and merging pull requests, and checking CI or deploy status) should go to a subagent running the Haiku model. Keep design, coding and debugging on the main model.
-- **Build commands.** `npm run dev` starts the local server, and `npm run build` type-checks and builds to `dist/`.
+- **Build commands.** `npm run dev` starts the local server, `npm run build` type-checks and builds to `dist/`, `npm test` runs the unit tests, and `npm run test:e2e` runs the browser smoke test.
 - **Keep `db/schema.sql` in step** with any database change.
 - **Deployment.** Vercel builds `main` on every push.
 
@@ -38,7 +38,8 @@ Keep generated files out of commits. `dist/` and `node_modules/` are in `.gitign
 
 Merge work through pull requests, as the history shows (`Merge pull request #1`, `#2`, `#3`). A pull request should:
 
-- pass `npm run build`,
+- pass `npm run build` and `npm test` (CI runs both, plus the browser smoke test, on every pull request),
+- add or update a unit test when you change pure logic (physics, drafting, stages, workouts, the race engine),
 - describe what changed and why, and
 - include the schema change, if there is one.
 

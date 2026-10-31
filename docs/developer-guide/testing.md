@@ -1,19 +1,61 @@
 # Testing
 
-This page covers what the repository checks automatically (the type check and the build), and how to check the interface by hand or headlessly, including the slow WebGL in headless browsers and how to mock Neon for signed-in screens.
+This page covers what the repository checks automatically (the type check, the build, the unit tests and a browser smoke test), and how to check the interface by hand or headlessly, including the slow WebGL in headless browsers and how to mock Neon for signed-in screens.
 
 ## What runs automatically
 
-The repository has no test suite. `package.json` has no test script, and there are no test files. The automated checks are:
+Every pull request and every push to `main` runs [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) on GitHub Actions:
 
-- **`npm run build`.** This runs `tsc --noEmit` on everything under `src/`, with strict mode, unused-variable checks and the Web Bluetooth types, and then `vite build`. A build that passes has no type errors and bundles every module.
-- **The Vercel build.** Vercel runs `npm run build` for every push, so a branch that doesn't build won't deploy.
+1. `npm ci`.
+2. **`npm run build`.** This runs `tsc --noEmit` on everything under `src/` (strict mode, unused-variable checks, the Web Bluetooth types) and then `vite build`.
+3. **`npm test`.** The unit tests (Vitest), below.
+4. **The smoke test.** `npx playwright install --with-deps chromium`, then `npx playwright test`: the built app in headless Chromium, below. On failure the workflow uploads the Playwright report and traces.
 
-Run the build before every commit:
+Vercel also runs `npm run build` for every push, so a branch that doesn't build won't deploy.
+
+Before every commit:
 
 ```bash
-npm run build
+npm run build && npm test
 ```
+
+## Unit tests (Vitest)
+
+`npm test` runs `vitest run`; `npm run test:watch` re-runs on save. The tests are in `tests/unit/` and cover the pure logic, with no browser and no WebGL:
+
+| File | Covers |
+| --- | --- |
+| `physics.test.ts` | `stepSpeed`: terminal speeds on the flat and on climbs, momentum, descents, mass and drag effects |
+| `draft.test.ts` | `draftSaving` by gap, `groupMax`, `lateralOverlap`, `draftFrom` (look-ahead, groups, ghosts, sideways) |
+| `drivetrain.test.ts` | gear tables, virtual gear offsets and cadence, automatic shifting, freewheeling |
+| `stages.test.ts` | every stage; each climb's finish distance and total gain match its published figures; hairpin signs; flat stages; the Hell of the West tour stages |
+| `workouts.test.ts` | `expand`, `targetAt`, TSS, the built-ins, `.zwo` export and import round trip, `.erg` / `.mrc` parsing, error messages |
+| `plans.test.ts` | every plan session points at a real workout or stage; `nextSession`, `complete` |
+| `gpx.test.ts` | `parseGpx` on a small fixture, `routeToStage` (length, climb, heading, no-elevation files) |
+| `raceSim.test.ts` | course lines and summit detection, points and bunch-time rules, seeded determinism, plausible finish times, a live player in the crossing orders |
+| `tour.test.ts` | the three classifications, jerseys, recording stages, `simulateStage` |
+| `ghost.test.ts` | ghost replay, interpolation and clamping, `raceTime` |
+
+Conventions:
+
+- Files that need a DOM (`DOMParser` for `.zwo` and GPX) start with `// @vitest-environment jsdom`; the rest run in Node.
+- Assert behaviour and sane ranges (a 250 W rider climbs an 8% grade at 10-16 km/h), not exact floating-point values, so a small tuning change to the physics doesn't break the suite.
+- Seeded simulations (`RaceSim`) are deterministic for a seed, so the tests can compare two runs exactly. Other work changes `draft.ts`, `physics.ts`, `peloton.ts` and `raceSim.ts` additively (optional parameters), so test public behaviour and leave room for new optional behaviour.
+- If a module can't be imported in Node because it touches the DOM or Three.js at import time, test the logic in a separate pure module rather than mocking the world.
+
+## Browser smoke test (Playwright)
+
+`npm run test:e2e` builds the app and runs `playwright test`. The test, `tests/e2e/smoke.spec.ts`, serves `vite preview` on port 4185 (override with `E2E_PORT`), then:
+
+- mocks Neon (`page.route` on the Auth and Data API hosts, signed out, empty tables),
+- skips the home page and the first-ride guide with `localStorage`,
+- starts a demo ride from ☰ Menu and checks the HUD fills in,
+- opens and closes each main dialog (stage, workouts, riders, leaderboard, time and weather, plans, kit, tour, settings, feedback, sign in),
+- fails on any page error or console error (blocked network requests are ignored).
+
+It takes about a minute with software WebGL. To keep that fast and reliable, the test throttles `requestAnimationFrame` to about 1 fps (set `E2E_FULL_FPS=1` to turn that off) and clicks through the DOM. When you add a main dialog or menu entry, add a line to `DIALOGS` in the spec.
+
+The Playwright config uses the default Playwright Chromium, which CI installs with `npx playwright install --with-deps chromium`. On a machine that has no downloaded browser but does have a Chromium at `/opt/pw-browsers/chromium` (the Claude Code sandbox), it uses that one.
 
 ## Check the interface by hand
 
@@ -25,7 +67,7 @@ Most of the app needs a person to check:
 
 ## Headless checks with Playwright
 
-Playwright isn't in the repository. You can add it for your own checks, outside the project if you prefer. These notes describe what to expect.
+For your own one-off checks (screenshots, a specific flow), use Playwright as the smoke test does. These notes describe what to expect.
 
 ### Start the app
 
@@ -48,9 +90,9 @@ Signed-in screens need Neon's Auth and Data API. Mock them with Playwright's `pa
 
 Fulfill each request with the shape the code expects. The shapes are in [`src/cloud/sync.ts`](../../src/cloud/sync.ts) (for example `Activity`, `FtpEntry`, `Feedback`, `AdminOverview`, `AdminUser`). Mocked responses only test the UI; they don't test Row-Level Security. Test RLS against a Neon branch, using the SQL in [Database schema](../reference/database-schema.md).
 
-### Keep checks out of the repository
+### Keep screenshots out of the repository
 
-If you add Playwright tests, keep them in a separate folder and decide whether they belong in the repository. Don't commit screenshots or traces; they can be large and can show personal details.
+Don't commit screenshots, traces or Playwright reports (`test-results/` and `playwright-report/` are in `.gitignore`); they can be large and can show personal details. New automated tests go in `tests/e2e/`.
 
 ## Checks on the database
 
@@ -62,7 +104,7 @@ Changes to `db/schema.sql` should be tested on a Neon branch before they reach t
 
 ## Checklist before a release
 
-1. `npm run build` passes.
+1. `npm run build` and `npm test` pass, and CI is green.
 2. The demo ride runs, and the stage finish screen appears on a finite stage.
 3. A workout runs in demo mode, and the summary appears at the end.
 4. Signed in: a ride saves, and the profile opens with its tabs.
