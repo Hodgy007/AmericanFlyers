@@ -46,6 +46,9 @@ export interface Stage {
   landmarks: LandmarkKind[];
   signs: StageSign[];
   hairpinWord?: string; // local word for a numbered hairpin, e.g. "Virage" or "Tornante"
+  baseAltitude?: number; // metres above sea level at the start, for the elevation readout
+  /** Set for routes the rider uploaded (GPX). */
+  uploaded?: boolean;
 }
 
 // --------------------------------------------------------------- helpers ----
@@ -63,12 +66,23 @@ function startRamp(d: number, m = 400) {
   return smoothstep(0, m, d);
 }
 
+/** Roadside farm landmarks, for lowland stages and routes. */
+export const FARM_LANDMARKS: LandmarkKind[] = [
+  { file: 'windmill.glb', every: 1900, first: 600, side: -1, offset: 26, size: 15, yaw: 0.4, clearance: 24 },
+  { file: 'barn.glb', every: 2300, first: 950, side: 1, offset: 34, size: 10, yaw: -0.6, clearance: 26 },
+  { file: 'farmhouse.glb', every: 2300, first: 1200, side: -1, offset: 32, size: 9, yaw: 0.6, clearance: 26 },
+  { file: 'diner.glb', every: 3700, first: 1900, side: -1, offset: 24, size: 6.5, yaw: 0.5, clearance: 24 },
+  { file: 'water-tower.glb', every: 4100, first: 2700, side: 1, offset: 46, size: 26, clearance: 18 },
+  { file: 'gas-station.glb', every: 4300, first: 1550, side: 1, offset: 23, size: 6.5, yaw: -0.5, clearance: 24 },
+  { file: 'silos.glb', every: 3100, first: 2150, side: 1, offset: 40, size: 18, yaw: -0.3, clearance: 26 },
+];
+
 const lowlandHills = (x: number, z: number) =>
   6 + fbm(x / 850, z / 850, 4) * 105 + (1 - Math.abs(fbm(x / 320 + 41, z / 320 - 7, 3))) * 28;
 
-const GANTRY: LandmarkKind = { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 };
-const startArch: LandmarkKind = { ...GANTRY, every: 1e9 };
-const finishArch = (at: number): LandmarkKind => ({ ...GANTRY, first: at, every: 1e9 });
+export const GANTRY: LandmarkKind = { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 };
+export const startArch: LandmarkKind = { ...GANTRY, every: 1e9 };
+export const finishArch = (at: number): LandmarkKind => ({ ...GANTRY, first: at, every: 1e9 });
 
 // ------------------------------------------------------------- Heartland ----
 
@@ -181,6 +195,7 @@ interface ClimbSpec {
   approachBends: number; // radians of gentle valley bends before the first hairpin
   finalBend: number; // radians of sweeping bend after the last hairpin
   hairpinWord: string;
+  baseAltitude: number;
   scenery: Omit<Scenery, 'wildHeight'>;
 }
 
@@ -298,6 +313,7 @@ function buildClimb(spec: ClimbSpec): Stage {
     landmarks: [startArch, finishArch(length)],
     signs: pins.map((p, i) => ({ d: p - 12, label: String(hairpins - i), style: 'hairpin' as const })),
     hairpinWord: spec.hairpinWord,
+    baseAltitude: spec.baseAltitude,
   };
 }
 
@@ -317,6 +333,7 @@ const alpe = buildClimb({
   approachBends: 0.08,
   finalBend: 0.6,
   hairpinWord: 'Virage',
+  baseAltitude: 723,
   scenery: {
     bumpAmp: 10,
     rockLine: 1250,
@@ -348,6 +365,7 @@ const stelvio = buildClimb({
   approachBends: 0.3,
   finalBend: 0.2,
   hairpinWord: 'Tornante',
+  baseAltitude: 915,
   scenery: {
     bumpAmp: 12,
     rockLine: 1150,
@@ -361,7 +379,7 @@ const stelvio = buildClimb({
 });
 
 /** Least-squares plane e = a + b·x + c·z through the points. */
-function fitPlane(pts: [number, number, number][]) {
+export function fitPlane(pts: [number, number, number][]) {
   let n = 0, sx = 0, sz = 0, se = 0, sxx = 0, szz = 0, sxz = 0, sxe = 0, sze = 0;
   for (const [x, z, e] of pts) {
     n++; sx += x; sz += z; se += e; sxx += x * x; szz += z * z; sxz += x * z; sxe += x * e; sze += z * e;

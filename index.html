@@ -14,6 +14,7 @@
       <div class="brand"><span class="star">★</span> American Flyers</div>
       <nav class="actions">
         <button id="btn-stage" title="Choose a stage">🏁 Stage</button>
+        <button id="btn-workouts" title="Workouts">🏋 Workouts</button>
         <button id="btn-trainer" class="primary">Connect trainer</button>
         <button id="btn-hr">Heart rate</button>
         <button id="btn-demo">Demo ride</button>
@@ -23,20 +24,25 @@
       </nav>
     </header>
 
-    <section class="hud" aria-live="off">
-      <div class="tile power">
-        <div class="label">Power</div>
-        <div class="value"><span id="m-power">0</span><small>W</small></div>
-        <div class="zone" id="m-zone">Z1</div>
-      </div>
-      <div class="tile"><div class="label">Cadence</div><div class="value"><span id="m-cadence">0</span><small>rpm</small></div></div>
-      <div class="tile"><div class="label">Speed</div><div class="value"><span id="m-speed">0.0</span><small id="u-speed">km/h</small></div></div>
-      <div class="tile"><div class="label">Heart rate</div><div class="value"><span id="m-hr">--</span><small>bpm</small></div></div>
-      <div class="tile"><div class="label">Distance</div><div class="value"><span id="m-distance">0.00</span><small id="u-distance">km</small></div></div>
-      <div class="tile"><div class="label">Time</div><div class="value"><span id="m-time">0:00</span></div></div>
-      <div class="tile"><div class="label">Grade</div><div class="value"><span id="m-grade">0.0</span><small>%</small></div></div>
-      <div class="tile"><div class="label">Climbed</div><div class="value"><span id="m-climb">0</span><small id="u-climb">m</small></div></div>
+    <section class="hud-wrap">
+      <div id="hud" class="hud" aria-live="off"></div>
+      <button id="btn-data" class="hud-edit" title="Choose data blocks" aria-label="Choose data blocks">✎</button>
     </section>
+
+    <aside id="workout-panel" class="workout-panel" hidden>
+      <div class="wp-head"><strong id="wp-name"></strong><button id="wp-stop" class="icon" title="End workout" aria-label="End workout">✕</button></div>
+      <div class="wp-step" id="wp-step"></div>
+      <div class="wp-target"><span id="wp-target">--</span><small>W</small><span class="wp-left" id="wp-left">0:00</span></div>
+      <div class="wp-next" id="wp-next"></div>
+      <div class="wp-controls">
+        <button id="wp-pause" title="Pause / resume">⏸</button>
+        <button id="wp-skip" title="Skip to next step">⏭</button>
+        <button id="wp-down" title="Easier: −5 %">−5%</button>
+        <span id="wp-intensity">100%</span>
+        <button id="wp-up" title="Harder: +5 %">+5%</button>
+      </div>
+      <div class="wp-mode" id="wp-mode"></div>
+    </aside>
 
     <div id="demo-panel" class="demo-panel" hidden>
       <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
@@ -56,7 +62,11 @@
 
     <dialog id="stages" class="stages-dialog">
       <form method="dialog">
-        <h2>Choose a stage</h2>
+        <div class="dialog-head">
+          <h2>Choose a stage</h2>
+          <label class="file-button">⬆ Upload GPX route<input type="file" id="route-upload" accept=".gpx,application/gpx+xml" multiple /></label>
+        </div>
+        <p class="hint">Practise any route: export it as a <code>.gpx</code> file from Strava, Komoot, RideWithGPS or Garmin and upload it. Its climbs and bends become the road. Routes are saved in this browser.</p>
         <div id="stage-list" class="stage-list"></div>
         <div class="dialog-actions"><button value="cancel">Close</button></div>
       </form>
@@ -67,12 +77,64 @@
         <div class="finish-flag">🏁</div>
         <h2 id="finish-title">Finished!</h2>
         <div id="finish-stats" class="finish-stats"></div>
-        <div class="dialog-actions">
-          <button id="finish-close">Keep riding</button>
-          <button id="finish-again" class="primary">Ride it again</button>
-        </div>
+        <div id="finish-actions" class="dialog-actions"></div>
       </div>
     </div>
+
+    <dialog id="data-blocks" class="data-dialog">
+      <form method="dialog">
+        <h2>Data blocks</h2>
+        <p class="hint">Tick the numbers to show across the top and use the arrows to order them. The first one is shown large. <span class="field-count"></span></p>
+        <div class="field-list"></div>
+        <div class="dialog-actions">
+          <button type="button" data-reset>Reset</button>
+          <button value="cancel" formnovalidate>Cancel</button>
+          <button value="save" class="primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="workouts" class="wide-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Workouts</h2>
+          <div class="head-actions">
+            <label class="file-button">⬆ Upload<input type="file" id="workout-upload" accept=".zwo,.erg,.mrc" multiple /></label>
+            <button type="button" id="workout-new" class="primary">＋ Create</button>
+          </div>
+        </div>
+        <p class="hint">Ride in ERG mode: the trainer holds the target power. Upload Zwift <code>.zwo</code>, <code>.erg</code> or <code>.mrc</code> files, or create your own. Your workouts are saved in this browser.</p>
+        <div id="workout-list" class="workout-list"></div>
+        <div class="dialog-actions"><button value="cancel">Close</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="creator" class="wide-dialog">
+      <form method="dialog">
+        <h2>Workout creator</h2>
+        <div class="creator-meta">
+          <label>Name <input name="name" maxlength="80" /></label>
+          <label>Description <input name="description" maxlength="300" /></label>
+        </div>
+        <canvas id="creator-graph" class="creator-graph"></canvas>
+        <div id="creator-summary" class="creator-summary"></div>
+        <div id="creator-blocks" class="creator-blocks"></div>
+        <div class="add-blocks">
+          <span>Add</span>
+          <button type="button" data-add="steady">Steady</button>
+          <button type="button" data-add="ramp">Ramp</button>
+          <button type="button" data-add="intervals">Intervals</button>
+          <button type="button" data-add="free">Free ride</button>
+        </div>
+        <p class="hint">Times as minutes or m:ss (e.g. 5, 1:30, 45s). Power as % of FTP.</p>
+        <div class="dialog-actions">
+          <button value="cancel" formnovalidate>Cancel</button>
+          <button type="button" id="creator-export">Export .zwo</button>
+          <button value="save">Save</button>
+          <button value="ride" class="primary">Save &amp; ride</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="settings">
       <form method="dialog">

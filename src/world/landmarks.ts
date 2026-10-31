@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { currentStage, gradeAt, roadPoint } from '../course';
-import { STAGES, type LandmarkKind } from '../stages';
+import { FARM_LANDMARKS, STAGES, type LandmarkKind } from '../stages';
 import { heightAt } from './terrain';
 
 // Roadside landmarks loaded from GLB models in public/models/. Each stage
@@ -55,7 +55,7 @@ export class Landmarks {
 
   constructor() {
     const loader = new GLTFLoader();
-    const files = new Set(STAGES.flatMap((s) => s.landmarks.map((k) => k.file)));
+    const files = new Set([...STAGES, { landmarks: FARM_LANDMARKS }].flatMap((s) => s.landmarks.map((k) => k.file)));
     for (const file of files) {
       loader.load(
         `${import.meta.env.BASE_URL}models/${file}`,

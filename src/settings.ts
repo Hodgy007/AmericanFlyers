@@ -6,6 +6,7 @@ export interface Settings {
   ftp: number;
   units: Units;
   difficulty: number; // 0–100, percentage of road grade sent to the trainer
+  dataFields: string[]; // data blocks shown across the top, in order
 }
 
 const KEY = 'americanflyers.settings';
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ftp: 200,
   units: 'metric',
   difficulty: 50,
+  dataFields: ['power', 'cadence', 'speed', 'hr', 'distance', 'time', 'grade', 'climbed'],
 };
 
 export function loadSettings(): Settings {

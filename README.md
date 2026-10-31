@@ -12,13 +12,17 @@ An indoor cycling app that runs in your browser. Connect a Wahoo smart trainer o
   - *Alpe d'Huez*: 14 km at 8% from Le Bourg-d'Oisans with real per-kilometre gradients (swi-cycling.com) and all 21 numbered hairpins.
   - *Stelvio Pass*: 24.5 km at 7.5% from Prato allo Stelvio to 2758 m through 48 numbered hairpins. Totals match published figures; the per-kilometre shape is approximated.
 
+  - *Your routes*: upload a `.gpx` file (from Strava, Komoot, RideWithGPS, Garmin…) in the stage picker to practise it. The road follows its bends and its smoothed elevation profile (gradients capped at 25 %), with scenery scaled to the route: farmland for flat routes, forests, rock and snow at their real altitudes for mountain ones. Routes are saved in the browser.
+
   Stages with a finish line count down the distance, show the next hairpin, and end at a checkered line under the arch with your time, average power and speed.
 - **3D world (Three.js).** A winding road through low-poly hills, forests, fields and distant mountains, with sunlight, shadows, haze and clouds. The terrain is generated on the fly as you ride, so the road never ends.
 - **3D rider.** A rigged rider model (generated with Higgsfield) posed on the bike every frame: legs follow the pedals at your real cadence, hands on the hoods, head up. The wheels turn at your virtual speed.
 - **Roadside landmarks:** a start/finish arch, red barn, farmhouse, windmill, retro diner and water tower, generated with Higgsfield (image → 3D) and placed along the route. See `public/models/README.md` to add or swap models.
 - **Three camera views:** chase, side-on and the rider's own view. Switch with the 🎥 button or the **C** key.
 - **Realistic speed.** Your watts become speed through a physics model with gravity, rolling resistance, air drag and momentum, using your weight.
-- **Ride stats.** Power with a 3-second average and FTP zone, cadence, speed, heart rate, distance, moving time, grade and elevation climbed, plus a 5 km elevation profile ahead.
+- **Data blocks** (✎ next to the numbers): choose which of 24 fields to show (power, 1 s power, W/kg, average, normalized and max power, workout target, interval and workout time left, cadence, speed, heart rate, distance, km to go, time, grade, climbing, elevation, energy, TSS) and their order. The first one is shown large. Saved in the browser.
+- **Workouts** (🏋 button): ride structured workouts in ERG mode, where the trainer holds the target power. Built-ins include Endurance, Sweet Spot, VO2 max, Over-Unders and a Ramp FTP test that estimates your FTP. Upload Zwift `.zwo`, `.erg` or `.mrc` files. While riding: pause, skip, ±5 % intensity, a workout graph with your power trace, and a summary (avg/normalized power, TSS, kJ) at the end.
+- **Workout creator**: build workouts from steady, ramp, interval and free-ride blocks with a live preview, TSS estimate and watts at your FTP; save them to your library or export as `.zwo`.
 - **Heart-rate strap** support (optional).
 - **Demo ride** mode for trying it without a trainer: set power with a slider or the ↑/↓ keys.
 - Metric and imperial units. Settings are saved in the browser.
@@ -59,7 +63,12 @@ src/
   ble/trainer.ts     FTMS + Cycling Power connection, packet parsing, grade control
   ble/heartRate.ts   Heart-rate strap
   physics.ts         Power → speed model
+  stats.ts           Ride statistics (averages, normalized power, TSS, best minute)
+  hud.ts             Data blocks and the data-block chooser
+  workouts/          Workout model, built-ins, .zwo/.erg/.mrc import + .zwo export,
+                     library (browser storage), player, graph, library + creator UI
   stages.ts          Stage definitions: profiles, bends, scenery, landmarks, signs
+  routes/            GPX parsing, route → stage conversion, saved routes
   course.ts          The current stage's road: elevation, grade, heading, centreline
   world/world.ts     Three.js renderer, lighting, cameras; places the rider each frame
   world/terrain.ts   Hills and forests built in tiles around the rider
