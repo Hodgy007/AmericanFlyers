@@ -1,4 +1,7 @@
 import './style.css';
+import { initMonitoring, setMonitoringContext, setMonitoringUser } from './monitoring';
+
+initMonitoring(); // first, so it catches errors while the app starts
 import { bluetoothAvailable, connectTrainer, type Trainer, type TrainerReading } from './ble/trainer';
 import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
 import { currentStage, elevationAt, gradeAt, setStage } from './course';
@@ -753,6 +756,7 @@ function stageClimbing(stage: Stage) {
 
 function chooseStage(stage: Stage) {
   setStage(stage);
+  setMonitoringContext({ stage: stage.id });
   const url = new URL(location.href);
   url.searchParams.set('stage', stage.id);
   url.searchParams.delete('start');
@@ -1187,6 +1191,7 @@ initRidersUi({
 });
 
 onAccountChange(async (a) => {
+  setMonitoringUser(a?.id ?? null);
   if (!a) {
     forgetLocalCopies();
     ghost = null;

@@ -10,15 +10,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <script>
-      // Two home page heroes take turns, one per visit: the rider, and the pit bull chase.
+      // The home page hero: the pit bull chase for now. ?hero=rider shows the
+      // original rider hero instead (both are kept in public/images).
       (function () {
-        var hero = 'rider';
-        try {
-          hero = localStorage.getItem('americanflyers.hero') === 'rider' ? 'dog' : 'rider';
-          localStorage.setItem('americanflyers.hero', hero);
-        } catch (e) {
-          hero = Math.random() < 0.5 ? 'dog' : 'rider';
-        }
+        var asked = new URLSearchParams(location.search).get('hero');
+        var hero = asked === 'rider' ? 'rider' : 'dog';
         document.documentElement.dataset.hero = hero;
         var base = hero === 'dog' ? '/images/hero-dog' : '/images/hero';
         [[base + '.jpg', '(min-width: 769px)'], [base + '-768.jpg', '(max-width: 768px)']].forEach(function (p) {

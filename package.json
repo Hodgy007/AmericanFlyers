@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@sentry/vite-plugin": "^11.10.0",
     "@types/three": "^0.187.0",
     "@types/web-bluetooth": "^0.0.22",
     "typescript": "^5.9.3",
@@ -16,6 +17,7 @@
   },
   "dependencies": {
     "@neon/neon-js": "^0.10.2",
+    "@sentry/browser": "^11.10.0",
     "three": "^0.187.0"
   }
 }
