@@ -26,7 +26,8 @@ The two endpoints are in [`src/cloud/client.ts`](../../src/cloud/client.ts). The
 | `ftp_history` | Each FTP entry, with its source. | FTP changes, sign-up. |
 | `feedback` | Ideas and bug reports, with status and reply. | Riders (insert). Admins (update, delete). |
 | `admins` | Admin email addresses. | Owner, through SQL only. |
-| `live_riders` | Where each signed-in rider is right now: stage, distance, speed, power, cadence. | `ride_presence()` only. |
+| `live_riders` | Where each signed-in rider is right now: stage, distance, speed, power, cadence, and kit colours. | `ride_presence()` only. |
+| `ride_ons` | Ride-ons (an emoji from one rider to another), kept for a day. | `send_ride_on()` only. |
 
 `activities` also has `finish_s`: the moving time from start line to finish line, set only for whole-stage rides. It feeds the leaderboards.
 
@@ -39,6 +40,7 @@ RLS is enabled on every table:
 - **Rider tables** (`profiles`, `workouts`, `routes`, `activities`, `ftp_history`) have one policy, `<table>_owner`, for all commands to `authenticated`. It requires `user_id = auth.user_id()` both to read and to write. Those tables grant `select`, `insert`, `update` and `delete` to `authenticated`, and revoke everything from `anonymous`.
 - **`feedback`** has four policies: riders insert their own rows; riders and admins can read; admins can update; admins can delete. Riders have no update or delete policy, so they can't change or remove feedback after sending it.
 - **`live_riders`** has RLS enabled, no policies and no grants. Only `ride_presence()` and `leave_ride()` touch it.
+- **`ride_ons`** is the same: RLS on, no policies, no grants. Only `send_ride_on()` and `my_ride_ons()` touch it.
 - **`admins`** has RLS enabled and no policies, and the schema grants nothing on it. The app's roles can't read it. Only the security-definer functions do, and the owner through SQL.
 
 For the full list, see [Security](security.md).
@@ -72,14 +74,18 @@ Also `security definer` with `search_path = ''`, for signed-in riders only.
 
 | Function | Called from | What it does |
 | --- | --- | --- |
-| `ride_presence(p_stage, p_distance, p_speed, p_power, p_cadence, p_visible)` | `src/cloud/presence.ts`, every 2 s while riding | Upserts the caller's row (values clamped), deletes rows older than 10 minutes, and returns up to 30 other riders on the stage seen in the last 15 s: hashed id, *First L.* name, distance, speed, power, cadence and the age of the position. |
+| `ride_presence(p_stage, p_distance, p_speed, p_power, p_cadence, p_visible, p_kit)` | `src/cloud/presence.ts`, every 2 s while riding | Upserts the caller's row (values clamped; `p_kit` optional and kept only if it is three hex colours), deletes rows older than 10 minutes, and returns up to 30 other riders on the stage seen in the last 15 s: hashed id, *First L.* name, distance, speed, power, cadence, the age of the position and their kit. |
+| `send_ride_on(p_to, p_emote)` | `src/cloud/rideOns.ts`, from `src/rideOnsUi.ts` | Sends 👍 🔥 💪 or 👋 to the rider whose hashed id is `p_to` (seen in the last 15 s). Refuses yourself, unknown or banned targets, more than one per target per 20 s, and more than 20 a minute. |
+| `my_ride_ons(p_since)` | `src/cloud/rideOns.ts`, every 4 s while riding | Ride-ons sent to the caller after `p_since` (default: the last minute), oldest first, up to 20: id, sender's hashed id and short name, emoji, time. Also deletes rows older than a day. |
 | `leave_ride()` | When the tab is hidden or closed, and when *Ride together* is switched off | Deletes the caller's row. |
 | `stage_leaderboard(p_stage, p_since)` | `src/leaderboardUi.ts`, and after a whole-stage finish | Each rider's fastest `finish_s`, ranked; top 25 plus the caller. |
 | `stage_ghost(p_activity)` | Racing a ghost | The distance trace (`samples -> 'distance'`) and time of one finished ride. Nothing else from it. |
 
 The browser predicts each rider's position between updates as `distance + speed × (time since received + age)`, capped at 6 s, and the world eases the drawn rider onto it. Drafting is worked out in the browser from these positions; see [Physics and stats](physics-and-stats.md#drafting).
 
-Neon Realtime (live queries) isn't available in the project's region (`eu-west-2`) and doesn't yet support row-level security, so riding together polls the Data API instead. Each rider makes one small call every 2 seconds.
+Neon Realtime (live queries) isn't available in the project's region (`eu-west-2`) and doesn't yet support row-level security, so riding together polls the Data API instead. Each rider makes one small call every 2 seconds, plus one every 4 seconds to look for ride-ons.
+
+The browser passes the sender's hashed id through unchanged, so a ride-on received from the rider with id `x` can be drawn over `x`'s rider in the world. `ride_presence()` once took six arguments; the old call still works because `p_kit` defaults to null.
 
 ## Sync rules
 

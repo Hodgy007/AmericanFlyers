@@ -79,6 +79,7 @@
             <button id="btn-camera" role="menuitem" title="Change camera (C)">🎥 Chase view</button>
             <button id="btn-leaderboard" role="menuitem" title="Leaderboard for this stage">🏆 Leaderboard</button>
             <button id="btn-menu-plans" role="menuitem">📅 Training plans</button>
+            <button id="btn-menu-kit" role="menuitem" title="Design your jersey and bike">🎨 My kit</button>
             <hr />
             <button id="btn-sound" role="menuitem" title="Sound on/off (M)">🔊 Sound on</button>
             <button id="btn-fullscreen" role="menuitem" title="Full screen (F)">⛶ Full screen</button>
@@ -420,6 +421,47 @@
         <div class="dialog-actions">
           <button type="button" id="riders-settings">Settings</button>
           <button type="button" id="riders-share" class="primary">Copy link to this stage</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="kit-dialog" class="kit-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>My kit</h2>
+          <button value="cancel" class="icon" aria-label="Close">✕</button>
+        </div>
+        <p class="muted small">Your jersey and bike, on your rider and on other riders’ screens. Changes show on your rider as you make them.</p>
+        <svg id="kit-preview" class="kit-preview" viewBox="0 0 300 170" role="img" aria-label="Your bike and jersey">
+          <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="70" cy="122" r="38" stroke="#20242c" stroke-width="5" />
+            <circle cx="230" cy="122" r="38" stroke="#20242c" stroke-width="5" />
+            <circle cx="70" cy="122" r="30" stroke="#8b93a3" stroke-width="1" stroke-dasharray="2 5" />
+            <circle cx="230" cy="122" r="30" stroke="#8b93a3" stroke-width="1" stroke-dasharray="2 5" />
+            <path d="M70 122 L140 122 L120 76 L70 122 M140 122 L206 98 M120 76 L202 76 M206 98 L202 76" stroke="var(--frame)" stroke-width="6" />
+            <path d="M206 98 L230 122" stroke="#20242c" stroke-width="4" />
+            <path d="M202 76 L214 70 L226 80" stroke="#20242c" stroke-width="4" />
+            <path d="M112 66 L128 66" stroke="#20242c" stroke-width="6" />
+            <path d="M112 66 L156 94 L146 120" stroke="var(--accent)" stroke-width="14" />
+            <path d="M156 94 L146 120" stroke="#e9c4a5" stroke-width="7" />
+            <path d="M118 68 L186 52" stroke="var(--jersey)" stroke-width="28" />
+            <path d="M186 54 L214 74" stroke="var(--jersey)" stroke-width="11" />
+            <path d="M212 73 L218 77" stroke="#16181d" stroke-width="9" />
+          </g>
+          <circle cx="206" cy="36" r="11" fill="#e9c4a5" />
+          <path d="M194 36 A12 12 0 0 1 218 34 L196 38 Z" fill="#f4f6fa" stroke="var(--jersey)" stroke-width="3" />
+        </svg>
+        <h3 class="riders-sub">Presets</h3>
+        <div id="kit-presets" class="kit-presets"></div>
+        <h3 class="riders-sub">Colours</h3>
+        <div class="kit-colours">
+          <label>Jersey <input name="jersey" type="color" value="#14213d" /></label>
+          <label>Second colour <input name="accent" type="color" value="#d62839" /></label>
+          <label>Bike frame <input name="frame" type="color" value="#1f3c88" /></label>
+        </div>
+        <div class="dialog-actions">
+          <button value="cancel">Cancel</button>
+          <button value="save" class="primary">Save kit</button>
         </div>
       </form>
     </dialog>

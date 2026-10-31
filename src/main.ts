@@ -37,6 +37,10 @@ import { initPlansUi } from './plansUi';
 import { initOnboarding, onboarded } from './onboarding';
 import { workoutById } from './workouts/library';
 import type { OtherRider } from './world/others';
+import { kitString, onLookChange, playerLook, setPlayerKit } from './kit';
+import { initKitUi } from './kitUi';
+import { RideOns } from './cloud/rideOns';
+import { initRideOnsUi } from './rideOnsUi';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -66,6 +70,7 @@ const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
 let draft: Draft | null = null; // the rider just ahead, if any
 let draftSaving = 0; // fraction of air drag saved, eased
+let roadRiders: OtherRider[] = []; // live riders and pro teams on the road now (for ride-ons)
 const rideWorkout = { started: null as string | null, completed: null as string | null };
 
 // ------------------------------------------------------------- devices ----
@@ -221,6 +226,9 @@ function markerConfig() {
 // `?stage=alpe-dhuez` picks the stage; the stage picker updates it.
 setStage(stageById(new URLSearchParams(location.search).get('stage')));
 const world = new World($<HTMLCanvasElement>('scene'), markerConfig());
+// Your kit (src/kit.ts): the world's rider follows it, including any tour jersey laid over it.
+onLookChange((look) => world.setPlayerLook(look));
+setPlayerKit(settings.kit);
 const profileCanvas = $<HTMLCanvasElement>('profile');
 // `?start=12` begins the ride 12 km in, handy for jumping to the hills.
 const startKm = Number(new URLSearchParams(location.search).get('start'));
@@ -257,6 +265,7 @@ function frame(now: number) {
     peloton.update(dt);
     liveRiders.push(...peloton.riders());
   }
+  roadRiders = liveRiders;
   draft = draftFrom(ride.distance, liveRiders);
   draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
 
@@ -1021,6 +1030,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'c' || e.key === 'C') cycleCamera();
   if (e.key === 'm' || e.key === 'M') setSound(!settings.sound);
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) rideOnsUi.thumbsUpAhead();
   if (e.key === '=' || e.key === '+' || e.key === ']') shift(1);
   if (e.key === '-' || e.key === '_' || e.key === '[') shift(-1);
   if (!demo) return;
@@ -1069,7 +1079,7 @@ onSyncError((msg) => toast(msg, 6000));
 
 const presence = new Presence(
   () => settings.rideTogether && !document.body.classList.contains('at-home')
-    ? { stageId: currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence }
+    ? { stageId: currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence, kit: kitString(playerLook()) }
     : null,
   () => true,
 );
@@ -1194,8 +1204,30 @@ initLeaderboardUi({
 
 peloton.reset(ride.distance);
 
+// Ride-ons (4-second poll for the ones sent to you) and the kit dialog.
+const rideOns = new RideOns(() => settings.rideTogether && !document.body.classList.contains('at-home'));
+const rideOnsUi = initRideOnsUi({
+  rideOns,
+  riders: () => roadRiders,
+  myDistance: () => ride.distance,
+  showEmote: (id, emoji) => world.showEmote(id, emoji),
+  toast,
+});
+const kitUi = initKitUi({
+  current: () => settings.kit,
+  save: (kit) => {
+    settings = { ...settings, kit };
+    saveSettings(settings);
+    pushSettings(settings);
+    setPlayerKit(kit);
+    toast(kit ? 'Kit saved. You’re riding in your colours.' : 'Back in the American Flyers stars and stripes.');
+  },
+});
+$('btn-menu-kit').addEventListener('click', () => kitUi.open());
+
 initRidersUi({
   presence,
+  sendRideOn: (id, name, emote) => rideOnsUi.send(id, name, emote),
   teams: () => settings.proTeams ? peloton.groups.map((g) => ({
     id: g.id, name: g.team.name, color: g.team.color, wkg: g.wkg, riders: g.riders.length,
     distance: g.distance, back: peloton.back(g) + 3.5, speedMs: g.speed,
@@ -1220,6 +1252,7 @@ onAccountChange(async (a) => {
     if (remote) {
       settings = { ...settings, ...remote };
       saveSettings(settings);
+      setPlayerKit(settings.kit);
       hud.setFields(settings.dataFields);
       world.setMarkers(markerConfig());
       placeWorkoutPanel();

@@ -201,6 +201,7 @@ Banning another admin is allowed by this function. See [Security](../developer-g
 | Set status or reply | `neon.from('feedback').update(...)` |
 | Delete feedback | `neon.from('feedback').delete()` |
 | Riding together | `neon.rpc('ride_presence', …)` and `neon.rpc('leave_ride')` in `src/cloud/presence.ts` |
+| Ride-ons | `neon.rpc('send_ride_on', { p_to, p_emote })` and `neon.rpc('my_ride_ons', { p_since })` in `src/cloud/rideOns.ts` |
 | Leaderboard | `neon.rpc('stage_leaderboard', { p_stage, p_since })` |
 | Ghost | `neon.rpc('stage_ghost', { p_activity })` |
 
@@ -218,7 +219,22 @@ Where each signed-in rider is right now. No direct access: row-level security is
 | `speed` | `real` | m/s, clamped to 0–40. |
 | `power` | `smallint` | Watts, clamped to 0–3,000. |
 | `cadence` | `smallint` | rpm, clamped to 0–250. |
+| `kit` | `text` | Nullable. The rider's kit as `#jersey,#accent,#frame` (three `#rrggbb` colours, lower case). `ride_presence()` stores it only if it matches that pattern; otherwise null (the default kit). |
 | `updated_at` | `timestamptz` | Set on every update. |
+
+### `ride_ons`
+
+Ride-ons: a quick emoji from one rider to another. No direct access: row-level security is on with no grants (on the table and its sequence), and only `send_ride_on()` and `my_ride_ons()` read or write it.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `bigserial` | Primary key. |
+| `from_user` | `text` | The sender's user id. |
+| `to_user` | `text` | The receiver's user id. |
+| `emote` | `text` | One of 👍 🔥 💪 👋 (check constraint). |
+| `created_at` | `timestamptz` | Default `now()`. |
+
+Indexes on `(to_user, created_at)` and `(from_user, created_at)`.
 
 ### `activities.finish_s`
 
@@ -228,7 +244,9 @@ Where each signed-in rider is right now. No direct access: row-level security is
 
 | Function | Who | What it does |
 | --- | --- | --- |
-| `ride_presence(p_stage, p_distance, p_speed, p_power, p_cadence, p_visible)` | Signed in | Records the caller's position (or removes it when `p_visible` is false), deletes rows older than 10 minutes, and returns up to 30 other riders on the stage seen in the last 15 s: `md5` of their id, short name, distance, speed, power, cadence and the age of the position in ms. Banned riders are left out. |
+| `ride_presence(p_stage, p_distance, p_speed, p_power, p_cadence, p_visible default true, p_kit default null)` | Signed in | Records the caller's position and kit (or removes the row when `p_visible` is false), deletes rows older than 10 minutes, and returns up to 30 other riders on the stage seen in the last 15 s: `md5` of their id, short name, distance, speed, power, cadence, the age of the position in ms and `kit`. Banned riders are left out. The six-argument call from before kits still works. |
+| `send_ride_on(p_to, p_emote)` | Signed in | Records a ride-on to the rider whose `md5` id is `p_to` and who was seen in the last 15 s. Raises an error for an unknown emoji, an unknown, stale or banned target, yourself, a second ride-on to the same rider within 20 s, or more than 20 in a minute. Returns nothing. |
+| `my_ride_ons(p_since default now() - 1 minute)` | Signed in | Ride-ons sent to the caller after `p_since`, oldest first, up to 20: `id`, `from_id` (`md5` of the sender, as in `ride_presence()`), `name` (short name), `emote` and `created_at`. Also deletes rows older than 1 day. |
 | `leave_ride()` | Signed in | Removes the caller's row. |
 | `short_name(full_name)` | Internal | *First L.*, or *Rider* when empty. |
 | `stage_leaderboard(p_stage, p_since)` | Signed in | Each rider's fastest `finish_s` on the stage (since `p_since` if given), ranked, top 25 plus the caller. Returns rank, activity id, short name, time, average power, date and `is_me`. |

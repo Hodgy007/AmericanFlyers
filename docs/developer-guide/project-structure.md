@@ -46,7 +46,10 @@ This page lists every file and folder in the repository, with a one-line summary
 | `plans.ts` | The training plans and their progress logic. |
 | `plansUi.ts` | The training plans dialog. |
 | `onboarding.ts` | The three-step first-ride guide. |
-| `ridersUi.ts` | The 👥 button and the *Riding now* list. |
+| `ridersUi.ts` | The 👥 button and the *Riding now* list, with the ride-on emoji buttons on each rider. |
+| `rideOnsUi.ts` | Ride-ons in the app: sending (from 👥 and the **R** key), the toast for ones you get, the floating emoji, and pro riders replying. |
+| `kit.ts` | Your kit (jersey, second colour, frame): the presets, validation, the kit string sent to the server, and `setTourJersey()` for tours. |
+| `kitUi.ts` | The ☰ Menu → 🎨 *My kit* dialog. |
 | `leaderboardUi.ts` | The 🏆 leaderboard dialog and *Race* buttons. |
 | `style.css` | All styles, including the layout for phones. |
 | `hud.ts` | The 24 data-block fields, the HUD tiles, and the data-block chooser dialog. |
@@ -78,7 +81,8 @@ This page lists every file and folder in the repository, with a one-line summary
 | `cloud/client.ts` | The Neon client, configured from the default endpoints or `VITE_` variables. |
 | `cloud/account.ts` | The signed-in account: session restore, Google sign-in, email sign-up and sign-in, password reset, sign-out and rename. |
 | `cloud/emailAuth.ts` | The email form: *Create account* (name, email, password, weight, optional FTP), *Sign in* and *Forgot password*. |
-| `cloud/presence.ts` | Riding together: sends your position every 2 s and predicts the other riders' positions. |
+| `cloud/presence.ts` | Riding together: sends your position and kit every 2 s and predicts the other riders' positions. |
+| `cloud/rideOns.ts` | Ride-ons: `send_ride_on()` and the 4 s poll of `my_ride_ons()`. |
 | `cloud/sync.ts` | Syncs settings, workouts and routes; saves and reads rides and FTP history; feedback; leaderboards and ghosts; and the admin calls. |
 | `cloud/recorder.ts` | Records one sample per second while moving, and writes `.tcx` files. |
 | `cloud/achievements.ts` | Works out the 17 achievements from rides and FTP history. |

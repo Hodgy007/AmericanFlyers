@@ -62,6 +62,8 @@ Don't add a service-role key, a database password or an API key to the client co
 ## Riding together, leaderboards and ghosts
 
 - `live_riders` can't be read or written directly. `ride_presence()` writes only the caller's own row, clamps every value, and returns other riders' **hashed** ids and **short names** (*First L.*), never emails or full names.
+- `ride_ons` can't be read or written directly. `send_ride_on()` takes only a hashed id and one of four emoji, resolves it against riders seen in the last 15 s, and rate-limits the caller. `my_ride_ons()` returns only the caller's own ride-ons, with the sender's hashed id and short name. There is no free text.
+- A rider's kit is stored as `#rrggbb,#rrggbb,#rrggbb`; `ride_presence()` keeps it only if it matches that pattern, and the browser re-checks it before drawing.
 - `stage_ghost()` returns only a ride's distance trace and time, never its power, heart rate or other samples.
 - Positions are shared only while a rider is signed in, on a stage, and has **Ride together** on. Hiding the tab removes the row; stale rows are deleted after 10 minutes.
 

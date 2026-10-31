@@ -905,3 +905,17 @@ body.at-home .draft-panel { display: none; }
 .riders-sub { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .riders-sub[hidden] { display: none; }
 .team-row .rider-dot { background: var(--team, #888); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+
+/* ------------------------------------------- ride-ons and my kit ---- */
+.rider-emotes { grid-column: 2 / -1; display: flex; gap: 6px; margin-top: 6px; }
+.rider-row .rider-emotes button.emote { grid-area: auto; margin: 0; padding: 2px 10px; font-size: 16px; line-height: 1.4; }
+.kit-dialog { width: min(94vw, 460px); max-height: 94vh; overflow-y: auto; }
+.kit-preview { display: block; width: 100%; max-height: 150px; margin: 6px 0; border-radius: 12px; background: rgba(255, 255, 255, 0.05); --jersey: #14213d; --accent: #d62839; --frame: #1f3c88; }
+.kit-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.kit-preset { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; text-align: left; }
+.kit-preset.selected { border-color: var(--blue, #4c8df6); box-shadow: inset 0 0 0 1px var(--blue, #4c8df6); }
+.kit-swatch { display: inline-flex; flex: none; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.3); }
+.kit-swatch i { display: block; width: 10px; height: 18px; }
+.kit-colours { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kit-colours label { margin: 0; }
+.kit-colours input[type='color'] { display: block; width: 100%; height: 38px; margin-top: 4px; padding: 2px; background: #18233f; border: 1px solid var(--glass-border); border-radius: 8px; cursor: pointer; }

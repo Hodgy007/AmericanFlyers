@@ -41,6 +41,8 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **FTP history**: every change (by hand, from a ramp test, or at sign-up) is recorded and charted.
 - **Feedback** (💬 button): riders send ideas and bug reports and see the status and any reply.
 - **Riding together** (👥 button): signed-in riders on the same stage see each other on the road, with name tags, a *Riding now* list with gaps, and *Ride with* to join someone. Switch it off in Settings.
+- **Ride-ons** (👍 🔥 💪 👋): send a quick emoji to a rider from 👥, or press **R** for a 👍 to the rider ahead. It floats over their head on the road. No free-text chat.
+- **My kit** (☰ Menu → 🎨): choose your jersey, second colour and bike frame, or a preset. Your rider wears it and other riders see it.
 - **Pro teams**: five computer-ridden teams with comedic near-miss names ride every stage two by two at 2.0–4.2 W/kg, in their own kit. Join one from 👥 and sit in.
 - **Drafting**: ride close behind someone and you save up to about a third of your air drag (and a smart trainer gets lighter). A slipstream gauge shows the gap to the wheel ahead and the watts you're saving.
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.

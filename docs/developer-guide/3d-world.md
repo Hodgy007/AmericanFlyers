@@ -69,7 +69,11 @@ The rig needs these bone names: `Hips`, `Spine02`, `Spine01`, `Spine`, `neck`, `
 
 If `rider.glb` fails to load, the built-in primitive rider is used instead. The console logs *Rider model not found* and carries on.
 
-`rider.glb` is loaded once and cloned (with `SkeletonUtils.clone`) for every rider on the road. `RiderModel` takes an optional look: a frame and jersey colour (other riders get one picked from their id), or `ghost`, which makes every material see-through and blue-tinted and turns off its shadows.
+`rider.glb` is loaded once and cloned (with `SkeletonUtils.clone`) for every rider on the road. `RiderModel` takes an optional look: a frame and jersey colour (other riders get one picked from their id), a `kit` (the rigged rider's navy and red become two chosen colours), or `ghost`, which makes every material see-through and blue-tinted and turns off its shadows.
+
+### Changing a rider's look at runtime
+
+`RiderModel.setLook({ frame, jersey, kit })` changes colours without reloading the model: the frame and jersey materials are recoloured in place (a shared default material is first swapped for the rider's own), and the kit is re-applied to the rigged rider (`null` restores the stars and stripes; each mesh remembers its original material). `World.setPlayerLook()` calls it for your rider. [`src/kit.ts`](../../src/kit.ts) holds your kit and a tour-jersey override: `setTourJersey([main, second])` lays a jersey over the saved kit, `setTourJersey(null)` removes it, and `onLookChange()` (used by `main.ts`) hands the result to the world. The look sent to other riders includes the tour jersey.
 
 ## Other riders and ghosts
 
@@ -81,6 +85,8 @@ If `rider.glb` fails to load, the built-in primitive rider is used instead. The 
 - Lanes are spread across the right half of the road from the rider's id. A rider within 2.6 m of you moves out a lane to pass; a rider 2.6–14 m ahead lines up in your lane, so drafting looks like it should. The ghost rides a lane to your left.
 - Name tags are canvas sprites that stay the same size on screen. They're hidden within 3.5 m of the camera and beyond 260 m.
 - Posing the rigged rider is the costly part, so riders more than 220 m away aren't re-posed.
+- A live rider's kit comes with their position (`jersey`, `accent`, `frame` on `OtherRider`); if it changes while they're on the road, `setLook()` updates their model. Riders without a kit get colours picked from their id.
+- `showEmote(id, emoji)` floats an emoji sprite (one shared canvas texture per emoji) up from a rider's head over about 2.6 s, for ride-ons. It returns false if that rider isn't drawn.
 - Riders not heard from are removed, and their materials and textures disposed.
 
 ## Sky

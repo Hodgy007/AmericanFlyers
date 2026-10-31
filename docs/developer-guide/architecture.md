@@ -30,6 +30,7 @@ Four things run on a timer or event, alongside the frame loop:
 | Frame loop | Every animation frame (`requestAnimationFrame`) | Advances the ride, updates the 3D scene, and redraws the elevation strip every 200 ms. | `frame()` in `src/main.ts` |
 | Trainer control | 1 second, and at once after a gear change | Sends grade (plus the virtual gear and the draft's wind factor) or ERG target power to the trainer, if they've changed. | `controlTrainer()` in `src/main.ts` |
 | Riding together | 2 seconds | Sends your position and fetches the other riders on your stage. | `Presence` in `src/cloud/presence.ts` |
+| Ride-ons | 4 seconds | Fetches ride-ons other riders have sent you (only while signed in and riding). | `RideOns` in `src/cloud/rideOns.ts` |
 | Autosave | 5 minutes | Saves a long ride while signed in. | `setInterval` in `src/main.ts` |
 | Settings sync | 800 ms after the last change | Writes settings to the account. | `pushSettings` in `src/cloud/sync.ts` |
 

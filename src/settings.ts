@@ -1,4 +1,5 @@
 import type { PlanProgress } from './plans';
+import type { Kit } from './kit';
 
 export type Units = 'metric' | 'imperial';
 
@@ -17,6 +18,7 @@ export interface Settings {
   plan: PlanProgress | null; // the training plan being followed
   hudPosition: 'left' | 'center' | 'right'; // where the data blocks sit
   proTeams: boolean; // computer-ridden pro teams on the road
+  kit: Kit | null; // your jersey and bike colours (null = the default stars and stripes)
 }
 
 const KEY = 'americanflyers.settings';
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   plan: null,
   hudPosition: 'center',
   proTeams: true,
+  kit: null,
 };
 
 export function loadSettings(): Settings {

@@ -24,6 +24,7 @@ The **☰ Menu** holds:
 | **🎥 Chase view** (or Side view, Rider's view) | Changes the camera. The label shows the current view. Shortcut: **C**. |
 | **🏆 Leaderboard** | The leaderboard for this stage. See [Leaderboards and ghosts](leaderboards-and-ghosts.md). |
 | **📅 Training plans** | See [Training plans](training-plans.md). |
+| **🎨 My kit** | Design your jersey and bike colours. See [My kit](my-kit.md). |
 | **🔊 Sound on** / **🔇 Sound off** | Shortcut: **M**. See [Sound and virtual shifting](sound-and-shifting.md). |
 | **⛶ Full screen** | Shortcut: **F**. |
 | **⬇ Install app** | Shown when your browser can install the app. See [Installing the app](installing-the-app.md). |
