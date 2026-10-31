@@ -40,7 +40,9 @@ This page lists every file and folder in the repository, with a one-line summary
 | `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up, and *Ride without an account*. |
 | `drivetrain.ts` | The virtual drivetrain: automatic gears that keep leg speed in step with road speed, the 24 virtual-shifting gears, crank angle and bike rock. |
 | `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish. |
-| `draft.ts` | Drafting: the drag saved at a given gap behind another rider, and the rider just ahead. |
+| `draft.ts` | Drafting: the drag saved at a given gap behind another rider (and how far across from their line), and the rider just ahead. |
+| `steering.ts` | Your lane across the road: ← / → steps, key and button hold-to-repeat, and auto-steer into the draft. |
+| `atmosphereUi.ts` | The ☰ Menu → Time & weather dialog. |
 | `ghost.ts` | Replays a past whole-stage ride as a ghost, and formats race times. |
 | `sound.ts` | Ride sounds made with Web Audio: wind, tyre hum, freewheel, crowds, beeps, shift clicks and the finish fanfare. |
 | `plans.ts` | The training plans and their progress logic. |
@@ -73,7 +75,9 @@ This page lists every file and folder in the repository, with a one-line summary
 | `world/road.ts` | Road chunks, distance markers, hairpin plaques, and the finish line. |
 | `world/landmarks.ts` | Loads the landmark models and places them along the road. |
 | `world/rider.ts` | The bike and rider: a built-in fallback, and the rig that poses the rigged rider (shared model, cloned per rider; frame colours and ghost look). |
-| `world/sky.ts` | The sky dome, the mountain ring, and the clouds. |
+| `world/sky.ts` | The sky dome (with stars and moon), the mountain ring, and the clouds, all tinted at runtime by the atmosphere. |
+| `world/atmosphere.ts` | Time of day and weather: keyframed looks, sun and moon, ambient light, fog, exposure, front light, wet road. |
+| `world/rain.ts` | Rain: GPU-animated streaks in a box that follows the camera. |
 | `world/noise.ts` | Deterministic noise (value noise and fractal noise), a seeded random generator, and `smoothstep`. |
 | `cloud/client.ts` | The Neon client, configured from the default endpoints or `VITE_` variables. |
 | `cloud/account.ts` | The signed-in account: session restore, Google sign-in, email sign-up and sign-in, password reset, sign-out and rename. |

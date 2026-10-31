@@ -43,6 +43,8 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Riding together** (👥 button): signed-in riders on the same stage see each other on the road, with name tags, a *Riding now* list with gaps, and *Ride with* to join someone. Switch it off in Settings.
 - **Pro teams**: five computer-ridden teams with comedic near-miss names ride every stage two by two at 2.0–4.2 W/kg, in their own kit. Join one from 👥 and sit in.
 - **Drafting**: ride close behind someone and you save up to about a third of your air drag (and a smart trainer gets lighter). A slipstream gauge shows the gap to the wheel ahead and the watts you're saving.
+- **Steering**: **←** / **→** (or on-screen ◀ ▶ on touch screens) move you across the road; auto-steer eases you onto the wheel ahead. The draft is lateral, so you need to be on their line.
+- **Time of day and weather** (☰ Menu → 🌤): dawn, day, dusk and night (moon, stars, a front light) and clear, cloudy or rain (streaks, wet glossy road, mist, rain sound), or Auto: stages start at their own time and weather, the light moves on as you ride, and the weather changes now and then.
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
 - **Training plans** (📅 in Workouts): Get Started, FTP Builder and Hell of the West, with sessions that tick off as you ride.
 - **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
@@ -119,7 +121,10 @@ src/
   world/terrain.ts   Hills and forests built in tiles around the rider
   world/road.ts      Road surface, marker posts and distance signs
   world/rider.ts     3D bike and rider with pedalling animation
-  world/sky.ts       Sky dome, distant mountains, clouds
+  world/sky.ts       Sky dome (stars, moon), distant mountains, clouds
+  world/atmosphere.ts  Time of day and weather: sky, sun, fog, exposure, headlight, wet road
+  world/rain.ts      Rain streaks that follow the camera
+  steering.ts        Lane steering and auto-steer
   world/noise.ts     Deterministic noise helpers
   profile.ts         Elevation profile strip
   settings.ts        Saved settings

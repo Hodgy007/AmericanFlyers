@@ -6,6 +6,7 @@
 const WIND_MAX = 0.32;
 const HUM_MAX = 0.06;
 const CROWD_MAX = 0.22;
+const RAIN_MAX = 0.1;
 
 export interface SoundState {
   speedMs: number;
@@ -19,6 +20,8 @@ export class Sound {
   private wind: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private hum: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private crowd: { gain: GainNode; swell: number } | null = null;
+  private rain: { gain: GainNode; filter: BiquadFilterNode } | null = null;
+  private rainLevel = 0; // 0..1, set by the weather
   private noise: AudioBuffer | null = null;
   private tickAt = 0;
   private whistleAt = 0;
@@ -84,6 +87,12 @@ export class Sound {
     this.hum = this.noiseVoice('bandpass', 110, 6);
     const crowd = this.noiseVoice('bandpass', 1300, 0.9);
     this.crowd = { gain: crowd.gain, swell: 0 };
+    this.rain = this.noiseVoice('highpass', 3200, 0.5);
+  }
+
+  /** How hard it's raining (0..1): a soft hiss that follows the weather. */
+  setRain(level: number) {
+    this.rainLevel = Math.min(1, Math.max(0, level));
   }
 
   private noiseVoice(type: BiquadFilterType, freq: number, q: number) {
@@ -118,6 +127,12 @@ export class Sound {
     // Tyre hum: a low rumble that rises in pitch with speed.
     glide(this.hum!.gain.gain, Math.min(1, v / 6) * HUM_MAX);
     glide(this.hum!.filter.frequency, 70 + v * 9);
+
+    // Rain: a steady hiss, a little brighter when it's heavy.
+    if (this.rain) {
+      glide(this.rain.gain.gain, this.rainLevel * RAIN_MAX, 0.8);
+      glide(this.rain.filter.frequency, 2600 + this.rainLevel * 1800, 0.8);
+    }
 
     // Freewheel: the ratchet ticks when rolling without pedalling.
     if (!s.pedalling && v > 1.2) {

@@ -905,3 +905,22 @@ body.at-home .draft-panel { display: none; }
 .riders-sub { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .riders-sub[hidden] { display: none; }
 .team-row .rider-dot { background: var(--team, #888); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+
+/* --------------------------------------------- steering & weather ---- */
+.steer-btn {
+  position: fixed; bottom: 128px; z-index: 6; display: none;
+  width: 60px; height: 60px; min-width: 44px; min-height: 44px; padding: 0; font-size: 26px; line-height: 1;
+  border-radius: 18px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  background: var(--glass); border: 1px solid var(--glass-border); color: var(--text);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.steer-left { left: 14px; }
+.steer-right { right: 14px; }
+.steer-btn:active { background: rgba(255, 255, 255, 0.22); }
+@media (pointer: coarse) { .steer-btn { display: block; } }
+body.at-home .steer-btn { display: none; }
+@media (max-width: 560px) { .steer-btn { bottom: 274px; } }
+.atmosphere-dialog { width: min(94vw, 480px); }
+.atmo-row { display: grid; gap: 6px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.atmo-row .seg { display: flex; flex-wrap: wrap; }
+.atmo-row .seg button { flex: 1 1 auto; }

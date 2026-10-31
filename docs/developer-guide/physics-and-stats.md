@@ -66,6 +66,8 @@ These follow measurements of pacelines and small groups (third wheel 40–45%, b
 
 The frame loop eases the saving over about 0.6 s (so it doesn't jump with each 2-second position update), and multiplies `cda` by `1 − saving` in `stepSpeed()`. With a smart trainer, the wind-resistance coefficient sent with the grade is scaled the same way, so the trainer gets lighter too (see [Bluetooth and FTMS](bluetooth-and-ftms.md)).
 
+**Sideways.** `draftFrom()` takes an optional fourth argument, `{ lane, lateralOf(id) }`: your lane and a lookup of each rider's drawn lane (`OtherRiders.lateralOf`). The saving is multiplied by `lateralOverlap(offset)`: 1 within 0.3 m of their line, easing to 0 at 1.1 m. The rider you follow is the one that shelters you best, riders off your line don't count towards the group, and if nobody is on your line the nearest rider is returned with a saving of 0 and an `offset` (their lane minus yours), which the gauge uses for *Move ◀ into their wheel*. Without the argument the sideways part is ignored.
+
 The draft gauge shows the gap to the rider ahead (within 60 m), the drag saved, and the watts that saves: `½ × ρ × CdA × v³ × saving / 0.976`. Riders you're following line up in your lane from 14 m back, as in a paceline, and pull aside when you overlap.
 
 ## Pro teams

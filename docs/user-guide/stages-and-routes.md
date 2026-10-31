@@ -22,6 +22,8 @@ Choosing a stage resets the ride. If your current ride is at least a minute long
 | **Col du Tourmalet** | 19 km | From Luz-Saint-Sauveur (711 m) to the col (2,115 m) at 7.4%, steeper through the hairpins above Barèges (**Virage**). Per-kilometer shape approximated. |
 | **Monte Zoncolan** | 10.1 km | From Ovaro (525 m) to 1,735 m at 11.9%, with long stretches at 13–15% and hairpins marked **Tornante**. Per-kilometer shape approximated. |
 
+Each stage also has its own light and weather when **Time & weather** is on Auto: Route 66 Flats and Hell of the West start at dusk (and it goes dark as you ride), and the Tourmalet is cloudy. See [Riding](riding.md#time-of-day-and-weather).
+
 On every climb the elevation readout shows real altitude. Hairpins count down from the bottom: the first you reach is the highest number.
 
 ## Finish lines

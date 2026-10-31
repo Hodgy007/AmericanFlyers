@@ -12,6 +12,8 @@ Rides have sound, made in the browser with no downloads:
 
 Turn sound on or off with **☰ Menu → 🔊 Sound** or the **M** key. Browsers start sound only after your first click or key press.
 
+In the rain, with sound on, there's a soft rain hiss that fades in and out with the weather (see [Riding](riding.md#time-of-day-and-weather)).
+
 ## Virtual shifting
 
 Turn on **Virtual shifting** in ⚙ Settings to choose your own gear, like on a real bike. Leave your trainer's real chain in one gear.

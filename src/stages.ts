@@ -47,6 +47,9 @@ export interface Stage {
   signs: StageSign[];
   hairpinWord?: string; // local word for a numbered hairpin, e.g. "Virage" or "Tornante"
   baseAltitude?: number; // metres above sea level at the start, for the elevation readout
+  /** What the light and weather are like here when the rider leaves them on Auto (default: day, clear). */
+  timeOfDay?: 'dawn' | 'day' | 'dusk' | 'night';
+  weather?: 'clear' | 'cloudy' | 'rain';
   /** Set for routes the rider uploaded (GPX). */
   uploaded?: boolean;
 }
@@ -144,6 +147,7 @@ const R66_FINISH = 25000;
 
 const route66: Stage = {
   id: 'route66',
+  timeOfDay: 'dusk',
   name: 'Route 66 Flats',
   tagline: '25 km of fast, flat highway past diners and gas stations. A time-trial.',
   finish: R66_FINISH,
@@ -196,6 +200,8 @@ interface ClimbSpec {
   finalBend: number; // radians of sweeping bend after the last hairpin
   hairpinWord: string;
   baseAltitude: number;
+  timeOfDay?: Stage['timeOfDay'];
+  weather?: Stage['weather'];
   scenery: Omit<Scenery, 'wildHeight'>;
 }
 
@@ -314,6 +320,8 @@ function buildClimb(spec: ClimbSpec): Stage {
     signs: pins.map((p, i) => ({ d: p - 12, label: String(hairpins - i), style: 'hairpin' as const })),
     hairpinWord: spec.hairpinWord,
     baseAltitude: spec.baseAltitude,
+    timeOfDay: spec.timeOfDay,
+    weather: spec.weather,
   };
 }
 
@@ -399,6 +407,7 @@ const hellOfTheWest = buildClimb({
   finalBend: 0.5,
   hairpinWord: 'Switchback',
   baseAltitude: 2293,
+  timeOfDay: 'dusk',
   scenery: {
     bumpAmp: 12,
     rockLine: 1100,
@@ -448,6 +457,7 @@ const ventoux = buildClimb({
 // hairpins of Super-Barèges. Shape approximated from published profiles.
 const tourmalet = buildClimb({
   id: 'tourmalet',
+  weather: 'cloudy',
   name: 'Col du Tourmalet',
   tagline: '19 km at 7.4% from Luz-Saint-Sauveur, through Barèges and the hairpins to 2,115 m.',
   kmGrades: [5.2, 6.4, 7.0, 7.2, 7.0, 7.4, 6.2, 6.8, 7.2, 7.6, 7.8, 7.0, 8.6, 8.8, 9.2, 8.4, 9.0, 9.6, 9.8],

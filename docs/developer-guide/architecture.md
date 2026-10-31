@@ -144,13 +144,13 @@ Each frame, `frame(now)` in `src/main.ts` does this, in order:
 
 1. Clamps the frame time to 0–0.1 s, so a tab that was in the background can't jump ahead.
 2. In demo mode, sets the power from the demo slider (or from the workout target, with a small wobble). Otherwise it checks the trainer's last reading, and zeroes power and cadence after 3 seconds of silence.
-3. Gets the other riders on the stage (predicted for now from their last update) and works out the draft from the rider just ahead (`draft.ts`).
+3. Gets the other riders on the stage (predicted for now from their last update), runs steering and auto-steer (`steering.ts`, then `world.setLane()`), and works out the draft from the rider just ahead, scaled by how far across from their line you are (`draft.ts`).
 4. Reads the road's grade at the rider's distance, and advances speed with `stepSpeed()` from [Physics and stats](physics-and-stats.md), with the drag area reduced by the draft.
 5. Advances distance, moving time and work. It checks for the finish line, and totals climbing from the elevation at the rider's distance.
 6. Updates the drivetrain (`drivetrain.ts`): the gear (automatic, or the rider's virtual gear), crank angle and bike rock, so the legs turn at a speed the wheels could produce.
 7. Records one statistics sample, and one recorder sample while moving.
 8. Advances the workout player, if one is running, with countdown beeps. It finishes the workout when the clock runs out.
-9. Updates the sounds (wind, tyres, freewheel, crowds).
+9. Updates the sounds (wind, tyres, freewheel, crowds, rain).
 10. Passes the other riders and the ghost to the world, and calls `world.update()` to place every rider, build terrain and roads, and render.
 11. Every 200 ms, updates the HUD, the status line (including the gap to the ghost), the draft gauge, and the elevation strip (or the workout graph).
 

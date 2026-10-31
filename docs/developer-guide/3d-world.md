@@ -11,14 +11,14 @@ Source: [`src/world/`](../../src/world/).
 - `WebGLRenderer` with antialiasing and a high-performance preference.
 - Pixel ratio capped at 2.
 - Soft shadows (`PCFShadowMap`).
-- ACES filmic tone mapping, with exposure 1.05.
+- ACES filmic tone mapping, with exposure 1.05 by day (the atmosphere changes it with the light).
 
 Lighting:
 
 - A **hemisphere light** (sky blue above, green-brown below, intensity 1.1).
 - A **directional sun** (`#fff4e0`, intensity 2.6). Its shadow map is 2048 × 2048, and covers a 60 m box centered on the rider. The sun's position follows the rider each frame.
 
-Fog runs from 180 m to 1,150 m, in the horizon color, so distant terrain fades into the haze.
+By day, fog runs from 180 m to 1,150 m, in the horizon color, so distant terrain fades into the haze. The hemisphere light, sun, fog and exposure above are the clear-day values; at other times of day and in other weather they are set by the atmosphere (see below).
 
 ## Cameras
 
@@ -30,7 +30,7 @@ The camera is a perspective camera with a 55° field of view, and near and far p
 | `side` | 4.2 m to the right of the rider, 1.1 m up | The rider |
 | `rider` | Just in front of the rider's head | 12 m ahead on the road |
 
-The rider rides on the right of the road, 1.9 m from the centerline. In `rider` mode the rider model is hidden.
+The rider starts 1.9 m right of the centerline and can steer across the right half of the road (see below). In `rider` mode the rider model is hidden.
 
 Chase and side views ease toward their targets. The rider's view copies the position directly, and only eases the look direction.
 
@@ -78,18 +78,34 @@ If `rider.glb` fails to load, the built-in primitive rider is used instead. The 
 - Up to 12 riders are drawn, the nearest first, from 300 m behind to 900 m ahead.
 - Each rider moves on at their reported speed, then eases onto the latest predicted position (over about 0.9 s), so the 2-second updates don't show. A jump of over 150 m snaps.
 - Each has their own drivetrain, so their legs turn at their speed and cadence, and the bike rocks with their power.
-- Lanes are spread across the right half of the road from the rider's id. A rider within 2.6 m of you moves out a lane to pass; a rider 2.6–14 m ahead lines up in your lane, so drafting looks like it should. The ghost rides a lane to your left.
+- Lanes are spread across the right half of the road from the rider's id. `update()` takes your current lane (`playerLane`): a rider within 1.9 m of you, and near your line, moves out a lane to pass; a live rider 1.9–14 m ahead whose line is within 1.3 m of yours lines up in your lane, so drafting looks like it should. Pro team riders keep their own two-by-two lanes. The ghost rides a lane to your left. `lateralOf(id)` returns a drawn rider's current lane, which the lateral draft uses.
 - Name tags are canvas sprites that stay the same size on screen. They're hidden within 3.5 m of the camera and beyond 260 m.
 - Posing the rigged rider is the costly part, so riders more than 220 m away aren't re-posed.
 - Riders not heard from are removed, and their materials and textures disposed.
+
+## Steering
+
+The bike's lane is `World.lane`, metres right of the centre line (default 1.9, limits 0.5–4.0, from `src/steering.ts`). `world.setLane(target)` sets where it's going; each frame the lane eases there with a time constant of 0.27 s (about 0.8 s to settle), and the bike and cameras are placed from the eased lane. `Steering` in `src/steering.ts` owns the target: **←** / **→** (and the `#steer-left` / `#steer-right` buttons, shown for `pointer: coarse`) call `press()`, which steps 0.7 m and repeats while held; auto-steer slides the target towards the nearest rider within 12 m ahead after 3 s without input. The draft uses the eased lane (see [Physics and stats](physics-and-stats.md#drafting)).
+
+## Atmosphere: time of day and weather
+
+[`src/world/atmosphere.ts`](../../src/world/atmosphere.ts) owns everything that changes with the light. It holds a *look* (sky and horizon colours, sun or moon colour, intensity and direction, hemisphere light, fog colour and range, tone-mapping exposure, stars, cloud cover and colours, mountain tint, wetness, rain level). Each frame it builds a *target* look from the clock and the weather, then eases the current look towards it (time constant 1.6 s, so any change settles in about 5 s). Nothing is allocated per frame.
+
+- **Time:** a 24-hour keyframe table (night, dawn at 6.3 h, day from 8.6 h to 17 h, dusk at 19.3 h, night from 21 h). Fixed choices map to an hour (dawn 6.3, day 10, dusk 19.3, night 22.5). On **Auto** the clock starts at the stage's `timeOfDay` (default day) and advances one hour per 120 s while the bike is moving. The sun's elevation and azimuth follow from the hour; the moon is fixed. The shadow-casting light is the sun, handing over to the moon as the stars come in.
+- **Weather:** `clear`, `cloudy` or `rain` greys the sky, dims the sun, thickens the fog and adds cloud (and, for rain, wetness and rain). On **Auto** it starts at the stage's `weather` (default clear) and every 4–8 minutes of riding may drift (clear → cloudy; cloudy → clear or rain; rain → cloudy).
+- **Night:** a `SpotLight` on the rider (always in the scene, intensity 0 by day, so the shader never recompiles) lights the road ahead. Stars and the moon are drawn in the sky-dome shader.
+- **Rain:** [`src/world/rain.ts`](../../src/world/rain.ts) is one `LineSegments` of 3,600 streaks (1,300 with `prefers-reduced-motion`, slower and fainter) in a 44 × 26 × 44 m box that moves with the camera. The vertex shader wraps each streak round the box from a time uniform, so the CPU does no per-drop work. `Road.setWet()` and `Terrain.setWet()` darken surfaces and lower their roughness. `Sound.setRain()` fades in a hiss.
+- **Settings and API:** `settings.timeOfDay` (`auto | dawn | day | dusk | night`) and `settings.weather` (`auto | clear | cloudy | rain`); `world.setAtmosphere(time, weather)` applies them, and `world.restage()` resets the Auto clock and weather from the new stage. `Stage` has optional `timeOfDay` and `weather` defaults. The menu dialog is `src/atmosphereUi.ts`.
+
+To add a look, add a `Keyframe` to `KEYS` and put it on the `TIMELINE`.
 
 ## Sky
 
 [`src/world/sky.ts`](../../src/world/sky.ts) builds three things, all following the camera:
 
-- **A sky dome** with a gradient from the horizon to the zenith, and a sun glow in the sun's direction.
-- **A mountain ring** of 160 segments at radius 3,600 m. Its height is set per stage by `mountainScale`, and its peaks lighten toward snow.
-- **Clouds**: 26 clusters of flat-shaded spheres, 1,600 to 3,400 m from the center and 380 to 760 m up, drifting slowly.
+- **A sky dome** with a gradient from the horizon to the zenith, a sun disc and glow, and (at night) stars and a moon. Its colours and the sun direction are the shared `ZENITH_COLOR`, `HORIZON_COLOR`, `SUN_DIRECTION` and so on, which the atmosphere updates in place.
+- **A mountain ring** of 160 segments at radius 3,600 m. Its height is set per stage by `mountainScale`, and its peaks lighten toward snow. A tint (set by the atmosphere) darkens it at dusk and night.
+- **Clouds**: 26 clusters of flat-shaded spheres, 1,600 to 3,400 m from the center and 380 to 760 m up, drifting slowly. The weather sets how many are out and their colour.
 
 The sky group follows the camera, but sits 60 m lower, so the horizon stays put on climbs.
 

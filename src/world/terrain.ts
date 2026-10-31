@@ -210,6 +210,13 @@ export class Terrain {
   private readonly conifer = makeConifer();
   private readonly broadleaf = makeBroadleaf();
 
+  /** Rain: 0 dry … 1 soaked. The ground and trees darken a little and lose their matt look. */
+  setWet(wet: number) {
+    this.groundMat.roughness = 0.95 - 0.2 * wet;
+    this.groundMat.color.setScalar(1 - 0.24 * wet);
+    this.treeMat.color.setScalar(1 - 0.16 * wet);
+  }
+
   /** Drops every tile (after a stage change). */
   clear() {
     for (const tile of this.tiles.values()) {

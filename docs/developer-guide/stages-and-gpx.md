@@ -20,6 +20,8 @@ A `Stage` in `src/stages.ts`:
 | `signs` | `{ d, label, style }[]` | Hairpin plaques. |
 | `hairpinWord` | string, optional | The local word for a hairpin, such as *Virage*. |
 | `baseAltitude` | number, optional | Meters above sea level at the start, for the elevation readout. |
+| `timeOfDay` | `'dawn' \| 'day' \| 'dusk' \| 'night'`, optional | The light when the rider's time of day is on Auto (default `day`). Route 66 and Hell of the West use `dusk`. |
+| `weather` | `'clear' \| 'cloudy' \| 'rain'`, optional | The weather when the rider's weather is on Auto (default `clear`). The Tourmalet uses `cloudy`. |
 | `uploaded` | boolean, optional | True for GPX routes. |
 
 The `scenery` object:
@@ -51,7 +53,7 @@ Hell of the West, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet and 
 | `hairpins`, `firstHairpin`, `lastHairpin` | Count and positions. |
 | `bunching` | Above 1 makes the straights shorter higher up. |
 | `approachBends`, `finalBend` | Gentle bends in radians before the first hairpin, and after the last. |
-| `hairpinWord`, `baseAltitude`, `scenery` | As in the stage definition. |
+| `hairpinWord`, `baseAltitude`, `timeOfDay`, `weather`, `scenery` | As in the stage definition. |
 
 How it works:
 

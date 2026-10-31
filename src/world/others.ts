@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { gradeAt, roadPoint } from '../course';
 import { Drivetrain } from '../drivetrain';
 import { RiderModel } from './rider';
+import { DEFAULT_LANE } from '../steering';
 
 // Other riders on the road: live riders on the same stage, and the ghost of
 // your best ride. Positions arrive a couple of times a second at most, so each
@@ -24,7 +25,6 @@ export interface OtherRider {
   lane?: number;
 }
 
-const PLAYER_LANE = 1.9; // keep in step with RIDER_LANE_OFFSET in world.ts
 const SHOW_BEHIND = 300;
 const SHOW_AHEAD = 900;
 const MAX_SHOWN = 24;
@@ -90,7 +90,13 @@ export class OtherRiders {
     this.list = list;
   }
 
-  update(playerDistance: number, dt: number, camera: THREE.Camera) {
+  /** Where a drawn rider is across the road right now (metres right of the centre line), if they're on screen. */
+  lateralOf(id: string): number | undefined {
+    return this.shown.get(id)?.lateral;
+  }
+
+  /** `playerLane` is where you are across the road: riders pull out to pass you and line up in front of you by it. */
+  update(playerDistance: number, dt: number, camera: THREE.Camera, playerLane = DEFAULT_LANE) {
     const now = performance.now();
     const near = this.list
       .filter((o) => o.distance > playerDistance - SHOW_BEHIND && o.distance < playerDistance + SHOW_AHEAD)
@@ -110,7 +116,7 @@ export class OtherRiders {
         const tag = label(text || ' ', !!o.ghost, o.jersey);
         tag.visible = !!text;
         if (text) model.group.add(tag);
-        const lane = o.lane ?? (o.ghost ? PLAYER_LANE - 1.1 : 0.9 + ((h >>> 6) % 5) * 0.6);
+        const lane = o.lane ?? (o.ghost ? DEFAULT_LANE - 1.1 : 0.9 + ((h >>> 6) % 5) * 0.6);
         s = { model, drivetrain: new Drivetrain(), tag, distance: o.distance, lane, lateral: lane, seen: now };
         this.shown.set(o.id, s);
         this.group.add(model.group);
@@ -126,10 +132,10 @@ export class OtherRiders {
       // Pull out to pass rather than riding through you.
       const gap = s.distance - playerDistance;
       let target = s.lane;
-      if (!o.ghost && Math.abs(gap) < 2.6 && Math.abs(s.lane - PLAYER_LANE) < 0.9) {
-        target = s.lane < PLAYER_LANE ? PLAYER_LANE - 1 : PLAYER_LANE + 1;
-      } else if (!o.ghost && !o.team && gap >= 2.6 && gap < 14) {
-        target = PLAYER_LANE; // you're on their wheel: line up in front of you, as in a paceline
+      if (!o.ghost && Math.abs(gap) < 1.9 && Math.abs(s.lane - playerLane) < 0.9) {
+        target = s.lane < playerLane ? playerLane - 1 : playerLane + 1;
+      } else if (!o.ghost && !o.team && gap >= 1.9 && gap < 14 && Math.abs(s.lane - playerLane) < 1.3) {
+        target = playerLane; // you're on their wheel: line up in front of you, as in a paceline
       }
       s.lateral += (target - s.lateral) * (1 - Math.exp(-dt / 0.6));
 

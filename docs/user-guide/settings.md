@@ -21,6 +21,10 @@ Changing **FTP** in Settings adds an entry to your FTP history when you're signe
 
 Changing **Trainer difficulty** takes effect straight away, on the next grade update.
 
+**Auto-steer into the draft** is on by default: with no steering for about 3 seconds and a rider within 12 m ahead, you ease onto their line. See [Riding](riding.md#steering).
+
+Time of day and weather live in **☰ Menu → 🌤 Time & weather**, not in this dialog, but they're saved with your settings. See [Riding](riding.md#time-of-day-and-weather).
+
 ## Data blocks
 
 The data blocks you show are also saved in settings, but you change them with the **✎** button, not in the Settings dialog. See [Data blocks](data-blocks.md).
