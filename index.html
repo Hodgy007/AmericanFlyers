@@ -49,6 +49,8 @@
       <nav class="actions">
         <button id="btn-stage" title="Choose a stage">🏁 Stage</button>
         <button id="btn-workouts" title="Workouts">🏋 Workouts</button>
+        <button id="btn-riders" title="Riding together">👥</button>
+        <button id="btn-leaderboard" title="Leaderboard for this stage">🏆</button>
         <button id="btn-trainer" class="primary">Connect trainer</button>
         <button id="btn-hr">Heart rate</button>
         <button id="btn-demo">Demo ride</button>
@@ -194,6 +196,12 @@
           <input name="difficulty" type="range" min="0" max="100" step="5" />
           <span class="hint">How much of the road grade the trainer simulates. 100% feels like the real hill.</span>
         </label>
+        <label class="check"><input name="ghost" type="checkbox" /> Race my best ride
+          <span class="hint">On a stage you’ve finished, a see-through ghost of your fastest ride rides with you.</span>
+        </label>
+        <label class="check"><input name="rideTogether" type="checkbox" /> Ride together
+          <span class="hint">Show me to other signed-in riders on the same stage, and show them to me.</span>
+        </label>
         <div class="dialog-actions">
           <button value="cancel" formnovalidate>Cancel</button>
           <button value="save" class="primary">Save</button>
@@ -235,6 +243,37 @@
           <button type="button" role="tab" data-tab="admin" hidden>🛠 Admin</button>
         </div>
         <div id="profile-body" class="profile-body"></div>
+      </form>
+    </dialog>
+
+    <dialog id="leaderboard" class="riders-dialog lb-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Leaderboard</h2>
+          <button value="cancel" class="icon" aria-label="Close">✕</button>
+        </div>
+        <p class="lb-sub"><strong id="lb-title"></strong></p>
+        <div class="lb-tabs" role="tablist">
+          <button type="button" role="tab" data-lb-range="week">This week</button>
+          <button type="button" role="tab" data-lb-range="all">All time</button>
+        </div>
+        <div id="lb-body"></div>
+        <p id="lb-ghost" class="muted small"></p>
+      </form>
+    </dialog>
+
+    <dialog id="riders" class="riders-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Riding now</h2>
+          <button value="cancel" class="icon" aria-label="Close">✕</button>
+        </div>
+        <p id="riders-note" class="muted small"></p>
+        <ul id="riders-list" class="riders-list"></ul>
+        <div class="dialog-actions">
+          <button type="button" id="riders-settings">Settings</button>
+          <button type="button" id="riders-share" class="primary">Copy link to this stage</button>
+        </div>
       </form>
     </dialog>
 

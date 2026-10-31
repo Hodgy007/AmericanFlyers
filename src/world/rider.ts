@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 // Bike and rider built from primitives. Local frame: +x forward, +y up,
 // +z to the rider's right (the drive side). Units are metres; the origin is
@@ -89,6 +90,42 @@ function buildWheel(): THREE.Group {
   return wheel;
 }
 
+/** The rigged rider, loaded once and cloned for every rider on the road. */
+let riderGltf: Promise<GLTF | null> | null = null;
+function loadRiderModel() {
+  riderGltf ??= new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/rider.glb`).catch(() => {
+    console.info('Rider model not found: models/rider.glb (using the built-in rider)');
+    return null;
+  });
+  return riderGltf;
+}
+
+export interface RiderLook {
+  frame?: string; // bike frame colour
+  jersey?: string; // jersey colour of the built-in rider
+  ghost?: boolean; // see-through, for the ghost of a past ride
+}
+
+const ghostMats = new Map<THREE.Material, THREE.Material>();
+/** Makes every mesh under `root` see-through and shadowless. */
+function makeGhost(root: THREE.Object3D, share: boolean) {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || (mesh as unknown as THREE.Sprite).isSprite) return;
+    mesh.castShadow = false;
+    const src = mesh.material as THREE.Material;
+    let m = share ? ghostMats.get(src) : undefined;
+    if (!m) {
+      m = src.clone();
+      Object.assign(m, { transparent: true, opacity: 0.38, depthWrite: false });
+      (m as THREE.MeshStandardMaterial).emissive?.set('#6f9bff');
+      (m as THREE.MeshStandardMaterial).emissiveIntensity = 0.35;
+      if (share) ghostMats.set(src, m);
+    }
+    mesh.material = m;
+  });
+}
+
 export class RiderModel {
   /** Placed on the road each frame: yaw on this group, pitch on `body`. */
   readonly group = new THREE.Group();
@@ -105,22 +142,33 @@ export class RiderModel {
   private rig: Rig | null = null;
   private personVisible = true;
 
-  constructor() {
+  private readonly frameMat: THREE.Material;
+  private readonly jerseyMat: THREE.Material;
+  private disposed = false;
+
+  constructor(look: RiderLook = {}) {
+    this.frameMat = look.frame ? mat(look.frame, { metalness: 0.35, roughness: 0.35 }) : M.frame;
+    this.jerseyMat = look.jersey ? mat(look.jersey, { roughness: 0.7 }) : M.jersey;
     this.group.add(this.body);
     this.body.add(this.person);
     this.buildBike();
     this.buildRider();
+    if (look.ghost) makeGhost(this.body, true);
     // Swap in the rigged 3D rider when it loads; the primitive rider stays as a fallback.
-    new GLTFLoader().load(
-      `${import.meta.env.BASE_URL}models/rider.glb`,
-      (gltf) => {
-        this.rig = new Rig(gltf.scene);
-        this.body.add(this.rig.root);
-        this.setPersonVisible(this.personVisible);
-      },
-      undefined,
-      () => console.info('Rider model not found: models/rider.glb (using the built-in rider)'),
-    );
+    loadRiderModel().then((gltf) => {
+      if (!gltf || this.disposed) return;
+      this.rig = new Rig(cloneSkinned(gltf.scene));
+      if (look.ghost) makeGhost(this.rig.root, true);
+      this.body.add(this.rig.root);
+      this.setPersonVisible(this.personVisible);
+    });
+  }
+
+  /** Frees this rider's own materials (shared geometry and textures stay). */
+  dispose() {
+    this.disposed = true;
+    if (this.frameMat !== M.frame) this.frameMat.dispose();
+    if (this.jerseyMat !== M.jersey) this.jerseyMat.dispose();
   }
 
   /** Shows or hides the rider (hidden in the rider's-eye camera). */
@@ -180,14 +228,14 @@ export class RiderModel {
     b.add(this.rearWheel, this.frontWheel);
 
     for (const side of [-1, 1]) {
-      tube(this.bb.clone().setZ(0.03 * side), rear.clone().setZ(0.055 * side), 0.012, M.frame); // chainstays
-      tube(seat.clone().setZ(0.02 * side), rear.clone().setZ(0.055 * side), 0.01, M.frame); // seatstays
+      tube(this.bb.clone().setZ(0.03 * side), rear.clone().setZ(0.055 * side), 0.012, this.frameMat); // chainstays
+      tube(seat.clone().setZ(0.02 * side), rear.clone().setZ(0.055 * side), 0.01, this.frameMat); // seatstays
       tube(headBottom.clone().setZ(0.02 * side), front.clone().setZ(0.05 * side), 0.012, M.black); // fork legs
     }
-    tube(this.bb, seat, 0.019, M.frame); // seat tube
-    tube(seat, headTop, 0.019, M.frame, 1.2); // top tube
-    tube(this.bb, headBottom, 0.026, M.frame, 1.3); // down tube
-    tube(headBottom, headTop, 0.024, M.frame); // head tube
+    tube(this.bb, seat, 0.019, this.frameMat); // seat tube
+    tube(seat, headTop, 0.019, this.frameMat, 1.2); // top tube
+    tube(this.bb, headBottom, 0.026, this.frameMat, 1.3); // down tube
+    tube(headBottom, headTop, 0.024, this.frameMat); // head tube
     tube(this.bb.clone().lerp(headBottom, 0.3), this.bb.clone().lerp(headBottom, 0.65), 0.0275, M.accent, 1.3);
 
     // Seatpost and saddle.
@@ -242,7 +290,7 @@ export class RiderModel {
     // Hips and torso (wider than deep), with a white chest band and navy shoulders.
     const pelvis = sphere(p, 0.14, M.navy, hip);
     pelvis.scale.set(0.14, 0.12, 0.17);
-    new Segment(p, 0.15, M.jersey, 1.25).set(hip.clone().lerp(shoulder, 0.1), shoulder);
+    new Segment(p, 0.15, this.jerseyMat, 1.25).set(hip.clone().lerp(shoulder, 0.1), shoulder);
     new Segment(p, 0.153, M.white, 1.25).set(hip.clone().lerp(shoulder, 0.48), hip.clone().lerp(shoulder, 0.58));
     new Segment(p, 0.153, M.navy, 1.25).set(hip.clone().lerp(shoulder, 0.7), hip.clone().lerp(shoulder, 0.85));
     const chest = sphere(p, 0.15, M.navy, shoulder);
@@ -253,8 +301,8 @@ export class RiderModel {
       const s = v(0.27, 1.26, 0.17 * side);
       const hand = v(0.6, 0.86, 0.2 * side);
       const elbow = ik(s, hand, 0.3, 0.3, -1, new THREE.Vector3());
-      sphere(p, 0.055, M.jersey, s);
-      new Segment(p, 0.047, M.jersey).set(s, elbow);
+      sphere(p, 0.055, this.jerseyMat, s);
+      new Segment(p, 0.047, this.jerseyMat).set(s, elbow);
       sphere(p, 0.04, M.skin, elbow);
       new Segment(p, 0.036, M.skin).set(elbow, hand);
       sphere(p, 0.042, M.black, hand);

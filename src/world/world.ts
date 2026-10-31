@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { currentStage, ensureRoad, roadPoint, gradeAt } from '../course';
 import { Landmarks } from './landmarks';
+import { OtherRiders, type OtherRider } from './others';
 import { RiderModel } from './rider';
 import { Road, type MarkerConfig } from './road';
 import { Sky, SUN_DIRECTION, HORIZON_COLOR } from './sky';
@@ -27,6 +28,7 @@ export class World {
   private readonly road: Road;
   private readonly sky = new Sky(currentStage().scenery.mountainScale);
   private readonly landmarks = new Landmarks();
+  private readonly others = new OtherRiders();
   private mode: CameraMode = 'chase';
   private readonly camTarget = new THREE.Vector3();
   private readonly lookTarget = new THREE.Vector3();
@@ -56,7 +58,7 @@ export class World {
 
     this.road = new Road(this.renderer, markers);
     this.terrain = new Terrain(this.renderer);
-    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.rider.group);
+    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.rider.group, this.others.group);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -75,6 +77,11 @@ export class World {
   jumped() {
     this.terrainReady = false;
     this.firstFrame = true;
+  }
+
+  /** Other riders on this stage (live riders and ghosts), positions predicted for now. */
+  setOthers(list: OtherRider[]) {
+    this.others.set(list);
   }
 
   setMarkers(markers: MarkerConfig) {
@@ -151,6 +158,7 @@ export class World {
     if (this.firstFrame) this.smoothLook.copy(this.lookTarget);
     this.firstFrame = false;
     this.camera.lookAt(this.smoothLook);
+    this.others.update(state.distance, dt, this.camera);
 
     // Keep the shadow box centred on the rider.
     this.sun.target.position.copy(riderPos);

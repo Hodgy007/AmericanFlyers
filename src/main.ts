@@ -18,10 +18,15 @@ import { WorkoutPlayer } from './workouts/player';
 import { initWorkoutUi } from './workouts/ui';
 import { HR_ZONES, POWER_ZONES, zoneBars } from './zones';
 import { account, onAccountChange, restoreSession } from './cloud/account';
-import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, syncOnSignIn, type Activity } from './cloud/sync';
+import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, stageGhost, stageLeaderboard, syncOnSignIn, type Activity, type LeaderboardRow } from './cloud/sync';
 import { RideRecorder } from './cloud/recorder';
 import { initAccountUi } from './cloud/ui';
 import { initHome } from './home';
+import { Presence } from './cloud/presence';
+import { initRidersUi } from './ridersUi';
+import { Ghost, raceTime } from './ghost';
+import { initLeaderboardUi } from './leaderboardUi';
+import type { OtherRider } from './world/others';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -38,7 +43,7 @@ let demo = false;
 let demoPower = 150;
 
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
-const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false };
+const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0 };
 const drivetrain = new Drivetrain(); // keeps the legs in step with the wheels
 const powerSamples: { t: number; p: number }[] = [];
 const zoneRefs = () => settings;
@@ -231,6 +236,10 @@ function frame(now: number) {
     if (player.done) finishWorkout(); // reached the end, or skipped past the last step
   }
 
+  const others: OtherRider[] = settings.rideTogether ? presence.riders() : [];
+  const g = ghostRider();
+  if (g) others.push(g);
+  world.setOthers(others);
   world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: drivetrain.crankAngle, rock: drivetrain.rock }, dt);
 
   if (now - lastHud > 200) {
@@ -438,6 +447,7 @@ function buildActivity(): Activity {
     hr_zones: zones(stats.hrZones),
     power_zones: zones(stats.powerZones),
     max_hr_setting: settings.maxHr,
+    finish_s: ride.finished && ride.finishTime > 0 ? Math.round(ride.finishTime) : null,
     samples: recorder.samples,
   };
 }
@@ -548,7 +558,7 @@ function resetRide() {
   lastSavedSeconds = 0;
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
-  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false });
+  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0 });
   drivetrain.reset();
   powerSamples.length = 0;
   stats = new RideStats(zoneRefs);
@@ -579,6 +589,9 @@ function chooseStage(stage: Stage) {
   history.replaceState(null, '', url);
   world.restage(markerConfig());
   resetRide();
+  presence.restage();
+  ghost = null;
+  loadMyGhost();
   $('stage-name').textContent = stage.name;
   toast(`${stage.name}: ${stage.tagline}`, 5000);
 }
@@ -639,6 +652,9 @@ function openStages() {
 
 function showFinish() {
   ride.finished = true;
+  // Only rides of the whole stage (from the start line) count for the leaderboard.
+  ride.finishTime = ride.startDistance === 0 ? ride.movingTime : 0;
+  const vsGhost = ghost && ride.finishTime ? ride.finishTime - ghost.finishS : null;
   const imperial = settings.units === 'imperial';
   const finish = currentStage().finish!;
   const avgPower = ride.movingTime > 0 ? Math.round(ride.work / ride.movingTime) : 0;
@@ -654,7 +670,36 @@ function showFinish() {
     { label: 'Keep riding', onClick: () => {} },
     { label: 'Ride it again', primary: true, onClick: resetRide },
   ], zoneSummary(stats));
-  saveRide();
+  if (vsGhost !== null && ghost) {
+    const who = ghost.isMe ? 'your best' : `${ghost.name}’s ghost`;
+    $('finish-title').textContent = vsGhost < 0 && ghost.isMe
+      ? `${currentStage().name}: new personal best!`
+      : $('finish-title').textContent;
+    $('finish-extra').prepend(Object.assign(document.createElement('p'), {
+      className: 'finish-ghost',
+      textContent: vsGhost < 0 ? `🏆 ${raceTime(-vsGhost)} faster than ${who}` : `${raceTime(vsGhost)} behind ${who}`,
+    }));
+  }
+  saveRide().then(() => showRank());
+}
+
+/** After a whole-stage ride is saved: where it puts you on the leaderboard. */
+async function showRank() {
+  if (!account() || !ride.finishTime) return;
+  try {
+    const rows = await stageLeaderboard(currentStage().id);
+    const me = rows.find((r) => r.is_me);
+    if (!me) return;
+    const total = rows.length;
+    toast(me.rank === 1 ? `🥇 You’re the fastest ever on ${currentStage().name}!` : `🏆 You’re ${ordinal(me.rank)} on the ${currentStage().name} leaderboard${total > 25 ? '' : ` of ${total}`}.`, 7000);
+    if (settings.ghost && (!ghost || ghost.isMe)) loadMyGhost(); // race your new best next time
+  } catch { /* leaderboard is a bonus */ }
+}
+
+function ordinal(n: number) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 /** "8.4 km to go · next: Virage 14 in 230 m" for stages with a finish. */
@@ -667,6 +712,12 @@ function stageProgress() {
   const parts = [stage.name, `${(imperial ? left / KM_PER_MI : left).toFixed(1)} ${imperial ? 'mi' : 'km'} to go`];
   const next = stage.signs.find((s) => s.d > ride.distance);
   if (next?.style === 'hairpin') parts.push(`next: ${stage.hairpinWord ?? 'Hairpin'} ${next.label} in ${Math.round(next.d - ride.distance)} m`);
+  const g = ghostRider();
+  if (g && ride.movingTime > 1) {
+    const gap = ride.distance - g.distance;
+    const who = ghost!.isMe ? 'your best' : ghost!.name;
+    parts.push(Math.abs(gap) < 3 ? `level with ${who}` : `${Math.round(Math.abs(gap))} m ${gap > 0 ? 'ahead of' : 'behind'} ${who}`);
+  }
   return parts.join(' · ');
 }
 
@@ -675,7 +726,8 @@ function openSettings() {
   const form = dialog.querySelector('form')!;
   for (const [k, v] of Object.entries(settings)) {
     const input = form.elements.namedItem(k) as HTMLInputElement | null;
-    if (input) input.value = String(v);
+    if (input?.type === 'checkbox') input.checked = v === true;
+    else if (input) input.value = String(v);
   }
   $('difficulty-out').textContent = `${settings.difficulty}%`;
   dialog.showModal();
@@ -698,12 +750,17 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     maxHr: Math.round(num('maxHr', settings.maxHr)),
     units: data.get('units') === 'imperial' ? 'imperial' : 'metric',
     difficulty: Math.max(0, Math.min(100, Number(data.get('difficulty')))),
+    rideTogether: data.get('rideTogether') === 'on',
   };
   saveSettings(settings);
   pushSettings(settings);
   if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
   world.setMarkers(markerConfig());
   lastSentGrade = NaN;
+  if (!settings.rideTogether) presence.leave();
+  if (!settings.ghost) ghost = null;
+  else if (!ghost) loadMyGhost();
+  presence.restage();
 });
 $('settings').querySelector<HTMLInputElement>('[name=difficulty]')!.addEventListener('input', (e) => {
   $('difficulty-out').textContent = `${(e.target as HTMLInputElement).value}%`;
@@ -787,9 +844,88 @@ const accountUi = initAccountUi({
 });
 onSyncError((msg) => toast(msg, 6000));
 
+// ------------------------------------------------------ riding together ----
+
+const presence = new Presence(
+  () => settings.rideTogether && !document.body.classList.contains('at-home')
+    ? { stageId: currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence }
+    : null,
+  () => true,
+);
+
+/** Starts a new ride at another rider's position on this stage. */
+function rideWith(distance: number, name: string) {
+  resetRide();
+  ride.distance = ride.startDistance = Math.max(0, distance - 6);
+  ride.lastElev = elevationAt(ride.distance);
+  world.jumped();
+  toast(`Riding with ${name}. Pedal to stay on their wheel!`);
+}
+
+// ---------------------------------------------------- ghosts & leaderboards ----
+
+let ghost: Ghost | null = null;
+let ghostSeq = 0;
+
+/** The ghost as a rider on the road, while racing a whole-stage ride. */
+function ghostRider(): OtherRider | null {
+  const finish = currentStage().finish;
+  if (!ghost || finish === null || ride.startDistance !== 0) return null;
+  const d = ghost.distanceAt(ride.movingTime);
+  if (d > finish + 40) return null; // finished and rolled away
+  return { id: 'ghost', name: ghost.label, distance: d, speedMs: ghost.speedAt(ride.movingTime), power: 200, cadence: 88, ghost: true };
+}
+
+async function setGhostFrom(activityId: string) {
+  const mine = ++ghostSeq;
+  const stageId = currentStage().id;
+  const trace = await stageGhost(activityId);
+  if (mine !== ghostSeq || stageId !== currentStage().id) return null;
+  ghost = trace ? new Ghost(trace) : null;
+  return ghost;
+}
+
+/** Loads the ghost of your fastest ride on this stage, if you have one. */
+async function loadMyGhost() {
+  if (!account() || !settings.ghost || currentStage().finish === null) return;
+  try {
+    const me = (await stageLeaderboard(currentStage().id)).find((r) => r.is_me);
+    if (me && (!ghost || ghost.isMe)) await setGhostFrom(me.activity_id);
+  } catch { /* no ghost this time */ }
+}
+
+async function raceGhost(row: LeaderboardRow) {
+  try {
+    const g = await setGhostFrom(row.activity_id);
+    if (!g) return toast('That ride can’t be raced any more.');
+    resetRide();
+    toast(`Racing ${g.isMe ? 'your best' : `${g.name}’s`} ghost (${raceTime(g.finishS)}). Go!`, 5000);
+  } catch (e) {
+    toast(`Couldn’t load that ghost: ${(e as Error).message}`);
+  }
+}
+
+initLeaderboardUi({
+  stage: currentStage,
+  race: raceGhost,
+  clearGhost: () => { ghost = null; ghostSeq++; },
+  ghostName: () => (ghost ? (ghost.isMe ? `your best (${raceTime(ghost.finishS)})` : `${ghost.name} (${raceTime(ghost.finishS)})`) : null),
+  openSignIn: (why) => accountUi.openSignIn(why),
+});
+
+initRidersUi({
+  presence,
+  me: () => ({ distance: ride.distance, stageName: currentStage().name, imperial: settings.units === 'imperial', enabled: settings.rideTogether }),
+  rideWith,
+  openSignIn: (why) => accountUi.openSignIn(why),
+  openSettings,
+  toast,
+});
+
 onAccountChange(async (a) => {
   if (!a) {
     forgetLocalCopies();
+    ghost = null;
     return;
   }
   try {
@@ -804,6 +940,7 @@ onAccountChange(async (a) => {
     }
     await savePendingRide();
     accountUi.checkAdmin(); // the session is settled now
+    loadMyGhost();
     toast(`Signed in as ${a.name}`);
   } catch (e) {
     toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
