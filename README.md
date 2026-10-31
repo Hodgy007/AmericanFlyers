@@ -55,7 +55,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **TypeScript** (strict) for all app code in `src/`, with **HTML** (`index.html`) and plain **CSS** (`src/style.css`).
 - **SQL** (PostgreSQL and PL/pgSQL) for the database: `db/schema.sql`.
 - **Three.js** for the 3D world, **Web Bluetooth** for the trainer and heart-rate strap, **Web Audio** for sound, and a small **JavaScript** service worker (`public/sw.js`) to make it installable.
-- **Vite** to build, **Vercel** to host, and **Neon** (Postgres, Neon Auth and the Data API) for accounts and data. No server code of our own.
+- **Vite** to build, **Vercel** to host, **Neon** (Postgres, Neon Auth and the Data API) for accounts and data, and **Sentry** for error reporting. No server code of our own.
 
 See [Architecture](docs/developer-guide/architecture.md#languages-and-technologies) for the full list.
 

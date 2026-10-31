@@ -44,3 +44,15 @@ The endpoints are public. They're not secrets, because row-level security protec
 3. The Vercel deployment for `main` finishes and the live site loads.
 4. If the database changed, `db/schema.sql` is updated in the same change.
 5. Sign-in works on the live address.
+
+## Error reporting (Sentry)
+
+The app reports crashes to Sentry (organisation `hodgy007`, project `sentry-byzantium-car`) using `@sentry/browser` ([`src/monitoring.ts`](../../src/monitoring.ts)).
+
+- **It's off unless the build has a DSN.** `vite.config.ts` reads it at build time from `VITE_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` or `SENTRY_DSN`; the Vercel Sentry integration normally sets one of these on the project. The DSN is public by design: it only lets the browser send reports.
+- **Source maps** upload automatically when `SENTRY_AUTH_TOKEN` is set (also from the integration), so stack traces show the TypeScript. They're deleted from the build afterwards, so they aren't published.
+- **What's sent:** the error and stack trace, the stage, the release (git commit) and, for signed-in riders, their account id only. No names, emails, cookies, headers, request bodies or URL query strings (a password reset token is scrubbed), and no session replays. 10% of page loads send a performance trace.
+- **Ignored:** closing the Bluetooth device chooser, and browsers blocking autoplay or audio.
+- To check it's working, open the site, then in the browser console run `setTimeout(() => { throw new Error('Sentry test') })` and look for the issue in Sentry.
+
+If the integration didn't add a DSN, copy it from Sentry (**Settings → Projects → sentry-byzantium-car → Client Keys (DSN)**) into a Vercel environment variable named `VITE_SENTRY_DSN`, and redeploy.
