@@ -8,12 +8,12 @@ For column-by-column detail, see [Database schema](../reference/database-schema.
 
 The backend is a Neon project called `americanflyers`, in the `eu-west-2` region. `CLAUDE.md` records the project ID, branch and database name (`neondb`). The app uses:
 
-- **Neon Auth** for sign-in with Google and Apple. It's managed Better Auth, and keeps its users in `neon_auth."user"` and its sessions in `neon_auth.session`.
+- **Neon Auth** for sign-in with Google, or with an email address and password. It's managed Better Auth, and keeps its users in `neon_auth."user"` and its sessions in `neon_auth.session`. Email sign-up is on, email verification is off, and password reset emails come from Neon's shared sender with the app name *American Flyers*.
 - **The Data API**, a REST interface over the `public` schema. The browser calls it with `@neon/neon-js` as the `authenticated` role.
 
 The two endpoints are in [`src/cloud/client.ts`](../../src/cloud/client.ts). They're public, and they're not secrets. Row-level security is what protects the data. The endpoints can be overridden with `VITE_NEON_AUTH_URL` and `VITE_NEON_DATA_API_URL`.
 
-`createClient()` returns a `neon` object with `neon.auth` (session, sign-in, sign-out, update user) and `neon.from(table)` and `neon.rpc(name, args)` for the Data API.
+`createClient()` returns a `neon` object with `neon.auth` (session, `signIn.social`, `signUp.email`, `signIn.email`, `requestPasswordReset`, `resetPassword`, sign-out, update user) and `neon.from(table)` and `neon.rpc(name, args)` for the Data API.
 
 ## Tables
 
@@ -26,6 +26,9 @@ The two endpoints are in [`src/cloud/client.ts`](../../src/cloud/client.ts). The
 | `ftp_history` | Each FTP entry, with its source. | FTP changes, sign-up. |
 | `feedback` | Ideas and bug reports, with status and reply. | Riders (insert). Admins (update, delete). |
 | `admins` | Admin email addresses. | Owner, through SQL only. |
+| `live_riders` | Where each signed-in rider is right now: stage, distance, speed, power, cadence. | `ride_presence()` only. |
+
+`activities` also has `finish_s`: the moving time from start line to finish line, set only for whole-stage rides. It feeds the leaderboards.
 
 Every rider table has a `user_id` column, filled from `auth.user_id()`, which is the signed-in user's ID.
 
@@ -35,6 +38,7 @@ RLS is enabled on every table:
 
 - **Rider tables** (`profiles`, `workouts`, `routes`, `activities`, `ftp_history`) have one policy, `<table>_owner`, for all commands to `authenticated`. It requires `user_id = auth.user_id()` both to read and to write. Those tables grant `select`, `insert`, `update` and `delete` to `authenticated`, and revoke everything from `anonymous`.
 - **`feedback`** has four policies: riders insert their own rows; riders and admins can read; admins can update; admins can delete. Riders have no update or delete policy, so they can't change or remove feedback after sending it.
+- **`live_riders`** has RLS enabled, no policies and no grants. Only `ride_presence()` and `leave_ride()` touch it.
 - **`admins`** has RLS enabled and no policies, and the schema grants nothing on it. The app's roles can't read it. Only the security-definer functions do, and the owner through SQL.
 
 For the full list, see [Security](security.md).
@@ -61,6 +65,21 @@ These are `security definer` functions with `search_path = ''`. Each one checks 
 The client calls these with `neon.rpc()`. Admin writes to feedback (status, reply, delete) go straight to the `feedback` table through the Data API, and RLS allows them only for admins.
 
 The admin dashboard is described in [Admin dashboard](../admin-guide/admin-dashboard.md).
+
+## Riding together, leaderboards and ghosts
+
+Also `security definer` with `search_path = ''`, for signed-in riders only.
+
+| Function | Called from | What it does |
+| --- | --- | --- |
+| `ride_presence(p_stage, p_distance, p_speed, p_power, p_cadence, p_visible)` | `src/cloud/presence.ts`, every 2 s while riding | Upserts the caller's row (values clamped), deletes rows older than 10 minutes, and returns up to 30 other riders on the stage seen in the last 15 s: hashed id, *First L.* name, distance, speed, power, cadence and the age of the position. |
+| `leave_ride()` | When the tab is hidden or closed, and when *Ride together* is switched off | Deletes the caller's row. |
+| `stage_leaderboard(p_stage, p_since)` | `src/leaderboardUi.ts`, and after a whole-stage finish | Each rider's fastest `finish_s`, ranked; top 25 plus the caller. |
+| `stage_ghost(p_activity)` | Racing a ghost | The distance trace (`samples -> 'distance'`) and time of one finished ride. Nothing else from it. |
+
+The browser predicts each rider's position between updates as `distance + speed × (time since received + age)`, capped at 6 s, and the world eases the drawn rider onto it. Drafting is worked out in the browser from these positions; see [Physics and stats](physics-and-stats.md#drafting).
+
+Neon Realtime (live queries) isn't available in the project's region (`eu-west-2`) and doesn't yet support row-level security, so riding together polls the Data API instead. Each rider makes one small call every 2 seconds.
 
 ## Sync rules
 

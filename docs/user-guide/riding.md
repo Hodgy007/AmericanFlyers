@@ -45,6 +45,12 @@ The bottom-left corner shows two things:
 - **Trainer status**, with a colored dot: connected, searching, or not connected.
 - **Stage name and progress.** On a stage with a finish line, this shows the distance to go and the next numbered hairpin, for example *Alpe d'Huez · 8.4 km to go · next: Virage 14 in 230 m*. On Heartland Rollers it shows just the name.
 
+## Panels at the bottom of the screen
+
+- **Draft gauge**: appears when another rider is within 60 m ahead. It shows the gap to their back wheel and, once you're within 12 m, how much drag you're saving. See [Riding together](riding-together.md#drafting).
+- **Gear panel**: with virtual shifting on, your gear and − / + buttons. See [Sound and virtual shifting](sound-and-shifting.md).
+- **Demo power**: in a demo ride, the power slider.
+
 ## The elevation strip
 
 The bottom-right strip shows the road ahead, colored by grade:

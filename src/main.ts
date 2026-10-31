@@ -27,6 +27,7 @@ import { initRidersUi } from './ridersUi';
 import { Ghost, raceTime } from './ghost';
 import { initLeaderboardUi } from './leaderboardUi';
 import { Sound } from './sound';
+import { draftFrom, DRAFT_MAX_GAP, DRAFT_SWEET_SPOT, type Draft } from './draft';
 import { complete, nextSession, planById, type Session } from './plans';
 import { initPlansUi } from './plansUi';
 import { initOnboarding, onboarded } from './onboarding';
@@ -58,6 +59,8 @@ let workoutStats = new RideStats(zoneRefs); // just the current workout
 let recorder = new RideRecorder(); // second-by-second samples for the saved ride
 const sound = new Sound(settings.sound);
 const beeps = { step: undefined as unknown, left: Infinity };
+let draft: Draft | null = null; // the rider just ahead, if any
+let draftSaving = 0; // fraction of air drag saved, eased
 const rideWorkout = { started: null as string | null, completed: null as string | null };
 
 // ------------------------------------------------------------- devices ----
@@ -125,6 +128,7 @@ async function toggleHeartRate() {
 // With virtual shifting on, the chosen gear adds to (or takes off) the grade.
 let lastSentGrade = NaN;
 let lastSentWatts = NaN;
+let lastSentWind = 1;
 function controlTrainer() {
   if (!trainer?.canControl) return;
   const watts = player && !player.done ? player.targetWatts() : null;
@@ -138,10 +142,13 @@ function controlTrainer() {
   const road = gradeAt(ride.distance) * 100 * (settings.difficulty / 100);
   const gear = settings.virtualShifting ? gearGradeOffset(vGear) : 0;
   const target = Math.round(Math.max(-10, Math.min(20, road + gear)) * 10) / 10;
-  if (Math.abs(target - lastSentGrade) < 0.1) return;
+  // In someone's draft the trainer's wind resistance drops too, so it feels easier.
+  const wind = Math.round((1 - draftSaving) * 20) / 20;
+  if (Math.abs(target - lastSentGrade) < 0.1 && wind === lastSentWind) return;
   lastSentGrade = target;
+  lastSentWind = wind;
   lastSentWatts = NaN;
-  trainer.setGrade(target).catch(() => { lastSentGrade = NaN; });
+  trainer.setGrade(target, wind).catch(() => { lastSentGrade = NaN; });
 }
 setInterval(controlTrainer, 1000);
 
@@ -239,10 +246,16 @@ function frame(now: number) {
     live.cadence = 0;
   }
 
+  // Other riders on the road, and the draft from the one just ahead.
+  const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders() : [];
+  draft = draftFrom(ride.distance, liveRiders);
+  draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
+
   const grade = gradeAt(ride.distance);
   ride.speed = stepSpeed(ride.speed, live.power, grade, dt, {
     ...DEFAULT_PARAMS,
     massKg: settings.riderKg + settings.bikeKg,
+    cda: DEFAULT_PARAMS.cda * (1 - draftSaving),
   });
   ride.distance += ride.speed * dt;
   if (ride.speed > 0.3 && !ride.finished) {
@@ -277,7 +290,7 @@ function frame(now: number) {
   }
   sound.update(dt, { speedMs: ride.speed, pedalling: live.power > 0 || live.cadence > 0, crowd: crowdNear(ride.distance) });
 
-  const others: OtherRider[] = settings.rideTogether ? presence.riders() : [];
+  const others = liveRiders;
   const g = ghostRider();
   if (g) others.push(g);
   world.setOthers(others);
@@ -409,6 +422,33 @@ function updateHud(grade: number) {
       : null,
   });
   updateWorkoutPanel();
+  updateDraftPanel();
+}
+
+/**
+ * The slipstream gauge: how far you are behind the rider ahead, and how much
+ * the draft is saving you. Shown when someone is within 60 m ahead.
+ */
+function updateDraftPanel() {
+  const panel = $('draft-panel');
+  if (!draft || ride.finished) { panel.hidden = true; return; }
+  panel.hidden = false;
+  const imperial = settings.units === 'imperial';
+  const gapText = imperial ? `${Math.round(draft.gap * 3.28084)} ft` : `${draft.gap < 10 ? draft.gap.toFixed(1) : Math.round(draft.gap)} m`;
+  const v = ride.speed;
+  const watts = 0.5 * 1.225 * DEFAULT_PARAMS.cda * v * v * v * draftSaving / 0.976;
+  const inDraft = draftSaving > 0.03;
+  panel.classList.toggle('on', inDraft);
+  panel.classList.toggle('sweet', draft.gap <= DRAFT_SWEET_SPOT);
+  $('draft-title').textContent = inDraft ? `In ${draft.name}’s draft` : `${draft.name} ahead`;
+  $('draft-gap').textContent = gapText;
+  $('draft-hint').textContent = inDraft
+    ? `−${Math.round(draftSaving * 100)}% drag${watts >= 5 ? ` · saving ~${Math.round(watts)} W` : ''}${draft.gap > DRAFT_SWEET_SPOT ? ` · closer than ${imperial ? '7 ft' : `${DRAFT_SWEET_SPOT} m`} for the most` : ''}`
+    : `Close to ${imperial ? '40 ft' : `${DRAFT_MAX_GAP} m`} to get in the draft`;
+  // The bar fills as you close in: empty at 60 m, full at the sweet spot.
+  const fill = Math.max(0, Math.min(1, (60 - draft.gap) / (60 - DRAFT_SWEET_SPOT)));
+  $('draft-bar').style.setProperty('--fill', String(fill));
+  $('draft-bar').style.setProperty('--zone', String(1 - (DRAFT_MAX_GAP - DRAFT_SWEET_SPOT) / (60 - DRAFT_SWEET_SPOT)));
 }
 
 // ------------------------------------------------------------- workouts ----
@@ -989,7 +1029,15 @@ if (!bluetoothAvailable()) {
 
 // --------------------------------------------------------------- account ----
 
+/** Weight and FTP given when creating an account by email. */
+function saveRiderDetails(d: { riderKg: number; ftp: number | null }) {
+  settings = { ...settings, riderKg: d.riderKg, ...(d.ftp ? { ftp: d.ftp } : {}) };
+  saveSettings(settings); // uploaded to the new account as it signs in
+  try { localStorage.setItem('americanflyers.onboarded', '1'); } catch { /* fine */ }
+}
+
 const accountUi = initAccountUi({
+  onRiderDetails: saveRiderDetails,
   settings: () => settings,
   toast,
   context: () => ({
@@ -1171,6 +1219,8 @@ onAccountChange(async (a) => {
 });
 // The Bluetooth note and the first-ride guide wait until the rider leaves the home page.
 initHome({
+  onRiderDetails: saveRiderDetails,
+  defaults: () => settings,
   onEnterApp: () => {
     // A short wait lets a signed-in rider's settings arrive first (they skip it).
     if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) onboarding.open(); }, 1500);

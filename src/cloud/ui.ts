@@ -1,11 +1,12 @@
-// Account UI: the sign-in dialog (Google or Apple), the rider's profile
+// Account UI: the sign-in dialog (Google, or email and password), the rider's profile
 // (stats, achievements, activities), feedback, and the admin dashboard.
 
 import type { Settings } from '../settings';
 import { BEST_WINDOWS } from '../stats';
 import { HR_ZONES, POWER_ZONES, addZones, zoneBars } from '../zones';
-import { account, onAccountChange, rename, signInWith, signOut } from './account';
+import { account, onAccountChange, rename, resetPassword, signInWith, signOut } from './account';
 import { achievements, weekIndex } from './achievements';
+import { mountEmailAuth, type RiderDetails } from './emailAuth';
 import { barChart, lineChart, statTiles } from './charts';
 import { toTcx } from './recorder';
 import {
@@ -19,6 +20,8 @@ interface Deps {
   toast: (msg: string, ms?: number) => void;
   /** Extra context sent with feedback (stage, browser, trainer…). */
   context: () => Record<string, unknown>;
+  /** Weight and FTP from the email sign-up form, saved before the account is made. */
+  onRiderDetails: (d: RiderDetails) => void;
 }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -81,20 +84,47 @@ export function initAccountUi(deps: Deps) {
     signinDialog.showModal();
   }
 
-  for (const provider of ['google', 'apple'] as const) {
-    $(`signin-${provider}`).addEventListener('click', async () => {
-      $('signin-error').textContent = '';
+  $('signin-google').addEventListener('click', async () => {
+    $('signin-error').textContent = '';
+    try {
+      await signInWith('google'); // leaves the page for Google
+    } catch (e) {
+      $('signin-error').textContent = errMsg(e);
+    }
+  });
+  $('signin-close').addEventListener('click', () => signinDialog.close());
+  const emailForm = mountEmailAuth($('signin-email'), { onDetails: deps.onRiderDetails, defaults: () => deps.settings() });
+  signinDialog.addEventListener('close', () => emailForm.reset());
+
+  // A password reset link comes back here with ?token=…
+  const resetToken = new URLSearchParams(location.search).get('token');
+  if (resetToken) {
+    const url = new URL(location.href);
+    url.searchParams.delete('token');
+    history.replaceState(null, '', url);
+    const dialog = $<HTMLDialogElement>('reset-password');
+    const form = $<HTMLFormElement>('reset-form');
+    const pw = form.elements.namedItem('password') as HTMLInputElement;
+    const again = form.elements.namedItem('confirm') as HTMLInputElement;
+    $('reset-cancel').addEventListener('click', () => dialog.close());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('reset-error').textContent = '';
+      if (pw.value !== again.value) { $('reset-error').textContent = 'The two passwords don’t match.'; return; }
       try {
-        await signInWith(provider); // leaves the page for Google / Apple
-      } catch (e) {
-        $('signin-error').textContent = provider === 'apple' && /provider|not.*(found|enabled|configured)/i.test(errMsg(e))
-          ? 'Sign in with Apple isn’t switched on yet. Please use Google for now.'
-          : errMsg(e);
+        await resetPassword(resetToken, pw.value);
+        dialog.close();
+        deps.toast('Password changed. Sign in with your new password.', 6000);
+        openSignIn('Sign in with your new password.');
+        emailForm.setMode('signin');
+      } catch (err) {
+        $('reset-error').textContent = errMsg(err);
       }
     });
+    setTimeout(() => dialog.showModal(), 300);
   }
 
-  // On returning from Google / Apple with an error, the URL carries it.
+  // On returning from Google with an error, the URL carries it.
   const params = new URLSearchParams(location.search);
   if (params.has('error')) {
     deps.toast(`Sign-in didn’t finish: ${params.get('error_description') ?? params.get('error')}`, 7000);
@@ -107,7 +137,7 @@ export function initAccountUi(deps: Deps) {
   async function refreshAccountButton() {
     const a = account();
     accountBtn.textContent = a ? `👤 ${a.name.split(' ')[0]}` : '👤 Sign in';
-    accountBtn.title = a ? `${a.name} (${a.email}): profile & stats` : 'Sign in with Google or Apple';
+    accountBtn.title = a ? `${a.name} (${a.email}): profile & stats` : 'Sign in or create a free account';
     await checkAdmin();
   }
 

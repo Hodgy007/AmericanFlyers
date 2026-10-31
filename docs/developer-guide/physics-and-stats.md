@@ -30,6 +30,40 @@ The acceleration is `(propulsion − gravity − rolling − drag) / (m + 1.5)`,
 
 The grade is read from `course.ts` with a central difference over ±2 m, so a steep section that changes in a few meters still shows the right slope at the rider's position.
 
+## Drafting
+
+[`src/draft.ts`](../../src/draft.ts) works out how much air drag you save behind another live rider (ghosts make no wind). The gap is wheel to wheel: their distance minus yours minus a bike length (1.75 m). Riders alongside you (gap below 0) give no draft.
+
+The saving follows wind-tunnel and CFD studies of two riders in line: about a third of the drag right on the wheel, falling to roughly a quarter at 2–3 m and fading to nothing by 12 m:
+
+`saving = 0.36 × e^(−(gap − 0.3) / 4.2)`, eased to zero between 8 and 12 m.
+
+| Gap | Drag saved |
+| --- | --- |
+| 0.5 m | 34% |
+| 1 m | 31% |
+| 2 m | 24% |
+| 3 m | 19% |
+| 5 m | 12% |
+| 8 m | 6% |
+| 12 m+ | 0% |
+
+The frame loop eases the saving over about 0.6 s (so it doesn't jump with each 2-second position update), and multiplies `cda` by `1 − saving` in `stepSpeed()`. With a smart trainer, the wind-resistance coefficient sent with the grade is scaled the same way, so the trainer gets lighter too (see [Bluetooth and FTMS](bluetooth-and-ftms.md)).
+
+The draft gauge shows the gap to the rider ahead (within 60 m), the drag saved, and the watts that saves: `½ × ρ × CdA × v³ × saving / 0.976`. Riders you're following line up in your lane from 14 m back, as in a paceline, and pull aside when you overlap.
+
+## Virtual drivetrain and shifting
+
+[`src/drivetrain.ts`](../../src/drivetrain.ts) keeps the rider's legs in step with the wheels. Normally it shifts automatically through a 50/34 × 11–34 set of gears toward your real cadence, one gear every 0.45 s with 8% hysteresis, and the cranks turn at `speed / (ratio × 2.105 m)` while you pedal. They ease to a stop when you freewheel.
+
+With **Virtual shifting** on, the rider picks one of 24 gears from 0.75 to 4.8 (evenly spaced in ratio), and:
+
+- the legs turn at the cadence that gear gives at your speed;
+- an extra grade of `5.5 × ln(ratio / ratio of gear 12)`, clamped to −6…+9%, is added to the grade sent to the trainer, so harder gears push back harder;
+- in a demo ride, the cadence shown follows the gear.
+
+ERG workouts ignore the gear: the trainer holds the target power.
+
 ## Ride statistics
 
 `RideStats` in `src/stats.ts` accumulates statistics while you're moving. Samples are taken each frame with the elapsed frame time (`dt`). Statistics use only moving time: `add()` returns early unless the frame counts as moving.

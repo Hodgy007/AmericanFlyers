@@ -62,12 +62,26 @@ The first frame builds every tile in range at once. After that, at most two tile
 The rider is loaded from `models/rider.glb`. The model has a 24-bone skeleton, and the app poses it every frame with two-bone inverse kinematics:
 
 - **Arms** reach to the hoods, with the elbow bending down and out.
-- **Legs** follow the pedals at the rider's cadence, with the foot on the pedal.
+- **Legs** follow the pedals, turned by the virtual drivetrain (see [Physics and stats](physics-and-stats.md#virtual-drivetrain-and-shifting)), with the ball of the foot on the pedal. The model's foot bone runs above the sole, so the toe target sits 4.5 cm below the pedal to keep the shoe level, dipping a little more through the bottom of the stroke (ankling).
 - **Torso** leans forward on the bike, and the head tilts up to look along the road.
 
 The rig needs these bone names: `Hips`, `Spine02`, `Spine01`, `Spine`, `neck`, `Head`, `head_end`, `Left` and `Right` `Arm`, `ForeArm`, `Hand`, `UpLeg`, `Leg`, `Foot` and `ToeBase`. A missing bone throws an error, so keep the names when you replace the model.
 
 If `rider.glb` fails to load, the built-in primitive rider is used instead. The console logs *Rider model not found* and carries on.
+
+`rider.glb` is loaded once and cloned (with `SkeletonUtils.clone`) for every rider on the road. `RiderModel` takes an optional look: a frame and jersey colour (other riders get one picked from their id), or `ghost`, which makes every material see-through and blue-tinted and turns off its shadows.
+
+## Other riders and ghosts
+
+[`src/world/others.ts`](../../src/world/others.ts) draws everyone else on the road: live riders from riding together, and the ghost.
+
+- Up to 12 riders are drawn, the nearest first, from 300 m behind to 900 m ahead.
+- Each rider moves on at their reported speed, then eases onto the latest predicted position (over about 0.9 s), so the 2-second updates don't show. A jump of over 150 m snaps.
+- Each has their own drivetrain, so their legs turn at their speed and cadence, and the bike rocks with their power.
+- Lanes are spread across the right half of the road from the rider's id. A rider within 2.6 m of you moves out a lane to pass; a rider 2.6–14 m ahead lines up in your lane, so drafting looks like it should. The ghost rides a lane to your left.
+- Name tags are canvas sprites that stay the same size on screen. They're hidden within 3.5 m of the camera and beyond 260 m.
+- Posing the rigged rider is the costly part, so riders more than 220 m away aren't re-posed.
+- Riders not heard from are removed, and their materials and textures disposed.
 
 ## Sky
 

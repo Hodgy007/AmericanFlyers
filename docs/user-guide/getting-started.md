@@ -19,7 +19,7 @@ Bluetooth only works on secure pages (`https://`) or on `localhost`. The live si
 
 1. Open https://americanflyers.vercel.app in Chrome or Edge (or Bluefy on iPhone or iPad).
 2. You'll see the 3D valley, the top bar of buttons and the data blocks across the top.
-3. You don't need an account to ride. Your settings are kept in this browser until you sign in. See [Accounts and profile](accounts-and-profile.md).
+3. You don't need an account to ride. Your settings are kept in this browser until you sign in. To save your rides, ride with others and get on the leaderboards, sign in with Google or **Sign up with email** (a rider name, email, password and your weight; no phone number or address). See [Accounts and profile](accounts-and-profile.md).
 
 ## Set up your numbers first
 

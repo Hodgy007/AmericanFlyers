@@ -53,11 +53,11 @@ The `ControlPoint` class:
 | --- | --- | --- | --- |
 | 0 | Opcode | `0x11` | |
 | 1–2 | Wind speed | `int16`, 0.001 m/s | `0` |
-| 3–4 | Grade | `int16`, 0.01% | The road grade, clamped to ±20% |
+| 3–4 | Grade | `int16`, 0.01% | The road grade × difficulty, plus the virtual gear's offset, clamped to ±20% |
 | 5 | Rolling resistance coefficient | `uint8`, 0.0001 | `40` (0.0040) |
-| 6 | Wind resistance coefficient | `uint8`, 0.01 kg/m | `51` (0.51) |
+| 6 | Wind resistance coefficient | `uint8`, 0.01 kg/m | `51` (0.51), times the draft factor |
 
-The coefficients are fixed for every ride. The rolling value, 0.0040, matches `crr` in `src/physics.ts`. The wind value, 0.51 kg/m, is a fixed constant and isn't derived from `cda` there.
+The rolling value, 0.0040, matches `crr` in `src/physics.ts`. The wind value starts at 0.51 kg/m and is multiplied by `1 − draft saving` (rounded to steps of 5%, never below 30%), so the trainer gets lighter in someone's slipstream.
 
 ## Parsing Indoor Bike Data
 
@@ -99,10 +99,10 @@ Flags bit 0 selects the format: when set, heart rate is a `uint16` at byte 1; ot
 
 ## The control loop
 
-`setInterval` in `src/main.ts` runs once a second. It does nothing unless the trainer can be controlled.
+`controlTrainer()` in `src/main.ts` runs once a second, and straight away after a virtual gear change. It does nothing unless the trainer can be controlled.
 
 1. **ERG takes priority.** If a workout is running and not finished, it reads the target watts. It sends them only if they differ from the last value by at least 1 W. When ERG ends, it clears the last grade so the grade is sent again.
-2. **Otherwise, grade.** The target is the road grade at the rider's distance, multiplied by the **Trainer difficulty** (0–100%) and rounded to 0.1%. It's sent only if it differs from the last value by at least 0.1%.
+2. **Otherwise, grade.** The target is the road grade at the rider's distance, multiplied by the **Trainer difficulty** (0–100%), plus the virtual gear's offset when virtual shifting is on, clamped to −10…+20% and rounded to 0.1%. It's sent with the draft's wind factor, and only if the grade differs from the last value by at least 0.1% or the wind factor has changed.
 
 The loop only sends on change, so the trainer keeps the last setting. If the write itself throws, the last value is cleared, so the next tick tries again. A response timeout resolves as `false` without throwing, so it doesn't trigger a retry.
 

@@ -1,16 +1,19 @@
 # Accounts and profile
 
-This page covers signing in with Google or Apple, what syncs to your account, when rides are saved, the profile tabs, `.tcx` export, deleting rides, renaming and signing out.
+This page covers signing in (Google, or email and password), what syncs to your account, when rides are saved, the profile tabs, `.tcx` export, deleting rides, renaming and signing out.
 
 ## Sign in
 
-1. Click **👤 Sign in**.
-2. Choose **Continue with Google** or **Continue with Apple**.
-3. You're taken to the provider to sign in, then brought back to the app.
+1. Click **👤 Sign in** (or use the home page).
+2. Choose **Continue with Google**, and you're taken to Google and brought back signed in.
+3. Or use your email:
+   - **Create account**: your rider name, email, a password (at least 8 characters), your weight, and your FTP if you know it. That's all: no phone number, no address. You're signed in straight away, and your weight and FTP are saved to your settings.
+   - **Sign in**: your email and password.
+   - **Forgot password?**: enter your email and we send a link (valid for 15 minutes). Open it, set a new password, then sign in with it.
+
+Other riders only ever see your rider name shortened to first name and initial, for example *Dave S.*
 
 Riding without an account works fine. Your settings stay in the browser. Signing in is needed for saved rides, profile stats, achievements, feedback and sync across devices.
-
-If Apple sign-in isn't switched on for the site, the dialog says *Sign in with Apple isn't switched on yet*. Use Google in the meantime.
 
 ## What syncs
 

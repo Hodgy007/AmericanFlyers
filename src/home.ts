@@ -1,7 +1,9 @@
 // The home page: a welcome screen over the 3D world for riders who aren't
-// signed in, with free sign-in (Google / Apple) or "ride without an account".
+// signed in, with free sign-in (Google, or email and password) or "ride
+// without an account".
 
 import { account, onAccountChange, signInWith } from './cloud/account';
+import { mountEmailAuth, type RiderDetails } from './cloud/emailAuth';
 
 const HINT_KEY = 'americanflyers.signedIn'; // remembered so signed-in riders skip the home page
 
@@ -16,10 +18,11 @@ function hint(on?: boolean) {
   return false;
 }
 
-export function initHome(opts: { onEnterApp?: () => void } = {}) {
+export function initHome(opts: { onEnterApp?: () => void; onRiderDetails: (d: RiderDetails) => void; defaults: () => { riderKg: number } }) {
   const home = document.getElementById('home')!;
   const error = document.getElementById('home-error')!;
   addHeroVideo(home);
+  if (document.documentElement.dataset.hero === 'dog') home.querySelector('.home-bg')!.setAttribute('aria-label', 'A cyclist sprinting along a desert highway at sunset, chased by a pit bull');
 
   const show = () => {
     home.hidden = false;
@@ -48,20 +51,26 @@ export function initHome(opts: { onEnterApp?: () => void } = {}) {
   for (const b of home.querySelectorAll<HTMLButtonElement>('[data-provider]')) {
     b.addEventListener('click', async () => {
       error.textContent = '';
-      const provider = b.dataset.provider as 'google' | 'apple';
       b.disabled = true;
       try {
-        await signInWith(provider); // leaves the page for Google / Apple
+        await signInWith('google'); // leaves the page for Google
       } catch (e) {
-        const msg = (e as Error)?.message ?? String(e);
-        error.textContent = provider === 'apple' && /provider|not.*(found|enabled|configured)/i.test(msg)
-          ? 'Sign in with Apple isn’t switched on yet. Please use Google for now.'
-          : msg;
+        error.textContent = (e as Error)?.message ?? String(e);
       } finally {
         b.disabled = false;
       }
     });
   }
+
+  // Email sign-up opens in place of the button.
+  const emailBox = document.getElementById('home-email')!;
+  const emailToggle = document.getElementById('home-email-toggle')!;
+  mountEmailAuth(emailBox, { onDetails: opts.onRiderDetails, defaults: opts.defaults });
+  emailToggle.addEventListener('click', () => {
+    emailToggle.hidden = true;
+    emailBox.hidden = false;
+    emailBox.querySelector<HTMLInputElement>('input[name=name]')?.focus();
+  });
 
   document.getElementById('home-ride')!.addEventListener('click', hide);
   document.getElementById('btn-home')!.addEventListener('click', () => {
@@ -90,7 +99,9 @@ function addHeroVideo(home: HTMLElement) {
   video.autoplay = true;
   video.preload = 'auto';
   video.setAttribute('aria-hidden', 'true');
-  video.src = matchMedia('(max-width: 768px)').matches ? '/images/hero-480.mp4' : '/images/hero.mp4';
+  // Matches the hero picked for this visit in index.html (the rider, or the pit bull chase).
+  const base = document.documentElement.dataset.hero === 'dog' ? '/images/hero-dog' : '/images/hero';
+  video.src = matchMedia('(max-width: 768px)').matches ? `${base}-480.mp4` : `${base}.mp4`;
   video.addEventListener('playing', () => video.classList.add('ready'), { once: true });
   home.querySelector('.home-bg')!.after(video);
   if (!home.hidden) video.play().catch(() => {});

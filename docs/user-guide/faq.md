@@ -16,7 +16,7 @@ On Android, use Chrome. On iPhone or iPad, use the free Bluefy browser, because 
 
 ## Does it work offline?
 
-No. The app is loaded from the web each time you open it, and it doesn't include an offline mode.
+Partly. Once you've opened it, the app and its 3D models are cached on your device, so it opens quickly and can start a ride with a weak connection. Signing in, saving rides, riding together and leaderboards need the internet. You can also install it as an app: see [Installing the app](installing-the-app.md).
 
 ## Why does the hill feel too easy or too hard?
 
@@ -69,3 +69,19 @@ Yes. Choose Metric or Imperial in [Settings](settings.md#the-settings). This cha
 ## Where do I report a bug?
 
 Use the **💬** button while signed in. See [Feedback](feedback.md).
+
+## Can I ride with my friends?
+
+Yes. Both sign in, pick the same stage, and you'll see each other on the road. Open 👥 and press **Ride with** to start next to them. See [Riding together](riding-together.md).
+
+## Is there drafting?
+
+Yes. Ride close behind another rider and you save up to about a third of your air drag; a gauge shows the gap and the watts you're saving. See [Riding together](riding-together.md#drafting).
+
+## Do I have to give my phone number or address?
+
+No. An email account needs only a rider name, email, password, weight and (optionally) FTP. Or use Google.
+
+## Why is the Hell of the West stage in Colorado?
+
+It's the final stage of the 1985 film *American Flyers*, filmed between Idaho Springs and Echo Lake on the road to Mount Evans. See [Stages and routes](stages-and-routes.md).

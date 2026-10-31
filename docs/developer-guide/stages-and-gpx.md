@@ -1,6 +1,6 @@
 # Stages and GPX
 
-This page covers the stage definition, how the two mountain climbs are built from published figures, how the Heartland and Route 66 courses are shaped, and how a GPX file becomes a stage.
+This page covers the stage definition, how the six mountain climbs are built from published figures, how the Heartland and Route 66 courses are shaped, and how a GPX file becomes a stage.
 
 Source: [`src/stages.ts`](../../src/stages.ts), [`src/course.ts`](../../src/course.ts), [`src/routes/gpx.ts`](../../src/routes/gpx.ts), [`src/routes/library.ts`](../../src/routes/library.ts).
 
@@ -42,7 +42,7 @@ Both are built from sums of sine waves (`waves()`), eased in from flat over the 
 
 ## The mountain climbs
 
-Alpe d'Huez and Stelvio Pass use `buildClimb()`, which takes a `ClimbSpec`:
+Hell of the West, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet and Monte Zoncolan all use `buildClimb()`, which takes a `ClimbSpec`:
 
 | Field | Meaning |
 | --- | --- |
@@ -66,6 +66,12 @@ How it works:
 
 - **Alpe d'Huez.** The per-kilometer gradients come from swi-cycling.com. The base is 723 m, and the 1,118 m gain puts the summit at 1,841 m.
 - **Stelvio Pass.** No per-kilometer source was found, so the shape is an approximation: an easier valley start, then 8 to 9%, with the hairpins bunched toward the top. The base is 915 m and the gain is 1,843 m, so the summit is at 2,758 m.
+- **Hell of the West** (`hell-of-the-west`). The final stage of the film *American Flyers* was filmed on Colorado 103 from Idaho Springs to Echo Lake (fast-rewind.com filming notes). 20.8 km and 942 m from 2,293 m to 3,235 m (pjammcycling.com), averaging about 3.5% for the first 11 km and 5.8% for the next 9 (summitbiking.org), then the short flat at the lake. Five switchbacks in the upper half (*Switchback*); scenery is all conifer forest, with Colorado's treeline (≈3,500 m) above the finish and snow on the surrounding 4,000 m peaks.
+- **Mont Ventoux** (`ventoux`). From Bédoin, 21.4 km, 1,610 m, 300 → 1,910 m. Per-kilometer shape approximated from published profiles: gentle to Saint-Estève, 9–10% through the forest, easing past Chalet Reynard. The bald white summit uses the snow shading (snow line set just above the tree line).
+- **Col du Tourmalet** (`tourmalet`). From Luz-Saint-Sauveur, 19 km, 1,404 m, 711 → 2,115 m, steeper above Barèges with eight hairpins. Shape approximated.
+- **Monte Zoncolan** (`zoncolan`). From Ovaro, 10.1 km, 1,210 m, 525 → 1,735 m, 11.9% average with long 13–15% stretches and nine hairpins. Shape approximated; the steepest 10 m ramps reach about 16% (the real road touches 22%, smoothed out by the per-kilometer model).
+
+`finish_s` on a saved ride (the leaderboard time) is only set when a ride starts on the start line (`startDistance === 0`) and crosses the finish.
 
 ## Routes from GPX
 
