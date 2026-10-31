@@ -2,6 +2,10 @@
 
 An indoor cycling app that runs in your browser. Connect a Wahoo smart trainer over Bluetooth and ride a 3D bike through an endless, winding valley. The trainer's resistance follows the hills.
 
+## Documentation
+
+The full documentation library is in [`docs/`](docs/README.md). Start with the [user guide](docs/user-guide/getting-started.md) if you ride, the [admin guide](docs/admin-guide/admin-dashboard.md) if you run the site and its database, or the [developer guide](docs/developer-guide/architecture.md) if you work on the code.
+
 ## Features
 
 - **Bluetooth trainer connection.** Uses the standard FTMS (Fitness Machine) profile, so it works with Wahoo KICKR, KICKR CORE and KICKR SNAP on current firmware, as well as most other smart trainers. Trainers that only expose a Cycling Power service still work in read-only mode.
