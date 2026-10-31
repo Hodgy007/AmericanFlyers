@@ -5,7 +5,7 @@ Any that are missing are skipped.
 
 | File | What | Where |
 | --- | --- | --- |
-| `gantry.glb` | Start/finish arch spanning the road | Start line, then every 5 km |
+| `gantry.glb` | Start/finish arch spanning the road | Just past the start, then every 5 km |
 | `windmill.glb` | Farm windmill | Left, every 1.9 km |
 | `barn.glb` | Red barn | Right, every 2.3 km |
 | `farmhouse.glb` | Farmhouse | Left, every 2.3 km |

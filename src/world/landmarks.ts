@@ -19,12 +19,12 @@ interface LandmarkKind {
 }
 
 const KINDS: LandmarkKind[] = [
-  { file: 'gantry.glb', every: 5000, first: 0, side: 0, offset: 0, size: 13, clearance: 10 },
-  { file: 'windmill.glb', every: 1900, first: 600, side: -1, offset: 38, size: 14, yaw: 0.4, clearance: 10 },
-  { file: 'barn.glb', every: 2300, first: 950, side: 1, offset: 34, size: 10, yaw: -0.6, clearance: 18 },
-  { file: 'farmhouse.glb', every: 2300, first: 1200, side: -1, offset: 32, size: 9, yaw: 0.6, clearance: 16 },
-  { file: 'diner.glb', every: 3700, first: 1900, side: -1, offset: 24, size: 6.5, yaw: 0.5, clearance: 16 },
-  { file: 'water-tower.glb', every: 4100, first: 2700, side: 1, offset: 46, size: 26, clearance: 10 },
+  { file: 'gantry.glb', every: 5000, first: 30, side: 0, offset: 0, size: 13, clearance: 12 },
+  { file: 'windmill.glb', every: 1900, first: 600, side: -1, offset: 26, size: 15, yaw: 0.4, clearance: 24 },
+  { file: 'barn.glb', every: 2300, first: 950, side: 1, offset: 34, size: 10, yaw: -0.6, clearance: 26 },
+  { file: 'farmhouse.glb', every: 2300, first: 1200, side: -1, offset: 32, size: 9, yaw: 0.6, clearance: 26 },
+  { file: 'diner.glb', every: 3700, first: 1900, side: -1, offset: 24, size: 6.5, yaw: 0.5, clearance: 24 },
+  { file: 'water-tower.glb', every: 4100, first: 2700, side: 1, offset: 46, size: 26, clearance: 18 },
 ];
 
 const BEHIND = 250;

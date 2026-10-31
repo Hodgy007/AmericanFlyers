@@ -8,6 +8,7 @@ An indoor cycling app that runs in your browser. Connect a Wahoo smart trainer o
 - **Resistance follows the road.** The current grade is sent to the trainer once a second, scaled by a *trainer difficulty* setting (default 50%).
 - **3D world (Three.js).** A winding road through low-poly hills, forests, fields and distant mountains, with sunlight, shadows, haze and clouds. The terrain is generated on the fly as you ride, so the road never ends.
 - **3D rider.** The legs pedal at your real cadence (solved with inverse kinematics) and the wheels turn at your virtual speed.
+- **Roadside landmarks:** a start/finish arch, red barn, farmhouse, windmill, retro diner and water tower, generated with Higgsfield (image → 3D) and placed along the route. See `public/models/README.md` to add or swap models.
 - **Three camera views:** chase, side-on and the rider's own view. Switch with the 🎥 button or the **C** key.
 - **Realistic speed.** Your watts become speed through a physics model with gravity, rolling resistance, air drag and momentum, using your weight.
 - **Ride stats.** Power with a 3-second average and FTP zone, cadence, speed, heart rate, distance, moving time, grade and elevation climbed, plus a 5 km elevation profile ahead.
