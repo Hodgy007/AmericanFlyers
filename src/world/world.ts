@@ -10,6 +10,7 @@ export interface WorldState {
   distance: number; // metres along the course
   speedMs: number;
   crankAngle: number; // radians, decreasing as the rider pedals forward
+  rock?: number; // side-to-side rock of the bike, radians
 }
 
 export type CameraMode = 'chase' | 'side' | 'rider';
@@ -110,6 +111,7 @@ export class World {
     this.rider.group.position.copy(riderPos);
     this.rider.group.rotation.y = -p.heading;
     this.rider.body.rotation.z = Math.atan(gradeAt(state.distance));
+    this.rider.body.rotation.x = state.rock ?? 0;
     this.rider.update(state.distance, state.crankAngle);
     this.rider.group.updateMatrixWorld(true);
     this.rider.poseRider();
