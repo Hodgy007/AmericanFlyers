@@ -21,6 +21,9 @@
         <button id="btn-camera" title="Change camera (C)">🎥 Chase view</button>
         <button id="btn-reset">Reset</button>
         <button id="btn-settings" aria-label="Settings" title="Settings">⚙</button>
+        <button id="btn-feedback" aria-label="Send feedback" title="Ideas & bug reports">💬</button>
+        <button id="btn-admin" title="Admin dashboard" hidden>🛠 Admin</button>
+        <button id="btn-account" title="Sign in with Google or Apple">👤 Sign in</button>
       </nav>
     </header>
 
@@ -77,6 +80,8 @@
         <div class="finish-flag">🏁</div>
         <h2 id="finish-title">Finished!</h2>
         <div id="finish-stats" class="finish-stats"></div>
+        <div id="finish-extra"></div>
+        <p id="finish-note" class="finish-note"></p>
         <div id="finish-actions" class="dialog-actions"></div>
       </div>
     </div>
@@ -142,6 +147,9 @@
         <label>Rider weight (kg) <input name="riderKg" type="number" min="30" max="200" step="0.5" /></label>
         <label>Bike weight (kg) <input name="bikeKg" type="number" min="5" max="30" step="0.5" /></label>
         <label>FTP (watts) <input name="ftp" type="number" min="50" max="600" step="1" /></label>
+        <label>Max heart rate (bpm) <input name="maxHr" type="number" min="120" max="230" step="1" />
+          <span class="hint">Used for heart-rate zones. Your highest HR in a hard effort; 220 − age is a rough guide.</span>
+        </label>
         <label>Units
           <select name="units">
             <option value="metric">Metric (km, km/h, m)</option>
@@ -156,6 +164,65 @@
           <button value="cancel" formnovalidate>Cancel</button>
           <button value="save" class="primary">Save</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog id="signin" class="signin-dialog">
+      <form method="dialog">
+        <h2>Sign in to American Flyers</h2>
+        <p id="signin-reason" class="muted"></p>
+        <div class="signin-buttons">
+          <button type="button" id="signin-google" class="provider google"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
+          <button type="button" id="signin-apple" class="provider apple"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4.1zM13.9 5c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.3 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5z"/></svg>Continue with Apple</button>
+        </div>
+        <p id="signin-error" class="error" role="alert"></p>
+        <p class="hint">We only use your name and email to set up your profile. Riding without an account still works; your settings stay in this browser.</p>
+        <div class="dialog-actions"><button value="cancel">Not now</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="profile-dialog" class="wide-dialog profile-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <div>
+            <h2 id="profile-name"></h2>
+            <span id="profile-email" class="muted small"></span>
+          </div>
+          <div class="head-actions">
+            <button type="button" id="profile-rename">Rename</button>
+            <button type="button" id="profile-signout">Sign out</button>
+            <button value="cancel" class="icon" aria-label="Close">✕</button>
+          </div>
+        </div>
+        <div id="profile-tabs" class="tabs" role="tablist">
+          <button type="button" role="tab" data-tab="stats">📊 Stats</button>
+          <button type="button" role="tab" data-tab="achievements">🏅 Achievements</button>
+          <button type="button" role="tab" data-tab="activities">🚴 Rides</button>
+          <button type="button" role="tab" data-tab="admin" hidden>🛠 Admin</button>
+        </div>
+        <div id="profile-body" class="profile-body"></div>
+      </form>
+    </dialog>
+
+    <dialog id="feedback-dialog" class="feedback-dialog">
+      <form method="dialog">
+        <h2>Ideas &amp; bug reports</h2>
+        <p class="muted small">Tell us what would make American Flyers better, or what went wrong. We read everything.</p>
+        <label>Type
+          <select name="category">
+            <option value="idea">💡 Idea or improvement</option>
+            <option value="bug">🐞 Something’s broken</option>
+            <option value="other">💬 Other</option>
+          </select>
+        </label>
+        <label>Message <textarea name="message" rows="5" maxlength="4000" required minlength="3" placeholder="What would you like to see?"></textarea></label>
+        <p id="feedback-error" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button value="cancel" formnovalidate>Close</button>
+          <button value="send" class="primary">Send</button>
+        </div>
+        <h3>Your suggestions</h3>
+        <div id="my-feedback" class="feedback-list"></div>
       </form>
     </dialog>
 

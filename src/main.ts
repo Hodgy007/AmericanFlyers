@@ -15,6 +15,11 @@ import { drawWorkout } from './workouts/graph';
 import { RAMP_TEST_ID, zoneColor, type Workout } from './workouts/model';
 import { WorkoutPlayer } from './workouts/player';
 import { initWorkoutUi } from './workouts/ui';
+import { HR_ZONES, POWER_ZONES, zoneBars } from './zones';
+import { account, onAccountChange, restoreSession } from './cloud/account';
+import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, syncOnSignIn, type Activity } from './cloud/sync';
+import { RideRecorder } from './cloud/recorder';
+import { initAccountUi } from './cloud/ui';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -33,9 +38,12 @@ let demoPower = 150;
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
 const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0, work: 0, finished: false };
 const powerSamples: { t: number; p: number }[] = [];
-let stats = new RideStats(); // whole ride
+const zoneRefs = () => settings;
+let stats = new RideStats(zoneRefs); // whole ride
 let player: WorkoutPlayer | null = null;
-let workoutStats = new RideStats(); // just the current workout
+let workoutStats = new RideStats(zoneRefs); // just the current workout
+let recorder = new RideRecorder(); // second-by-second samples for the saved ride
+const rideWorkout = { started: null as string | null, completed: null as string | null };
 
 // ------------------------------------------------------------- devices ----
 
@@ -206,6 +214,11 @@ function frame(now: number) {
 
   const moving = ride.speed > 0.3 || live.power > 0;
   stats.add(dt, live.power, live.cadence, currentHr(), moving);
+  recorder.tick(dt, moving, {
+    power: live.power, cadence: live.cadence, hr: currentHr(), speedMs: ride.speed,
+    distance: ride.distance - ride.startDistance,
+    elevation: (currentStage().baseAltitude ?? 0) + elev,
+  });
   if (player) {
     const pedalling = live.power > 0 || live.cadence > 0;
     if (!player.done) {
@@ -271,9 +284,17 @@ function placeWorkoutPanel() {
 }
 window.addEventListener('resize', placeWorkoutPanel);
 
+/** Keeps the data blocks just below the top bar, however many rows its buttons take. */
+const topbar = document.querySelector<HTMLElement>('.topbar')!;
+new ResizeObserver(() => {
+  (document.querySelector('.hud-wrap') as HTMLElement).style.top = `${Math.round(topbar.getBoundingClientRect().bottom + 2)}px`;
+  placeWorkoutPanel();
+}).observe(topbar);
+
 function startWorkout(w: Workout) {
   player = new WorkoutPlayer(w, settings.ftp);
-  workoutStats = new RideStats();
+  workoutStats = new RideStats(zoneRefs);
+  rideWorkout.started = w.name;
   lastSentWatts = NaN;
   $('workout-panel').hidden = false;
   placeWorkoutPanel();
@@ -328,16 +349,22 @@ function finishWorkout() {
     actions.unshift({
       label: `Set my FTP to ${ftp} W`,
       primary: true,
-      onClick: () => { settings = { ...settings, ftp }; saveSettings(settings); toast(`FTP set to ${ftp} W`); },
+      onClick: () => { setFtp(ftp, 'ramp_test'); toast(`FTP set to ${ftp} W`); },
     });
   }
+  rideWorkout.completed = w.name;
+  const zones = zoneSummary(workoutStats);
   stopWorkout();
-  showSummary('💪', `${w.name}: complete!`, items, actions);
+  showSummary('💪', `${w.name}: complete!`, items, actions, zones);
+  saveRide();
 }
 
 interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
 
-function showSummary(flag: string, title: string, items: [string, string][], actions: SummaryAction[]) {
+function showSummary(flag: string, title: string, items: [string, string][], actions: SummaryAction[], extra: Node[] = []) {
+  $('finish').querySelector('.finish-card')!.classList.toggle('wide', extra.length > 0);
+  $('finish-extra').replaceChildren(...extra);
+  $('finish-note').textContent = '';
   $('finish').querySelector('.finish-flag')!.textContent = flag;
   $('finish-title').textContent = title;
   const statsEl = $('finish-stats');
@@ -356,6 +383,116 @@ function showSummary(flag: string, title: string, items: [string, string][], act
     return b;
   }));
   $('finish').hidden = false;
+}
+
+/** Heart-rate and power zone breakdowns for a ride summary. */
+function zoneSummary(st: RideStats) {
+  return [
+    zoneBars('Heart-rate zones', HR_ZONES, st.hrZones, { ref: settings.maxHr, unit: 'bpm' }),
+    zoneBars('Power zones', POWER_ZONES, st.powerZones, { ref: settings.ftp, unit: 'W' }),
+  ];
+}
+
+function setFtp(ftp: number, source: 'manual' | 'ramp_test') {
+  if (ftp === settings.ftp && source === 'manual') return;
+  settings = { ...settings, ftp };
+  saveSettings(settings);
+  pushSettings(settings);
+  recordFtp(ftp, source).catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
+}
+
+// ------------------------------------------------------- saving rides ----
+
+const MIN_RIDE_S = 60; // shorter rides aren't saved
+const PENDING_KEY = 'americanflyers.pendingRide';
+
+function buildActivity(): Activity {
+  const st = currentStage();
+  const round = (v: number) => (v > 0 ? Math.round(v) : null);
+  const zones = (z: number[]) => (z.some((v) => v > 0) ? z.map((v) => Math.round(v)) : null);
+  const best = Object.fromEntries(Object.entries(stats.best).filter(([, v]) => v > 0).map(([k, v]) => [k, Math.round(v)]));
+  return {
+    id: recorder.id,
+    started_at: (recorder.startedAt ?? new Date()).toISOString(),
+    title: rideWorkout.started ? `${rideWorkout.started} · ${st.name}` : st.name,
+    stage_id: st.id,
+    stage_name: st.name,
+    finished: ride.finished,
+    workout_name: rideWorkout.completed,
+    duration_s: Math.round(stats.seconds),
+    distance_m: Math.round(ride.distance - ride.startDistance),
+    climbed_m: Math.round(ride.climbed),
+    avg_power: round(stats.avgPower),
+    np: round(stats.np),
+    max_power: round(stats.maxPower),
+    avg_hr: round(stats.avgHr),
+    max_hr: round(stats.maxHr),
+    avg_cadence: round(stats.avgCadence),
+    kj: round(stats.work / 1000),
+    tss: stats.seconds ? Math.round(stats.tss(settings.ftp) * 10) / 10 : null,
+    ftp: settings.ftp,
+    best_power: Object.keys(best).length ? best : null,
+    hr_zones: zones(stats.hrZones),
+    power_zones: zones(stats.powerZones),
+    max_hr_setting: settings.maxHr,
+    samples: recorder.samples,
+  };
+}
+
+let lastSavedSeconds = 0;
+
+/**
+ * Saves the current ride to the rider's account (the same ride is updated
+ * on later saves). Updates the note on the summary card if it's showing.
+ */
+async function saveRide(opts: { quiet?: boolean } = {}) {
+  const note = $('finish-note');
+  const showNote = !opts.quiet && !$('finish').hidden;
+  if (stats.seconds < MIN_RIDE_S) return;
+  if (!account()) {
+    if (showNote) {
+      note.replaceChildren('Sign in to save this ride to your profile. ');
+      const b = document.createElement('button');
+      b.className = 'link';
+      b.textContent = 'Sign in';
+      b.addEventListener('click', () => {
+        // Keep the ride so it's saved when the rider comes back from signing in.
+        try { localStorage.setItem(PENDING_KEY, JSON.stringify(buildActivity())); } catch { /* too big: lost */ }
+        accountUi.openSignIn('Sign in to save this ride, and all your future ones.');
+      });
+      note.append(b);
+    }
+    return;
+  }
+  if (showNote) note.textContent = 'Saving to your rides…';
+  try {
+    await saveActivity(buildActivity());
+    lastSavedSeconds = stats.seconds;
+    accountUi.invalidate();
+    if (showNote) note.textContent = '✓ Saved to your rides';
+  } catch (e) {
+    if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
+    else if (!opts.quiet) toast(`Couldn’t save your ride: ${(e as Error).message}`);
+  }
+}
+
+// Save long rides every few minutes, so a closed tab doesn't lose them.
+setInterval(() => {
+  if (account() && stats.seconds >= MIN_RIDE_S && stats.seconds - lastSavedSeconds > 60) saveRide({ quiet: true });
+}, 5 * 60 * 1000);
+
+async function savePendingRide() {
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(PENDING_KEY); } catch { /* storage blocked */ }
+  if (!raw) return;
+  try {
+    await saveActivity(JSON.parse(raw) as Activity);
+    localStorage.removeItem(PENDING_KEY);
+    accountUi.invalidate();
+    toast('Your ride was saved to your profile.');
+  } catch (e) {
+    toast(`Couldn’t save your earlier ride: ${(e as Error).message}`);
+  }
 }
 
 const workoutUi = initWorkoutUi({ ftp: () => settings.ftp, ride: startWorkout, toast });
@@ -383,10 +520,34 @@ function cycleCamera() {
   $('btn-camera').textContent = `🎥 ${CAMERA_LABELS[mode]}`;
 }
 
+/** The Reset button: show a summary of a ride worth keeping, then start afresh. */
+function endRide() {
+  if (stats.seconds < MIN_RIDE_S) return resetRide();
+  const imperial = settings.units === 'imperial';
+  const km = (ride.distance - ride.startDistance) / 1000;
+  showSummary('🚴', 'Ride summary', [
+    ['Time', formatTime(stats.seconds)],
+    ['Distance', imperial ? `${(km / KM_PER_MI).toFixed(2)} mi` : `${km.toFixed(2)} km`],
+    ['Avg power', `${Math.round(stats.avgPower)} W`],
+    ['Norm. power', `${Math.round(stats.np)} W`],
+    ['Avg HR', stats.avgHr ? `${Math.round(stats.avgHr)} bpm` : '--'],
+    ['Climbed', `${Math.round(imperial ? ride.climbed * 3.28084 : ride.climbed)} ${imperial ? 'ft' : 'm'}`],
+  ], [
+    { label: 'Keep riding', onClick: () => {} },
+    { label: 'Start a new ride', primary: true, onClick: resetRide },
+  ], zoneSummary(stats));
+  saveRide();
+}
+
 function resetRide() {
+  if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) saveRide({ quiet: true });
+  recorder = new RideRecorder();
+  lastSavedSeconds = 0;
+  rideWorkout.started = player ? player.workout.name : null;
+  rideWorkout.completed = null;
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, crankAngle: 0, work: 0, finished: false });
   powerSamples.length = 0;
-  stats = new RideStats();
+  stats = new RideStats(zoneRefs);
   lastSentGrade = NaN;
   $('finish').hidden = true;
   world.jumped();
@@ -483,10 +644,13 @@ function showFinish() {
     ['Avg power', `${avgPower} W`],
     ['Avg speed', `${(imperial ? avgKmh / KM_PER_MI : avgKmh).toFixed(1)} ${imperial ? 'mph' : 'km/h'}`],
     ['Climbed', `${Math.round(imperial ? ride.climbed * 3.28084 : ride.climbed)} ${imperial ? 'ft' : 'm'}`],
+    ['Avg HR', stats.avgHr ? `${Math.round(stats.avgHr)} bpm` : '--'],
+    ['Norm. power', `${Math.round(stats.np)} W`],
   ], [
     { label: 'Keep riding', onClick: () => {} },
     { label: 'Ride it again', primary: true, onClick: resetRide },
-  ]);
+  ], zoneSummary(stats));
+  saveRide();
 }
 
 /** "8.4 km to go · next: Virage 14 in 230 m" for stages with a finish. */
@@ -521,15 +685,19 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     const v = Number(data.get(k));
     return Number.isFinite(v) && v > 0 ? v : fallback;
   };
+  const oldFtp = settings.ftp;
   settings = {
     ...settings,
     riderKg: num('riderKg', settings.riderKg),
     bikeKg: num('bikeKg', settings.bikeKg),
-    ftp: num('ftp', settings.ftp),
+    ftp: Math.round(num('ftp', settings.ftp)),
+    maxHr: Math.round(num('maxHr', settings.maxHr)),
     units: data.get('units') === 'imperial' ? 'imperial' : 'metric',
     difficulty: Math.max(0, Math.min(100, Number(data.get('difficulty')))),
   };
   saveSettings(settings);
+  pushSettings(settings);
+  if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
   world.setMarkers(markerConfig());
   lastSentGrade = NaN;
 });
@@ -540,7 +708,7 @@ $('settings').querySelector<HTMLInputElement>('[name=difficulty]')!.addEventList
 $('btn-trainer').addEventListener('click', toggleTrainer);
 $('btn-hr').addEventListener('click', toggleHeartRate);
 $('btn-demo').addEventListener('click', () => setDemo(!demo));
-$('btn-reset').addEventListener('click', resetRide);
+$('btn-reset').addEventListener('click', endRide);
 $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);
 $('btn-stage').addEventListener('click', openStages);
@@ -566,6 +734,7 @@ $('btn-data').addEventListener('click', () =>
   openDataBlocks($<HTMLDialogElement>('data-blocks'), settings.dataFields, (ids) => {
     settings = { ...settings, dataFields: ids };
     saveSettings(settings);
+    pushSettings(settings);
     hud.setFields(ids);
     placeWorkoutPanel();
   }),
@@ -596,5 +765,44 @@ if (!bluetoothAvailable()) {
 } else {
   setStatus('No trainer connected', 'off');
 }
+
+// --------------------------------------------------------------- account ----
+
+const accountUi = initAccountUi({
+  settings: () => settings,
+  toast,
+  context: () => ({
+    stage: currentStage().name,
+    workout: player?.workout.name ?? null,
+    trainer: trainer?.name ?? (demo ? 'demo' : null),
+    browser: navigator.userAgent,
+    screen: `${window.innerWidth}×${window.innerHeight}`,
+    version: import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev',
+  }),
+});
+onSyncError((msg) => toast(msg, 6000));
+
+onAccountChange(async (a) => {
+  if (!a) {
+    forgetLocalCopies();
+    return;
+  }
+  try {
+    const remote = await syncOnSignIn(settings);
+    if (remote) {
+      settings = { ...settings, ...remote };
+      saveSettings(settings);
+      hud.setFields(settings.dataFields);
+      world.setMarkers(markerConfig());
+      placeWorkoutPanel();
+      lastSentGrade = NaN;
+    }
+    await savePendingRide();
+    toast(`Signed in as ${a.name}`);
+  } catch (e) {
+    toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
+  }
+});
+restoreSession();
 
 requestAnimationFrame(frame);
