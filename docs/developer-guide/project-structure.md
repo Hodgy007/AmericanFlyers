@@ -27,7 +27,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `public/textures/asphalt.jpg` | Road surface texture. |
 | `public/textures/grass.jpg` | Grass detail texture, multiplied over the land colors. |
 | `public/images/hero*.jpg`, `hero*.mp4` | The home page hero (still and looping video, with smaller phone versions). |
-| `public/images/hero-dog*.jpg`, `hero-dog*.mp4` | The second hero: a pit bull chasing the rider. The home page picks one of the two heroes per visit. |
+| `public/images/hero-dog*.jpg`, `hero-dog*.mp4` | The second hero: a pit bull chasing the rider. The home page rotates between the two heroes (`heroRotator()` in `src/home.ts`; `?hero=dog` or `?hero=rider` pins one). |
 | `public/icons/` | App icons (192, 512, maskable 512, Apple touch icon, favicon). |
 | `public/manifest.webmanifest` | Makes the app installable: name, icons, full-screen display, colours. |
 | `public/sw.js` | Service worker: network-first pages, cached build files, models and textures. Never caches Neon. |
