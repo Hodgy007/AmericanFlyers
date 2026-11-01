@@ -49,6 +49,7 @@ Your weight drives the speed model. FTP sets the power zones and workout targets
 
 No trainer? Click **Demo ride**. The rider's power comes from a slider at the top of the screen, from 0 to 600 W in steps of 5 W. You can also use the **↑** and **↓** keys to change power by 10 W.
 
+- **Jump along the route:** click or tap the elevation profile at the bottom of the screen to go straight to that point (hover to see where). It doesn't count towards your distance, climbing or a leaderboard time. Jumping is off during races and workouts.
 - Click **Stop demo** to end the demo.
 - Connecting a trainer turns the demo off.
 - Demo rides work in every browser, including Firefox and Safari.

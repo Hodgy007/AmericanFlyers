@@ -152,7 +152,7 @@ Each frame, `frame(now)` in `src/main.ts` does this, in order:
 6. Updates the drivetrain (`drivetrain.ts`): the gear (automatic, or the rider's virtual gear), crank angle and bike rock, so the legs turn at a speed the wheels could produce.
 7. Records one statistics sample, and one recorder sample while moving.
 8. Advances the workout player, if one is running, with countdown beeps. It finishes the workout when the clock runs out.
-9. Updates the sounds (wind, tyres, freewheel, crowds, rain).
+9. Updates the sounds (wind, tyres, freewheel ratchet from `freewheel.ts`, crowds, rain).
 10. Passes the other riders and the ghost to the world, and calls `world.update()` to place every rider, build terrain and roads, and render.
 11. Every 200 ms, updates the HUD, the status line (including the gap to the ghost), the draft gauge, and the elevation strip (or the workout graph).
 

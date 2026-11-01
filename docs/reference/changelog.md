@@ -6,6 +6,12 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Steadier rider, real freewheel sound, jump along the route in demo rides
+
+- **Less wobble.** The bike's side-to-side rock with each pedal stroke is now at most about 1° (it was up to 3.4° on climbs and at low cadence), for you and the other riders. `MAX_ROCK` in `src/drivetrain.ts`.
+- **Freewheel sound.** Rebuilt from a square-wave beep into a synthesised hub ratchet (`src/freewheel.ts`): a pre-rendered metallic pawl tick (six variants) played at the real ratchet rate, 36 engagement points × how much faster the wheel turns than the cassette. Coasting at 30 km/h that's about 140 ticks a second, a buzz that builds as the cranks spin down and slows to clicks as you stop. Ticks are scheduled ahead on the audio clock so the rate stays accurate at any frame rate.
+- **Jump along the route (demo rides).** Click or tap the elevation profile to go to that point. It doesn't count as distance or climbing, and moves the ride's start, so no leaderboard time. Off during races and workouts.
+
 ### Wind and echelons, mini-map and climb preview
 
 - **Wind.** Each stage has a prevailing wind (speed and direction) that the weather scales: light on clear days, stronger under cloud and strongest in rain, with gusts and a slow swing in direction. Drag now works on air speed (road speed plus headwind), so headwinds slow you, tailwinds help, and the pro teams and race field feel it too. A smart trainer is sent the headwind in its simulation parameters. Clouds drift with the wind and rain slants with it. A wind chip in the status bar shows an arrow (up is the way you ride), the speed and "Headwind", "Tailwind" or "Crosswind from the left". New setting **Wind** (on by default). `?wind=<m/s>,<degrees>` forces the wind for testing. New module `src/world/wind.ts`; `stepSpeed()` and `Trainer.setGrade()` gained optional headwind arguments.
