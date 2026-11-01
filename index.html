@@ -8,7 +8,11 @@
     <meta name="description" content="Free 3D indoor cycling in your browser. Ride the Hell of the West, Alpe d'Huez, Mont Ventoux and more on your Wahoo or any smart trainer, with friends, ghosts, leaderboards, ERG workouts and training plans." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Fonts: the stylesheet is fetched early (preload) but applied without blocking the first paint
+         (media="print" until it arrives); display=swap shows text in the fallback font meanwhile. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" /></noscript>
     <script>
       // The home page hero rotates between the pit bull chase and the original
       // rider (src/home.ts crossfades them), starting on the other one each

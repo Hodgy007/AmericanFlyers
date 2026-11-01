@@ -1,5 +1,5 @@
-// Builds share cards from rides and puts "📤 Share" buttons where they're wanted
-// (the finish card and a ride on your profile).
+// Builds share cards from rides and shares them. The buttons that start this are in
+// shareButton.ts; this file (with the card canvas it draws) loads when one is pressed.
 
 import type { Activity } from '../cloud/sync';
 import type { Kit } from '../kit';
@@ -81,16 +81,4 @@ export async function runShare(data: ShareCardData, toast: (m: string, ms?: numb
   } catch (e) {
     toast(`Couldn’t make the card: ${(e as Error).message}`, 5000);
   }
-}
-
-/** Adds a "📤 Share" button to a row of actions; the data is built when it's pressed. */
-export function attachShare(parent: HTMLElement, data: () => ShareCardData, toast: (m: string, ms?: number) => void, where: 'start' | 'end' = 'end') {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.textContent = '📤 Share';
-  b.title = 'Make a picture of this ride to share';
-  b.addEventListener('click', () => { b.disabled = true; runShare(data(), toast).finally(() => { b.disabled = false; }); });
-  if (where === 'start') parent.prepend(b);
-  else parent.append(b);
-  return b;
 }

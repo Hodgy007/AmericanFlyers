@@ -19,7 +19,7 @@ import {
   type Activity, type Feedback, type FeedbackCategory, type FeedbackStatus,
 } from './sync';
 
-interface Deps {
+export interface Deps {
   settings: () => Settings;
   toast: (msg: string, ms?: number) => void;
   /** Extra context sent with feedback (stage, browser, trainer…). */
@@ -72,8 +72,7 @@ const errMsg = (e: unknown) => (e as Error)?.message ?? String(e);
 
 const BEST_LABELS: Record<number, string> = { 5: '5 s', 60: '1 min', 300: '5 min', 1200: '20 min' };
 
-export function initAccountUi(deps: Deps) {
-  const accountBtn = $<HTMLButtonElement>('btn-account');
+export function initAccountDialogs(deps: Deps) {
   const adminBtn = $<HTMLButtonElement>('btn-admin');
   const signinDialog = $<HTMLDialogElement>('signin');
   const profileDialog = $<HTMLDialogElement>('profile-dialog');
@@ -130,23 +129,6 @@ export function initAccountUi(deps: Deps) {
     setTimeout(() => dialog.showModal(), 300);
   }
 
-  // On returning from Google with an error, the URL carries it.
-  const params = new URLSearchParams(location.search);
-  if (params.has('error')) {
-    deps.toast(`Sign-in didn’t finish: ${params.get('error_description') ?? params.get('error')}`, 7000);
-    const url = new URL(location.href);
-    url.searchParams.delete('error');
-    url.searchParams.delete('error_description');
-    history.replaceState(null, '', url);
-  }
-
-  async function refreshAccountButton() {
-    const a = account();
-    accountBtn.textContent = a ? `👤 ${a.name.split(' ')[0]}` : '👤 Sign in';
-    accountBtn.title = a ? `${a.name} (${a.email}): profile & stats` : 'Sign in or create a free account';
-    await checkAdmin();
-  }
-
   async function checkAdmin() {
     const id = account()?.id;
     const yes = id ? await isAdmin() : false;
@@ -157,7 +139,7 @@ export function initAccountUi(deps: Deps) {
   }
 
   onAccountChange(() => {
-    refreshAccountButton();
+    checkAdmin();
     if (account()) {
       if (signinDialog.open) signinDialog.close();
       const then = pendingAfterSignIn;
@@ -165,11 +147,7 @@ export function initAccountUi(deps: Deps) {
       then?.();
     } else if (profileDialog.open) profileDialog.close();
   });
-  refreshAccountButton();
-
-  accountBtn.addEventListener('click', () => (account() ? openProfile('stats') : openSignIn()));
-  adminBtn.addEventListener('click', () => openProfile('admin'));
-  $('btn-feedback').addEventListener('click', () => openFeedback());
+  checkAdmin();
 
   // ----------------------------------------------------------- profile ----
 
@@ -696,7 +674,7 @@ export function initAccountUi(deps: Deps) {
     }
   });
 
-  return { openSignIn, openProfile, invalidate, checkAdmin };
+  return { openSignIn, openProfile, openFeedback, invalidate, checkAdmin };
 }
 
 const STATUSES: FeedbackStatus[] = ['new', 'planned', 'in_progress', 'done', 'declined'];

@@ -60,7 +60,7 @@ Conventions:
 - opens and closes each main dialog (stage, workouts, riders, leaderboard, time and weather, plans, kit, tour, settings, feedback, sign in),
 - fails on any page error or console error (blocked network requests are ignored).
 
-It takes about a minute with software WebGL. To keep that fast and reliable, the test throttles `requestAnimationFrame` to about 1 fps (set `E2E_FULL_FPS=1` to turn that off) and clicks through the DOM. When you add a main dialog or menu entry, add a line to `DIALOGS` in the spec.
+It takes about a minute with software WebGL. To keep that fast and reliable, the test throttles `requestAnimationFrame` to about 1 fps (set `E2E_FULL_FPS=1` to turn that off) and clicks through the DOM. When you add a main dialog or menu entry, add a line to `DIALOGS` in the spec. Most dialogs load their code on first click (see [Architecture](architecture.md#lazy-loading)); the spec polls for the dialog to open, so that needs no special handling. On a busy machine the whole test can pass 150 s; raise it with `--timeout`.
 
 The Playwright config uses the default Playwright Chromium, which CI installs with `npx playwright install --with-deps chromium`. On a machine that has no downloaded browser but does have a Chromium at `/opt/pw-browsers/chromium` (the Claude Code sandbox), it uses that one.
 

@@ -1171,3 +1171,8 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 .gc.claimed { opacity: 0.7; }
 .finish-reward { margin: 6px 0 0; font-weight: 600; color: #f0b429; text-align: center; }
 @media (max-width: 560px) { .gar-preview { height: 170px; } .gi-grid, .gc-list { grid-template-columns: 1fr; } }
+
+/* A button whose dialog's code is still arriving (src/lazy.ts): shown only if the wait is noticeable. */
+.lazy-busy { cursor: progress; opacity: 0.65; animation: lazy-pulse 0.9s ease-in-out infinite alternate; }
+@keyframes lazy-pulse { from { opacity: 0.45; } to { opacity: 0.8; } }
+@media (prefers-reduced-motion: reduce) { .lazy-busy { animation: none; } }

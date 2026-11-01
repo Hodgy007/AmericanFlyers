@@ -8,7 +8,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | --- | --- |
 | `index.html` | The page markup: home page, top bar and ☰ menu, data blocks, workout, gear, draft and demo panels, status line, every dialog. |
 | `package.json` | Scripts (`dev`, `build`, `preview`) and dependencies. |
-| `vite.config.ts` | Vite config: relative base (`./`) and a larger chunk-size warning limit. |
+| `vite.config.ts` | Vite config: relative base (`./`), the `vendor-three`, `vendor-neon` and `vendor-sentry` chunks, and Sentry source-map upload. |
 | `tsconfig.json` | TypeScript config: strict mode, `noUnusedLocals`, and the `web-bluetooth` and `vite/client` types. |
 | `README.md` | Features, browser support, local run instructions and the backend overview. |
 | `CLAUDE.md` | Project notes for AI coding assistants: commands, preferences, deployment and the backend. |
@@ -38,6 +38,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | File | Purpose |
 | --- | --- |
 | `main.ts` | Entry point. Owns the ride state, runs the frame loop, controls the trainer, handles the top bar, ☰ menu and dialogs, saves rides, and wires up sign-in, riding together, ghosts, plans, sound, virtual shifting and drafting. |
+| `lazy.ts` | Lazy loading helpers: `lazy()`, `use()`, `loadOnClick()`, `prefetchWhenIdle()`, `firstFrame`. See [Architecture](architecture.md#lazy-loading). |
 | `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up, and *Ride without an account*. |
 | `drivetrain.ts` | The virtual drivetrain: automatic gears that keep leg speed in step with road speed, the 24 virtual-shifting gears, crank angle and bike rock. |
 | `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish. |
@@ -65,7 +66,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `sound.ts` | Ride sounds made with Web Audio: wind, tyre hum, freewheel, crowds, beeps, shift clicks and the finish fanfare. |
 | `plans.ts` | The training plans and their progress logic. |
 | `plansUi.ts` | The training plans dialog. |
-| `onboarding.ts` | The three-step first-ride guide. |
+| `onboarding.ts`, `onboardingState.ts` | The three-step first-ride guide (lazy), and the tiny "has it been done" check that stays in the entry chunk. |
 | `ridersUi.ts` | The 👥 button and the *Riding now* list, with the ride-on emoji buttons on each rider. |
 | `rideOnsUi.ts` | Ride-ons in the app: sending (from 👥 and the **R** key), the toast for ones you get, the floating emoji, and pro riders replying. |
 | `kit.ts` | Your kit (jersey, second colour, frame): the presets, validation, the kit string sent to the server, and `setTourJersey()` for tours. |
@@ -76,7 +77,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `garage/effects.ts` | What an item does in watts and seconds, from the ride's physics. |
 | `garage/store.ts`, `garage/garage.ts`, `garage/api.ts` | Item states and equipping, the controller (wallet, loadout, rewards) and the database calls. |
 | `garage/garageUi.ts`, `garage/preview.ts` | The Garage dialog and its turntable renderer. |
-| `garage/shareCard.ts`, `garage/shareUi.ts` | The share card canvas and the Share buttons. |
+| `garage/shareCard.ts`, `garage/shareUi.ts`, `garage/shareButton.ts` | The share card canvas, building its data, and the Share buttons (the first two load on the first press). |
 | `world/bikeParts.ts` | Wheels, the Tron glow (`updateGlow`), helmets, and the jersey pattern and sock shader. |
 | `leaderboardUi.ts` | The 🏆 leaderboard dialog and *Race* buttons. |
 | `style.css` | All styles, including the layout for phones. |
@@ -108,7 +109,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `world/atmosphere.ts` | Time of day and weather: keyframed looks, sun and moon, ambient light, fog, exposure, front light, wet road. |
 | `world/rain.ts` | Rain: GPU-animated streaks in a box that follows the camera. |
 | `world/noise.ts` | Deterministic noise (value noise and fractal noise), a seeded random generator, and `smoothstep`. |
-| `cloud/client.ts` | The Neon client, configured from the default endpoints or `VITE_` variables. |
+| `cloud/client.ts` | The Neon client, configured from the default endpoints or `VITE_` variables, loaded on demand through a recording proxy. |
 | `cloud/account.ts` | The signed-in account: session restore, Google sign-in, email sign-up and sign-in, password reset, sign-out and rename. |
 | `cloud/emailAuth.ts` | The email form: *Create account* (name, email, password, weight, optional FTP), *Sign in* and *Forgot password*. |
 | `cloud/presence.ts` | Riding together: sends your position and kit every 2 s and predicts the other riders' positions. |
@@ -120,8 +121,9 @@ This page lists every file and folder in the repository, with a one-line summary
 | `cloud/verification.ts` | Email verification codes: pure helpers (code cleaning, resend timer, error wording) and the two SDK calls. |
 | `cloud/codeEntry.ts`, `cloud/verifyBanner.ts` | The 6-digit code box (used in the email form and the profile banner). |
 | `cloud/privacy.ts`, `cloud/accountTab.ts` | "Download my data" and "Delete my account", and the profile tab that offers them. |
-| `privacyUi.ts`, `rideIntegrity.ts` | The Privacy dialog (any `data-privacy` element opens it); which rides may be on leaderboards. |
-| `cloud/ui.ts` | The sign-in and password-reset dialogs, the profile tabs, the feedback dialog, and the admin dashboard. |
+| `privacyUi.ts`, `privacyText.ts`, `rideIntegrity.ts` | The Privacy dialog (any `data-privacy` element opens it; the text is lazy); which rides may be on leaderboards. |
+| `cloud/accountBar.ts` | The 👤 button and admin button in the top bar, and the entry points that load `cloud/ui.ts`. |
+| `cloud/ui.ts` | The sign-in and password-reset dialogs, the profile tabs, the feedback dialog, and the admin dashboard (lazy). |
 
 ## Tests and tooling
 

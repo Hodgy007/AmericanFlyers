@@ -17,7 +17,7 @@ This page explains how the modules fit together: the frame loop, the trainer and
 | 3D models | **glTF binary** (`.glb`) | `public/models/`, generated with Higgsfield. |
 | Docs | **Markdown** | `docs/` and `README.md`. |
 
-Libraries: **Three.js** (3D rendering), **@neon/neon-js** (Neon Auth and the Data API). Browser APIs: **Web Bluetooth** (trainer and heart-rate strap), **WebGL** (through Three.js), **Web Audio** (ride sounds), the **Fullscreen** and **Service Worker** APIs. Build tool: **Vite**. Hosting: **Vercel**. Backend: **Neon** (Postgres, Neon Auth, Data API). There's no server code of our own: the browser talks to Neon directly, and the database enforces who can see what.
+Libraries: **Three.js** (3D rendering), **@neon/neon-js** (Neon Auth and the Data API), **@sentry/browser** (crash reports, only when the build has a DSN). Browser APIs: **Web Bluetooth** (trainer and heart-rate strap), **WebGL** (through Three.js), **Web Audio** (ride sounds), the **Fullscreen** and **Service Worker** APIs. Build tool: **Vite**. Hosting: **Vercel**. Backend: **Neon** (Postgres, Neon Auth, Data API). There's no server code of our own: the browser talks to Neon directly, and the database enforces who can see what.
 
 ## The shape of the app
 
@@ -182,6 +182,38 @@ When you sign in, the account is the source of truth. The browser's copies are a
 `src/cloud/` talks to Neon. `client.ts` builds the client from `@neon/neon-js`. `account.ts` holds the current user and signs in with Google or with email and password (sign-up, sign-in, password reset). `emailAuth.ts` draws the email form. `presence.ts` runs riding together. `sync.ts` reads and writes every table the browser can touch, including the admin functions. `recorder.ts` records rides and writes `.tcx` files. `achievements.ts` works out badges from rides and FTP history. `ui.ts` draws the sign-in, profile, feedback and admin dialogs, and `charts.ts` draws their charts.
 
 Nothing in the cloud layer runs on the frame loop. Every call is triggered by a user action, a ride event, the 2-second riding-together update, or the 5-minute autosave.
+
+## Lazy loading
+
+The first visit downloads only what draws the first frame: the entry chunk (`main.ts` and the ride, world and HUD code) and the `vendor-three` chunk. Everything else is split off with dynamic `import()` and loaded on first use, so a phone isn't parsing the garage, the admin dashboard or the privacy text before the road appears.
+
+| What | Where it loads from | Loads when |
+| --- | --- | --- |
+| Neon SDK (`vendor-neon`) | `cloud/client.ts` | After the first frame (`restoreSession()`), or at the first database call. `neon` there is a small recording proxy: `neon.from(...).select(...)` and `neon.auth.getSession()` look and chain as before, and awaiting one loads the SDK and replays the calls on the real client. |
+| Sentry SDK | `monitoring.ts` | After the first frame (`startMonitoring()`). Until then two tiny listeners keep crashes, and hand them to Sentry once it is up. |
+| Sign-in, profile, feedback, admin dialogs | `cloud/ui.ts` (via `cloud/accountBar.ts`, which keeps the 👤 button and admin button) | First click on 👤, Admin, Feedback, or any `openSignIn()`. |
+| Workout library and creator, `.zwo` import | `workouts/ui.ts` | First click on Workouts. |
+| Garage and store, with its 3D turntable | `garage/garageUi.ts`, `garage/preview.ts` | First click on Garage. |
+| Share card | `garage/shareUi.ts`, `shareCard.ts` (buttons in `garage/shareButton.ts`) | First press of a 📤 Share button. |
+| Tour, Events, Leaderboard, Plans, Kit, Time & weather dialogs | `tourUi.ts`, `eventsUi.ts`, `leaderboardUi.ts`, `plansUi.ts`, `kitUi.ts`, `atmosphereUi.ts` | First click on their button. |
+| First-ride guide | `onboarding.ts` (`onboardingState.ts` stays eager) | When it first opens. |
+| Privacy text | `privacyText.ts` (loaded by `privacyUi.ts`) | First time the dialog opens. |
+| Race screens and the commentator | `raceUi.ts`, `commentary.ts` | When a race starts. |
+| Email sign-up form on the home page | `cloud/emailAuth.ts` | First tap of *Sign up with email*. |
+| GPX parser | `routes/gpx.ts` | When a file is chosen. |
+| Landmark models (`public/models/*.glb`) | `world/landmarks.ts` | When a landmark that uses the file comes within range. |
+| Hero videos | `home.ts` | After the first frame. |
+
+How it works, in `src/lazy.ts`:
+
+- `lazy(() => import('./x'))` wraps a module (or `import(...).then((m) => m.initX(deps))` to build a UI once). `.get()` loads it once, `.peek()` returns it if it has arrived, `.prefetch()` loads it quietly.
+- `use(lazyThing, (ui) => ui.open(), button)` runs something as soon as the module is there. If the wait passes 150 ms the button gets the `lazy-busy` class (a pulse, `cursor: progress`); if the load fails a toast says so and the next click tries again.
+- `loadOnClick(button, lazyThing)` is for modules that attach their own handler to a button when built (Events, Leaderboard): the first click loads the module, then is replayed.
+- `prefetchWhenIdle([...])`, called from `afterFirstFrame()` in `main.ts`, fetches the likely next dialogs one at a time in spare moments (not on data saver or 2G). By the time a rider taps, the chunk is usually cached. The service worker caches `/assets/*` on first fetch, so chunks work offline after the first visit.
+
+**Adding a new lazy module:** give it an `initX(deps)` that returns `{ open() }`, wrap it in `lazy()` in `main.ts` next to the others, open it with `use(...)`, and add it to the list in `afterFirstFrame()` if it's likely to be opened. Don't import it statically from anywhere on the first-frame path (`import type` is fine); if another module needs a small part of it, move that part into its own file, as `onboardingState.ts` and `shareButton.ts` do. Check `npm run build`: the module should show up as its own file in `dist/assets/` and not in the entry chunk.
+
+`vite.config.ts` puts `three`, the Neon libraries and Sentry in `vendor-*` chunks. They change far less often than the app, so browsers keep them across deploys.
 
 ## Racing
 

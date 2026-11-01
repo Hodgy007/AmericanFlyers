@@ -1,9 +1,8 @@
 // First-ride setup: three quick steps the first time someone rides. About
 // you (weight, FTP, max heart rate), your trainer, then your first ride.
 
+import { markDone } from './onboardingState';
 import type { Settings } from './settings';
-
-const DONE_KEY = 'americanflyers.onboarded';
 
 interface Options {
   settings: () => Settings;
@@ -15,15 +14,6 @@ interface Options {
   rampTest: () => void;
   rideStage: (id: string) => void;
   openPlans: () => void;
-}
-
-/** True once the guide has been done or skipped, or for anyone who has ridden here before (has saved settings). */
-export function onboarded() {
-  try { return localStorage.getItem(DONE_KEY) === '1' || localStorage.getItem('americanflyers.settings') !== null; } catch { return true; }
-}
-
-function markDone() {
-  try { localStorage.setItem(DONE_KEY, '1'); } catch { /* shows again next time */ }
 }
 
 export function initOnboarding(o: Options) {

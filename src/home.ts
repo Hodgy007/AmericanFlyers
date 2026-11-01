@@ -3,7 +3,8 @@
 // without an account".
 
 import { account, onAccountChange, signInWith } from './cloud/account';
-import { mountEmailAuth, type RiderDetails } from './cloud/emailAuth';
+import type { RiderDetails } from './cloud/emailAuth';
+import { firstFrame, lazy, use } from './lazy';
 
 const HINT_KEY = 'americanflyers.signedIn'; // remembered so signed-in riders skip the home page
 
@@ -17,6 +18,9 @@ function hint(on?: boolean) {
   }
   return false;
 }
+
+/** The email sign-up form's code, loaded on first use. */
+export const emailAuth = lazy(() => import('./cloud/emailAuth'));
 
 export function initHome(opts: { onEnterApp?: () => void; onRiderDetails: (d: RiderDetails) => void; defaults: () => { riderKg: number } }) {
   const home = document.getElementById('home')!;
@@ -61,14 +65,18 @@ export function initHome(opts: { onEnterApp?: () => void; onRiderDetails: (d: Ri
     });
   }
 
-  // Email sign-up opens in place of the button.
+  // Email sign-up opens in place of the button. The form's code loads on the first
+  // tap (and in a spare moment before that: main.ts prefetches it), not with the page.
   const emailBox = document.getElementById('home-email')!;
   const emailToggle = document.getElementById('home-email-toggle')!;
-  mountEmailAuth(emailBox, { onDetails: opts.onRiderDetails, defaults: opts.defaults });
+  let emailMounted = false;
   emailToggle.addEventListener('click', () => {
-    emailToggle.hidden = true;
-    emailBox.hidden = false;
-    emailBox.querySelector<HTMLInputElement>('input[name=name]')?.focus();
+    use(emailAuth, (m) => {
+      if (!emailMounted) { emailMounted = true; m.mountEmailAuth(emailBox, { onDetails: opts.onRiderDetails, defaults: opts.defaults }); }
+      emailToggle.hidden = true;
+      emailBox.hidden = false;
+      emailBox.querySelector<HTMLInputElement>('input[name=name]')?.focus();
+    }, emailToggle);
   });
 
   document.getElementById('home-ride')!.addEventListener('click', hide);
@@ -106,6 +114,9 @@ function heroRotator(home: HTMLElement) {
   const small = matchMedia('(max-width: 768px)').matches;
 
   interface Slide { id: HeroId; el: HTMLElement; video?: HTMLVideoElement }
+  // The looping clips (up to a megabyte each) wait for the first frame of the world, so they
+  // don't compete with the code and models for the connection. The still shows meanwhile.
+  let videosReady = false;
   const makeVideo = (id: HeroId, slide: HTMLElement) => {
     const video = document.createElement('video');
     video.className = 'home-video';
@@ -125,7 +136,7 @@ function heroRotator(home: HTMLElement) {
     bg.classList.add(`hero-${id}`);
     bg.setAttribute('aria-label', HEROES[id].label);
     el.append(bg);
-    return { id, el, video: moving ? makeVideo(id, el) : undefined };
+    return { id, el, video: moving && videosReady ? makeVideo(id, el) : undefined };
   };
 
   // The still in the markup becomes the first slide.
@@ -138,6 +149,14 @@ function heroRotator(home: HTMLElement) {
   let current = 0;
   let playing = false;
   let timer = 0;
+
+  if (moving) {
+    firstFrame.then(() => {
+      videosReady = true;
+      for (const s of slides) s.video ??= makeVideo(s.id, s.el);
+      if (playing) slides[current].video?.play().catch(() => {});
+    });
+  }
 
   // The second hero is only fetched once the first has been up a while.
   const addSecond = () => {

@@ -134,7 +134,7 @@ Each stage lists its landmark kinds in `src/stages.ts`. A kind is a `LandmarkKin
 | `yaw` | Extra turn after facing the road. |
 | `clearance` | Meters of tree-free space around it. |
 
-Models are scaled to `size`, centered, and stood on the ground. Models are placed between 250 m behind and 1,500 m ahead. A missing file is skipped, and the console logs *Landmark model not found*.
+Models are scaled to `size`, centered, and stood on the ground. Models are placed between 250 m behind and 1,500 m ahead. A model file is fetched the first time a landmark that uses it comes into that range, not all at start-up (the nine files are 7.5 MB, and a stage uses only some of them), so a rider only downloads the models for the stages they ride. A missing file is skipped, and the console logs *Landmark model not found*.
 
 The farm landmarks used on lowland stages and most GPX routes are in `FARM_LANDMARKS` in `src/stages.ts`.
 

@@ -1,5 +1,5 @@
 import './style.css';
-import { initMonitoring, setMonitoringContext, setMonitoringUser } from './monitoring';
+import { initMonitoring, setMonitoringContext, setMonitoringUser, startMonitoring } from './monitoring';
 
 initMonitoring(); // first, so it catches errors while the app starts
 import { bluetoothAvailable, connectTrainer, type Trainer, type TrainerReading } from './ble/trainer';
@@ -7,7 +7,6 @@ import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
 import { currentStage, elevationAt, gradeAt, headingAt, setStage } from './course';
 import type { Stage } from './stages';
 import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
-import { parseGpx } from './routes/gpx';
 import { stepSpeed, DEFAULT_PARAMS } from './physics';
 import { drawProfile } from './profile';
 import { World, type CameraMode } from './world/world';
@@ -18,19 +17,18 @@ import { Drivetrain, gearCadence, gearGradeOffset, VIRTUAL_GEARS, VIRTUAL_REF } 
 import { drawWorkout } from './workouts/graph';
 import { RAMP_TEST_ID, zoneColor, type Workout } from './workouts/model';
 import { WorkoutPlayer } from './workouts/player';
-import { initWorkoutUi } from './workouts/ui';
 import { HR_ZONES, POWER_ZONES, zoneBars } from './zones';
 import { account, onAccountChange, restoreSession } from './cloud/account';
 import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, stageGhost, stageLeaderboard, syncOnSignIn, type Activity, type LeaderboardRow } from './cloud/sync';
 import { RideRecorder } from './cloud/recorder';
-import { initAccountUi } from './cloud/ui';
-import { initHome } from './home';
-import { initPrivacyUi } from './privacyUi';
+import { initAccountUi } from './cloud/accountBar';
+import { lazy, loadOnClick, markFirstFrame, onLazyError, prefetchWhenIdle, use } from './lazy';
+import { emailAuth, initHome } from './home';
+import { initPrivacyUi, prefetchPrivacy } from './privacyUi';
 import { leaderboardEligible, leaderboardNote, type RideFlags } from './rideIntegrity';
 import { Presence } from './cloud/presence';
 import { initRidersUi } from './ridersUi';
 import { Ghost, raceTime } from './ghost';
-import { initLeaderboardUi } from './leaderboardUi';
 import { Sound } from './sound';
 import { Peloton } from './peloton';
 import { draftFrom, DRAFT_MAX_GAP, DRAFT_SWEET_SPOT, type Draft } from './draft';
@@ -40,28 +38,21 @@ import { initWindUi } from './windUi';
 import { MiniMap } from './miniMap';
 import { initClimbUi } from './climbUi';
 import { complete, nextSession, planById, type Session } from './plans';
-import { initPlansUi } from './plansUi';
-import { initOnboarding, onboarded } from './onboarding';
+import { onboarded } from './onboardingState';
 import { workoutById } from './workouts/library';
 import type { OtherRider } from './world/others';
 import { Steering } from './steering';
-import { initAtmosphereUi } from './atmosphereUi';
 import { kitString, onLookChange, playerLook, setPlayerKit, setTourJersey } from './kit';
-import { initKitUi } from './kitUi';
 import { Garage, rewardText } from './garage/garage';
-import { initGarageUi } from './garage/garageUi';
-import { attachShare, shareDataFromRide, shareRideFromActivity, runShare } from './garage/shareUi';
+import { attachShare, shareRide } from './garage/shareButton';
 import { levelTitle } from './garage/progression';
 import { RideOns } from './cloud/rideOns';
 import { initRideOnsUi } from './rideOnsUi';
 // Racing and the Hell of the West tour (race.ts, raceUi.ts, tour.ts, tourUi.ts).
-import { LiveRace, raceSetup, type ResultRow } from './race';
-import { initRaceUi, resultsNode } from './raceUi';
-import { initTourUi } from './tourUi';
+import { LiveRace, raceSetup, type PanelData, type ResultRow } from './race';
 // Scheduled group rides and races, and the race commentator (schedule.ts, eventSession.ts, eventsUi.ts, commentary.ts, cloud/events.ts).
-import { ClipPlayer, Commentator, RaceCommentary } from './commentary';
+import type { RaceCommentary } from './commentary';
 import { DropWatcher, EVENT_REF_WKG, eventOver, mergeEventResults, secondsSinceStart, type ActiveEvent, type RealResult } from './eventSession';
-import { eventResultsNode, initEventBar, initEventsUi } from './eventsUi';
 import { eventResults, serverNow, submitEventResult, syncServerClock, type EventRow } from './cloud/events';
 import { countdownLabel, eventStageKey, joinState } from './schedule';
 import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChange, priorTotals, recordStage, refWkg, simulateStage, tourComplete, tourJersey, tourStageNumber } from './tour';
@@ -93,11 +84,22 @@ const sound = new Sound(settings.sound);
 const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
 let race: LiveRace | null = null; // the race being ridden, if any
-const raceUi = initRaceUi();
+onLazyError((msg) => toast(msg, 5000));
+// Racing screens (the 3-2-1, live panel and result tables) and the commentator are only
+// needed once a race starts, so they load then (and in a spare moment after the first frame).
+const raceUiModule = lazy(() => import('./raceUi').then((m) => ({ m, ui: m.initRaceUi() })));
+const raceUi = {
+  /** The 3-2-1 text, or null to hide it. Nothing to hide until the screens have loaded. */
+  countdown(text: string | null) { const r = raceUiModule.peek(); if (r) r.ui.countdown(text); else if (text) raceUiModule.prefetch(); },
+  panel(d: PanelData | null, imperial: boolean) { const r = raceUiModule.peek(); if (r) r.ui.panel(d, imperial); else if (d) raceUiModule.prefetch(); },
+};
 // The race commentator: voice lines for race events, quieter ride sounds while it speaks.
-const clipPlayer = new ClipPlayer();
-clipPlayer.onDuck = (on) => sound.duck(on);
-const commentator = new Commentator(clipPlayer, () => performance.now() / 1000);
+const commentary = lazy(() => import('./commentary').then((m) => {
+  const clipPlayer = new m.ClipPlayer();
+  clipPlayer.onDuck = (on) => sound.duck(on);
+  const commentator = new m.Commentator(clipPlayer, () => performance.now() / 1000);
+  return { m, clipPlayer, commentator };
+}));
 let raceCommentary: RaceCommentary | null = null;
 let clipsPreloaded = false;
 /** The scheduled event you have joined (a race or a group ride), if any. */
@@ -448,6 +450,7 @@ function frame(now: number) {
   if (g) others.push(g);
   world.setOthers(others);
   world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: drivetrain.crankAngle, rock: drivetrain.rock }, dt);
+  if (!firstFrameDrawn) { firstFrameDrawn = true; requestAnimationFrame(() => window.setTimeout(afterFirstFrame, 0)); }
   if (settings.miniMap && !ride.finished) {
     miniMap.update(now, { distance: ride.distance, riders: others, lines: race ? race.course.lines.filter((l) => l.kind !== 'finish').map((l) => ({ kind: l.kind, d: l.d })) : [] });
   }
@@ -476,26 +479,6 @@ function frame(now: number) {
     profileCanvas.classList.toggle('jumpable', canJump());
   }
   requestAnimationFrame(frame);
-
-// Installable app: register the service worker (production builds only).
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
-}
-
-// "Install app" button where the browser offers it (Chrome, Edge, Android).
-let installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  installPrompt = e as Event & { prompt: () => Promise<void> };
-  $('btn-install').hidden = false;
-});
-$('btn-install').addEventListener('click', async () => {
-  if (!installPrompt) return;
-  await installPrompt.prompt().catch(() => {});
-  installPrompt = null;
-  $('btn-install').hidden = true;
-});
-window.addEventListener('appinstalled', () => { $('btn-install').hidden = true; toast('American Flyers is installed. Open it from your home screen or apps.'); });
 }
 
 /** 0..1: crowds line the hairpins of the climbs and the last few hundred metres. */
@@ -869,7 +852,8 @@ async function savePendingRide() {
   }
 }
 
-const workoutUi = initWorkoutUi({ ftp: () => settings.ftp, ride: startWorkout, toast });
+// The workout library and creator (and the .zwo/.erg/.mrc import) load when the dialog is first opened.
+const workoutUi = lazy(() => import('./workouts/ui').then((m) => m.initWorkoutUi({ ftp: () => settings.ftp, ride: startWorkout, toast })));
 
 // ------------------------------------------------------------------- UI ----
 
@@ -923,7 +907,7 @@ function resetRide() {
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
   if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); } // starting afresh ends a race
   raceCommentary = null;
-  clipPlayer.stop();
+  commentary.peek()?.clipPlayer.stop();
   endEvent(); // ...and leaves a scheduled event
   drivetrain.reset();
   powerSamples.length = 0;
@@ -975,7 +959,7 @@ function openStages() {
   const tourCard = document.createElement('button');
   tourCard.className = 'stage-card tour-card';
   tourCard.innerHTML = '<strong>🏆 Hell of the West tour</strong><span class="stage-tagline">Race the three stages of American Flyers in order against the pro teams: Morgul-Bismark, the Tour of the Moon, then Echo Lake. Yellow, green and polka-dot jerseys.</span>';
-  tourCard.addEventListener('click', () => { dialog.close(); tourUi.open(); });
+  tourCard.addEventListener('click', () => { dialog.close(); openTour(); });
   list.append(tourCard);
   for (const stage of stages) {
     if (stage.uploaded && !list.querySelector('.stage-section')) {
@@ -1072,14 +1056,14 @@ function finishRace(r: LiveRace) {
     if (worn.length) window.setTimeout(() => toast(`You lead the tour: ${worn.map((j) => JERSEY_NAMES[j].toLowerCase()).join(' and ')}!`, 6000), 1200);
     const next = TOUR_STAGE_IDS[tourN];
     if (next && tour && !tourComplete(tour)) actions.push({ label: `Next: stage ${tourN + 1}`, primary: true, onClick: () => beginRace(stageById(next), tourN + 1) });
-    else actions.push({ label: 'Tour standings', primary: true, onClick: () => tourUi.open() });
+    else actions.push({ label: 'Tour standings', primary: true, onClick: openTour });
   } else {
     actions.push({ label: 'Race again', primary: true, onClick: () => beginRace(stage, tourN) });
   }
   return { rows, me, place, tour: tour && tourN ? tour : null, actions };
 }
 
-const tourUi = initTourUi({
+const tourUi = lazy(() => import('./tourUi').then((m) => m.initTourUi({
   race: (n) => beginRace(stageById(TOUR_STAGE_IDS[n - 1]), n),
   simulate: (n) => {
     const tour = getTour();
@@ -1091,8 +1075,9 @@ const tourUi = initTourUi({
     toast(`Stage ${n} simulated: you finished ${ordinal(you)} of ${rows.length}.`, 5000);
   },
   imperial: () => settings.units === 'imperial',
-});
-$('btn-tour').addEventListener('click', () => tourUi.open());
+})));
+function openTour() { use(tourUi, (u) => u.open(), $('btn-tour')); }
+$('btn-tour').addEventListener('click', openTour);
 // Progress is saved with the settings, so it follows the account.
 loadTour(settings.tour);
 onTourChange((p) => {
@@ -1113,18 +1098,26 @@ updateTourJersey();
 // clock). Joining puts you on the start line of the event's stage, in a presence room of
 // its own, with a 3-2-1 that starts at the same moment for everyone.
 
-const eventBar = initEventBar(() => {
-  const was = eventState?.ev;
-  resetRide();
-  if (was) toast(`You left ${was.title}.`);
-});
-
-initEventsUi({
-  join: (row) => { joinEvent(row); },
-  stageName: (id) => stageById(id).name,
-  openSignIn: (why) => accountUi.openSignIn(why),
-  currentEventId: () => eventState?.ev.id ?? null,
-});
+const eventsUi = lazy(() => import('./eventsUi').then((m) => {
+  const bar = m.initEventBar(() => {
+    const was = eventState?.ev;
+    resetRide();
+    if (was) toast(`You left ${was.title}.`);
+  });
+  m.initEventsUi({
+    join: (row) => { joinEvent(row); },
+    stageName: (id) => stageById(id).name,
+    openSignIn: (why) => accountUi.openSignIn(why),
+    currentEventId: () => eventState?.ev.id ?? null,
+  });
+  return { m, bar };
+}));
+loadOnClick($('btn-events'), eventsUi); // the dialog wires its own button once loaded
+// The lobby strip: only ever shown while an event is joined, which the events dialog does, so it has loaded by then.
+const eventBar = {
+  show: (title: string, status: string) => eventsUi.peek()?.bar.show(title, status),
+  hide: () => eventsUi.peek()?.bar.hide(),
+};
 
 function eventHolding() {
   return !!eventState && eventState.ev.kind === 'group_ride' && secondsSinceStart(eventState.ev, serverNow()) < 0;
@@ -1133,10 +1126,16 @@ function eventHolding() {
 /** Wires a new race to the beeps and the commentator (single races, tour stages and events). */
 function attachRace(r: LiveRace) {
   r.onBeep = (last) => sound.beep(last);
-  commentator.reset();
-  raceCommentary = new RaceCommentary(commentator);
-  r.onEvent = (text, kind) => raceCommentary?.event(text, kind);
-  if (!clipsPreloaded && settings.commentary && sound.enabled) { clipsPreloaded = true; ClipPlayer.preload(); }
+  raceUiModule.prefetch();
+  raceCommentary = null;
+  // The commentator is normally loaded already (prefetched after the first frame); if not, it joins in a moment.
+  use(commentary, ({ m, commentator }) => {
+    if (race !== r) return; // the race ended or changed while it loaded
+    commentator.reset();
+    raceCommentary = new m.RaceCommentary(commentator);
+    r.onEvent = (text, kind) => raceCommentary?.event(text, kind);
+    if (!clipsPreloaded && settings.commentary && sound.enabled) { clipsPreloaded = true; m.ClipPlayer.preload(); }
+  });
 }
 
 async function joinEvent(row: EventRow) {
@@ -1210,6 +1209,9 @@ function updateEvent() {
 
 /** The race commentator: feeds it this frame's race picture. Called with the live panel's numbers. */
 function updateCommentary(panel: ReturnType<LiveRace['panel']> | null) {
+  const c = commentary.peek();
+  if (!c) return;
+  const { commentator } = c;
   commentator.enabled = settings.commentary && sound.enabled;
   if (!race || !raceCommentary) return;
   if (race.phase === 'countdown' && race.untilGo > 5 && race.untilGo <= 30) raceCommentary.lobby();
@@ -1239,7 +1241,7 @@ function updateCommentary(panel: ReturnType<LiveRace['panel']> | null) {
 function eventFinishPanel(ev: ActiveEvent, rows: ResultRow[], myTime: number, avgPower: number, demoUsed: boolean): Node {
   const box = document.createElement('div');
   const bots = rows.map((r) => ({ name: r.name, time: r.time, team: r.team, you: r.you }));
-  const draw = (real: RealResult[]) => box.replaceChildren(eventResultsNode(mergeEventResults(bots, real, myTime), real.filter((r) => !r.is_me).length + 1));
+  const draw = (real: RealResult[]) => { const m = eventsUi.peek()?.m; if (m) box.replaceChildren(m.eventResultsNode(mergeEventResults(bots, real, myTime), real.filter((r) => !r.is_me).length + 1)); };
   draw([]);
   const eligible = !demoUsed && TIME_SCALE === 1 && avgPower > 0;
   const note = document.createElement('p');
@@ -1306,7 +1308,8 @@ function showFinish() {
     items.splice(2, 0, ['Points', `${r.me.sprint} sprint · ${r.me.kom} mountain`]);
     items.length = Math.min(items.length, 6);
     title = `${currentStage().name}: ${ordinal(r.place)}`;
-    extra = [resultsNode(r.rows, r.tour), ...extra];
+    const results = raceUiModule.peek()?.m.resultsNode(r.rows, r.tour); // loaded when the race began
+    if (results) extra = [results, ...extra];
     actions = r.actions;
     raceCommentary?.finished(r.place);
     if (eventState?.ev.kind === 'race') extra = [eventFinishPanel(eventState.ev, r.rows, r.me.time, avgPower, eventState.demoUsed), ...extra];
@@ -1323,7 +1326,7 @@ function showFinish() {
   const finishStage = currentStage();
   const finishFrom = ride.startDistance;
   const finishTo = ride.distance;
-  attachShare($('finish-actions'), () => shareDataFromRide({
+  attachShare($('finish-actions'), () => ({
     stage: finishStage, fromM: finishFrom, toM: finishTo, title: finishStage.name.replace('Hell of the West · ', ''),
     subtitle: `${racing ? 'Race · ' : ''}${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`,
     timeS: ride.movingTime, avgPower, climbedM: ride.climbed, distanceM: finishTo - finishFrom,
@@ -1489,6 +1492,7 @@ $<HTMLInputElement>('route-upload').addEventListener('change', async (e) => {
   let last: Stage | null = null;
   for (const file of Array.from(input.files ?? [])) {
     try {
+      const { parseGpx } = await import('./routes/gpx');
       const { stage, saved } = addRoute(parseGpx(file.name, await file.text()));
       if (!saved) toast('Route too large to save in this browser; it’s rideable until you reload.', 6000);
       last = stage;
@@ -1501,7 +1505,7 @@ $<HTMLInputElement>('route-upload').addEventListener('change', async (e) => {
   if (last) chooseStage(last);
   else openStages();
 });
-$('btn-workouts').addEventListener('click', () => workoutUi.openLibrary());
+$('btn-workouts').addEventListener('click', () => use(workoutUi, (u) => u.openLibrary(), $('btn-workouts')));
 $('btn-data').addEventListener('click', () =>
   openDataBlocks($<HTMLDialogElement>('data-blocks'), settings.dataFields, (ids) => {
     settings = { ...settings, dataFields: ids };
@@ -1547,7 +1551,7 @@ for (const [id, dir] of [['steer-left', -1], ['steer-right', 1]] as const) {
 }
 
 // ☰ Menu → Time & weather.
-const atmosphereUi = initAtmosphereUi({
+const atmosphereUi = lazy(() => import('./atmosphereUi').then((m) => m.initAtmosphereUi({
   current: () => ({ timeOfDay: settings.timeOfDay, weather: settings.weather }),
   choose: (patch) => {
     settings = { ...settings, ...patch };
@@ -1555,8 +1559,8 @@ const atmosphereUi = initAtmosphereUi({
     pushSettings(settings);
     world.setAtmosphere(settings.timeOfDay, settings.weather);
   },
-});
-$('btn-weather').addEventListener('click', () => atmosphereUi.open());
+})));
+$('btn-weather').addEventListener('click', () => use(atmosphereUi, (u) => u.open(), $('btn-weather')));
 
 let bluetoothNote = () => {};
 if (!bluetoothAvailable()) {
@@ -1585,7 +1589,7 @@ const accountUi = initAccountUi({
   settings: () => settings,
   toast,
   // 📤 Share on a ride in your profile.
-  shareRide: (a) => runShare(shareDataFromRide(shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined)), toast),
+  shareRide: (a) => { import('./garage/shareUi').then((m) => shareRide(m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined), toast)); },
   context: () => ({
     stage: currentStage().name,
     workout: player?.workout.name ?? null,
@@ -1647,13 +1651,14 @@ function rideSession(session: Session) {
   }
 }
 
-const plansUi = initPlansUi({ progress: () => settings.plan, setProgress: setPlan, ride: rideSession, toast });
-$('btn-plans').addEventListener('click', () => { $<HTMLDialogElement>('workouts').close(); plansUi.open(); });
-$('btn-menu-plans').addEventListener('click', () => plansUi.open());
+const plansUi = lazy(() => import('./plansUi').then((m) => m.initPlansUi({ progress: () => settings.plan, setProgress: setPlan, ride: rideSession, toast })));
+const openPlans = (from?: Element | null) => use(plansUi, (u) => u.open(), from);
+$('btn-plans').addEventListener('click', () => { $<HTMLDialogElement>('workouts').close(); openPlans($('btn-plans')); });
+$('btn-menu-plans').addEventListener('click', () => openPlans($('btn-menu-plans')));
 
 // ---------------------------------------------------------- first ride ----
 
-const onboarding = initOnboarding({
+const onboarding = lazy(() => import('./onboarding').then((m) => m.initOnboarding({
   settings: () => settings,
   save: (patch) => {
     const oldFtp = settings.ftp;
@@ -1669,9 +1674,10 @@ const onboarding = initOnboarding({
   startDemo: () => { if (!demo) setDemo(true); },
   rampTest: () => { const w = workoutById(RAMP_TEST_ID); if (w) startWorkout(w); },
   rideStage: (id) => rideSession({ title: '', note: '', stage: id }),
-  openPlans: () => plansUi.open(),
-});
-$('btn-setup-guide').addEventListener('click', () => { $<HTMLDialogElement>('settings').close(); onboarding.open(); });
+  openPlans: () => { openPlans(); },
+})));
+const openOnboarding = (from?: Element | null) => use(onboarding, (u) => u.open(), from);
+$('btn-setup-guide').addEventListener('click', () => { $<HTMLDialogElement>('settings').close(); openOnboarding($('btn-setup-guide')); });
 
 // ---------------------------------------------------- ghosts & leaderboards ----
 
@@ -1716,13 +1722,14 @@ async function raceGhost(row: LeaderboardRow) {
   }
 }
 
-initLeaderboardUi({
+const leaderboardUi = lazy(() => import('./leaderboardUi').then((m) => m.initLeaderboardUi({
   stage: currentStage,
   race: raceGhost,
   clearGhost: () => { ghost = null; ghostSeq++; },
   ghostName: () => (ghost ? (ghost.isMe ? `your best (${raceTime(ghost.finishS)})` : `${ghost.name} (${raceTime(ghost.finishS)})`) : null),
   openSignIn: (why) => accountUi.openSignIn(why),
-});
+})));
+loadOnClick($('btn-leaderboard'), leaderboardUi); // the dialog wires its own button once loaded
 
 peloton.reset(ride.distance);
 
@@ -1735,7 +1742,7 @@ const rideOnsUi = initRideOnsUi({
   showEmote: (id, emoji) => world.showEmote(id, emoji),
   toast,
 });
-const kitUi = initKitUi({
+const kitUi = lazy(() => import('./kitUi').then((m) => m.initKitUi({
   current: () => settings.kit,
   save: (kit) => {
     settings = { ...settings, kit };
@@ -1744,18 +1751,18 @@ const kitUi = initKitUi({
     setPlayerKit(kit);
     toast(kit ? 'Kit saved. You’re riding in your colours.' : 'Back in the American Flyers stars and stripes.');
   },
-});
-$('btn-menu-kit').addEventListener('click', () => kitUi.open());
+})));
+$('btn-menu-kit').addEventListener('click', () => use(kitUi, (u) => u.open(), $('btn-menu-kit')));
 // 🚲 Garage & store (src/garage): bikes, wheels and clothes, bought with credits earned from riding.
-const garageUi = initGarageUi({
+const garageUi = lazy(() => import('./garage/garageUi').then((m) => m.initGarageUi({
   garage,
   ctx: () => ({ riderKg: settings.riderKg, bikeKg: settings.bikeKg, ftp: settings.ftp }),
   imperial: () => settings.units === 'imperial',
   night: () => world.nightAmount,
   openSignIn: (why) => accountUi.openSignIn(why),
   toast,
-});
-$('btn-menu-garage').addEventListener('click', () => garageUi.open());
+})));
+$('btn-menu-garage').addEventListener('click', () => use(garageUi, (u) => u.open(), $('btn-menu-garage')));
 
 initRidersUi({
   presence,
@@ -1820,11 +1827,32 @@ initHome({
   defaults: () => settings,
   onEnterApp: () => {
     // A short wait lets a signed-in rider's settings arrive first (they skip it).
-    if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) onboarding.open(); }, 1500);
+    if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) openOnboarding(); }, 1500);
     else bluetoothNote();
   },
 });
-restoreSession();
+
+// Everything that can wait for the first frame (src/lazy.ts): signing in (which loads the
+// Neon SDK), error reporting (the Sentry SDK), the hero videos, and fetching the dialogs a
+// rider is likely to open next, one at a time in spare moments.
+let firstFrameDrawn = false;
+let afterFirstFrameDone = false;
+function afterFirstFrame() {
+  if (afterFirstFrameDone) return;
+  afterFirstFrameDone = true;
+  markFirstFrame();
+  restoreSession();
+  startMonitoring();
+  prefetchPrivacy();
+  prefetchWhenIdle([
+    // First visit: the guide, and the email form on the home page.
+    ...(onboarded() ? [] : [onboarding, emailAuth]),
+    workoutUi, accountUi.dialogs, garageUi, leaderboardUi, plansUi, eventsUi, tourUi, kitUi, atmosphereUi, raceUiModule, commentary,
+    ...(onboarded() ? [emailAuth] : []),
+  ]);
+}
+// A tab opened in the background never gets an animation frame: don't leave sign-in waiting on one.
+window.setTimeout(afterFirstFrame, 6000);
 
 requestAnimationFrame(frame);
 

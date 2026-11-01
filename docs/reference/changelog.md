@@ -6,6 +6,17 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Faster loading: a much smaller first download
+
+- **Code splitting.** The first visit now downloads only the entry chunk and `vendor-three`; the Neon SDK, the Sentry SDK and every dialog that isn't on screen at the start load on first use (workouts, garage and store with its 3D turntable, share card, sign-in, profile and admin, tour, events, leaderboard, plans, kit, time and weather, first-ride guide, privacy text, race screens, commentator, email sign-up form, GPX import). A button whose code is still arriving pulses; a failed load shows a toast and the next click tries again. After the first frame the likely next dialogs are fetched one at a time in spare moments (not on data saver or 2G). See "Lazy loading" in the architecture guide for how to add a lazy module (`src/lazy.ts`).
+- **Vendor chunks.** `three`, the Neon libraries and Sentry are separate long-cached files (`vite.config.ts`).
+- **Neon loads on demand.** `src/cloud/client.ts` exports a recording proxy with the same call syntax as the SDK; the SDK loads after the first frame (sign-in is restored then) or at the first database call. Sign-in restore therefore starts a moment later than before.
+- **Sentry loads after the first frame.** Crashes before then are kept and sent once it is up. Sentry's automatic page-load timing now starts later, so page-load traces are less accurate.
+- **Landmark models load when needed.** Each of the nine `.glb` files (7.5 MB together) is fetched when a landmark that uses it first comes within range, instead of all at start-up.
+- **Home page.** The hero videos start after the first frame; the email form's code loads when *Sign up with email* is first tapped.
+- **Fonts.** The Google Fonts stylesheet is preloaded but no longer blocks the first paint (text shows in the fallback font until it arrives, as `display=swap` already did).
+- **Fixed:** `main.ts` registered the service worker and the install-button handlers again on every animation frame (a copy of that block had ended up inside `frame()`); the copy is removed.
+
 ### Trust and safety: privacy, account deletion, email verification, leaderboard sanity
 
 - **Privacy page.** ☰ Menu → 🔒 Privacy (also linked from the sign-in dialog, the home page small print and the profile) says in plain English what is collected, what other riders see, where it is kept and for how long, and how to delete it. It is a draft for the site owner to review, not legal advice (`src/privacyUi.ts`).
