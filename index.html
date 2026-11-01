@@ -10,11 +10,20 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <script>
-      // The home page hero: the pit bull chase for now. ?hero=rider shows the
-      // original rider hero instead (both are kept in public/images).
+      // The home page hero rotates between the pit bull chase and the original
+      // rider (src/home.ts crossfades them), starting on the other one each
+      // visit. ?hero=dog or ?hero=rider pins one.
       (function () {
         var asked = new URLSearchParams(location.search).get('hero');
-        var hero = asked === 'rider' ? 'rider' : 'dog';
+        var hero;
+        if (asked === 'rider' || asked === 'dog') hero = asked;
+        else {
+          try {
+            hero = localStorage.getItem('americanflyers.hero') === 'dog' ? 'rider' : 'dog';
+            localStorage.setItem('americanflyers.hero', hero);
+          } catch (e) { hero = 'dog'; }
+          document.documentElement.dataset.heroRotate = '1';
+        }
         document.documentElement.dataset.hero = hero;
         var base = hero === 'dog' ? '/images/hero-dog' : '/images/hero';
         [[base + '.jpg', '(min-width: 769px)'], [base + '-768.jpg', '(max-width: 768px)']].forEach(function (p) {
