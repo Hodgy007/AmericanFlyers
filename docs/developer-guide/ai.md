@@ -10,7 +10,7 @@ Two opt-in features that call Claude through one Vercel function: **Coach Marty*
 | Gate and quota | `db/schema.sql` (`ai_claim`) | The database decides: signed in, opted in, not banned, under today's quota. |
 | Shared pure code | `src/ai/types.ts`, `rivals.ts`, `canned.ts`, `sanitize.ts`, `catalogue.ts`, `text.ts` | Imported by both the browser and the function (no DOM). |
 | Ride logic | `src/ai/moments.ts`, `coachPlan.ts`, `rivalBot.ts`, `rivalTriggers.ts`, `story.ts`, `summary.ts`, `brief.ts` | Pure, unit-tested. |
-| Controller and UI | `src/ai/aiRide.ts`, `coachUi.ts`, `rivalsUi.ts`, `consentUi.ts`, `speech.ts` | One `AiRide` per page; `main.ts` calls `frame()` and a few hooks. |
+| Controller and UI | `src/ai/aiRide.ts`, `coachUi.ts`, `rivalsUi.ts`, `consentUi.ts`, `speech.ts` | One `AiRide` per page, built by `ai/create.ts` and loaded on demand (see [Lazy loading](architecture.md#lazy-loading)); `main.ts` calls `frame()` and a few hooks as `ai?.…`, which do nothing until it has loaded. |
 | Browser calls | `src/cloud/aiApi.ts`, `src/cloud/token.ts` | `askAi()`, consent, rival memory, saved debriefs. `dataApiToken()` returns the Data API JWT. |
 
 ## How a request is authenticated

@@ -53,13 +53,10 @@ import { levelTitle } from './garage/progression';
 import { RideOns } from './cloud/rideOns';
 import { initRideOnsUi } from './rideOnsUi';
 // AI coach and AI rivals (src/ai/): tips, debriefs and rivals with personalities and memory.
-import { AiRide } from './ai/aiRide';
-import { initRivalsUi } from './ai/rivalsUi';
-import { syncAiSettingsForm } from './ai/consentUi';
-import { stageBrief } from './ai/brief';
-import { buildDebrief } from './ai/summary';
-import type { DebriefPayload } from './ai/types';
-import { myRivals } from './cloud/aiApi';
+// Loaded on demand (aiLazy and friends below), so only types are imported here.
+import type { AiRide } from './ai/aiRide';
+import type { AiHostBase } from './ai/create';
+import type { RideSummaryInput } from './ai/summary';
 // Racing and the Hell of the West tour (race.ts, raceUi.ts, tour.ts, tourUi.ts).
 import { LiveRace, raceSetup, type PanelData, type ResultRow } from './race';
 // Scheduled group rides and races, and the race commentator (schedule.ts, eventSession.ts, eventsUi.ts, commentary.ts, cloud/events.ts).
@@ -120,7 +117,18 @@ let lastCrossShift = 0; // crosswind echelon: metres right of a rider's line the
 let draftSaving = 0; // fraction of air drag saved, eased
 let roadRiders: OtherRider[] = []; // live riders and pro teams on the road now (for ride-ons)
 const rideWorkout = { started: null as string | null, completed: null as string | null };
-let ai: AiRide | null = null; // the AI coach and rival for this ride (src/ai/aiRide.ts); set up once the account UI exists
+// The AI coach and rival for this ride (src/ai/aiRide.ts). Not in the entry chunk: `ai` stays null
+// until the controller has loaded (a rider who opted in, a rival chosen, the Rivals dialog or the
+// AI switches opened), and every hook below is `ai?.…`, so until then they do nothing.
+let ai: AiRide | null = null;
+const aiLazy = lazy(() => import('./ai/create').then((m) => (ai = m.createAi(aiHost()))));
+const aiApiLazy = lazy(() => import('./cloud/aiApi')); // the small API client: consent, rival records
+const rivalsUi = lazy(() => import('./ai/rivalsUi').then((m) => m.initRivalsUi(rivalsDeps())));
+const aiConsentUi = lazy(() => import('./ai/consentUi')); // the sign-in prompt and switches in Settings
+/** Loads the AI in the background for a rider who has opted in (called when a ride starts). */
+function ensureAi() {
+  if (settings.aiCoach || settings.aiRivals) aiLazy.prefetch();
+}
 
 // ------------------------------------------------------------- devices ----
 
@@ -712,7 +720,7 @@ function finishWorkout() {
   rideWorkout.completed = w.name;
   planDone({ workout: w.id });
   const zones = zoneSummary(workoutStats);
-  const coach = ai?.debrief(aiDebriefPayload(workoutStats, w.name, 'workout', null)); // the AI coach's debrief card
+  const coach = aiDebrief(aiDebriefInput(workoutStats, w.name, 'workout', null)); // the AI coach's debrief card
   stopWorkout();
   showSummary('💪', `${w.name}: complete!`, items, actions, [...(coach ? [coach.node] : []), ...zones]);
   const rideId = recorder.id;
@@ -898,18 +906,18 @@ window.addEventListener('online', () => { void uploadQueuedRides(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void uploadQueuedRides(); });
 setInterval(() => { if (navigator.onLine !== false) void uploadQueuedRides(); }, 2 * 60 * 1000);
 
-/** What the AI coach is told after a ride (src/ai/summary.ts). `st` is the stats to describe: the whole ride, or just the workout. */
-function aiDebriefPayload(st: RideStats, title: string, mode: DebriefPayload['mode'], race: { place: number; of: number } | null): DebriefPayload {
+/** The numbers the AI coach is told after a ride (the controller turns them into the payload, src/ai/summary.ts). `st` is the stats to describe: the whole ride, or just the workout. */
+function aiDebriefInput(st: RideStats, title: string, mode: RideSummaryInput['mode'], race: { place: number; of: number } | null): RideSummaryInput {
   const plan = settings.plan ? planById(settings.plan.id) : undefined;
   const c = ai?.workoutCompliance();
-  return buildDebrief({
+  return {
     title, mode, durationS: st.seconds, distanceM: ride.distance - ride.startDistance, climbedM: ride.climbed,
     avgW: st.avgPower, npW: st.np, powerZoneS: st.powerZones, hrZoneS: st.hrZones, avgHr: st.avgHr, maxHr: st.maxHr, avgCadence: st.avgCadence,
     tss: st.seconds ? st.tss(settings.ftp) : 0,
     workout: mode === 'workout' && c ? { name: title, onTargetS: c.onTargetS, totalS: c.totalS } : null,
     race,
     plan: plan && settings.plan ? { name: plan.name, done: settings.plan.done.length, total: planSessions(plan).length } : null,
-  });
+  };
 }
 
 // Save long rides every few minutes, so a closed tab doesn't lose them.
@@ -962,7 +970,7 @@ function endRide() {
   if (stats.seconds < MIN_RIDE_S) return resetRide();
   const imperial = settings.units === 'imperial';
   const km = (ride.distance - ride.startDistance) / 1000;
-  const coach = ai?.debrief(aiDebriefPayload(stats, currentStage().name, player ? 'workout' : 'ride', null)); // the AI coach's debrief card
+  const coach = aiDebrief(aiDebriefInput(stats, currentStage().name, player ? 'workout' : 'ride', null)); // the AI coach's debrief card
   showSummary('🚴', 'Ride summary', [
     ['Time', formatTime(stats.seconds)],
     ['Distance', imperial ? `${(km / KM_PER_MI).toFixed(2)} mi` : `${km.toFixed(2)} km`],
@@ -981,6 +989,7 @@ function endRide() {
 
 function resetRide() {
   ai?.newRide();
+  ensureAi();
   if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) saveRide({ quiet: true });
   recorder = new RideRecorder();
   rideFlags.usedDemo = false;
@@ -1409,7 +1418,7 @@ function showFinish() {
     raceUi.panel(null, false);
     endEvent(); // the lobby and presence go back to the normal road
   }
-  const coach = ai?.debrief(aiDebriefPayload(stats, currentStage().name, aiRace ? 'race' : 'ride', aiRace)); // the AI coach's debrief card
+  const coach = aiDebrief(aiDebriefInput(stats, currentStage().name, aiRace ? 'race' : 'ride', aiRace)); // the AI coach's debrief card
   if (coach) extra = [coach.node, ...extra];
   showSummary('🏁', title, items, actions, extra);
   $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
@@ -1482,7 +1491,7 @@ function stageProgress() {
   return parts.join(' · ');
 }
 
-function openSettings() {
+async function openSettings() {
   const dialog = $<HTMLDialogElement>('settings');
   const form = dialog.querySelector('form')!;
   for (const [k, v] of Object.entries(settings)) {
@@ -1491,8 +1500,11 @@ function openSettings() {
     else if (input) input.value = String(v);
   }
   $('difficulty-out').textContent = `${settings.difficulty}%`;
-  syncAiSettingsForm(form, !!account(), () => accountUi.openSignIn('Sign in to turn on the AI coach and rivals.')); // signed-out riders can't opt in
-  dialog.showModal();
+  // The AI switches stay off until the small consent module is here (signed-out riders can't opt in);
+  // if it can't load (a toast says so) the rest of Settings still opens.
+  for (const n of ['aiCoach', 'aiRivals']) (form.elements.namedItem(n) as HTMLInputElement).disabled = true;
+  await use(aiConsentUi, (ui) => ui.syncAiSettingsForm(form, !!account(), () => accountUi.openSignIn('Sign in to turn on the AI coach and rivals.')), $('btn-settings'));
+  if (!dialog.open) dialog.showModal();
 }
 
 $<HTMLDialogElement>('settings').addEventListener('close', () => {
@@ -1527,7 +1539,8 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
   };
   saveSettings(settings);
   pushSettings(settings);
-  ai?.applyConsent({ coach: settings.aiCoach, rivals: settings.aiRivals }, prevAi); // the database holds the real opt-in
+  const nextAi = { coach: settings.aiCoach, rivals: settings.aiRivals };
+  if (nextAi.coach !== prevAi.coach || nextAi.rivals !== prevAi.rivals) void use(aiLazy, (a) => a.applyConsent(nextAi, prevAi)); // the database holds the real opt-in
   if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
   world.setMarkers(markerConfig());
   lastSentGrade = NaN;
@@ -1704,55 +1717,78 @@ const accountUi = initAccountUi({
 });
 onSyncError((msg) => toast(msg, 6000));
 
-// ---- AI coach and rivals (src/ai/) ----
+// ---- AI coach and rivals (src/ai/): the host the controller is given when it loads ----
 const stageLines = () => {
   const st = currentStage();
   if (race) return race.course.lines;
   return [...(st.race?.sprints ?? []).map((l) => ({ kind: 'sprint' as const, d: l.d, name: l.name })), ...(st.race?.summits ?? []).map((l) => ({ kind: 'summit' as const, d: l.d, name: l.name }))];
 };
-let briefCache: { key: string; brief: ReturnType<typeof stageBrief> } | null = null;
-ai = new AiRide({
-  settings: () => settings,
-  signedIn: () => !!account(),
-  toast,
-  stageBrief: () => {
-    const st = currentStage();
-    const key = `${st.id}:${race ? 'r' : ''}`;
-    if (briefCache?.key !== key) briefCache = { key, brief: stageBrief(st, stageLines()) };
-    return briefCache.brief;
-  },
-  stageName: () => currentStage().name,
-  rideMode: () => (player ? 'workout' : race ? 'race' : 'ride'),
-  workoutBrief: () => {
-    if (!player) return null;
-    return {
-      name: player.workout.name, minutes: Math.round(player.duration / 60),
-      steps: player.steps.slice(0, 40).map((st) => ({ atS: Math.round(st.at), durS: Math.round(st.duration), label: st.label, pctFtp: st.free ? null : Math.round(((st.start + st.end) / 2) * 100) / 100 })),
-    };
-  },
-  gradeAt,
-  headwindAt: (d) => roadWind(d).head,
-  countsForRecord: () => leaderboardEligible(rideFlags),
-  loadSession: (id, kind) => {
-    if (kind === 'workout') { const w = workoutById(id); if (w) startWorkout(w); }
-    else chooseStage(stageById(id));
-  },
-  patchSettings: (p) => { settings = { ...settings, ...p }; saveSettings(settings); pushSettings(settings); },
-  openSettings,
-  openSignIn: (reason) => accountUi.openSignIn(reason),
+const patchAiSettings = (p: Partial<Pick<Settings, 'aiCoach' | 'aiRivals'>>) => { settings = { ...settings, ...p }; saveSettings(settings); pushSettings(settings); };
+function aiHost(): AiHostBase {
+  return {
+    settings: () => settings,
+    signedIn: () => !!account(),
+    toast,
+    stage: currentStage,
+    stageLines,
+    briefKey: () => `${currentStage().id}:${race ? 'r' : ''}`,
+    stageName: () => currentStage().name,
+    rideMode: () => (player ? 'workout' : race ? 'race' : 'ride'),
+    workoutBrief: () => {
+      if (!player) return null;
+      return {
+        name: player.workout.name, minutes: Math.round(player.duration / 60),
+        steps: player.steps.slice(0, 40).map((st) => ({ atS: Math.round(st.at), durS: Math.round(st.duration), label: st.label, pctFtp: st.free ? null : Math.round(((st.start + st.end) / 2) * 100) / 100 })),
+      };
+    },
+    gradeAt,
+    headwindAt: (d) => roadWind(d).head,
+    countsForRecord: () => leaderboardEligible(rideFlags),
+    loadSession: (id, kind) => {
+      if (kind === 'workout') { const w = workoutById(id); if (w) startWorkout(w); }
+      else chooseStage(stageById(id));
+    },
+    patchSettings: patchAiSettings,
+    openSettings,
+    openSignIn: (reason) => accountUi.openSignIn(reason),
+  };
+}
+function rivalsDeps() {
+  return {
+    signedIn: () => !!account(),
+    rivalsOn: () => settings.aiRivals,
+    active: () => ai?.rival ?? null,
+    start: (id: string) => { void use(aiLazy, (a) => a.startRival(id)); },
+    stop: () => ai?.stopRival(),
+    openSettings,
+    openSignIn: () => accountUi.openSignIn('Sign in to turn on AI rivals.'),
+    records: () => aiApiLazy.get().then((m) => m.myRivals(), () => []),
+    forget: (id?: string) => aiApiLazy.get().then((m) => m.forgetRival(id), () => false),
+  };
+}
+// ☰ Menu → Rivals: the dialog loads on first open (it is prefetched when idle); the controller starts loading with it.
+$('btn-rivals').addEventListener('click', () => {
+  aiLazy.prefetch();
+  void use(rivalsUi, (ui) => ui.open(), $('btn-rivals'));
 });
-const rivalsUi = initRivalsUi({
-  signedIn: () => !!account(),
-  rivalsOn: () => settings.aiRivals,
-  active: () => ai?.rival ?? null,
-  start: (id) => ai?.startRival(id),
-  stop: () => ai?.stopRival(),
-  openSettings,
-  openSignIn: () => accountUi.openSignIn('Sign in to turn on AI rivals.'),
-  records: myRivals,
-  forget: (id) => ai!.forget(id),
-});
-$('btn-rivals').addEventListener('click', () => rivalsUi.open());
+/** After sign-in the database has the last word on the AI opt-in. Read it without loading the controller; that loads only if the rider has opted in. */
+function syncAiConsent() {
+  aiApiLazy.get().then((m) => m.loadConsent()).then((c) => {
+    if (c) patchAiSettings({ aiCoach: c.coach, aiRivals: c.rivals });
+    ensureAi();
+  }).catch(() => {});
+}
+/**
+ * The AI coach's card for a ride summary. With the controller loaded this is its card; otherwise (it is also the
+ * "turn on the AI coach" invitation, so it matters even when the AI is off) a placeholder fills in once the module arrives.
+ */
+function aiDebrief(input: RideSummaryInput): { node: Node; rideSaved(activityId: string | null): void } | null {
+  if (ai) return ai.debriefRide(input);
+  if (input.durationS < 180) return null; // (the same minimum as DEBRIEF_MIN_S in ai/aiRide.ts)
+  const slot = Object.assign(document.createElement('div'), { style: 'display: contents' });
+  const card = aiLazy.get().then((a) => { const c = a.debriefRide(input); if (c) slot.append(c.node); return c; }, () => null);
+  return { node: slot, rideSaved: (id) => { void card.then((c) => c?.rideSaved(id)); } };
+}
 // ---- end of AI ----
 
 // ------------------------------------------------------ riding together ----
@@ -1972,7 +2008,7 @@ onAccountChange(async (a) => {
     garage.refresh(); // a ride saved just now may have earned credits
     accountUi.checkAdmin(); // the session is settled now
     loadMyGhost();
-    ai?.syncConsent(); // the AI coach and rivals follow what the account agreed to (the database has the last word)
+    syncAiConsent(); // the AI coach and rivals follow what the account agreed to (the database has the last word)
     toast(`Signed in as ${a.name}`);
   } catch (e) {
     toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
@@ -1984,6 +2020,7 @@ initPrivacyUi(); // the Privacy dialog; any element with data-privacy opens it
 let enteredApp = false;
 function leaveHub() {
   hub.close();
+  ensureAi();
   if (enteredApp) return;
   enteredApp = true;
   // A short wait lets a signed-in rider's settings arrive first (they skip it).
@@ -2090,10 +2127,11 @@ function afterFirstFrame() {
   restoreSession().then((a) => hub.sessionSettled(a)); // the hub turns into a guest hub if the hint was wrong
   startMonitoring();
   prefetchPrivacy();
+  ensureAi(); // a rider who opted in gets the coach and rivals ready for the ride
   prefetchWhenIdle([
     // First visit: the guide, and the email form on the home page.
     ...(onboarded() ? [] : [onboarding, emailAuth]),
-    workoutUi, accountUi.dialogs, garageUi, leaderboardUi, plansUi, eventsUi, tourUi, kitUi, atmosphereUi, raceUiModule, commentary,
+    workoutUi, accountUi.dialogs, garageUi, leaderboardUi, plansUi, eventsUi, tourUi, kitUi, atmosphereUi, raceUiModule, commentary, rivalsUi, aiConsentUi,
     ...(onboarded() ? [emailAuth] : []),
   ]);
 }

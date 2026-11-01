@@ -4,7 +4,7 @@
 // beside it. The ride never waits on the AI: each request runs in the
 // background and falls back to the canned text (canned.ts) on any failure.
 
-import { askAi, forgetRival, loadConsent, saveConsent, saveDebrief, type AiConsent } from '../cloud/aiApi';
+import { askAi, saveConsent, saveDebrief, type AiConsent } from '../cloud/aiApi';
 import type { OtherRider } from '../world/others';
 import { cannedPlan, cannedRivalLines, cannedRivalPost, cannedTip } from './canned';
 import { PlanRunner } from './coachPlan';
@@ -17,6 +17,7 @@ import { sanitizeDebrief, sanitizePlan, sanitizeRivalLines, sanitizeRivalPost, s
 import { speak } from './speech';
 import { RideStory } from './story';
 import { pickFresh } from './text';
+import { buildDebrief, type RideSummaryInput } from './summary';
 import type { DebriefPayload, PlanPayload, RivalLines, RivalPostPayload, RivalTrigger, StageBrief } from './types';
 
 export interface AiSettings { aiCoach: boolean; aiRivals: boolean; coachVoice: boolean; ftp: number; riderKg: number; bikeKg: number }
@@ -97,11 +98,7 @@ export class AiRide {
 
   // ----------------------------------------------------------- consent ----
 
-  /** After sign-in: the database knows what the rider agreed to; the settings follow it. */
-  async syncConsent() {
-    const c = await loadConsent();
-    if (c) this.host.patchSettings({ aiCoach: c.coach, aiRivals: c.rivals });
-  }
+  // (After sign-in the settings follow the database's consent: main.ts does that without loading this file.)
 
   /** The rider changed the switches in Settings: save them (or put them back if that fails). */
   async applyConsent(next: AiConsent, previous: AiConsent) {
@@ -202,6 +199,11 @@ export class AiRide {
   /** Time on target in the current workout, for the debrief. */
   workoutCompliance() {
     return { onTargetS: this.onTargetS, totalS: this.targetS };
+  }
+
+  /** `debrief()` from the raw numbers of a ride (main.ts doesn't import summary.ts, so this file stays out of the entry chunk). */
+  debriefRide(input: RideSummaryInput) {
+    return this.debrief(buildDebrief(input));
   }
 
   /**
@@ -336,9 +338,5 @@ export class AiRide {
   /** The last frame we saw, for the rivals dialog and tests. */
   get last() {
     return this.lastFrame;
-  }
-
-  forget(id?: string) {
-    return forgetRival(id);
   }
 }

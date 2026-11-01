@@ -226,6 +226,8 @@ The first visit downloads only what draws the first frame: the entry chunk (`mai
 | GPX parser | `routes/gpx.ts` | When a file is chosen. |
 | Landmark models (`public/models/*.glb`) | `world/landmarks.ts` | When a landmark that uses the file comes within range. |
 | Hero videos | `home.ts` | After the first frame. |
+| AI coach and rival controller | `ai/create.ts` (builds `AiRide` from `ai/aiRide.ts`, with `cloud/aiApi.ts` and the rest of `src/ai/`) | When the rider has opted in (`settings.aiCoach` or `aiRivals`) at the first frame, the start of a ride or after sign-in, when a rival is chosen, when the Rivals dialog opens, when the AI switches in Settings are saved, or when a ride summary needs the coach's card (that card is also the invitation to turn the coach on). Until it arrives `ai` in `main.ts` is `null` and every hook (`ai?.…`, the frame hook, the debrief) does nothing; the summary gets a placeholder that fills in. |
+| Rivals dialog, AI switches in Settings | `ai/rivalsUi.ts`, `ai/consentUi.ts` | First open of ☰ → Rivals or of Settings (both prefetched when idle). Settings opens without the AI switches until the small consent module is here. |
 
 How it works, in `src/lazy.ts`:
 
@@ -233,6 +235,8 @@ How it works, in `src/lazy.ts`:
 - `use(lazyThing, (ui) => ui.open(), button)` runs something as soon as the module is there. If the wait passes 150 ms the button gets the `lazy-busy` class (a pulse, `cursor: progress`); if the load fails a toast says so and the next click tries again.
 - `loadOnClick(button, lazyThing)` is for modules that attach their own handler to a button when built (Events, Leaderboard): the first click loads the module, then is replayed.
 - `prefetchWhenIdle([...])`, called from `afterFirstFrame()` in `main.ts`, fetches the likely next dialogs one at a time in spare moments (not on data saver or 2G). By the time a rider taps, the chunk is usually cached. The service worker caches `/assets/*` on first fetch, so chunks work offline after the first visit.
+
+The AI is the example of a feature that is off for most riders: `main.ts` keeps only the settings fields and a shim (`aiLazy`, `ensureAi()`, `aiDebrief()`, `syncAiConsent()`), imports `src/ai/*` as types only, and hands the controller its host through `ai/create.ts`. After sign-in the opt-in is read with the small `cloud/aiApi.ts` chunk, which loads the controller only if the rider has opted in.
 
 **Adding a new lazy module:** give it an `initX(deps)` that returns `{ open() }`, wrap it in `lazy()` in `main.ts` next to the others, open it with `use(...)`, and add it to the list in `afterFirstFrame()` if it's likely to be opened. Don't import it statically from anywhere on the first-frame path (`import type` is fine); if another module needs a small part of it, move that part into its own file, as `onboardingState.ts` and `shareButton.ts` do. Check `npm run build`: the module should show up as its own file in `dist/assets/` and not in the entry chunk.
 

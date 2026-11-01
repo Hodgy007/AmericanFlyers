@@ -88,6 +88,13 @@ async function mock(page: Page, f: Fixture) {
   });
 }
 
+/** The app opens on the hub (signed-in hint set below); these tests are about the ride, so press Ride first. */
+async function ride(page: Page) {
+  await expect(page.locator('#hub')).toBeVisible();
+  await press(page, '#hub-go');
+  await expect(page.locator('#hub')).toBeHidden();
+}
+
 async function setup(page: Page, f: Partial<Fixture> = {}, query = ''): Promise<Fixture> {
   const fx: Fixture = { signedIn: true, consent: { coach: false, rivals: false }, rivals: [], aiCalls: [], rpcCalls: [], ...f };
   await mock(page, fx);
@@ -105,6 +112,7 @@ async function setup(page: Page, f: Partial<Fixture> = {}, query = ''): Promise<
   });
   await page.setViewportSize({ width: 960, height: 600 });
   await page.goto(`/${query}`);
+  await ride(page);
   await expect(page.locator('#btn-menu')).toBeVisible();
   return fx;
 }

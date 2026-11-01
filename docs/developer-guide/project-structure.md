@@ -86,7 +86,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `garage/store.ts`, `garage/garage.ts`, `garage/api.ts` | Item states and equipping, the controller (wallet, loadout, rewards) and the database calls. |
 | `garage/garageUi.ts`, `garage/preview.ts` | The Garage dialog and its turntable renderer. |
 | `garage/shareCard.ts`, `garage/shareUi.ts`, `garage/shareButton.ts` | The share card canvas, building its data, and the Share buttons (the first two load on the first press). |
-| `ai/aiRide.ts` | The AI coach and rival for the current ride: frame hook, plan, tips, rival bot, debrief card, consent. See [AI coach and rivals](ai.md). |
+| `ai/aiRide.ts` | The AI coach and rival for the current ride: frame hook, plan, tips, rival bot, debrief card, consent. Lazy, built by `ai/create.ts`. See [AI coach and rivals](ai.md). |
 | `ai/moments.ts`, `ai/coachPlan.ts` | Reactive coach moments (cadence on a climb, heart-rate drift, over target, no draft) and the ride plan runner. |
 | `ai/rivals.ts`, `ai/rivalBot.ts`, `ai/rivalTriggers.ts`, `ai/story.ts` | The four rivals (kit, personality, canned lines), the bot that rides with you, when they speak, and what happened for their memory note. |
 | `ai/types.ts`, `ai/canned.ts`, `ai/sanitize.ts`, `ai/catalogue.ts`, `ai/text.ts`, `ai/brief.ts`, `ai/summary.ts` | Shared request and reply shapes, built-in fallbacks, reply checking, the suggestible sessions, text helpers, the stage brief and ride summary builders. Also imported by `api/`. |

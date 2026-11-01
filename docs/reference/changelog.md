@@ -19,6 +19,7 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Landmark models load when needed.** Each of the nine `.glb` files (7.5 MB together) is fetched when a landmark that uses it first comes within range, instead of all at start-up.
 - **Home page.** The hero videos start after the first frame; the email form's code loads when *Sign up with email* is first tapped.
 - **Fonts.** The Google Fonts stylesheet is preloaded but no longer blocks the first paint (text shows in the fallback font until it arrives, as `display=swap` already did).
+- **AI coach and rivals load on demand.** The AI client (`src/ai/*`, `src/cloud/aiApi.ts`) was in the entry chunk (117 kB gzip, up from 102 kB); it is now its own chunk, loaded when a rider who opted in starts a ride, when a rival is chosen or the Rivals dialog opens, when the AI switches are saved, or when a ride summary needs the coach's card. The Rivals dialog and the AI part of Settings load on first open and are prefetched when idle. Until the controller has loaded its hooks do nothing, and rival lines and the coach's built-in tips work with the AI off as before. Entry chunk now about 105 kB gzip. Settings opens a moment after the click on a first visit if the consent module hasn't arrived (the AI switches stay off until it has).
 - **Fixed:** `main.ts` registered the service worker and the install-button handlers again on every animation frame (a copy of that block had ended up inside `frame()`); the copy is removed.
 ### Trainer in the menu, and devices that are remembered
 
