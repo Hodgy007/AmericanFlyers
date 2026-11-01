@@ -90,6 +90,15 @@ Open the URL it prints (http://localhost:5173) in Chrome. Click **Connect traine
 
 To pick a stage or start partway along it, add `?stage=` and `?start=` (km), e.g. http://localhost:5173/?stage=alpe-dhuez&start=6 drops you halfway up the Alpe.
 
+## Tests
+
+```bash
+npm test          # unit tests (Vitest): physics, drafting, stages, workouts, GPX, race engine, tour...
+npm run test:e2e  # builds, then a headless-browser smoke test (Playwright)
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the build, the unit tests and the smoke test on every pull request and push to `main`. See `docs/developer-guide/testing.md`.
+
 ## Deploy
 
 Vercel (project `americanflyers`) builds and deploys `main` on every push.

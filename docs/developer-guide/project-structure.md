@@ -102,4 +102,4 @@ This page lists every file and folder in the repository, with a one-line summary
 
 ## Tests and tooling
 
-The repository has no test files, no linter configuration and no Playwright setup. The build's type check is the main automated check. See [Testing](testing.md).
+The repository has no linter configuration. `tests/unit/` holds the Vitest unit tests, `tests/e2e/` the Playwright smoke test, and `.github/workflows/ci.yml` runs them with the build on every pull request. See [Testing](testing.md).
