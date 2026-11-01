@@ -46,6 +46,10 @@ import { Steering } from './steering';
 import { initAtmosphereUi } from './atmosphereUi';
 import { kitString, onLookChange, playerLook, setPlayerKit, setTourJersey } from './kit';
 import { initKitUi } from './kitUi';
+import { Garage, rewardText } from './garage/garage';
+import { initGarageUi } from './garage/garageUi';
+import { attachShare, shareDataFromRide, shareRideFromActivity, runShare } from './garage/shareUi';
+import { levelTitle } from './garage/progression';
 import { RideOns } from './cloud/rideOns';
 import { initRideOnsUi } from './rideOnsUi';
 // Racing and the Hell of the West tour (race.ts, raceUi.ts, tour.ts, tourUi.ts).
@@ -69,7 +73,7 @@ let demo = false;
 let demoPower = 150;
 
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
-const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false };
+const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 };
 const drivetrain = new Drivetrain(); // keeps the legs in step with the wheels
 const powerSamples: { t: number; p: number }[] = [];
 const zoneRefs = () => settings;
@@ -260,6 +264,16 @@ const steering = new Steering(); // where you ride across the road
 // Your kit (src/kit.ts): the world's rider follows it, including any tour jersey laid over it.
 onLookChange((look) => world.setPlayerLook(look));
 setPlayerKit(settings.kit);
+// The garage (src/garage): what you ride and wear, your level and credits. Its loadout is saved with the settings.
+const garage = new Garage({
+  saved: () => settings.loadout,
+  save: (l) => {
+    settings = { ...settings, loadout: l };
+    saveSettings(settings);
+    pushSettings(settings);
+  },
+  toast: (m, ms) => toast(m, ms),
+});
 const profileCanvas = $<HTMLCanvasElement>('profile');
 // `?start=12` begins the ride 12 km in, handy for jumping to the hills.
 const startKm = Number(new URLSearchParams(location.search).get('start'));
@@ -327,11 +341,17 @@ function frame(now: number) {
   draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
 
   const grade = gradeAt(ride.distance);
+  // ---- Garage equipment (src/garage): frame, wheels, tyres, helmet and suit change mass, drag area and rolling resistance. ----
+  const equipment = garage.effects();
   ride.speed = stepSpeed(ride.speed, live.power, grade, dt, {
     ...DEFAULT_PARAMS,
-    massKg: settings.riderKg + settings.bikeKg,
-    cda: DEFAULT_PARAMS.cda * (1 - draftSaving),
+    massKg: settings.riderKg + settings.bikeKg + equipment.massKg,
+    cda: DEFAULT_PARAMS.cda * equipment.cdaFactor * (1 - draftSaving),
+    crr: DEFAULT_PARAMS.crr + equipment.crrDelta,
   }, roadWind(ride.distance).head); // air speed = road speed + headwind
+  // ---- end of garage equipment ----
+  // Distance ridden within 30 m of a pro team (a weekly challenge).
+  if (!ride.finished && ride.speed > 0.3 && liveRiders.some((r) => r.team && Math.abs(r.distance - ride.distance) < 30)) ride.proM += ride.speed * dt;
   if (race?.holding) ride.speed = 0; // waiting on the line for the start
   ride.distance += ride.speed * dt;
   if (ride.speed > 0.3 && !ride.finished) {
@@ -523,7 +543,7 @@ function updateDraftPanel() {
   const gapText = imperial ? `${Math.round(draft.gap * 3.28084)} ft` : `${draft.gap < 10 ? draft.gap.toFixed(1) : Math.round(draft.gap)} m`;
   const v = ride.speed;
   const airSpeed = Math.max(0, v + roadWind(ride.distance).head);
-  const watts = 0.5 * 1.225 * DEFAULT_PARAMS.cda * airSpeed * airSpeed * v * draftSaving / 0.976;
+  const watts = 0.5 * 1.225 * DEFAULT_PARAMS.cda * garage.effects().cdaFactor * airSpeed * airSpeed * v * draftSaving / 0.976;
   // Behind them but off their line: the gauge says which way to move.
   const offLine = draft.gap <= DRAFT_MAX_GAP && draft.overlap < 0.5;
   const move = draft.offset < 0 ? '◀' : '▶';
@@ -719,6 +739,9 @@ function buildActivity(): Activity {
     power_zones: zones(stats.powerZones),
     max_hr_setting: settings.maxHr,
     finish_s: ride.finished && ride.finishTime > 0 ? Math.round(ride.finishTime) : null,
+    race_place: ride.racePlace > 0 ? ride.racePlace : null, // weekly challenges: race wins and podiums
+    race_size: ride.raceSize > 0 ? ride.raceSize : null,
+    pro_m: ride.proM > 0 ? Math.round(ride.proM) : null, // metres ridden with a pro team
     samples: recorder.samples,
   };
 }
@@ -754,6 +777,13 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
     lastSavedSeconds = stats.seconds;
     accountUi.invalidate();
     if (showNote) note.textContent = '✓ Saved to your rides';
+    // Credits and levels come from the server's count of your saved rides.
+    garage.afterRide().then((r) => {
+      if (!r || opts.quiet) return;
+      const text = rewardText(r);
+      if (text && showNote) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
+      if (r.levelAfter > r.levelBefore) toast(`⭐ Level ${r.levelAfter}!`, 5000);
+    }).catch(() => { /* credits are a bonus */ });
   } catch (e) {
     if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
     else if (!opts.quiet) toast(`Couldn’t save your ride: ${(e as Error).message}`);
@@ -829,7 +859,7 @@ function resetRide() {
   lastSavedSeconds = 0;
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
-  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false });
+  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
   if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); } // starting afresh ends a race
   drivetrain.reset();
   powerSamples.length = 0;
@@ -1040,9 +1070,15 @@ function showFinish() {
   ];
   let extra: Node[] = zoneSummary(stats);
   let title = `${currentStage().name}: finished!`;
+  let shareHeadline: string | undefined;
+  const shareBadges: string[] = [];
   if (racing) {
     racing.update(0.001, ride.distance, ride.speed); // make sure the line is recorded for this frame
     const r = finishRace(racing);
+    ride.racePlace = r.place;
+    ride.raceSize = r.rows.length;
+    shareHeadline = `${ordinal(r.place)} of ${r.rows.length}`;
+    if (r.tour) shareBadges.push(...myJerseys(r.tour).map((j) => `👕 ${JERSEY_NAMES[j]}`));
     items.splice(0, 1, ['Place', `${ordinal(r.place)} of ${r.rows.length}`], ['Race time', raceTime(r.me.time)]);
     items.splice(2, 0, ['Points', `${r.me.sprint} sprint · ${r.me.kom} mountain`]);
     items.length = Math.min(items.length, 6);
@@ -1055,6 +1091,18 @@ function showFinish() {
   }
   showSummary('🏁', title, items, actions, extra);
   $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
+  // 📤 Share: a picture of the ride (route, numbers, place, your colours).
+  const finishStage = currentStage();
+  const finishFrom = ride.startDistance;
+  const finishTo = ride.distance;
+  attachShare($('finish-actions'), () => shareDataFromRide({
+    stage: finishStage, fromM: finishFrom, toM: finishTo, title: finishStage.name.replace('Hell of the West · ', ''),
+    subtitle: `${racing ? 'Race · ' : ''}${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    timeS: ride.movingTime, avgPower, climbedM: ride.climbed, distanceM: finishTo - finishFrom,
+    headline: shareHeadline ?? (vsGhost !== null && vsGhost < 0 && ghost?.isMe ? 'New personal best' : undefined),
+    badges: shareBadges, imperial, kit: settings.kit,
+    rider: garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined,
+  }), toast);
   if (vsGhost !== null && ghost) {
     const who = ghost.isMe ? 'your best' : `${ghost.name}’s ghost`;
     $('finish-title').textContent = vsGhost < 0 && ghost.isMe
@@ -1301,6 +1349,8 @@ const accountUi = initAccountUi({
   onRiderDetails: saveRiderDetails,
   settings: () => settings,
   toast,
+  // 📤 Share on a ride in your profile.
+  shareRide: (a) => runShare(shareDataFromRide(shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined)), toast),
   context: () => ({
     stage: currentStage().name,
     workout: player?.workout.name ?? null,
@@ -1461,6 +1511,16 @@ const kitUi = initKitUi({
   },
 });
 $('btn-menu-kit').addEventListener('click', () => kitUi.open());
+// 🚲 Garage & store (src/garage): bikes, wheels and clothes, bought with credits earned from riding.
+const garageUi = initGarageUi({
+  garage,
+  ctx: () => ({ riderKg: settings.riderKg, bikeKg: settings.bikeKg, ftp: settings.ftp }),
+  imperial: () => settings.units === 'imperial',
+  night: () => world.nightAmount,
+  openSignIn: (why) => accountUi.openSignIn(why),
+  toast,
+});
+$('btn-menu-garage').addEventListener('click', () => garageUi.open());
 
 initRidersUi({
   presence,
@@ -1482,14 +1542,17 @@ onAccountChange(async (a) => {
   if (!a) {
     forgetLocalCopies();
     ghost = null;
+    garage.refresh(); // signed out: back to the starter kit and no wallet
     return;
   }
+  garage.refresh(); // level, credits and what you own (this also applies your loadout)
   try {
     const remote = await syncOnSignIn(settings);
     if (remote) {
       settings = { ...settings, ...remote };
       saveSettings(settings);
       setPlayerKit(settings.kit);
+      garage.apply(); // the account's loadout
       loadTour(settings.tour);
       updateTourJersey();
       hud.setFields(settings.dataFields);
@@ -1507,6 +1570,7 @@ onAccountChange(async (a) => {
       if (ob.open) ob.close();
     }
     await savePendingRide();
+    garage.refresh(); // a ride saved just now may have earned credits
     accountUi.checkAdmin(); // the session is settled now
     loadMyGhost();
     toast(`Signed in as ${a.name}`);

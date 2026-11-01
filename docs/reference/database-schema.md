@@ -252,6 +252,22 @@ Indexes on `(to_user, created_at)` and `(from_user, created_at)`.
 | `stage_leaderboard(p_stage, p_since)` | Signed in | Each rider's fastest `finish_s` on the stage (since `p_since` if given), ranked, top 25 plus the caller. Returns rank, activity id, short name, time, average power, date and `is_me`. |
 | `stage_ghost(p_activity)` | Signed in | For a finished whole-stage ride: short name, `finish_s`, the 1 s distance trace (`samples -> 'distance'`) and `is_me`. Nothing else from the ride is returned. |
 
+## Garage, credits, levels and challenges
+
+Tables (all with row-level security and **no policies**: only the functions below touch them): `store_items` (`id`, `slot`, `name`, `price`, `level_req`, `unlock` json such as `{"climbed_m": 8848}`, `effects` json, `starter`, `sort`), `purchases` (`user_id`, `item_id`, `price`, `bought_at`; primary key `(user_id, item_id)`), `challenge_claims` (`user_id`, `challenge_id`, `week`, `credits`, `claimed_at`; primary key `(user_id, challenge_id, week)`) and `rider_progress` (`user_id`, `km`, `climbed_m`, a high-water mark so unlocks survive deleted rides).
+
+New nullable `activities` columns: `race_place smallint`, `race_size smallint`, `pro_m real` (metres ridden with a pro team).
+
+| Function | Who | What it does |
+| --- | --- | --- |
+| `my_wallet()` | Signed in | JSON: `level`, `xp`, `xp_this`, `xp_next`, `credits_earned`, `credits_spent`, `balance`, `km`, `climbed_m`, `rides`, `challenges_done`, `owned` (item ids). |
+| `buy_item(p_item)` | Signed in | Buys or claims an item after checking level, unlock rule and balance; returns the new wallet. |
+| `my_challenges()` | Signed in | This ISO week's four challenges with progress and `claimed`. |
+| `claim_challenge(p_id)` | Signed in | Pays a finished challenge once; returns the new wallet. |
+| `level_xp(n)`, `rider_totals(uid, since)`, `wallet_of(uid)`, `challenge_pool()` | Internal | Level curve, totals from rides, the wallet, and the challenge pool. Not callable from the browser. |
+
+`ride_presence()` accepts a kit string with up to eight `;key=value` parts after the three colours (same signature).
+
 ## Changing the schema
 
 When you change a table or function, update this page and `db/schema.sql` in the same change. See [Contributing](../developer-guide/contributing.md#keep-the-schema-in-sync).

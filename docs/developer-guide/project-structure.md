@@ -64,6 +64,14 @@ This page lists every file and folder in the repository, with a one-line summary
 | `rideOnsUi.ts` | Ride-ons in the app: sending (from 👥 and the **R** key), the toast for ones you get, the floating emoji, and pro riders replying. |
 | `kit.ts` | Your kit (jersey, second colour, frame): the presets, validation, the kit string sent to the server, and `setTourJersey()` for tours. |
 | `kitUi.ts` | The ☰ Menu → 🎨 *My kit* dialog. |
+| `garage/catalogue.ts` | The store catalogue (items, prices, unlock rules, effects), loadout validation and `equipmentEffects()`. `scripts/gen-store-sql.mjs` prints the matching SQL seed. |
+| `garage/style.ts` | The bike and clothing style names the 3D model understands and the `;f=tron;…` codes in the kit string. |
+| `garage/progression.ts`, `garage/challenges.ts`, `garage/md5.ts` | The level curve, wallet parsing, and the weekly challenge pool and pick (mirrors the database). |
+| `garage/effects.ts` | What an item does in watts and seconds, from the ride's physics. |
+| `garage/store.ts`, `garage/garage.ts`, `garage/api.ts` | Item states and equipping, the controller (wallet, loadout, rewards) and the database calls. |
+| `garage/garageUi.ts`, `garage/preview.ts` | The Garage dialog and its turntable renderer. |
+| `garage/shareCard.ts`, `garage/shareUi.ts` | The share card canvas and the Share buttons. |
+| `world/bikeParts.ts` | Wheels, the Tron glow (`updateGlow`), helmets, and the jersey pattern and sock shader. |
 | `leaderboardUi.ts` | The 🏆 leaderboard dialog and *Race* buttons. |
 | `style.css` | All styles, including the layout for phones. |
 | `hud.ts` | The 24 data-block fields, the HUD tiles, and the data-block chooser dialog. |

@@ -132,10 +132,13 @@ export interface Activity {
   power_zones: number[] | null; // seconds in each power zone
   max_hr_setting: number | null; // the max HR the zones were worked out from
   finish_s?: number | null; // moving time to the finish, for a whole-stage ride
+  race_place?: number | null; // finishing place in a race (weekly challenges)
+  race_size?: number | null; // riders in that race
+  pro_m?: number | null; // metres ridden alongside a pro team
   samples?: Samples | null;
 }
 
-const SUMMARY_COLUMNS = 'id, started_at, title, stage_id, stage_name, finished, workout_name, duration_s, distance_m, climbed_m, avg_power, np, max_power, avg_hr, max_hr, avg_cadence, kj, tss, ftp, best_power, hr_zones, power_zones, max_hr_setting, finish_s';
+const SUMMARY_COLUMNS = 'id, started_at, title, stage_id, stage_name, finished, workout_name, duration_s, distance_m, climbed_m, avg_power, np, max_power, avg_hr, max_hr, avg_cadence, kj, tss, ftp, best_power, hr_zones, power_zones, max_hr_setting, finish_s, race_place, race_size, pro_m';
 
 /** Saves (or updates, using the same id) an activity for the signed-in rider. */
 export async function saveActivity(a: Activity) {

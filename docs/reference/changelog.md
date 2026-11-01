@@ -6,6 +6,18 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Garage, credits, levels, challenges and the share card
+
+- **Credits and levels** from saved rides, counted on the server (`my_wallet()`): 1 credit per km and per 10 m climbed, 5 XP per km and 0.5 XP per metre, levels 1 to 50. Demo and sped-up rides are ignored. A high-water mark of km and climbing (`rider_progress`) keeps unlocks when rides are deleted.
+- **Bike store** (☰ Menu → 🚲 Garage & store): frames (classic, aero, climbing, time-trial, Tron), wheels (35 mm alloy, 50 mm carbon, 80 mm deep, light climbing, disc for the time-trial bike), tyres, helmets, jersey designs and socks, with prices, level requirements and a live turntable. Each item states its effect in watts and seconds from the ride's physics. `buy_item()` checks level, unlock rule and balance.
+- **Equipment effects** change mass, drag area and rolling resistance in one marked place in `main.ts` (modest: -2.5% to -5% drag for frames, -0.8 kg to +0.4 kg weight, -0.0005 rolling resistance).
+- **The Tron bike**, unlocked by 8,848 m of total climbing and claimed automatically: neon edges, light-ribbon wheels, a ground glow, a gentle pulse, brighter at night. Other bikes look different too (deep rims, a solid disc, aero tubes, a time-trial bike with tri-bars and a tucked rider).
+- **Clothing**: stripes, hoops, chevrons, stars, polka dots and a skinsuit, drawn by the rider shader from pre-skinning positions; black and aero helmets; coloured socks.
+- **Others see your bike and clothes**: the kit string gains optional `;f=tron;w=deep80…` parts (validated by `ride_presence()`, same signature).
+- **Weekly challenges** (`my_challenges()`, `claim_challenge()`): four per ISO week, claimed once for credits. New columns `activities.race_place`, `race_size`, `pro_m`.
+- **Share card**: a 1080 x 1350 picture of a ride from the finish card and from profile rides, shared with the Web Share API or saved as a PNG.
+- New setting `loadout`. New modules in `src/garage/`, `src/world/bikeParts.ts`. Unit tests in `tests/unit/garage.test.ts` and `challenges.test.ts`.
+
 ### Wind and echelons, mini-map and climb preview
 
 - **Wind.** Each stage has a prevailing wind (speed and direction) that the weather scales: light on clear days, stronger under cloud and strongest in rain, with gusts and a slow swing in direction. Drag now works on air speed (road speed plus headwind), so headwinds slow you, tailwinds help, and the pro teams and race field feel it too. A smart trainer is sent the headwind in its simulation parameters. Clouds drift with the wind and rain slants with it. A wind chip in the status bar shows an arrow (up is the way you ride), the speed and "Headwind", "Tailwind" or "Crosswind from the left". New setting **Wind** (on by default). `?wind=<m/s>,<degrees>` forces the wind for testing. New module `src/world/wind.ts`; `stepSpeed()` and `Trainer.setGrade()` gained optional headwind arguments.

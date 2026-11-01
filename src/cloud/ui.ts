@@ -22,6 +22,8 @@ interface Deps {
   context: () => Record<string, unknown>;
   /** Weight and FTP from the email sign-up form, saved before the account is made. */
   onRiderDetails: (d: RiderDetails) => void;
+  /** Makes a share card for a ride (src/garage/shareUi.ts). */
+  shareRide?: (a: Activity) => void;
 }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -417,6 +419,7 @@ export function initAccountUi(deps: Deps) {
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
       }));
     }).catch((e) => charts.replaceChildren(h('p', { class: 'error', text: errMsg(e) })));
+    if (deps.shareRide) actions.append(button('📤 Share', () => deps.shareRide!(a)));
     actions.append(button('🗑 Delete ride', async () => {
       if (!confirm(`Delete "${a.title}" from ${longDate(a.started_at)}? This can’t be undone.`)) return;
       try {

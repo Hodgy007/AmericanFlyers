@@ -1071,3 +1071,41 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
   body:has(#demo-panel:not([hidden])) .minimap, body.hud-left .minimap { left: auto; right: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .wind-arrow { transition: none; } }
+
+/* ---- Garage & store, weekly challenges and the share card (src/garage) ---- */
+.garage-dialog { width: min(96vw, 760px); max-height: 94vh; overflow-y: auto; }
+.gar-head { margin-top: 6px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: center; margin-bottom: 8px; }
+.gar-head .gar-bar, .gar-head .gar-xp, .gar-head .gar-totals { grid-column: 1; }
+.gar-signin { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.gar-level { display: flex; align-items: baseline; gap: 10px; }
+.gar-lv { font-size: 20px; font-weight: 700; }
+.gar-title { color: var(--muted); font-size: 13px; }
+.gar-bar { height: 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.gar-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #4c8df6, #5ee1ff); transition: width 0.4s; }
+.gar-xp, .gar-totals { font-size: 12px; color: var(--muted); }
+.gar-credits { grid-column: 2; grid-row: 1 / span 3; text-align: right; display: flex; flex-direction: column; font-size: 13px; }
+.gar-credits strong { font-size: 22px; }
+.gar-credits small { color: var(--muted); font-size: 11px; }
+.gar-preview { display: block; width: 100%; height: 210px; border-radius: 12px; background: radial-gradient(ellipse at 50% 30%, #2a3a63, #121a30); cursor: grab; touch-action: pan-y; }
+.gar-setup { margin: 6px 0 8px; min-height: 1.3em; }
+.gar-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.gar-tabs button { padding: 6px 12px; font-size: 13px; }
+.gar-tabs button.selected { border-color: var(--blue, #4c8df6); box-shadow: inset 0 0 0 1px var(--blue, #4c8df6); }
+.gi-grid, .gc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.gi, .gc { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 12px; background: rgba(255, 255, 255, 0.04); cursor: pointer; }
+.gc { cursor: default; }
+.gi.worn { border-color: #3ccf7a; box-shadow: inset 0 0 0 1px #3ccf7a; }
+.gi.tried { border-color: var(--blue, #4c8df6); box-shadow: inset 0 0 0 1px var(--blue, #4c8df6); }
+.gi.locked { opacity: 0.75; }
+.gi-top, .gc-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.gi-price, .gc-reward { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.gi-blurb { margin: 0; font-size: 12px; color: var(--muted); }
+.gi-fx { margin: 0; padding: 0; list-style: none; font-size: 12px; color: #8fe3b0; }
+.gi-fx li::before { content: '▲ '; font-size: 9px; }
+.gi-foot, .gc-foot { margin-top: auto; display: flex; gap: 8px; align-items: center; justify-content: space-between; min-height: 30px; }
+.gi-note, .gc-prog { font-size: 11px; color: var(--muted); }
+.gi-foot button, .gc-foot button { padding: 5px 10px; font-size: 12px; margin-left: auto; }
+.gc.done { border-color: #f0b429; }
+.gc.claimed { opacity: 0.7; }
+.finish-reward { margin: 6px 0 0; font-weight: 600; color: #f0b429; text-align: center; }
+@media (max-width: 560px) { .gar-preview { height: 170px; } .gi-grid, .gc-list { grid-template-columns: 1fr; } }

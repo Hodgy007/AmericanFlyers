@@ -4,6 +4,7 @@ import { Drivetrain } from '../drivetrain';
 import { RiderModel } from './rider';
 import { DEFAULT_LANE } from '../steering';
 import { modelKit } from '../kit';
+import { DEFAULT_STYLE, type BikeStyle } from '../garage/style';
 import { draftShift, wind } from './wind';
 
 // Other riders on the road: live riders on the same stage, and the ghost of
@@ -26,6 +27,8 @@ export interface OtherRider {
   frame?: string;
   /** Second kit colour (a live rider's custom kit); pro teams use their frame colour instead. */
   accent?: string;
+  /** Their bike and clothes from the garage (a live rider's kit string carries them). */
+  style?: BikeStyle;
   lane?: number;
 }
 
@@ -49,6 +52,7 @@ function lookOf(o: OtherRider) {
     jersey: o.jersey ?? JERSEYS[(h >>> 3) % JERSEYS.length],
     // Pro teams: [jersey, frame] in the navy and red slots. Live riders with a kit: jersey on the torso.
     kit: o.jersey && o.frame ? (o.accent ? modelKit(o.jersey, o.accent) : ([o.jersey, o.frame] as [string, string])) : null,
+    style: o.style,
   };
 }
 
@@ -178,7 +182,7 @@ export class OtherRiders {
       if (!s) {
         const h = hash(o.id);
         const look = lookOf(o);
-        const model = new RiderModel(o.ghost ? { ghost: true } : { frame: look.frame, jersey: look.jersey, kit: look.kit ?? undefined });
+        const model = new RiderModel(o.ghost ? { ghost: true } : { frame: look.frame, jersey: look.jersey, kit: look.kit ?? undefined, style: look.style });
         const text = o.tag ?? o.name;
         const tag = label(text || ' ', !!o.ghost, o.jersey);
         tag.visible = !!text;
@@ -194,7 +198,7 @@ export class OtherRiders {
         const key = JSON.stringify(lookOf(o));
         if (key !== s.look) {
           s.look = key;
-          s.model.setLook(lookOf(o));
+          s.model.setLook({ ...lookOf(o), style: o.style ?? DEFAULT_STYLE });
         }
       }
 
