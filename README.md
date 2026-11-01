@@ -15,6 +15,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Group rides and races** (☰ Menu → 🗓 Events): a race every evening and a group ride at midday, plus one-off events, with a synchronised start, a lobby, shared computer-ridden fields and results alongside other riders.
 - **Race commentator:** voice lines call the race and how you are doing; switch off in Settings.
 - **Mini-map and climb preview.** A route map with you, riders, teams, ghost and race markers, and a card for the next climb when it is within 2 km.
+- **The hub.** Before you ride you land on a hub: your name, level, XP and credits; a big **Ride** button for what you've chosen (plus **Free ride** and your plan's next session); and Route, Training, Plan, Achievements, Garage, Stats and Events sections. Sign-in leads to it, signed-in riders open on it, and ☰ Menu → 🏠 Hub (or *Back to the hub* on the finish card) returns to it. See `docs/user-guide/the-hub.md`.
 - **Stages** (🏁 button):
   - *Heartland Rollers*: endless farmland, free ride.
   - *Route 66 Flats*: 25 km time trial.
@@ -150,5 +151,7 @@ src/
   world/noise.ts     Deterministic noise helpers
   profile.ts         Elevation profile strip
   settings.ts        Saved settings
+  hub/               The hub (the screen before you ride): header, sections, cache and logic
+  home.ts            The home page: sign-in, or ride without an account (both lead to the hub)
   main.ts            App loop, HUD, controls
 ```

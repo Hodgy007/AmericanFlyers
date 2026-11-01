@@ -19,6 +19,7 @@ The **☰ Menu** holds:
 
 | Item | What it does |
 | --- | --- |
+| **🏠 Hub** | Ends the ride and goes back to the [hub](the-hub.md). If you've ridden a minute or more it asks first: *Keep riding*, or *Save and go to the hub*. |
 | **🎮 Demo ride** / **Stop demo** | Turns the demo ride on or off. See [Getting started](getting-started.md#try-the-demo-ride). |
 | **❤️ Heart rate strap** / **Heart rate ✓** | Connects or disconnects a heart-rate strap. |
 | **🎥 Chase view** (or Side view, Rider's view) | Changes the camera. The label shows the current view. Shortcut: **C**. |

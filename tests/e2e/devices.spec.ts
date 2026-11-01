@@ -140,11 +140,22 @@ const bt = (page: Page) => page.evaluate(() => (window as any).__bt.log);
 const stored = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('americanflyers.devices') ?? 'null'));
 const snap = async (page: Page, name: string) => { if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` }); };
 
+/** The app opens on the hub; these tests are about riding, so press Ride first (the hub's own device banner is checked in the first test). */
+async function ride(page: Page) {
+  await expect(page.locator('#hub')).toBeVisible();
+  await press(page, '#hub-go');
+  await expect(page.locator('#hub')).toBeHidden();
+}
+
 const REMEMBERED = { trainer: { id: 'trainer-1', name: 'KICKR Test' }, hr: { id: 'hr-1', name: 'Strap Test' } };
 
 test('without getDevices: a banner offers one-tap reconnect through a name-filtered chooser', async ({ page }) => {
   await setup(page, { getDevices: false, remembered: REMEMBERED });
   await page.goto('/');
+  // The banner is offered on the hub already, where you'd connect before riding.
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(page.locator('#device-banner')).toBeVisible();
+  await ride(page);
   await expect(page.locator('.topbar')).toBeVisible();
 
   // Nothing connects by itself (no way to without the chooser); the banner offers both devices.
@@ -183,6 +194,7 @@ test('without getDevices: a banner offers one-tap reconnect through a name-filte
 test('with getDevices: remembered devices reconnect on load without the chooser', async ({ page }) => {
   await setup(page, { getDevices: true, remembered: REMEMBERED });
   await page.goto('/');
+  await ride(page);
   await expect(page.locator('#trainer-status')).toContainText('KICKR Test', { timeout: 20_000 });
   await press(page, '#btn-menu');
   await expect(page.locator('#btn-hr')).toContainText('Disconnect Strap Test', { timeout: 20_000 });
@@ -201,6 +213,7 @@ test('with getDevices: remembered devices reconnect on load without the chooser'
 test('connect from the menu remembers the device; disconnect keeps it; no automatic reconnect after a manual disconnect', async ({ page }) => {
   await setup(page, { getDevices: false });
   await page.goto('/');
+  await ride(page);
   await expect(page.locator('#device-banner')).toBeHidden();
   await press(page, '#btn-menu');
   await expect(page.locator('#btn-menu-trainer')).toContainText('Connect trainer');
@@ -221,6 +234,7 @@ test('connect from the menu remembers the device; disconnect keeps it; no automa
 test('a dropped trainer reconnects by itself, with a backoff, and gets the resistance again', async ({ page }) => {
   await setup(page, { getDevices: false });
   await page.goto('/');
+  await ride(page);
   await press(page, '#btn-menu-trainer');
   await expect(page.locator('#trainer-status')).toContainText('KICKR Test');
   await page.evaluate(() => (window as any).__bt.pedalWhileConnected(180, 85));
@@ -253,6 +267,7 @@ test('a dropped trainer reconnects by itself, with a backoff, and gets the resis
 test('forget removes a device from the menu and from Settings', async ({ page }) => {
   await setup(page, { getDevices: true, remembered: REMEMBERED });
   await page.goto('/');
+  await ride(page);
   await expect(page.locator('#trainer-status')).toContainText('KICKR Test', { timeout: 20_000 });
 
   await press(page, '#btn-menu');

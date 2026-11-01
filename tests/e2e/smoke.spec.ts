@@ -1,24 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockNeon } from './mockNeon';
 
-// A fast smoke test of the built app: it loads with Neon mocked (signed out),
-// a demo ride starts, each main dialog opens and closes, and nothing throws.
-
-const CORS = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-headers': '*',
-  'access-control-allow-methods': '*',
-};
-
-/** Neon Auth and the Data API are unreachable (and not wanted) in tests: answer them locally. */
-async function mockNeon(page: Page) {
-  await page.route(/neonauth|apirest/, (route) => {
-    const req = route.request();
-    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
-    const isAuth = /neonauth/.test(req.url());
-    // No session for Auth; empty result sets for the Data API.
-    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/json' }, body: isAuth ? 'null' : '[]' });
-  });
-}
+// Fast smoke tests of the built app, with Neon mocked (tests/e2e/mockNeon.ts): it opens on the hub,
+// Ride starts a demo ride, each main dialog opens and closes, ☰ Menu → Hub comes back, and nothing
+// throws. A second test signs in a rider with rides, a plan and a wallet and checks the hub's sections.
 
 /**
  * Clicks with the DOM, not the mouse. The 3D scene renders in software in CI and
@@ -52,6 +37,8 @@ const DIALOGS: { name: string; button: string; dialog: string[]; menu?: boolean 
 const openDialogs = (page: Page) => page.evaluate(() => Array.from(document.querySelectorAll('dialog[open]')).map((d) => `#${d.id}`));
 
 test('loads, starts a demo ride and opens every main dialog without errors', async ({ page }) => {
+  // The longest test: the hub, a demo ride and about fifteen dialogs, each loaded on first use, all in software WebGL.
+  test.setTimeout(300_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
@@ -79,8 +66,27 @@ test('loads, starts a demo ride and opens every main dialog without errors', asy
   }
 
   await page.goto('/');
-  await expect(page.locator('.topbar')).toBeVisible();
   await expect(page.locator('canvas').first()).toBeAttached();
+
+  // The hub comes first (the session check finds no rider, so it is the guest's hub): header, seven sections, a route to pick.
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(page.locator('#home')).toBeHidden();
+  await expect(page.locator('.hub-ride-title')).toHaveText('Heartland Rollers');
+  await expect(page.locator('.hub-tab')).toHaveCount(7);
+  await expect(page.locator('#hub-name')).toHaveText('Guest rider');
+  await expect(page.locator('#hub-s-route .hub-stage')).not.toHaveCount(0);
+  await press(page, '#hub-tab-training');
+  await expect(page.locator('#hub-s-training .hub-workout').first()).toBeVisible();
+  await press(page, '#hub-tab-route');
+  await press(page, '[data-fkey="stage-route66"]');
+  await expect(page.locator('.hub-ride-title')).toHaveText('Route 66 Flats');
+  // Guests get a friendly sign-in prompt where a section needs an account.
+  await press(page, '#hub-tab-achievements');
+  await expect(page.locator('#hub-s-achievements .hub-signin-card')).toBeVisible();
+  await press(page, '#hub-go');
+  await expect(page.locator('#hub')).toBeHidden();
+  await expect(page.locator('.topbar')).toBeVisible();
+  await expect(page.locator('#stage-name')).toContainText('Route 66 Flats');
 
   // Demo ride from the menu: the demo power slider appears and the HUD fills in.
   await press(page, '#btn-menu');
@@ -111,7 +117,90 @@ test('loads, starts a demo ride and opens every main dialog without errors', asy
   await page.keyboard.press('Escape');
   await expect(page.locator('#stages[open]')).toHaveCount(0);
 
+  // ☰ Menu → 🏠 Hub (a ride of under a minute needs no questions), then Ride goes back to the road.
+  await press(page, '#btn-menu');
+  await press(page, '#btn-menu-hub');
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(page.locator('#hub-leave[open]')).toHaveCount(0);
+  await page.keyboard.press('Escape'); // never strands you: focus returns to Ride
+  await expect(page.locator('#hub-go')).toBeFocused();
+  await press(page, '#hub-go');
+  await expect(page.locator('#hub')).toBeHidden();
+
   // Still riding, and nothing threw.
   await expect(page.locator('#demo-panel')).toBeVisible();
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('the hub for a signed-in rider: header, sections, and back from a ride', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    if (/Failed to load resource|net::ERR|ERR_BLOCKED|ERR_NAME|ERR_INTERNET|ERR_CONNECTION|ERR_TUNNEL|CORS/i.test(m.text())) return;
+    errors.push(`console.error: ${m.text()}`);
+  });
+
+  await mockNeon(page, { signedIn: true });
+  await page.addInitScript(() => {
+    localStorage.setItem('americanflyers.signedIn', '1');
+    localStorage.setItem('americanflyers.onboarded', '1');
+  });
+  if (!process.env.E2E_FULL_FPS) {
+    await page.addInitScript(() => {
+      const raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (cb) => window.setTimeout(() => raf(cb), 1000) as unknown as number;
+    });
+  }
+  await page.goto('/');
+
+  // Header: name, level, credits from the wallet; the plan's next session is one click away.
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(page.locator('#hub-name')).toHaveText('Sam');
+  await expect(page.locator('.hub-lv')).toHaveText('Level 7');
+  await expect(page.locator('.hub-credits').first()).toContainText('1,240');
+  await expect(page.locator('.hub-plan-row')).toContainText('Tempo 2×20');
+
+  // Route: best times come from the rider's finished rides.
+  await expect(page.locator('#hub-s-route .hub-chip.gold').first()).toBeVisible();
+
+  // Training: choosing a workout sets what Ride starts, on a road without a finish line.
+  await press(page, '#hub-tab-training');
+  await press(page, '[data-fkey="w-builtin-sweet-spot-3x10"]');
+  await expect(page.locator('.hub-ride-title')).toHaveText('Sweet Spot 3×10');
+  await expect(page.locator('.hub-ride-meta')).toContainText('Heartland Rollers');
+
+  // Plan, Achievements, Stats, Garage and Events fill in from the account.
+  await press(page, '#hub-tab-plan');
+  await expect(page.locator('#hub-s-plan .hub-next-session h3')).toHaveText('Tempo 2×20');
+  await press(page, '#hub-tab-achievements');
+  await expect(page.locator('#hub-s-achievements .hub-bignum strong')).toHaveText('7');
+  await press(page, '#hub-tab-stats');
+  await expect(page.locator('#hub-s-stats .hub-kpi').first()).toBeVisible();
+  await expect(page.locator('#hub-s-stats .hub-ride-row').first()).toContainText('Sweet Spot');
+  await press(page, '#hub-tab-garage');
+  await expect(page.locator('#hub-s-garage .hub-challenge').first()).toBeVisible();
+  await press(page, '#hub-tab-events');
+  await expect(page.locator('#hub-s-events .hub-event')).toHaveCount(2);
+
+  // A ride row opens the existing ride detail in the profile.
+  await press(page, '#hub-tab-stats');
+  await press(page, '#hub-s-stats .hub-ride-row >> nth=0');
+  await expect(page.locator('#profile-dialog[open]')).toBeVisible();
+  await expect(page.locator('#profile-dialog details.activity[open]')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#profile-dialog[open]')).toHaveCount(0);
+  await expect(page.locator('#hub')).toBeVisible();
+
+  // Ride starts the chosen workout; the finish card's way back is "Back to the hub".
+  await press(page, '#hub-go');
+  await expect(page.locator('#hub')).toBeHidden();
+  await expect(page.locator('#workout-panel')).toBeVisible();
+  await expect(page.locator('#wp-name')).toHaveText('Sweet Spot 3×10');
+  await press(page, '#btn-menu');
+  await press(page, '#btn-menu-hub');
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(page.locator('#workout-panel')).toBeHidden();
+
   expect(errors, errors.join('\n')).toEqual([]);
 });

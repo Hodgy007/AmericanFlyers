@@ -7,7 +7,7 @@ This page explains how the modules fit together: the frame loop, the trainer and
 | Part | Language or format | Notes |
 | --- | --- | --- |
 | App code | **TypeScript** (strict), compiled to JavaScript | Everything in `src/`. `npm run build` type-checks with `tsc --noEmit`, then bundles with Vite. |
-| Page markup | **HTML** | `index.html`: the home page, top bar, panels and every dialog. |
+| Page markup | **HTML** | `index.html`: the home page, the hub's header and containers, top bar, panels and every dialog. |
 | Styles | **CSS** | `src/style.css`, plain CSS with custom properties (no preprocessor or framework). |
 | Database | **SQL** (PostgreSQL, PL/pgSQL functions) | `db/schema.sql`: tables, row-level security policies and security-definer functions, run on Neon. |
 | Service worker | **JavaScript** | `public/sw.js`, served as-is (not bundled). |
@@ -35,6 +35,27 @@ Four things run on a timer or event, alongside the frame loop:
 | Settings sync | 800 ms after the last change | Writes settings to the account. | `pushSettings` in `src/cloud/sync.ts` |
 
 Device events (trainer and heart-rate notifications) arrive as Bluetooth callbacks and are stored in a shared `live` object. The frame loop reads that object once per frame.
+
+## How the app starts: home, hub, ride
+
+`main.ts` builds the world and every module, then hands over to the start flow:
+
+```
+signed in last time? (localStorage americanflyers.signedIn)
+  yes -> hub (placeholders from index.html paint first, then cached data, then the account's)
+  no  -> home page -> sign in, or "Ride without an account" -> hub
+hub -> Ride (or Free ride, Ride it, Race, Join) -> the ride
+ride -> ☰ Menu -> 🏠 Hub, or the finish card's "Back to the hub" -> hub
+```
+
+- **Before the hub (the old flow):** a signed-in rider skipped the home page and landed on the bike; everyone else saw the home page, and both of its exits hid it and showed the ride.
+- **The home page** (`home.ts`) now only leads to the hub: `openHub` for sign-in and *Ride without an account*, `requestHub` for the brand button. A sign-in made mid-ride changes nothing on screen.
+- **The hub** (`src/hub/`) is a full-screen layer over the world. `hub.open()` adds the body classes `at-home` (the ride's own panels, riding together and ride-ons stand down, as on the home page) and `at-hub`, and tells `main.ts` through `onVisibility`. While it is open `frame()` does no ride physics: `hubFrame()` only renders the world, slowly orbiting your rider (`World.setOrbit()`), at about 30 fps (1 fps on phones and with reduced motion).
+- **Ride** calls `startFromHub()` in `main.ts`: close the hub, `chooseStage()` if the stage differs (which starts afresh), then `startWorkout()` if a workout was chosen. The first time, `leaveHub()` also starts the first-ride guide or the Bluetooth note, as leaving the home page used to.
+- **Back to the hub** is `goToHub()`: for a ride of a minute or more, a race or a group ride it asks first (`hub/leave.ts`), then stops the workout, calls `resetRide()` (which quietly saves a ride worth keeping and leaves a race or event) and opens the hub.
+- **The session check** (`restoreSession()`) answers after the hub is up. `hub.sessionSettled()` turns the hub into a guest's if a signed-in hint turned out wrong.
+- **Things the hub listens for.** `main.ts` dispatches `af:hub-refresh` on `document` (`stage`, `ride`, `plan`) when the app moves under an open hub; the hub also looks again when any dialog closes and when the garage's wallet changes.
+- **Speed.** The shell and header are in the main bundle; each section is a dynamic `import()` loaded when first shown (and warmed when idle); the turntable (`garage/preview.ts`, three.js) is imported only when the Garage section is on screen and is disposed when it isn't; canvases draw only while visible (`dom.ts`); account data is fetched after the first paint.
 
 ## Module diagram
 
@@ -170,7 +191,9 @@ Persistent state is in `localStorage`, under these keys:
 | `americanflyers.workouts` | The rider's own workouts | `src/workouts/library.ts` |
 | `americanflyers.routes` | The rider's uploaded GPX routes | `src/routes/library.ts` |
 | `americanflyers.pendingRide` | A ride held back until sign-in | `src/main.ts` |
-| `americanflyers.signedIn` | A hint that skips the home page for signed-in riders | `src/home.ts` |
+| `americanflyers.signedIn` | A hint that skips the home page for signed-in riders (they open on the hub) | `src/home.ts` |
+| `americanflyers.hub` | The hub's cache: your name, garage wallet and ride summary from last visit, so it paints at once | `src/hub/cache.ts` |
+| `americanflyers.hubStage` | The stage last started from the hub | `src/hub/cache.ts` |
 | `americanflyers.onboarded` | The first-ride guide has been done or skipped | `src/onboarding.ts` |
 
 Settings now also hold the training plan in progress, the data-block position, sound, virtual shifting, ghost and ride-together switches. The service worker keeps its own cache of the app's files (see [Project structure](project-structure.md)).

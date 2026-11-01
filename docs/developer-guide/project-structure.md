@@ -6,7 +6,7 @@ This page lists every file and folder in the repository, with a one-line summary
 
 | Path | Purpose |
 | --- | --- |
-| `index.html` | The page markup: home page, top bar and ☰ menu, data blocks, workout, gear, draft and demo panels, status line, every dialog. |
+| `index.html` | The page markup: home page, the hub's header and containers, top bar and ☰ menu, data blocks, workout, gear, draft and demo panels, status line, every dialog. |
 | `package.json` | Scripts (`dev`, `build`, `preview`) and dependencies. |
 | `vite.config.ts` | Vite config: relative base (`./`), the `vendor-three`, `vendor-neon` and `vendor-sentry` chunks, and Sentry source-map upload. |
 | `tsconfig.json` | TypeScript config: strict mode, `noUnusedLocals`, and the `web-bluetooth` and `vite/client` types. |
@@ -39,7 +39,15 @@ This page lists every file and folder in the repository, with a one-line summary
 | --- | --- |
 | `main.ts` | Entry point. Owns the ride state, runs the frame loop, controls the trainer, handles the top bar, ☰ menu and dialogs, saves rides, and wires up sign-in, riding together, ghosts, plans, sound, virtual shifting and drafting. |
 | `lazy.ts` | Lazy loading helpers: `lazy()`, `use()`, `loadOnClick()`, `prefetchWhenIdle()`, `firstFrame`. See [Architecture](architecture.md#lazy-loading). |
-| `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up, and *Ride without an account*. |
+| `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up, and *Ride without an account*. Both ways in lead to the hub (`openHub`); `hint()` remembers a signed-in rider. |
+| `hub/hub.ts` | The hub controller: opens and closes it, tabs (a single column on phones), loads each section on first use, keeps the choice (what Ride starts), the cached wallet and ride summary, and keyboard behaviour. In the main bundle. |
+| `hub/header.ts` | The hub's header: rider card (level, XP, credits) and the Ride panel (the choice, Ride, Free ride, the plan's next session, and the phone dock). |
+| `hub/data.ts` | The hub's pure logic, with no DOM: weekly totals, best times, plan summary, next events, the Ride choice rules, and the `Summary` that is cached. |
+| `hub/accountData.ts` | Fetches rides and FTP history and builds the `Summary` (imported only when there is an account). |
+| `hub/cache.ts`, `hub/dom.ts`, `hub/types.ts` | The localStorage cache (`americanflyers.hub`, `americanflyers.hubStage`), DOM helpers (including drawing canvases only while visible) and shared types (`HubDeps`, `HubCtx`, `SectionView`). |
+| `hub/leave.ts` | The "Back to the hub?" question for a ride in progress. |
+| `hub/hub.css` | All the hub's styles (its own file; uses the tokens in `style.css`). |
+| `hub/sections/*.ts` | One module per section (`route`, `training`, `plan`, `achievements`, `garage`, `stats`, `events`), each a dynamic `import()` with a `mount(root, ctx)` entry point. The garage one imports the turntable (`garage/preview.ts`) only when it is on screen. |
 | `drivetrain.ts` | The virtual drivetrain: automatic gears that keep leg speed in step with road speed, the 24 virtual-shifting gears, crank angle and bike rock. |
 | `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish. |
 | `draft.ts` | Drafting: the drag saved at a given gap behind another rider (and how far across from their line), and the rider just ahead. |
@@ -129,4 +137,4 @@ This page lists every file and folder in the repository, with a one-line summary
 
 ## Tests and tooling
 
-The repository has no linter configuration. `tests/unit/` holds the Vitest unit tests, `tests/e2e/` the Playwright smoke test, and `.github/workflows/ci.yml` runs them with the build on every pull request. See [Testing](testing.md).
+The repository has no linter configuration. `tests/unit/` holds the Vitest unit tests (`hub.test.ts` covers the hub's logic), `tests/e2e/` the Playwright smoke test and `mockNeon.ts` (a signed-out or signed-in Neon for tests), and `.github/workflows/ci.yml` runs them with the build on every pull request. See [Testing](testing.md).

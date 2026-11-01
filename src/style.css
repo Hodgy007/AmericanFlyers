@@ -1191,7 +1191,14 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
   max-width: min(calc(100vw - 32px), 560px); padding: 8px 12px; border-radius: 12px; font-size: 14px;
   background: rgba(14, 22, 44, 0.94); border: 1px solid var(--glass-border); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
-.device-banner[hidden], body.at-home .device-banner { display: none; }
+.device-banner[hidden], body.at-home:not(.at-hub) .device-banner { display: none; } /* not on the sign-in page */
+/* On the hub it sits inside the Ride panel, above Ride (moved there by main.ts): connect, then ride. */
+.device-banner.in-hub { position: static; max-width: none; margin: 0 0 12px; padding: 0; background: none; border: 0; box-shadow: none; }
+.device-banner.in-hub .db-close { display: none; }
+.device-banner.in-hub .db-text { display: none; }
+.device-banner.in-hub .db-actions { width: 100%; }
+.device-banner.in-hub .db-actions button { flex: 1 1 auto; padding: 9px 12px; font-size: 13px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--glass-border); box-shadow: none; color: var(--text); }
+.device-banner.in-hub .db-actions button:hover { background: rgba(255, 255, 255, 0.12); }
 .device-banner .db-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .device-banner button { padding: 6px 12px; font-size: 13px; }
 .device-banner .db-close { background: transparent; border-color: transparent; box-shadow: none; padding: 6px 8px; }

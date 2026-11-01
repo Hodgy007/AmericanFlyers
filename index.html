@@ -37,6 +37,11 @@
         });
       })();
     </script>
+    <script>
+      // Riders who were signed in last time open on the hub (src/hub), not the home page:
+      // hide the home page's markup from the very first paint. src/hub/hub.ts clears this.
+      try { if (localStorage.getItem('americanflyers.signedIn') === '1') document.documentElement.dataset.start = 'hub'; } catch (e) {}
+    </script>
     <link rel="icon" href="/icons/favicon-64.png" type="image/png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -77,6 +82,33 @@
       </div>
     </section>
 
+    <!-- The hub (src/hub): shown before you ride. The header's placeholders are replaced by src/hub/header.ts; the tabs and sections are built by src/hub/hub.ts. -->
+    <section id="hub" class="hub" hidden aria-label="Your hub">
+      <div class="hub-scroll">
+        <div class="hub-inner">
+          <header class="hub-top">
+            <div class="home-brand"><span class="star">★</span> American Flyers</div>
+            <div class="hub-top-actions">
+              <button type="button" id="hub-account">👤 Sign in</button>
+              <button type="button" id="hub-settings">⚙ Settings</button>
+            </div>
+          </header>
+          <div class="hub-hero">
+            <section id="hub-rider" class="hub-panel hub-rider" aria-label="Your rider">
+              <div class="hub-avatar hub-sk" aria-hidden="true"></div>
+              <div class="hub-rider-main"><span class="hub-sk" style="width:60%;height:44px"></span><span class="hub-sk" style="width:90%;height:18px"></span><span class="hub-sk" style="width:70%;height:12px"></span></div>
+            </section>
+            <section id="hub-ride" class="hub-panel hub-ride" aria-label="Start riding">
+              <span class="hub-sk" style="width:55%;height:34px"></span><span class="hub-sk" style="width:80%;height:16px"></span><span class="hub-sk" style="width:100%;height:56px"></span>
+            </section>
+          </div>
+          <nav id="hub-tabs" class="hub-tabs" aria-label="Hub sections"></nav>
+          <div id="hub-sections" class="hub-sections"></div>
+        </div>
+      </div>
+      <div id="hub-dock" class="hub-dock" aria-label="Ride"></div>
+    </section>
+
     <header class="topbar">
       <button type="button" class="brand" id="btn-home" title="Home"><span class="star">★</span> American Flyers</button>
       <nav class="actions">
@@ -92,6 +124,7 @@
             <button id="btn-hr" role="menuitem"><span class="mi-label">❤️ Heart rate</span><small class="mi-sub"></small></button>
             <button id="btn-forget-trainer" role="menuitem" hidden>✕ Forget trainer</button>
             <button id="btn-forget-hr" role="menuitem" hidden>✕ Forget heart rate strap</button>
+            <button id="btn-menu-hub" role="menuitem" title="Back to the hub: route, training, plan, achievements, garage and stats">🏠 Hub</button>
             <button id="btn-demo" role="menuitem">🎮 Demo ride</button>
             <button id="btn-camera" role="menuitem" title="Change camera (C)">🎥 Chase view</button>
             <button id="btn-leaderboard" role="menuitem" title="Leaderboard for this stage">🏆 Leaderboard</button>
@@ -611,6 +644,18 @@
         </div>
         <h3>Your suggestions</h3>
         <div id="my-feedback" class="feedback-list"></div>
+      </form>
+    </dialog>
+
+    <!-- Leaving a ride for the hub (src/hub/leave.ts): keep riding, or save it and go. -->
+    <dialog id="hub-leave" class="signin-dialog hub-leave">
+      <form method="dialog">
+        <h2>Back to the hub?</h2>
+        <p id="hub-leave-text"></p>
+        <div class="dialog-actions">
+          <button value="keep" id="hub-leave-keep" autofocus>Keep riding</button>
+          <button value="leave" id="hub-leave-go" class="primary">Save and go to the hub</button>
+        </div>
       </form>
     </dialog>
 
