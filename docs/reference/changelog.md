@@ -6,6 +6,18 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### The hub: a screen before you ride
+
+- **A hub comes first.** Signing in leads to it, signed-in riders open on it every time (no more dropping straight onto the bike), and guests reach it with *Ride without an account*. Sign-in, hub, ride. The home page's first paint is skipped for signed-in riders (a hint set in `index.html`).
+- **Header.** Name, level and title, an XP bar and credits (from the garage wallet), a big **Ride** button for what is chosen (with its elevation profile or workout chart), **Free ride** (endless Heartland Rollers), and the training plan's next session with **Ride it**. On phones a bottom bar keeps **Ride** in reach.
+- **Seven sections** (tabs on a computer, one scrolling column on a phone): **Route** (every stage and climb, plus uploaded GPX routes, with profile thumbnails, length, climbing, your best time, a Race button, the tour), **Training** (the Ramp FTP test, your workouts, the built-ins, with block charts, and Create), **Plan** (progress, the next session with *Ride it*, or pick a plan), **Achievements** (earned badges and the next to go), **Garage** (a turntable of your bike, level, credits, what you wear, this week's challenges), **Stats** (this week and the last four weeks, FTP and its history, eight weeks of distance, your last rides) and **Events** (the next race and group ride with a live countdown and *Join*). Detail views are the existing dialogs, opened over the hub; a ride row opens that ride in the profile.
+- **What Ride starts.** Picking a route clears any workout; picking a workout rides it on an endless stage (your chosen one if it has no finish line, otherwise Heartland Rollers). The last stage started from the hub is remembered.
+- **Back to the hub.** ☰ Menu → 🏠 Hub, the brand button, and a *Back to the hub* button on every finish and summary card. A ride of a minute or more, a race or a group ride asks first: *Keep riding*, or *Save and go to the hub*.
+- **The look.** The live world circles your rider behind the blur (one frame a second on phones and with reduced motion), in the home page's type and navy glass, with the red-white-blue stripe; bigger on TVs (as the ride screens are) and a two-across grid on phones.
+- **Fast.** Placeholders paint first, then last visit's cached wallet and ride summary (`americanflyers.hub`), then the account's. Every section and the turntable are loaded when first shown (`import()`), canvases draw only when visible, and nothing jumps when data arrives.
+- **Accessible.** Tab order, Enter on cards (the whole card is one button with `aria-pressed`), arrow keys on the section tabs, visible focus, announcements when a choice is made, and Escape brings you back to *Ride* instead of stranding you.
+- New modules in `src/hub/` (`hub.ts`, `header.ts`, `data.ts`, `accountData.ts`, `cache.ts`, `dom.ts`, `leave.ts`, `types.ts`, `hub.css`, `sections/`). Small edits to `main.ts` (the start flow, `goToHub()`, the hub's frame), `home.ts` (leads to the hub), `index.html`, `world/world.ts` (`setOrbit()`), `cloud/ui.ts` (`openProfile(tab, rideId)`) and `workouts/ui.ts`. Unit tests in `tests/unit/hub.test.ts`; the smoke test now goes through the hub, and `tests/e2e/mockNeon.ts` provides a signed-in rider.
+
 ### Trust and safety: privacy, account deletion, email verification, leaderboard sanity
 
 - **Privacy page.** ☰ Menu → 🔒 Privacy (also linked from the sign-in dialog, the home page small print and the profile) says in plain English what is collected, what other riders see, where it is kept and for how long, and how to delete it. It is a draft for the site owner to review, not legal advice (`src/privacyUi.ts`).

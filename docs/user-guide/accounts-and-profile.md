@@ -4,7 +4,7 @@ This page covers signing in (Google, or email and password), what syncs to your 
 
 ## Sign in
 
-1. Click **👤 Sign in** (or use the home page).
+1. Click **👤 Sign in** (or use the home page). After signing in you arrive at the [hub](the-hub.md); signed-in riders open on it every time.
 2. Choose **Continue with Google**, and you're taken to Google and brought back signed in.
 3. Or use your email:
    - **Create account**: your rider name, email, a password (at least 8 characters), your weight, and your FTP if you know it. That's all: no phone number, no address. You're signed in straight away, and your weight and FTP are saved to your settings.

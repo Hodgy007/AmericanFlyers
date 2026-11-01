@@ -210,7 +210,8 @@ export function initWorkoutUi(hooks: WorkoutUiHooks) {
     else { hooks.toast(`Saved "${draft.name}"`); openLibrary(); }
   });
 
-  return { openLibrary };
+  // The hub's "Create a workout" opens the creator on a fresh workout (same as ＋ Create in the library).
+  return { openLibrary, newWorkout: () => $('workout-new').click() };
 }
 
 // -------------------------------------------------------------- helpers ----

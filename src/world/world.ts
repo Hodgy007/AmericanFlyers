@@ -43,6 +43,9 @@ export class World {
   private readonly smoothLook = new THREE.Vector3();
   private firstFrame = true;
   private terrainReady = false;
+  // The hub (src/hub): a slow orbit round the rider instead of the ride cameras.
+  private orbiting = false;
+  private orbitAngle = 2.3;
 
   constructor(canvas: HTMLCanvasElement, markers: MarkerConfig) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -105,6 +108,14 @@ export class World {
 
   /** 0..1: how dark it is (the Tron bike glows more at night). */
   get nightAmount() { return this.atmosphere.nightAmount; }
+
+  /** The hub's backdrop: the camera circles your rider slowly (and the rider is shown, whatever the ride camera). */
+  setOrbit(on: boolean) {
+    if (this.orbiting === on) return;
+    this.orbiting = on;
+    this.rider.setPersonVisible(on ? true : this.mode !== 'rider');
+    this.firstFrame = true;
+  }
 
   cycleCamera(): CameraMode {
     this.mode = CAMERA_MODES[(CAMERA_MODES.indexOf(this.mode) + 1) % CAMERA_MODES.length];
@@ -184,7 +195,12 @@ export class World {
     // Camera.
     const ahead = roadPoint(state.distance + 12);
     const up = new THREE.Vector3(0, 1, 0);
-    switch (this.mode) {
+    if (this.orbiting) {
+      // Hub: round the rider at head height, a little above.
+      this.orbitAngle += dt * 0.12;
+      this.camTarget.copy(riderPos).addScaledVector(forward, Math.cos(this.orbitAngle) * 4.6).addScaledVector(right, Math.sin(this.orbitAngle) * 4.6).addScaledVector(up, 1.5);
+      this.lookTarget.copy(riderPos).addScaledVector(up, 0.85);
+    } else switch (this.mode) {
       case 'chase':
         this.camTarget.copy(riderPos).addScaledVector(forward, -5.2).addScaledVector(up, 2.1).addScaledVector(right, 0.5);
         this.lookTarget.set(ahead.x, ahead.y + 0.9, ahead.z).addScaledVector(right, this.lane * 0.6);
@@ -201,7 +217,10 @@ export class World {
         break;
       }
     }
-    if (this.mode !== 'rider') {
+    if (this.orbiting) {
+      this.camera.position.copy(this.camTarget);
+      this.smoothLook.copy(this.lookTarget);
+    } else if (this.mode !== 'rider') {
       const k = this.firstFrame ? 1 : 1 - Math.exp(-dt * 5);
       this.camera.position.lerp(this.camTarget, k);
       this.smoothLook.lerp(this.lookTarget, k);

@@ -25,6 +25,9 @@ import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, 
 import { RideRecorder } from './cloud/recorder';
 import { initAccountUi } from './cloud/ui';
 import { initHome } from './home';
+// The hub: the screen before you ride (src/hub). Sections load on demand; this is the small part.
+import { initHub } from './hub/hub';
+import { askToLeave } from './hub/leave';
 import { initPrivacyUi } from './privacyUi';
 import { leaderboardEligible, leaderboardNote, type RideFlags } from './rideIntegrity';
 import { Presence } from './cloud/presence';
@@ -351,7 +354,25 @@ const urlWind = (() => {
   return Number.isFinite(ms) ? { ms, angle: Number.isFinite(angle) ? angle : 90 } : undefined;
 })();
 
+// ---- The hub (src/hub): while it is open nothing rides; the world just circles your rider, behind the blur. ----
+let lastHubDraw = 0;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const phoneWidth = matchMedia('(max-width: 760px)');
+function hubFrame(now: number) {
+  lastFrame = now; // so the first ride frame after the hub doesn't see a long gap
+  const every = reducedMotion.matches || phoneWidth.matches ? 1000 : 33; // slow and cheap where it can't be seen well
+  if (now - lastHubDraw < every) return;
+  const dt = Math.min(1, (now - lastHubDraw) / 1000);
+  lastHubDraw = now;
+  world.update({ distance: ride.distance, speedMs: 0, crankAngle: drivetrain.crankAngle, rock: 0 }, dt);
+}
+
 function frame(now: number) {
+  if (hub.isOpen()) {
+    hubFrame(now);
+    requestAnimationFrame(frame);
+    return;
+  }
   // rAF timestamps can precede the load-time clock reading, so clamp at 0.
   const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000)) * TIME_SCALE;
   lastFrame = now;
@@ -545,6 +566,7 @@ function setMenu(open: boolean) {
 }
 menuBtn.addEventListener('click', (e) => { e.stopPropagation(); setMenu(menu.hidden); });
 menu.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('button')) setMenu(false); });
+$('btn-menu-hub').addEventListener('click', () => { void goToHub(); }); // ☰ Menu → 🏠 Hub
 document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !(e.target as HTMLElement).closest('.menu-wrap')) setMenu(false); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) setMenu(false); });
 
@@ -743,8 +765,16 @@ function showSummary(flag: string, title: string, items: [string, string][], act
     if (a.primary) b.className = 'primary';
     b.addEventListener('click', () => { $('finish').hidden = true; a.onClick(); });
     return b;
-  }));
+  }), backToHubButton());
   $('finish').hidden = false;
+}
+
+/** The summary card's "Back to the hub" (the ride is over, so no questions asked). */
+function backToHubButton() {
+  const b = document.createElement('button');
+  b.textContent = '🏠 Back to the hub';
+  b.addEventListener('click', () => { $('finish').hidden = true; void goToHub({ ask: false }); });
+  return b;
 }
 
 /** Heart-rate and power zone breakdowns for a ride summary. */
@@ -836,6 +866,7 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
     await saveActivity(buildActivity());
     lastSavedSeconds = stats.seconds;
     accountUi.invalidate();
+    hubNotify('ride');
     if (showNote) note.textContent = '✓ Saved to your rides';
     // Credits and levels come from the server's count of your saved rides.
     garage.afterRide().then((r) => {
@@ -963,6 +994,12 @@ function chooseStage(stage: Stage) {
   loadMyGhost();
   $('stage-name').textContent = stage.name;
   toast(`${stage.name}: ${stage.tagline}`, 5000);
+  hubNotify('stage');
+}
+
+/** Tells the hub (if it is open) that the app moved under it: a new stage, a saved ride, a plan change. */
+function hubNotify(kind: 'stage' | 'ride' | 'plan') {
+  document.dispatchEvent(new CustomEvent('af:hub-refresh', { detail: kind }));
 }
 
 function openStages() {
@@ -1520,6 +1557,7 @@ $('stage-name').textContent = currentStage().name;
 $<HTMLInputElement>('demo-power').addEventListener('input', (e) => setDemoPower(Number((e.target as HTMLInputElement).value)));
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('dialog')) return;
+  if (hub.isOpen()) return; // the hub has its own keys (Tab, arrows on the section tabs, Enter, Escape)
   if (e.key === 'c' || e.key === 'C') cycleCamera();
   if (e.key === 'm' || e.key === 'M') setSound(!settings.sound);
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
@@ -1622,6 +1660,7 @@ function setPlan(plan: Settings['plan']) {
   settings = { ...settings, plan };
   saveSettings(settings);
   pushSettings(settings);
+  hubNotify('plan');
 }
 
 /** Ticks off the next matching session of the plan being followed. */
@@ -1799,6 +1838,7 @@ onAccountChange(async (a) => {
       updateMapMenu();
       applyHudPosition(settings.hudPosition);
       world.setAtmosphere(settings.timeOfDay, settings.weather);
+      hubNotify('plan'); // the account's plan, FTP and units reach the hub
       // A returning rider on a new device: they've done the setup before.
       try { localStorage.setItem('americanflyers.onboarded', '1'); } catch { /* fine */ }
       const ob = $<HTMLDialogElement>('onboarding');
@@ -1813,18 +1853,95 @@ onAccountChange(async (a) => {
     toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
   }
 });
-// The Bluetooth note and the first-ride guide wait until the rider leaves the home page.
+// The hub (src/hub): sign-in leads here, and so does opening the app as a signed-in rider. Ride starts from here.
+// The Bluetooth note and the first-ride guide wait until the rider first leaves it for the ride.
 initPrivacyUi(); // the Privacy dialog; any element with data-privacy opens it
+let enteredApp = false;
+function leaveHub() {
+  hub.close();
+  if (enteredApp) return;
+  enteredApp = true;
+  // A short wait lets a signed-in rider's settings arrive first (they skip it).
+  if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) onboarding.open(); }, 1500);
+  else bluetoothNote();
+}
+
+/** Ride: what the hub chose, as a fresh ride (a workout goes on top of its stage). */
+function startFromHub(c: { stageId: string; workoutId: string | null }) {
+  leaveHub();
+  const stage = stageById(c.stageId);
+  if (player) stopWorkout();
+  if (stage !== currentStage()) chooseStage(stage); // (this also starts the ride afresh)
+  const w = c.workoutId ? workoutById(c.workoutId) : undefined;
+  if (w) startWorkout(w);
+}
+
+/**
+ * ☰ Menu → 🏠 Hub, the brand button, and the finish card's "Back to the hub". A ride under way
+ * (a minute or more, or a race or group ride) asks first: keep riding, or save it and go.
+ */
+async function goToHub(opts: { ask?: boolean } = {}) {
+  if (hub.isOpen()) return;
+  const underWay = $('finish').hidden && (stats.seconds >= MIN_RIDE_S || !!race || !!eventState);
+  if (opts.ask !== false && underWay) {
+    const also = [race ? (eventState ? 'your race' : 'the race') : eventState ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
+    if (!(await askToLeave({ signedIn: !!account(), time: formatTime(stats.seconds), also }))) return;
+  }
+  if (player) stopWorkout();
+  resetRide(); // quietly saves a ride worth keeping, and leaves a race or group ride
+  hub.open();
+}
+
+const hub = initHub({
+  settings: () => settings,
+  garage,
+  currentStageId: () => currentStage().id,
+  onVisibility: (open) => {
+    world.setOrbit(open);
+    if (open) {
+      world.setOthers([]);
+      sound.update(0.1, { speedMs: 0, pedalling: false, crowd: 0, cassetteRevs: 0 }); // quiet while you choose
+    } else {
+      lastFrame = performance.now();
+    }
+  },
+  start: startFromHub,
+  race: (stage) => { leaveHub(); beginRace(stage, tourStageNumber(stage.id)); },
+  joinEvent: async (row) => {
+    await joinEvent(row); // checks the account and the join window, and shows why if it can't
+    if (eventState) leaveHub();
+  },
+  startPlan: (id) => {
+    const plan = planById(id);
+    if (!plan) return;
+    setPlan({ id, started: new Date().toISOString().slice(0, 10), done: [] });
+    toast(`${plan.name} plan started. First up: ${plan.weeks[0][0].title}.`);
+  },
+  openProfile: (tab, rideId) => accountUi.openProfile(tab, rideId),
+  openSignIn: (why) => accountUi.openSignIn(why),
+  openGarage: (tab) => { void garageUi.open(tab); },
+  dialogs: {
+    workouts: () => workoutUi.openLibrary(),
+    newWorkout: () => workoutUi.newWorkout(),
+    plans: () => plansUi.open(),
+    tour: () => tourUi.open(),
+    events: () => $('btn-events').click(),
+    settings: openSettings,
+    stages: openStages,
+    kit: () => kitUi.open(),
+    account: () => $('btn-account').click(),
+  },
+  night: () => world.nightAmount,
+  toast,
+});
 initHome({
   onRiderDetails: saveRiderDetails,
   defaults: () => settings,
-  onEnterApp: () => {
-    // A short wait lets a signed-in rider's settings arrive first (they skip it).
-    if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) onboarding.open(); }, 1500);
-    else bluetoothNote();
-  },
+  openHub: () => hub.open(),
+  requestHub: () => { void goToHub(); },
+  onShowHome: () => hub.close(),
 });
-restoreSession();
+restoreSession().then((a) => hub.sessionSettled(a));
 
 requestAnimationFrame(frame);
 

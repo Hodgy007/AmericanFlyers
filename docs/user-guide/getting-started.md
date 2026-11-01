@@ -18,8 +18,9 @@ Bluetooth only works on secure pages (`https://`) or on `localhost`. The live si
 ## Open the app
 
 1. Open https://americanflyers.vercel.app in Chrome or Edge (or Bluefy on iPhone or iPad).
-2. You'll see the 3D valley, the top bar of buttons and the data blocks across the top.
-3. You don't need an account to ride. Your settings are kept in this browser until you sign in. To save your rides, ride with others and get on the leaderboards, sign in with Google or **Sign up with email** (a rider name, email, password and your weight; no phone number or address). See [Accounts and profile](accounts-and-profile.md).
+2. If you're signed in you land on the [hub](the-hub.md), where you choose a route or workout and press **Ride**. If you're not, you start on the home page: sign in, or choose **Ride without an account** to reach the same hub.
+3. Press **Ride**. You'll see the 3D valley, the top bar of buttons and the data blocks across the top.
+4. You don't need an account to ride. Your settings are kept in this browser until you sign in. To save your rides, ride with others and get on the leaderboards, sign in with Google or **Sign up with email** (a rider name, email, password and your weight; no phone number or address). See [Accounts and profile](accounts-and-profile.md).
 
 ## Set up your numbers first
 
@@ -56,6 +57,7 @@ No trainer? Click **Demo ride**. The rider's power comes from a slider at the to
 
 ## Where next
 
+- [The hub](the-hub.md) for the screen before you ride: routes, workouts, your plan, badges, garage, stats and events.
 - [Connecting devices](connecting-devices.md) for the trainer, heart rate and the two control modes.
 - [Riding](riding.md) for a tour of the screen.
 - [Stages and routes](stages-and-routes.md) to pick a course.

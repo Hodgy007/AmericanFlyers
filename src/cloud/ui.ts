@@ -187,9 +187,11 @@ export function initAccountUi(deps: Deps) {
     return activities;
   }
 
-  function openProfile(tab: Tab) {
+  /** Opens the profile on a tab; with `rideId` (and the activities tab) that ride's detail is opened too (used by the hub). */
+  function openProfile(tab: Tab, rideId?: string) {
     const a = account();
     if (!a) return openSignIn();
+    focusRide = rideId ?? null;
     $('profile-name').textContent = a.name;
     $('profile-email').textContent = a.email;
     verifyBanner.refresh(); // a note to riders whose email isn't verified yet
@@ -211,6 +213,7 @@ export function initAccountUi(deps: Deps) {
   });
 
   let tabToken = 0;
+  let focusRide: string | null = null; // a ride to open once the activities tab is drawn
   async function showTab(tab: Tab) {
     for (const b of $('profile-tabs').querySelectorAll<HTMLElement>('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
     const body = $('profile-body');
@@ -222,7 +225,14 @@ export function initAccountUi(deps: Deps) {
         : tab === 'activities' ? await activitiesTab()
         : tab === 'privacy' ? accountTab({ toast: deps.toast, close: () => profileDialog.close() })
         : await adminTab();
-      if (token === tabToken) body.replaceChildren(content);
+      if (token === tabToken) {
+        body.replaceChildren(content);
+        if (tab === 'activities' && focusRide) {
+          const row = body.querySelector<HTMLDetailsElement>(`details[data-id="${CSS.escape(focusRide)}"]`);
+          if (row) { row.open = true; row.scrollIntoView({ block: 'nearest' }); }
+        }
+        focusRide = null;
+      }
     } catch (e) {
       if (token === tabToken) body.replaceChildren(h('p', { class: 'error', text: `Couldn’t load this: ${errMsg(e)}` }));
     }
@@ -352,6 +362,7 @@ export function initAccountUi(deps: Deps) {
     }
     for (const a of acts) {
       const row = h('details', { class: 'activity' });
+      row.dataset.id = a.id;
       const summary = h('summary', {},
         h('span', { class: 'act-date', text: new Date(a.started_at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }),
         h('strong', { text: a.title }),

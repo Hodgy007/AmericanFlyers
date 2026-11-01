@@ -20,6 +20,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 ## User guide
 
 - [Getting started](user-guide/getting-started.md): requirements, browsers, your first ride and the demo ride.
+- [The hub](user-guide/the-hub.md): the screen before you ride: choose a route or workout, see your plan, badges, garage, stats and the next event, and how to get back to it.
 - [Connecting devices](user-guide/connecting-devices.md): the trainer (full control or power only), heart-rate straps, and how ERG and grade modes differ.
 - [Riding](user-guide/riding.md): the top bar, data blocks, the elevation strip, camera views, demo controls, and Reset and the ride summary.
 - [Stages and routes](user-guide/stages-and-routes.md): each built-in stage, finish lines, uploading GPX routes, and deleting routes.
