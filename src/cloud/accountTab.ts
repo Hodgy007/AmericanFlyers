@@ -28,7 +28,7 @@ export function accountTab(deps: Deps): HTMLElement {
       <h3>Delete my account</h3>
       <p>This permanently deletes your account and everything in it: your rides, workouts, routes, settings, FTP history, feedback and ride-ons. It can’t be undone. Download your data first if you want to keep it.</p>
       <label>Type <strong>${DELETE_PHRASE}</strong> to confirm
-        <input class="pv-confirm" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+        <input type="search" class="pv-confirm" enterkeyhint="done" autocomplete="off" autocapitalize="characters" spellcheck="false" />
       </label>
       <p class="error pv-delete-error" role="alert"></p>
       <div class="dialog-actions left"><button type="button" class="danger pv-delete" disabled>Delete my account for good</button></div>
