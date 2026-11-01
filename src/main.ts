@@ -41,7 +41,7 @@ import { draftShift, wind } from './world/wind';
 import { initWindUi } from './windUi';
 import { MiniMap } from './miniMap';
 import { initClimbUi } from './climbUi';
-import { complete, nextSession, planById, type Session } from './plans';
+import { complete, nextSession, planById, sessions as planSessions, type Session } from './plans';
 import { onboarded } from './onboardingState';
 import { workoutById } from './workouts/library';
 import type { OtherRider } from './world/others';
@@ -52,6 +52,14 @@ import { attachShare, shareRide } from './garage/shareButton';
 import { levelTitle } from './garage/progression';
 import { RideOns } from './cloud/rideOns';
 import { initRideOnsUi } from './rideOnsUi';
+// AI coach and AI rivals (src/ai/): tips, debriefs and rivals with personalities and memory.
+import { AiRide } from './ai/aiRide';
+import { initRivalsUi } from './ai/rivalsUi';
+import { syncAiSettingsForm } from './ai/consentUi';
+import { stageBrief } from './ai/brief';
+import { buildDebrief } from './ai/summary';
+import type { DebriefPayload } from './ai/types';
+import { myRivals } from './cloud/aiApi';
 // Racing and the Hell of the West tour (race.ts, raceUi.ts, tour.ts, tourUi.ts).
 import { LiveRace, raceSetup, type PanelData, type ResultRow } from './race';
 // Scheduled group rides and races, and the race commentator (schedule.ts, eventSession.ts, eventsUi.ts, commentary.ts, cloud/events.ts).
@@ -112,6 +120,7 @@ let lastCrossShift = 0; // crosswind echelon: metres right of a rider's line the
 let draftSaving = 0; // fraction of air drag saved, eased
 let roadRiders: OtherRider[] = []; // live riders and pro teams on the road now (for ride-ons)
 const rideWorkout = { started: null as string | null, completed: null as string | null };
+let ai: AiRide | null = null; // the AI coach and rival for this ride (src/ai/aiRide.ts); set up once the account UI exists
 
 // ------------------------------------------------------------- devices ----
 
@@ -380,6 +389,19 @@ function frame(now: number) {
     peloton.update(dt);
     liveRiders.push(...peloton.riders());
   }
+  // ---- AI coach and rival (src/ai/): tips as you ride, and a rival on the road ----
+  if (ai) {
+    const ahead = liveRiders.reduce((m, r) => (r.distance > ride.distance && r.distance - ride.distance < m ? r.distance - ride.distance : m), Infinity);
+    const target = player && !player.done && !player.paused ? player.targetWatts() : null;
+    const rival = ai.frame({
+      dt, movingTime: ride.movingTime, distance: ride.distance, watts: live.power, cadence: live.cadence, hr: currentHr(),
+      gradePct: gradeAt(ride.distance) * 100, finish: currentStage().finish, finishS: ride.finishTime, finished: ride.finished,
+      targetW: target, workoutS: player ? player.elapsed : null, gapAheadM: Number.isFinite(ahead) ? ahead : null,
+      drafting: !!draft && draft.saving > 0.01, riding: !ride.finished && !race?.holding && !eventHolding(),
+    });
+    if (rival) liveRiders.push(rival);
+  }
+  // ---- end of AI ----
   roadRiders = liveRiders;
   steering.update(dt, { autoSteer: settings.autoSteer, distance: ride.distance, riders: liveRiders, lateralOf: lateralOf, shift: crossShift });
   world.setLane(steering.target);
@@ -453,7 +475,7 @@ function frame(now: number) {
     updateHud(grade);
     miniMap.setVisible(settings.miniMap && !ride.finished);
     windUi.update(ride.distance, settings.units === 'imperial');
-    climbUi.update(ride.distance, settings.miniMap, !ride.finished, settings.units === 'imperial');
+    climbUi.update(ride.distance, settings.miniMap, !ride.finished && $('finish').hidden, settings.units === 'imperial'); // not over the finish card or ride summary
     placeBelowHud();
     raceUi.countdown(race?.countText ?? null);
     const panelData = race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null;
@@ -625,6 +647,7 @@ new ResizeObserver(() => {
 
 function startWorkout(w: Workout) {
   player = new WorkoutPlayer(w, settings.ftp);
+  ai?.workoutStarted();
   beeps.step = undefined;
   workoutStats = new RideStats(zoneRefs);
   rideWorkout.started = w.name;
@@ -689,9 +712,11 @@ function finishWorkout() {
   rideWorkout.completed = w.name;
   planDone({ workout: w.id });
   const zones = zoneSummary(workoutStats);
+  const coach = ai?.debrief(aiDebriefPayload(workoutStats, w.name, 'workout', null)); // the AI coach's debrief card
   stopWorkout();
-  showSummary('💪', `${w.name}: complete!`, items, actions, zones);
-  saveRide();
+  showSummary('💪', `${w.name}: complete!`, items, actions, [...(coach ? [coach.node] : []), ...zones]);
+  const rideId = recorder.id;
+  saveRide().then((saved) => coach?.rideSaved(saved ? rideId : null));
 }
 
 interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
@@ -793,10 +818,10 @@ let lastSavedSeconds = 0;
  * Saves the current ride to the rider's account (the same ride is updated
  * on later saves). Updates the note on the summary card if it's showing.
  */
-async function saveRide(opts: { quiet?: boolean } = {}) {
+async function saveRide(opts: { quiet?: boolean } = {}): Promise<boolean> {
   const note = $('finish-note');
   const showNote = !opts.quiet && !$('finish').hidden;
-  if (stats.seconds < MIN_RIDE_S) return;
+  if (stats.seconds < MIN_RIDE_S) return false;
   if (!account()) {
     if (showNote) {
       note.replaceChildren('Sign in to save this ride to your profile. ');
@@ -810,7 +835,7 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
       });
       note.append(b);
     }
-    return;
+    return false;
   }
   if (showNote) note.textContent = 'Saving to your rides…';
   try {
@@ -826,6 +851,7 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
       if (text && showNote) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
       if (r.levelAfter > r.levelBefore) toast(`⭐ Level ${r.levelAfter}!`, 5000);
     }).catch(() => { /* credits are a bonus */ });
+    return true;
   } catch (e) {
     // No connection (or the server didn't answer): keep it on this device and upload it later (src/rideQueue.ts).
     const me = account()?.id;
@@ -842,6 +868,7 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
       hubNotify('ride');
     } else if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
     else if (!opts.quiet) toast(`Couldn’t save your ride: ${(e as Error).message}`);
+    return false;
   }
 }
 
@@ -870,6 +897,20 @@ async function uploadQueuedRides() {
 window.addEventListener('online', () => { void uploadQueuedRides(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void uploadQueuedRides(); });
 setInterval(() => { if (navigator.onLine !== false) void uploadQueuedRides(); }, 2 * 60 * 1000);
+
+/** What the AI coach is told after a ride (src/ai/summary.ts). `st` is the stats to describe: the whole ride, or just the workout. */
+function aiDebriefPayload(st: RideStats, title: string, mode: DebriefPayload['mode'], race: { place: number; of: number } | null): DebriefPayload {
+  const plan = settings.plan ? planById(settings.plan.id) : undefined;
+  const c = ai?.workoutCompliance();
+  return buildDebrief({
+    title, mode, durationS: st.seconds, distanceM: ride.distance - ride.startDistance, climbedM: ride.climbed,
+    avgW: st.avgPower, npW: st.np, powerZoneS: st.powerZones, hrZoneS: st.hrZones, avgHr: st.avgHr, maxHr: st.maxHr, avgCadence: st.avgCadence,
+    tss: st.seconds ? st.tss(settings.ftp) : 0,
+    workout: mode === 'workout' && c ? { name: title, onTargetS: c.onTargetS, totalS: c.totalS } : null,
+    race,
+    plan: plan && settings.plan ? { name: plan.name, done: settings.plan.done.length, total: planSessions(plan).length } : null,
+  });
+}
 
 // Save long rides every few minutes, so a closed tab doesn't lose them.
 setInterval(() => {
@@ -921,6 +962,7 @@ function endRide() {
   if (stats.seconds < MIN_RIDE_S) return resetRide();
   const imperial = settings.units === 'imperial';
   const km = (ride.distance - ride.startDistance) / 1000;
+  const coach = ai?.debrief(aiDebriefPayload(stats, currentStage().name, player ? 'workout' : 'ride', null)); // the AI coach's debrief card
   showSummary('🚴', 'Ride summary', [
     ['Time', formatTime(stats.seconds)],
     ['Distance', imperial ? `${(km / KM_PER_MI).toFixed(2)} mi` : `${km.toFixed(2)} km`],
@@ -931,11 +973,14 @@ function endRide() {
   ], [
     { label: 'Keep riding', onClick: () => {} },
     { label: 'Start a new ride', primary: true, onClick: resetRide },
-  ], zoneSummary(stats));
-  saveRide();
+  ], [...(coach ? [coach.node] : []), ...zoneSummary(stats)]);
+  const rideId = recorder.id;
+  if (ride.movingTime >= 180) ai?.rideEnded({ distance: ride.distance, finish: null, finishS: null, movingTime: ride.movingTime, lengthKm: null }, (n) => $('finish-extra').prepend(n));
+  saveRide().then((saved) => coach?.rideSaved(saved ? rideId : null));
 }
 
 function resetRide() {
+  ai?.newRide();
   if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) saveRide({ quiet: true });
   recorder = new RideRecorder();
   rideFlags.usedDemo = false;
@@ -1341,11 +1386,13 @@ function showFinish() {
   let title = `${currentStage().name}: finished!`;
   let shareHeadline: string | undefined;
   const shareBadges: string[] = [];
+  let aiRace: { place: number; of: number } | null = null;
   if (racing) {
     racing.update(0.001, ride.distance, ride.speed); // make sure the line is recorded for this frame
     const r = finishRace(racing);
     ride.racePlace = r.place;
     ride.raceSize = r.rows.length;
+    aiRace = { place: r.place, of: r.rows.length };
     shareHeadline = `${ordinal(r.place)} of ${r.rows.length}`;
     if (r.tour) shareBadges.push(...myJerseys(r.tour).map((j) => `👕 ${JERSEY_NAMES[j]}`));
     items.splice(0, 1, ['Place', `${ordinal(r.place)} of ${r.rows.length}`], ['Race time', raceTime(r.me.time)]);
@@ -1362,8 +1409,13 @@ function showFinish() {
     raceUi.panel(null, false);
     endEvent(); // the lobby and presence go back to the normal road
   }
+  const coach = ai?.debrief(aiDebriefPayload(stats, currentStage().name, aiRace ? 'race' : 'ride', aiRace)); // the AI coach's debrief card
+  if (coach) extra = [coach.node, ...extra];
   showSummary('🏁', title, items, actions, extra);
   $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
+  const rideId = recorder.id;
+  const rideLen = currentStage().finish;
+  ai?.rideEnded({ distance: ride.distance, finish: rideLen, finishS: ride.finishTime || null, movingTime: ride.movingTime, lengthKm: rideLen ? Math.round(rideLen / 100) / 10 : null }, (n) => $('finish-extra').prepend(n));
   const offBoard = leaderboardNote(rideFlags);
   if (offBoard) $('finish-extra').prepend(Object.assign(document.createElement('p'), { className: 'finish-ghost off-board', textContent: `ℹ️ ${offBoard}` }));
   // 📤 Share: a picture of the ride (route, numbers, place, your colours).
@@ -1388,7 +1440,7 @@ function showFinish() {
       textContent: vsGhost < 0 ? `🏆 ${raceTime(-vsGhost)} faster than ${who}` : `${raceTime(vsGhost)} behind ${who}`,
     }));
   }
-  saveRide().then(() => showRank());
+  saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); showRank(); });
 }
 
 /** After a whole-stage ride is saved: where it puts you on the leaderboard. */
@@ -1439,6 +1491,7 @@ function openSettings() {
     else if (input) input.value = String(v);
   }
   $('difficulty-out').textContent = `${settings.difficulty}%`;
+  syncAiSettingsForm(form, !!account(), () => accountUi.openSignIn('Sign in to turn on the AI coach and rivals.')); // signed-out riders can't opt in
   dialog.showModal();
 }
 
@@ -1451,6 +1504,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     return Number.isFinite(v) && v > 0 ? v : fallback;
   };
   const oldFtp = settings.ftp;
+  const prevAi = { coach: settings.aiCoach, rivals: settings.aiRivals };
   settings = {
     ...settings,
     riderKg: num('riderKg', settings.riderKg),
@@ -1467,9 +1521,13 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     wind: data.get('wind') === 'on',
     miniMap: data.get('miniMap') === 'on',
     commentary: data.get('commentary') === 'on',
+    aiCoach: data.get('aiCoach') === 'on',
+    aiRivals: data.get('aiRivals') === 'on',
+    coachVoice: data.get('coachVoice') === 'on',
   };
   saveSettings(settings);
   pushSettings(settings);
+  ai?.applyConsent({ coach: settings.aiCoach, rivals: settings.aiRivals }, prevAi); // the database holds the real opt-in
   if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
   world.setMarkers(markerConfig());
   lastSentGrade = NaN;
@@ -1645,6 +1703,57 @@ const accountUi = initAccountUi({
   }),
 });
 onSyncError((msg) => toast(msg, 6000));
+
+// ---- AI coach and rivals (src/ai/) ----
+const stageLines = () => {
+  const st = currentStage();
+  if (race) return race.course.lines;
+  return [...(st.race?.sprints ?? []).map((l) => ({ kind: 'sprint' as const, d: l.d, name: l.name })), ...(st.race?.summits ?? []).map((l) => ({ kind: 'summit' as const, d: l.d, name: l.name }))];
+};
+let briefCache: { key: string; brief: ReturnType<typeof stageBrief> } | null = null;
+ai = new AiRide({
+  settings: () => settings,
+  signedIn: () => !!account(),
+  toast,
+  stageBrief: () => {
+    const st = currentStage();
+    const key = `${st.id}:${race ? 'r' : ''}`;
+    if (briefCache?.key !== key) briefCache = { key, brief: stageBrief(st, stageLines()) };
+    return briefCache.brief;
+  },
+  stageName: () => currentStage().name,
+  rideMode: () => (player ? 'workout' : race ? 'race' : 'ride'),
+  workoutBrief: () => {
+    if (!player) return null;
+    return {
+      name: player.workout.name, minutes: Math.round(player.duration / 60),
+      steps: player.steps.slice(0, 40).map((st) => ({ atS: Math.round(st.at), durS: Math.round(st.duration), label: st.label, pctFtp: st.free ? null : Math.round(((st.start + st.end) / 2) * 100) / 100 })),
+    };
+  },
+  gradeAt,
+  headwindAt: (d) => roadWind(d).head,
+  countsForRecord: () => leaderboardEligible(rideFlags),
+  loadSession: (id, kind) => {
+    if (kind === 'workout') { const w = workoutById(id); if (w) startWorkout(w); }
+    else chooseStage(stageById(id));
+  },
+  patchSettings: (p) => { settings = { ...settings, ...p }; saveSettings(settings); pushSettings(settings); },
+  openSettings,
+  openSignIn: (reason) => accountUi.openSignIn(reason),
+});
+const rivalsUi = initRivalsUi({
+  signedIn: () => !!account(),
+  rivalsOn: () => settings.aiRivals,
+  active: () => ai?.rival ?? null,
+  start: (id) => ai?.startRival(id),
+  stop: () => ai?.stopRival(),
+  openSettings,
+  openSignIn: () => accountUi.openSignIn('Sign in to turn on AI rivals.'),
+  records: myRivals,
+  forget: (id) => ai!.forget(id),
+});
+$('btn-rivals').addEventListener('click', () => rivalsUi.open());
+// ---- end of AI ----
 
 // ------------------------------------------------------ riding together ----
 
@@ -1863,6 +1972,7 @@ onAccountChange(async (a) => {
     garage.refresh(); // a ride saved just now may have earned credits
     accountUi.checkAdmin(); // the session is settled now
     loadMyGhost();
+    ai?.syncConsent(); // the AI coach and rivals follow what the account agreed to (the database has the last word)
     toast(`Signed in as ${a.name}`);
   } catch (e) {
     toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);

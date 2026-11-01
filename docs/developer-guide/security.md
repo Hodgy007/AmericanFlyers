@@ -55,6 +55,10 @@ Passwords go straight to Neon Auth and are never stored by the app. OAuth client
 
 Don't add a service-role key, a database password or an API key to the client code. Anything in the bundle can be read by anyone who opens the page.
 
+## The AI function
+
+`api/ai.ts` is the only server code. The Anthropic key (`ANTHROPIC_API_KEY`) lives only in the Vercel environment. The function never trusts the browser about who the rider is: it forwards the rider's own Neon token to the database function `ai_claim()`, which checks sign-in, opt-in (`ai_consent`), ban and the daily quota (`ai_usage`), and returns the first name, FTP, weight and rival memory for the prompt (never the email). A bad token is a 401, no opt-in or a ban a 403, over quota a 429. The request body is size-capped and validated with zod; text that reaches a prompt (a route's name) is reduced to plain characters; replies are length-limited and checked before they are shown. Rival memory notes are trimmed in the database. The function logs token counts, never names, ids or tokens. See [AI coach and rivals](ai.md).
+
 ## What the browser stores
 
 `localStorage` holds settings, workouts, routes, and a ride held back until sign-in. It's readable by any script on the same origin, so don't store secrets there. Routes include GPS coordinates, which are personal data. They stay on the device unless you're signed in, and then they're in your account.

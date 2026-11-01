@@ -1,7 +1,7 @@
 // Stage definitions: each stage supplies its own elevation profile, road
 // bends, scenery style, roadside landmarks and signs.
 
-import { fbm, smoothstep } from './world/noise';
+import { fbm, smoothstep } from './world/noise.js';
 
 export interface LandmarkKind {
   file: string;

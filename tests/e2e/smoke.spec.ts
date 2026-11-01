@@ -27,6 +27,7 @@ const DIALOGS: { name: string; button: string; dialog: string[]; menu?: boolean 
   { name: 'garage', button: '#btn-menu-garage', dialog: ['#garage-dialog'], menu: true },
   { name: 'tour', button: '#btn-tour', dialog: ['#tour'], menu: true },
   { name: 'events', button: '#btn-events', dialog: ['#events'], menu: true },
+  { name: 'rivals', button: '#btn-rivals', dialog: ['#rivals'], menu: true },
   { name: 'settings', button: '#btn-settings', dialog: ['#settings'], menu: true },
   { name: 'feedback', button: '#btn-feedback', dialog: ['#feedback-dialog', '#signin'], menu: true },
   { name: 'privacy', button: '#btn-privacy', dialog: ['#privacy'], menu: true },

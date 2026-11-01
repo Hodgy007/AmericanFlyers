@@ -30,6 +30,8 @@ export interface OtherRider {
   /** Their bike and clothes from the garage (a live rider's kit string carries them). */
   style?: BikeStyle;
   lane?: number;
+  /** A line the rider is saying right now (an AI rival's speech bubble, src/ai/); undefined or '' for none. */
+  speech?: string;
 }
 
 const SHOW_BEHIND = 300;
@@ -111,6 +113,47 @@ function label(text: string, ghost: boolean, accent?: string) {
   return sprite;
 }
 
+/** A speech bubble above a rider (an AI rival's line, src/ai/): white, wrapped to a few short lines. */
+function speechBubble(text: string) {
+  const font = '600 34px Inter, system-ui, sans-serif';
+  const measure = document.createElement('canvas').getContext('2d')!;
+  measure.font = font;
+  const lines: string[] = [];
+  let cur = '';
+  for (const word of text.split(' ')) {
+    const next = cur ? `${cur} ${word}` : word;
+    if (cur && measure.measureText(next).width > 560) { lines.push(cur); cur = word; } else cur = next;
+  }
+  if (cur) lines.push(cur);
+  const w = Math.ceil(Math.max(...lines.map((l) => measure.measureText(l).width))) + 44;
+  const lh = 44;
+  const h = lines.length * lh + 36;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h + 16;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+  ctx.beginPath();
+  ctx.roundRect(2, 2, w - 4, h - 4, 22);
+  ctx.moveTo(w / 2 - 12, h - 3);
+  ctx.lineTo(w / 2, h + 13);
+  ctx.lineTo(w / 2 + 12, h - 3);
+  ctx.fill();
+  ctx.fillStyle = '#10151f';
+  ctx.font = font;
+  ctx.textBaseline = 'middle';
+  lines.forEach((l, i) => ctx.fillText(l, 22, 18 + lh * i + lh / 2));
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false, transparent: true, sizeAttenuation: false }));
+  const sh = 0.032 * ((h + 16) / 64);
+  sprite.scale.set((sh * w) / (h + 16), sh, 1);
+  sprite.center.set(0.5, 0); // the tail points at the rider
+  sprite.position.set(0, 2.4, 0);
+  sprite.renderOrder = 13;
+  return sprite;
+}
+
 interface Shown {
   model: RiderModel;
   drivetrain: Drivetrain;
@@ -121,6 +164,7 @@ interface Shown {
   seen: number; // performance.now() when last in the list
   look: string; // their kit as last applied, to notice changes
   emotes: { sprite: THREE.Sprite; age: number }[]; // floating ride-on emoji (age in seconds)
+  bubble?: { sprite: THREE.Sprite; text: string }; // the line they are saying (OtherRider.speech)
 }
 
 export class OtherRiders {
@@ -233,6 +277,13 @@ export class OtherRiders {
       const fromCam = g.position.distanceTo(camera.position);
       s.tag.visible = !!(o.tag ?? o.name) && fromCam > 3.5 && fromCam < 260;
       if (s.emotes.length) this.tickEmotes(s, dt);
+      // Speech bubble (AI rivals): built when the line changes, gone when it clears.
+      const say = o.speech ?? '';
+      if (say !== (s.bubble?.text ?? '')) {
+        if (s.bubble) { g.remove(s.bubble.sprite); s.bubble.sprite.material.map?.dispose(); s.bubble.sprite.material.dispose(); s.bubble = undefined; }
+        if (say) { const sprite = speechBubble(say); g.add(sprite); s.bubble = { sprite, text: say }; }
+      }
+      if (s.bubble) s.bubble.sprite.visible = fromCam > 3.5 && fromCam < 260;
     }
 
     // Drop riders who've left, gone out of range, or haven't been heard from.
@@ -243,6 +294,7 @@ export class OtherRiders {
       s.tag.material.map?.dispose();
       s.tag.material.dispose();
       for (const e of s.emotes) e.sprite.material.dispose();
+      if (s.bubble) { s.bubble.sprite.material.map?.dispose(); s.bubble.sprite.material.dispose(); }
       this.shown.delete(id);
     }
   }

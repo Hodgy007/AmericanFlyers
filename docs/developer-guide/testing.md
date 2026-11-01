@@ -41,6 +41,8 @@ npm run build && npm test
 | `eventSession.test.ts` | the shared event clock, the "you've been dropped" watcher, merging real and computer-ridden results, fixed-step determinism |
 | `commentary.test.ts` | commentary rate limiting and queueing, race events to voice lines, every clip file exists |
 | `garage.test.ts` | the level curve, rewards, wallet parsing, loadout validation, equipment effect maths against `stepSpeed`, store rules (the Tron bike at 8,848 m), kit strings and the server's regex, the share card |
+| `aiLogic.test.ts` | the AI coach and rivals: text trimming, reply sanitizers, canned text for every moment and trigger, the coach moments and their rate limits, the plan runner, rival triggers and line limiter, the rival bot (pace, styles, result) |
+| `aiApi.test.ts` | `api/ai.ts` with the Anthropic client and the Data API injected: 401/403/429/503 mapping, the rider's token reaching `ai_claim`, refusal and unusable replies falling back to canned text, the exact Claude request, prompt contents and injection hygiene |
 | `challenges.test.ts` | ISO weeks and the weekly challenge pick (pinned to the database for several weeks) |
 
 Conventions:

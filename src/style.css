@@ -1206,3 +1206,60 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 .dev-box { display: grid; gap: 6px; margin: 4px 0 10px; }
 .dev-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
 .dev-row button { padding: 4px 12px; font-size: 13px; }
+/* ---- AI coach and rivals (src/ai/) ---- */
+.ai-settings { margin: 6px 0 12px; padding: 10px 12px 4px; border: 1px solid var(--glass-border); border-radius: 12px; }
+.ai-settings legend { padding: 0 6px; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.ai-settings label.check:has(input:disabled) { opacity: 0.55; }
+.ai-settings > .hint { margin: 0 0 8px; }
+.ai-settings [hidden] { display: none; }
+
+/* The coach's tip: bottom-left, six seconds at a time. */
+.coach-bubble {
+  position: fixed; left: 190px; bottom: 120px; z-index: 40; max-width: min(60vw, 340px); /* right of the mini-map */
+  display: flex; gap: 10px; align-items: flex-start;
+  background: rgba(14, 22, 44, 0.94); border: 1px solid var(--glass-border); border-left: 4px solid #f2c14e; border-radius: 14px;
+  padding: 10px 14px 10px 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); font-size: 14px; line-height: 1.35;
+  opacity: 0; transform: translateX(-16px); transition: opacity 0.25s, transform 0.25s; pointer-events: none;
+}
+.coach-bubble.show { opacity: 1; transform: none; }
+.coach-bubble[hidden] { display: none; }
+.coach-bubble strong { display: block; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #f2c14e; margin-bottom: 2px; }
+.coach-bubble p { margin: 0; }
+.coach-face { font-size: 24px; line-height: 1; }
+
+/* The coach on the ride summary. */
+.coach-card { margin: 0 0 12px; padding: 12px 14px; text-align: left; background: rgba(242, 193, 78, 0.08); border: 1px solid rgba(242, 193, 78, 0.35); border-radius: 14px; }
+.coach-card header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.coach-card header strong { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #f2c14e; }
+.coach-card h3 { margin: 0 0 4px; font-size: 18px; }
+.coach-card p { margin: 0 0 8px; }
+.coach-card .muted { color: var(--muted); font-size: 13px; }
+.coach-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 8px; }
+.coach-col h4 { margin: 0 0 2px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.coach-col ul { margin: 0; padding-left: 16px; font-size: 13px; }
+.coach-col.good h4 { color: #48c774; }
+.coach-col.work h4 { color: #f2c14e; }
+.coach-next { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 10px; background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
+.coach-next div { display: flex; flex-direction: column; font-size: 13px; }
+.coach-next span { color: var(--muted); }
+.coach-foot { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.coach-wait::after { content: ''; display: inline-block; width: 1em; animation: coach-dots 1.2s steps(4, end) infinite; }
+@keyframes coach-dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+@media (max-width: 700px) { .coach-bubble { left: 16px; bottom: 300px; max-width: min(78vw, 340px); } }
+@media (max-width: 480px) { .coach-cols { grid-template-columns: 1fr; } }
+
+/* Rivals dialog. */
+.rivals-dialog { width: min(94vw, 560px); }
+.rivals-list { display: grid; gap: 10px; margin: 10px 0; max-height: 56vh; overflow: auto; }
+.rival-card { display: grid; grid-template-columns: 48px 1fr; gap: 6px 12px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 14px; background: rgba(255, 255, 255, 0.04); }
+.rival-card.active { border-color: #48c774; box-shadow: 0 0 0 1px #48c774 inset; }
+.rival-swatch { width: 48px; height: 48px; border-radius: 12px; border: 3px solid; display: grid; place-items: center; font-size: 22px; }
+.rival-info { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.rival-info strong { font-size: 16px; }
+.rival-tag { color: var(--muted); }
+.rival-record { font-weight: 700; }
+.rival-remember { margin-top: 4px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #f2c14e; }
+.rival-memory { margin: 0; padding-left: 16px; color: var(--muted); }
+.rival-actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+.rivals-note { min-height: 1.2em; }
+.rival-closing { margin-top: 6px; }

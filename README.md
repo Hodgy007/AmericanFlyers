@@ -54,6 +54,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Pro teams**: five computer-ridden teams with comedic near-miss names ride every stage two by two at 2.0–4.2 W/kg, in their own kit. Join one from 👥 and sit in.
 - **Drafting**: ride close behind someone and you save up to about a third of your air drag (and a smart trainer gets lighter). A slipstream gauge shows the gap to the wheel ahead and the watts you're saving.
 - **Steering**: **←** / **→** (or on-screen ◀ ▶ on touch screens) move you across the road; auto-steer eases you onto the wheel ahead. The draft is lateral, so you need to be on their line.
+- **AI coach and AI rivals** (opt-in, ⚙ Settings): Coach Marty plans your ride, gives a few reactive tips and writes a debrief with a suggested next session; ☰ Menu → 🤺 Rivals has four original rivals (a showboat sprinter, a cold climber, a crafty veteran, a data-obsessed time triallist) who ride at your pace, talk, and remember your rides. Powered by Claude through one Vercel function (`api/ai.ts`); built-in tips and lines when the AI is off or busy. See `docs/developer-guide/ai.md`.
 - **Time of day and weather** (☰ Menu → 🌤): dawn, day, dusk and night (moon, stars, a front light) and clear, cloudy or rain (streaks, wet glossy road, mist, rain sound), or Auto: stages start at their own time and weather, the light moves on as you ride, and the weather changes now and then.
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
 - **Training plans** (📅 in Workouts): Get Started, FTP Builder and Hell of the West, with sessions that tick off as you ride.
@@ -68,7 +69,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **TypeScript** (strict) for all app code in `src/`, with **HTML** (`index.html`) and plain **CSS** (`src/style.css`).
 - **SQL** (PostgreSQL and PL/pgSQL) for the database: `db/schema.sql`.
 - **Three.js** for the 3D world, **Web Bluetooth** for the trainer and heart-rate strap, **Web Audio** for sound, and a small **JavaScript** service worker (`public/sw.js`) to make it installable.
-- **Vite** to build, **Vercel** to host, **Neon** (Postgres, Neon Auth and the Data API) for accounts and data, and **Sentry** for error reporting. No server code of our own.
+- **Vite** to build, **Vercel** to host, **Neon** (Postgres, Neon Auth and the Data API) for accounts and data, and **Sentry** for error reporting. One small Vercel function (`api/ai.ts`) for the optional AI features; otherwise no server code of our own.
 
 See [Architecture](docs/developer-guide/architecture.md#languages-and-technologies) for the full list.
 

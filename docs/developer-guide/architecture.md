@@ -17,7 +17,7 @@ This page explains how the modules fit together: the frame loop, the trainer and
 | 3D models | **glTF binary** (`.glb`) | `public/models/`, generated with Higgsfield. |
 | Docs | **Markdown** | `docs/` and `README.md`. |
 
-Libraries: **Three.js** (3D rendering), **@neon/neon-js** (Neon Auth and the Data API), **@sentry/browser** (crash reports, only when the build has a DSN). Browser APIs: **Web Bluetooth** (trainer and heart-rate strap), **WebGL** (through Three.js), **Web Audio** (ride sounds), the **Fullscreen** and **Service Worker** APIs. Build tool: **Vite**. Hosting: **Vercel**. Backend: **Neon** (Postgres, Neon Auth, Data API). There's no server code of our own: the browser talks to Neon directly, and the database enforces who can see what.
+Libraries: **Three.js** (3D rendering), **@neon/neon-js** (Neon Auth and the Data API), **@sentry/browser** (crash reports, only when the build has a DSN), and on the server **@anthropic-ai/sdk** with **zod** (the AI function in `api/`). Browser APIs: **Web Bluetooth** (trainer and heart-rate strap), **WebGL** (through Three.js), **Web Audio** (ride sounds), the **Fullscreen** and **Service Worker** APIs. Build tool: **Vite**. Hosting: **Vercel**. Backend: **Neon** (Postgres, Neon Auth, Data API). There's no server code of our own: the browser talks to Neon directly, and the database enforces who can see what.
 
 ## The shape of the app
 

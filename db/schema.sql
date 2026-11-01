@@ -1007,3 +1007,229 @@ grant execute on function public.my_wallet(), public.buy_item(text), public.my_c
 --   my_kit text := case when p_kit ~ '^#[0-9a-fA-F]{6},#[0-9a-fA-F]{6},#[0-9a-fA-F]{6}(;[a-z]{1,2}=[a-z0-9]{1,12}){0,8}$' then lower(p_kit) else null end;
 -- (applied in the ride_presence() definition above; same signature as before)
 notify pgrst, 'reload schema';
+
+-- ------------------------------------------------ AI coach and rivals ----
+-- Riders opt in (ai_consent). The Vercel function api/ai.ts calls ai_claim()
+-- with the rider's own token: it checks consent, ban and the daily quota,
+-- records the use, and returns what the prompt needs (first name, FTP, weight,
+-- last four weeks, and for rivals the rival's memory). Every table has row-level
+-- security and no grants; the functions run as their owner. Each public function
+-- is a one-line wrapper over an internal "_for(me, ...)" version so the logic can
+-- be tested with a made-up rider (the _for functions are granted to nobody).
+
+create table if not exists public.ai_consent (
+  user_id text primary key default auth.user_id(),
+  coach boolean not null default false,
+  rivals boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+create table if not exists public.ai_usage (
+  user_id text not null default auth.user_id(),
+  day date not null,
+  kind text not null check (kind in ('coach_debrief', 'coach_plan', 'coach_tip', 'rival_pre', 'rival_post')),
+  count integer not null default 0,
+  primary key (user_id, day, kind)
+);
+create table if not exists public.rival_memory (
+  user_id text not null default auth.user_id(),
+  rival_id text not null check (rival_id ~ '^[a-z0-9_-]{1,24}$'),
+  wins integer not null default 0,
+  losses integer not null default 0,
+  rides integer not null default 0,
+  last_ride timestamptz,
+  notes jsonb not null default '[]'::jsonb, -- up to 8 short facts the rival remembers
+  primary key (user_id, rival_id)
+);
+create table if not exists public.coach_notes (
+  user_id text not null default auth.user_id(),
+  activity_id uuid not null references public.activities (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  debrief jsonb not null,
+  primary key (user_id, activity_id)
+);
+alter table public.ai_consent enable row level security;
+alter table public.ai_usage enable row level security;
+alter table public.rival_memory enable row level security;
+alter table public.coach_notes enable row level security;
+-- (no policies and no grants: only the functions below touch them)
+revoke all on public.ai_consent, public.ai_usage, public.rival_memory, public.coach_notes from public, anonymous, authenticated;
+
+-- Consent -------------------------------------------------------------------
+create or replace function public.my_ai_consent_for(me text) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare c record;
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  select a.coach, a.rivals into c from public.ai_consent a where a.user_id = me;
+  return jsonb_build_object('coach', coalesce(c.coach, false), 'rivals', coalesce(c.rivals, false));
+end $$;
+
+create or replace function public.set_ai_consent_for(me text, p_coach boolean, p_rivals boolean) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  insert into public.ai_consent as a (user_id, coach, rivals, updated_at)
+  values (me, coalesce(p_coach, false), coalesce(p_rivals, false), now())
+  on conflict (user_id) do update set coach = excluded.coach, rivals = excluded.rivals, updated_at = excluded.updated_at;
+  return public.my_ai_consent_for(me);
+end $$;
+
+-- The gate the Vercel function calls with the rider's token ---------------------
+-- Returns {ok:false, reason:'no_consent'|'banned'|'quota'} for the three ways to be turned away,
+-- else {ok:true, name, ftp, weight_kg, last4w, rivals, used, limit}. Not signed in raises 42501.
+create or replace function public.ai_claim_for(me text, p_kind text, p_rival text default null) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare
+  usr record;
+  con record;
+  lim integer;
+  used integer := null;
+  today date := (now() at time zone 'utc')::date;
+  prof jsonb;
+  ftp numeric;
+  kg numeric;
+  fname text;
+  wk jsonb;
+  mem jsonb := '[]'::jsonb;
+  is_adm boolean;
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  if p_kind is null or p_kind not in ('coach_debrief', 'coach_plan', 'coach_tip', 'rival_pre', 'rival_post') then
+    raise exception 'Unknown AI request' using errcode = '22023';
+  end if;
+  select u.name as name, coalesce(u.banned, false) as banned into usr from neon_auth."user" u where u.id::text = me;
+  if not found then raise exception 'No such account' using errcode = '42501'; end if;
+  if usr.banned then return jsonb_build_object('ok', false, 'reason', 'banned'); end if;
+
+  select a.coach, a.rivals into con from public.ai_consent a where a.user_id = me;
+  if not coalesce(case when left(p_kind, 5) = 'coach' then con.coach else con.rivals end, false) then
+    return jsonb_build_object('ok', false, 'reason', 'no_consent');
+  end if;
+
+  -- Today's quota (UTC day). Admins are unlimited. One atomic upsert: the WHERE stops the count at the limit.
+  is_adm := exists (
+    select 1 from neon_auth."user" u join public.admins ad on lower(ad.email) = lower(u.email)
+    where u.id::text = me and u."emailVerified");
+  lim := case when is_adm then 100000 else case p_kind when 'coach_debrief' then 10 when 'coach_plan' then 6 when 'coach_tip' then 30 else 10 end end;
+  insert into public.ai_usage as a (user_id, day, kind, count) values (me, today, p_kind, 1)
+  on conflict (user_id, day, kind) do update set count = a.count + 1 where a.count < lim
+  returning a.count into used;
+  if used is null then return jsonb_build_object('ok', false, 'reason', 'quota', 'limit', lim); end if;
+
+  -- What the prompt may say about the rider: a first name made only of letters (never an email address).
+  fname := case when position('@' in coalesce(usr.name, '')) > 0 then null
+    else nullif(left(regexp_replace(split_part(trim(coalesce(usr.name, '')), ' ', 1), '[^[:alpha:]''-]', '', 'g'), 20), '') end;
+  select p.settings into prof from public.profiles p where p.user_id = me;
+  ftp := case when jsonb_typeof(prof -> 'ftp') = 'number' then (prof ->> 'ftp')::numeric end;
+  kg := case when jsonb_typeof(prof -> 'riderKg') = 'number' then (prof ->> 'riderKg')::numeric end;
+  select jsonb_build_object(
+    'rides', count(*),
+    'hours', round((coalesce(sum(a.duration_s), 0) / 3600.0)::numeric, 1),
+    'km', round((coalesce(sum(a.distance_m), 0) / 1000.0)::numeric, 0),
+    'climbed_m', round(coalesce(sum(a.climbed_m), 0)::numeric, 0),
+    'tss', round(coalesce(sum(a.tss), 0)::numeric, 0))
+    into wk from public.activities a where a.user_id = me and a.started_at > now() - interval '28 days';
+  if left(p_kind, 5) = 'rival' then
+    select coalesce(jsonb_agg(jsonb_build_object('rival', m.rival_id, 'wins', m.wins, 'losses', m.losses, 'rides', m.rides, 'last_ride', m.last_ride, 'notes', m.notes)), '[]'::jsonb)
+      into mem from public.rival_memory m where m.user_id = me and (p_rival is null or m.rival_id = p_rival);
+  end if;
+  return jsonb_build_object(
+    'ok', true,
+    'name', coalesce(fname, 'Rider'),
+    'ftp', case when ftp between 30 and 800 then round(ftp) end,
+    'weight_kg', case when kg between 30 and 200 then round(kg, 1) end,
+    'last4w', wk, 'rivals', mem, 'used', used, 'limit', lim);
+end $$;
+
+-- Rival memory --------------------------------------------------------------
+create or replace function public.rival_record_for(me text, p_rival text, p_won boolean, p_note text default null) returns void
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare
+  cur jsonb;
+  note text := left(trim(regexp_replace(coalesce(p_note, ''), '[[:cntrl:]]+', ' ', 'g')), 140);
+  merged jsonb;
+  kept jsonb;
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  if p_rival is null or p_rival !~ '^[a-z0-9_-]{1,24}$' then raise exception 'Unknown rival' using errcode = '22023'; end if;
+  if not coalesce((select a.rivals from public.ai_consent a where a.user_id = me), false) then
+    raise exception 'Turn on AI rivals first' using errcode = '42501';
+  end if;
+  select m.notes into cur from public.rival_memory m where m.user_id = me and m.rival_id = p_rival;
+  if cur is null and (select count(*) from public.rival_memory m where m.user_id = me) >= 12 then
+    raise exception 'Too many rivals' using errcode = '22023';
+  end if;
+  merged := coalesce(cur, '[]'::jsonb) || case when note <> '' then jsonb_build_array(note) else '[]'::jsonb end;
+  select coalesce(jsonb_agg(t.x order by t.ord), '[]'::jsonb) into kept
+    from (select e.x, e.ord from jsonb_array_elements(merged) with ordinality as e(x, ord) order by e.ord desc limit 8) t;
+  insert into public.rival_memory as m (user_id, rival_id, wins, losses, rides, last_ride, notes)
+  values (me, p_rival, case when p_won then 1 else 0 end, case when p_won then 0 else 1 end, 1, now(), kept)
+  on conflict (user_id, rival_id) do update set
+    wins = m.wins + excluded.wins, losses = m.losses + excluded.losses, rides = m.rides + 1,
+    last_ride = now(), notes = excluded.notes;
+end $$;
+
+create or replace function public.my_rivals_for(me text) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object('rival', m.rival_id, 'wins', m.wins, 'losses', m.losses, 'rides', m.rides, 'last_ride', m.last_ride, 'notes', m.notes) order by m.rival_id), '[]'::jsonb)
+    from public.rival_memory m where m.user_id = me);
+end $$;
+
+-- Forgets one rival's memory, or all of them when p_rival is null.
+create or replace function public.forget_rival_for(me text, p_rival text default null) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  delete from public.rival_memory m where m.user_id = me and (p_rival is null or m.rival_id = p_rival);
+end $$;
+
+-- Coach debriefs kept with the ride -----------------------------------------
+create or replace function public.save_coach_debrief_for(me text, p_activity uuid, p_debrief jsonb) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  if p_debrief is null or jsonb_typeof(p_debrief) <> 'object' or octet_length(p_debrief::text) > 6000 then
+    raise exception 'That debrief is too big' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.activities a where a.id = p_activity and a.user_id = me) then
+    raise exception 'Save the ride first' using errcode = '22023';
+  end if;
+  insert into public.coach_notes as n (user_id, activity_id, debrief) values (me, p_activity, p_debrief)
+  on conflict (user_id, activity_id) do update set debrief = excluded.debrief, created_at = now();
+end $$;
+
+create or replace function public.my_coach_debrief_for(me text, p_activity uuid) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  return (select n.debrief from public.coach_notes n where n.user_id = me and n.activity_id = p_activity);
+end $$;
+
+-- The public functions the browser and api/ai.ts call (rider's own token) ----------
+create or replace function public.my_ai_consent() returns jsonb language sql stable security definer set search_path = '' as $$ select public.my_ai_consent_for(auth.user_id()) $$;
+create or replace function public.set_ai_consent(p_coach boolean, p_rivals boolean) returns jsonb language sql security definer set search_path = '' as $$ select public.set_ai_consent_for(auth.user_id(), p_coach, p_rivals) $$;
+create or replace function public.ai_claim(p_kind text, p_rival text default null) returns jsonb language sql security definer set search_path = '' as $$ select public.ai_claim_for(auth.user_id(), p_kind, p_rival) $$;
+create or replace function public.rival_record(p_rival text, p_won boolean, p_note text default null) returns void language sql security definer set search_path = '' as $$ select public.rival_record_for(auth.user_id(), p_rival, p_won, p_note) $$;
+create or replace function public.my_rivals() returns jsonb language sql stable security definer set search_path = '' as $$ select public.my_rivals_for(auth.user_id()) $$;
+create or replace function public.forget_rival(p_rival text default null) returns void language sql security definer set search_path = '' as $$ select public.forget_rival_for(auth.user_id(), p_rival) $$;
+create or replace function public.save_coach_debrief(p_activity uuid, p_debrief jsonb) returns void language sql security definer set search_path = '' as $$ select public.save_coach_debrief_for(auth.user_id(), p_activity, p_debrief) $$;
+create or replace function public.my_coach_debrief(p_activity uuid) returns jsonb language sql stable security definer set search_path = '' as $$ select public.my_coach_debrief_for(auth.user_id(), p_activity) $$;
+
+revoke execute on function
+  public.my_ai_consent_for(text), public.set_ai_consent_for(text, boolean, boolean), public.ai_claim_for(text, text, text),
+  public.rival_record_for(text, text, boolean, text), public.my_rivals_for(text), public.forget_rival_for(text, text),
+  public.save_coach_debrief_for(text, uuid, jsonb), public.my_coach_debrief_for(text, uuid)
+  from public, anonymous, authenticated;
+revoke execute on function
+  public.my_ai_consent(), public.set_ai_consent(boolean, boolean), public.ai_claim(text, text), public.rival_record(text, boolean, text),
+  public.my_rivals(), public.forget_rival(text), public.save_coach_debrief(uuid, jsonb), public.my_coach_debrief(uuid)
+  from public, anonymous;
+grant execute on function
+  public.my_ai_consent(), public.set_ai_consent(boolean, boolean), public.ai_claim(text, text), public.rival_record(text, boolean, text),
+  public.my_rivals(), public.forget_rival(text), public.save_coach_debrief(uuid, jsonb), public.my_coach_debrief(uuid)
+  to authenticated;
+notify pgrst, 'reload schema';
