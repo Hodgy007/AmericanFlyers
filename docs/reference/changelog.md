@@ -6,6 +6,12 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Steadier rider, real freewheel sound, jump along the route in demo rides
+
+- **Less wobble.** The bike's side-to-side rock with each pedal stroke is now at most about 1° (it was up to 3.4° on climbs and at low cadence), for you and the other riders. `MAX_ROCK` in `src/drivetrain.ts`.
+- **Freewheel sound.** Rebuilt from a square-wave beep into a synthesised hub ratchet (`src/freewheel.ts`): a pre-rendered metallic pawl tick (six variants) played at the real ratchet rate, 36 engagement points × how much faster the wheel turns than the cassette. Coasting at 30 km/h that's about 140 ticks a second, a buzz that builds as the cranks spin down and slows to clicks as you stop. Ticks are scheduled ahead on the audio clock so the rate stays accurate at any frame rate.
+- **Jump along the route (demo rides).** Click or tap the elevation profile to go to that point. It doesn't count as distance or climbing, and moves the ride's start, so no leaderboard time. Off during races and workouts.
+
 ### Rotating home hero
 
 - The home page hero rotates between the pit bull chase and the original rider, crossfading every 10 seconds while the home page is open, and starts on the other one each visit. The second hero is only downloaded once the first has been up for a few seconds. Riders who prefer reduced motion or have data saver on get the still image, alternating per visit. `?hero=dog` or `?hero=rider` pins one.

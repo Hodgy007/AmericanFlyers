@@ -5,7 +5,7 @@
 Rides have sound, made in the browser with no downloads:
 
 - Wind and tyre hum that rise with your speed.
-- The freewheel ticking when you stop pedalling.
+- The freewheel when you stop pedalling: the hub's pawls clicking over the ratchet, building up as your legs stop turning, a fast whirr at speed that slows to separate ticks as you roll to a stop.
 - Crowds cheering on the hairpins of the climbs and over the last 700 m to the finish, with the odd whistle.
 - Beeps at 3, 2 and 1 seconds before a workout step changes, and a long beep as it changes.
 - A fanfare at the finish line.

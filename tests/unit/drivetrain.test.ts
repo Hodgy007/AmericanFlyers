@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Drivetrain, GEARS, VIRTUAL_GEARS, VIRTUAL_REF, gearCadence, gearGradeOffset } from '../../src/drivetrain';
+import { Drivetrain, MAX_ROCK, GEARS, VIRTUAL_GEARS, VIRTUAL_REF, gearCadence, gearGradeOffset } from '../../src/drivetrain';
 
 describe('gear tables', () => {
   it('GEARS is sorted, unique and spans easy to hard', () => {
@@ -82,5 +82,14 @@ describe('Drivetrain', () => {
     const d = new Drivetrain();
     for (let i = 0; i < 50; i++) d.update(0.1, 5, 0, 0);
     expect(d.rock).toBeCloseTo(0, 6);
+  });
+
+  it('pedal rock stays within about a degree, even grinding up a climb', () => {
+    const d = new Drivetrain();
+    let most = 0;
+    for (let i = 0; i < 600; i++) { d.update(1 / 60, 2.5, 55, 450); most = Math.max(most, Math.abs(d.rock)); }
+    expect(most).toBeGreaterThan(0);
+    expect(most).toBeLessThanOrEqual(MAX_ROCK + 1e-9);
+    expect(MAX_ROCK).toBeLessThan((1.2 * Math.PI) / 180);
   });
 });

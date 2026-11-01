@@ -223,6 +223,41 @@ function setDemo(on: boolean) {
   else if (!trainer) setStatus('No trainer connected', 'off');
 }
 
+// Demo rides: click or tap the profile strip at the bottom to jump along the
+// route. Not in races (that would be cheating) or workouts (the strip shows the
+// workout then). The jump doesn't count as distance or climbing, and moves the
+// start too, so the ride never earns a full-stage time on the leaderboard.
+
+/** The stretch of road the profile strip shows: the whole stage, or a 5 km window on endless ones. */
+function profileSpan(): [number, number] {
+  const finish = currentStage().finish;
+  if (finish !== null) return [0, finish + 200];
+  const from = Math.max(0, ride.distance - 500);
+  return [from, from + 5000];
+}
+
+function canJump() {
+  return demo && !player && !race;
+}
+
+function profileDistanceAt(clientX: number) {
+  const r = profileCanvas.getBoundingClientRect();
+  const [from, to] = profileSpan();
+  const d = from + ((to - from) * (clientX - r.left)) / Math.max(1, r.width);
+  const finish = currentStage().finish;
+  return Math.max(0, finish === null ? d : Math.min(d, finish - 25));
+}
+
+function jumpTo(d: number) {
+  if (ride.finished) { const speed = ride.speed; resetRide(); ride.speed = speed; } // finished: start a fresh demo ride from there
+  ride.startDistance += d - ride.distance;
+  ride.distance = d;
+  ride.lastElev = elevationAt(d);
+  world.jumped();
+  const imperial = settings.units === 'imperial';
+  toast(`Jumped to ${(d / 1000 / (imperial ? KM_PER_MI : 1)).toFixed(1)} ${imperial ? 'mi' : 'km'}`, 1500);
+}
+
 function setDemoPower(p: number) {
   demoPower = Math.max(0, Math.min(600, p));
   $<HTMLInputElement>('demo-power').value = String(demoPower);
@@ -365,7 +400,7 @@ function frame(now: number) {
     else if (!player.paused) intervalBeeps();
   }
   sound.setRain(world.rainLevel);
-  sound.update(dt, { speedMs: ride.speed, pedalling: live.power > 0 || live.cadence > 0, crowd: crowdNear(ride.distance) });
+  sound.update(dt, { speedMs: ride.speed, pedalling: live.power > 0 || live.cadence > 0, crowd: crowdNear(ride.distance), cassetteRevs: drivetrain.crankRate * drivetrain.ratio });
 
   const others = liveRiders;
   const g = race ? null : ghostRider(); // no ghost in a race
@@ -392,9 +427,9 @@ function frame(now: number) {
     if (player) {
       drawWorkout(profileCanvas, player.steps, { elapsed: player.elapsed, trace: player.trace });
     } else {
-      const stageFinish = currentStage().finish;
-      drawProfile(profileCanvas, ride.distance, stageFinish === null ? undefined : [0, stageFinish + 200]);
+      drawProfile(profileCanvas, ride.distance, profileSpan());
     }
+    profileCanvas.classList.toggle('jumpable', canJump());
   }
   requestAnimationFrame(frame);
 
@@ -1177,6 +1212,12 @@ updateMapMenu();
 $('btn-trainer').addEventListener('click', toggleTrainer);
 $('btn-hr').addEventListener('click', toggleHeartRate);
 $('btn-demo').addEventListener('click', () => setDemo(!demo));
+profileCanvas.addEventListener('click', (e) => { if (canJump()) jumpTo(profileDistanceAt(e.clientX)); });
+profileCanvas.addEventListener('pointermove', (e) => {
+  if (!canJump()) { profileCanvas.title = ''; return; }
+  const imperial = settings.units === 'imperial';
+  profileCanvas.title = `Jump to ${(profileDistanceAt(e.clientX) / 1000 / (imperial ? KM_PER_MI : 1)).toFixed(1)} ${imperial ? 'mi' : 'km'}`;
+});
 $('btn-reset').addEventListener('click', endRide);
 $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);

@@ -8,7 +8,7 @@
 // allows, but always at a rate the wheel speed could actually produce. When
 // you stop pedalling the bike freewheels and the legs ease to a stop.
 
-const WHEEL_CIRCUMFERENCE = 2.105; // metres, 700×25c
+export const WHEEL_CIRCUMFERENCE = 2.105; // metres, 700×25c
 const CHAINRINGS = [50, 34];
 const COGS = [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34]; // 11–34 cassette, for steep climbs
 /** All gear ratios (chainring ÷ cog), lowest first. */
@@ -35,6 +35,9 @@ export function gearCadence(speedMs: number, index: number) {
 
 const SHIFT_INTERVAL = 0.45; // seconds between single-gear shifts
 const DEFAULT_CADENCE = 85; // rpm, when a power meter doesn't report cadence
+
+/** Most the bike rocks side to side per pedal stroke, radians (≈ 1°). */
+export const MAX_ROCK = 0.018;
 
 export class Drivetrain {
   /** Crank angle in radians; decreases as the rider pedals forward. */
@@ -90,9 +93,10 @@ export class Drivetrain {
     // Pedal force ≈ power ÷ crank speed: large on a standing start or a steep
     // climb, small when spinning fast. The bike rocks once per pedal stroke.
     const force = pedalling ? power / Math.max(0.6, this.crankRate) : 0;
-    const amount = Math.min(1, force / 650);
-    this.rockAmount += (amount - this.rockAmount) * (1 - Math.exp(-dt / 0.4));
-    this.rock = this.rockAmount * 0.06 * Math.sin(this.crankAngle);
+    // Only a little, though: a seated rider keeps it within about a degree.
+    const amount = Math.min(1, force / 900);
+    this.rockAmount += (amount - this.rockAmount) * (1 - Math.exp(-dt / 0.6));
+    this.rock = this.rockAmount * MAX_ROCK * Math.sin(this.crankAngle);
   }
 
   reset() {
