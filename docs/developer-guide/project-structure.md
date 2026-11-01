@@ -103,6 +103,10 @@ This page lists every file and folder in the repository, with a one-line summary
 | `cloud/recorder.ts` | Records one sample per second while moving, and writes `.tcx` files. |
 | `cloud/achievements.ts` | Works out the 17 achievements from rides and FTP history. |
 | `cloud/charts.ts` | Draws the bar charts, line charts and stat tiles in the profile. |
+| `cloud/verification.ts` | Email verification codes: pure helpers (code cleaning, resend timer, error wording) and the two SDK calls. |
+| `cloud/codeEntry.ts`, `cloud/verifyBanner.ts` | The 6-digit code box (used in the email form and the profile banner). |
+| `cloud/privacy.ts`, `cloud/accountTab.ts` | "Download my data" and "Delete my account", and the profile tab that offers them. |
+| `privacyUi.ts`, `rideIntegrity.ts` | The Privacy dialog (any `data-privacy` element opens it); which rides may be on leaderboards. |
 | `cloud/ui.ts` | The sign-in and password-reset dialogs, the profile tabs, the feedback dialog, and the admin dashboard. |
 
 ## Tests and tooling

@@ -252,6 +252,25 @@ Indexes on `(to_user, created_at)` and `(from_user, created_at)`.
 | `stage_leaderboard(p_stage, p_since)` | Signed in | Each rider's fastest `finish_s` on the stage (since `p_since` if given), ranked, top 25 plus the caller. Returns rank, activity id, short name, time, average power, date and `is_me`. |
 | `stage_ghost(p_activity)` | Signed in | For a finished whole-stage ride: short name, `finish_s`, the 1 s distance trace (`samples -> 'distance'`) and `is_me`. Nothing else from the ride is returned. |
 
+## Trust and safety
+
+### `public.stage_limits`
+
+One row per built-in stage with a finish line: `stage_id` (primary key), `distance_m`, `min_finish_s` (the fastest believable time) and `max_avg_kmh`. The floor is 80% of the time a 60 kg rider on an 8 kg bike (CdA 0.25) takes at a steady 6.5 W/kg through the app's own physics, so drafting and tucking are allowed for. Row-level security is on and nothing is granted: only the security-definer functions read it. Stages that aren't listed (uploaded GPX routes) get only the power check.
+
+### `activities.demo`
+
+`boolean`, default `false`. Set by the app when a ride used the demo power slider or `?timescale`. Such rides never count for leaderboards or ghosts.
+
+### Functions
+
+| Function | Who | What it does |
+| --- | --- | --- |
+| `ride_is_plausible(p_stage, p_finish_s, p_avg_power, p_demo)` | Internal | True when a ride may be ranked: it has a time, isn't a demo ride, averaged at most 2000 W, and isn't faster than the stage's `min_finish_s` or `max_avg_kmh`; a ride with no power data must also be at least 1.5 times the floor. Not callable from the browser. |
+| `stage_leaderboard(...)`, `stage_ghost(...)` | Signed in | Unchanged signatures and columns; both now skip rides that fail `ride_is_plausible()`. |
+| `my_data_extras()` | Signed in | JSON for "Download my data": the caller's account (id, name, email, verified, created), live position, ride-ons sent and received (emoji and time only, no names) and the rows of any other table with a text `user_id` column. |
+| `delete_my_account()` | Signed in | Deletes the caller's rows from every public table with a text `user_id` (plus ride-ons in both directions), their pending verification codes, and their Neon Auth user (sessions, linked accounts and memberships go with it by foreign-key cascade). Refuses accounts whose email is in `public.admins`. Only ever touches the caller's own data. |
+
 ## Changing the schema
 
 When you change a table or function, update this page and `db/schema.sql` in the same change. See [Contributing](../developer-guide/contributing.md#keep-the-schema-in-sync).

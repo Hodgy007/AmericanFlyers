@@ -9,6 +9,8 @@ import { achievements, weekIndex } from './achievements';
 import { mountEmailAuth, type RiderDetails } from './emailAuth';
 import { barChart, lineChart, statTiles } from './charts';
 import { toTcx } from './recorder';
+import { mountVerifyBanner } from './verifyBanner';
+import { accountTab } from './accountTab';
 import {
   activitySamples, adminDeleteFeedback, adminFeedback, adminOverview, adminSetBan, adminUpdateFeedback, adminUsers,
   deleteActivity, ftpHistory, isAdmin, listActivities, myFeedback, submitFeedback,
@@ -167,7 +169,8 @@ export function initAccountUi(deps: Deps) {
 
   // ----------------------------------------------------------- profile ----
 
-  type Tab = 'stats' | 'achievements' | 'activities' | 'admin';
+  const verifyBanner = mountVerifyBanner($('profile-verify'), deps.toast);
+  type Tab = 'stats' | 'achievements' | 'activities' | 'privacy' | 'admin';
   let activities: Activity[] | null = null;
 
   /** Forget cached activities so the next look reloads them (after a save). */
@@ -185,6 +188,7 @@ export function initAccountUi(deps: Deps) {
     if (!a) return openSignIn();
     $('profile-name').textContent = a.name;
     $('profile-email').textContent = a.email;
+    verifyBanner.refresh(); // a note to riders whose email isn't verified yet
     const tabs = $('profile-tabs');
     tabs.querySelector<HTMLElement>('[data-tab=admin]')!.hidden = !admin;
     if (!profileDialog.open) profileDialog.showModal();
@@ -212,6 +216,7 @@ export function initAccountUi(deps: Deps) {
       const content = tab === 'stats' ? await statsTab()
         : tab === 'achievements' ? await achievementsTab()
         : tab === 'activities' ? await activitiesTab()
+        : tab === 'privacy' ? accountTab({ toast: deps.toast, close: () => profileDialog.close() })
         : await adminTab();
       if (token === tabToken) body.replaceChildren(content);
     } catch (e) {

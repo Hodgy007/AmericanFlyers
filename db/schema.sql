@@ -401,3 +401,174 @@ $$;
 
 revoke execute on function public.stage_leaderboard(text, timestamptz), public.stage_ghost(uuid) from public, anonymous;
 grant execute on function public.stage_leaderboard(text, timestamptz), public.stage_ghost(uuid) to authenticated;
+
+-- ================================================== trust and safety (round 3) ====
+-- Stream D. Leaderboard sanity, "delete my account" and "download my data".
+
+-- ------------------------------------------------------ leaderboard sanity ----
+-- stage_limits holds, for every built-in stage with a finish line, the length
+-- of the finish and the fastest believable ride. min_finish_s is 80% of the
+-- time a 60 kg rider (+8 kg bike, CdA 0.25) takes at a sustained 6.5 W/kg
+-- through the app's own physics, so drafting and tucking are allowed for;
+-- max_avg_kmh is the same limit as a speed. Rides outside them, rides with an
+-- average power above 2000 W, rides recorded with the demo slider or a sped-up
+-- clock (activities.demo), and rides with no power that are also suspiciously
+-- fast (under 1.5x the floor) are ignored by stage_leaderboard() and stage_ghost().
+-- Stages that aren't listed (uploaded GPX routes) get only the power check.
+
+create table if not exists public.stage_limits (
+  stage_id text primary key,
+  distance_m integer not null,
+  min_finish_s integer not null check (min_finish_s > 0),
+  max_avg_kmh real not null check (max_avg_kmh > 0)
+);
+alter table public.stage_limits enable row level security; -- no grants: only the functions below read it
+revoke all on public.stage_limits from public, anonymous, authenticated;
+
+insert into public.stage_limits (stage_id, distance_m, min_finish_s, max_avg_kmh) values
+  ('route66', 25000, 1524, 60),
+  ('hotw-morgul-bismark', 42263, 2675, 57),
+  ('hotw-tour-of-the-moon', 37000, 2496, 54),
+  ('hell-of-the-west', 20800, 1948, 39),
+  ('alpe-dhuez', 14000, 1826, 28),
+  ('stelvio', 24500, 3042, 30),
+  ('ventoux', 21400, 2672, 29),
+  ('tourmalet', 19000, 2328, 30),
+  ('zoncolan', 10100, 1813, 21)
+on conflict (stage_id) do update set distance_m = excluded.distance_m, min_finish_s = excluded.min_finish_s, max_avg_kmh = excluded.max_avg_kmh;
+
+-- Set by the app when a ride used the demo slider or ?timescale: such rides never count for times.
+alter table public.activities add column if not exists demo boolean default false;
+
+create or replace function public.ride_is_plausible(p_stage text, p_finish_s integer, p_avg_power real, p_demo boolean)
+returns boolean
+language sql stable security definer set search_path = '' as $$
+  select p_finish_s is not null and p_finish_s > 0
+    and not coalesce(p_demo, false)
+    and coalesce(p_avg_power, 0) <= 2000
+    and not exists (
+      select 1 from public.stage_limits l
+      where l.stage_id = p_stage
+        and (p_finish_s < l.min_finish_s
+          or l.distance_m / p_finish_s::float * 3.6 > l.max_avg_kmh
+          or (p_avg_power is null and p_finish_s < l.min_finish_s * 1.5)))
+$$;
+revoke execute on function public.ride_is_plausible(text, integer, real, boolean) from public, anonymous, authenticated;
+
+-- Same signature and columns as before.
+create or replace function public.stage_leaderboard(p_stage text, p_since timestamptz default null)
+returns table (rank bigint, activity_id uuid, name text, finish_s integer, avg_power real, ridden_at timestamptz, is_me boolean)
+language sql stable security definer set search_path = '' as $$
+  with best as (
+    select distinct on (a.user_id) a.user_id, a.id, a.finish_s, a.avg_power, a.started_at
+    from public.activities a
+    join neon_auth."user" u on u.id::text = a.user_id and not coalesce(u.banned, false)
+    where a.stage_id = p_stage and a.finish_s is not null and (p_since is null or a.started_at >= p_since)
+      and public.ride_is_plausible(a.stage_id, a.finish_s, a.avg_power, a.demo)
+    order by a.user_id, a.finish_s, a.started_at
+  ), ranked as (
+    select rank() over (order by b.finish_s) as rank, b.* from best b
+  )
+  select r.rank, r.id, public.short_name(u.name), r.finish_s, r.avg_power, r.started_at, r.user_id = auth.user_id()
+  from ranked r join neon_auth."user" u on u.id::text = r.user_id
+  where r.rank <= 25 or r.user_id = auth.user_id()
+  order by r.rank, r.started_at
+$$;
+
+create or replace function public.stage_ghost(p_activity uuid)
+returns table (name text, finish_s integer, distance jsonb, is_me boolean)
+language sql stable security definer set search_path = '' as $$
+  select public.short_name(u.name), a.finish_s, a.samples -> 'distance', a.user_id = auth.user_id()
+  from public.activities a
+  join neon_auth."user" u on u.id::text = a.user_id and not coalesce(u.banned, false)
+  where a.id = p_activity and a.finish_s is not null and auth.user_id() is not null
+    and public.ride_is_plausible(a.stage_id, a.finish_s, a.avg_power, a.demo)
+$$;
+
+revoke execute on function public.stage_leaderboard(text, timestamptz), public.stage_ghost(uuid) from public, anonymous;
+grant execute on function public.stage_leaderboard(text, timestamptz), public.stage_ghost(uuid) to authenticated;
+
+-- ------------------------------------------- delete my account / my data ----
+-- delete_my_account(): deletes everything the caller owns, then their Neon
+-- Auth user (sessions, linked Google accounts and organisation memberships
+-- go with it through foreign-key cascades; pending verification codes are
+-- removed here). It only ever touches the caller's own rows. Admins (anyone
+-- whose email is in public.admins) are refused: remove them from that table first.
+-- It also clears every other public table that has a text user_id column, so
+-- tables added later (purchases, event results, challenge claims...) are covered
+-- without editing this function.
+-- my_data_extras(): the parts of "Download my data" that the app can't read
+-- through its own table access: the account itself, ride-ons (counts and
+-- emoji only, no names) and any other table with a text user_id column.
+
+create or replace function public.delete_my_account() returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  me text := auth.user_id();
+  my_email text;
+  t record;
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  select u.email into my_email from neon_auth."user" u where u.id::text = me;
+  if my_email is null then raise exception 'No such account' using errcode = '42501'; end if;
+  if exists (select 1 from public.admins a where lower(a.email) = lower(my_email)) then
+    raise exception 'Admin accounts can''t be deleted here. Ask another admin to remove you from the admin list first.' using errcode = '42501';
+  end if;
+
+  delete from public.live_riders where user_id = me;
+  delete from public.ride_ons where from_user = me or to_user = me;
+  delete from public.feedback where user_id = me;
+  delete from public.ftp_history where user_id = me;
+  delete from public.activities where user_id = me;
+  delete from public.routes where user_id = me;
+  delete from public.workouts where user_id = me;
+  delete from public.profiles where user_id = me;
+
+  -- Any other table that keeps a rider's rows under a text user_id column.
+  for t in
+    select c.table_name from information_schema.columns c
+    join information_schema.tables tb on tb.table_schema = c.table_schema and tb.table_name = c.table_name and tb.table_type = 'BASE TABLE'
+    where c.table_schema = 'public' and c.column_name = 'user_id' and c.data_type = 'text'
+      and c.table_name not in ('live_riders', 'feedback', 'ftp_history', 'activities', 'routes', 'workouts', 'profiles')
+  loop
+    execute format('delete from public.%I where user_id = $1', t.table_name) using me;
+  end loop;
+
+  -- Pending one-time codes for this email address (exact identifiers only, never someone else's).
+  delete from neon_auth.verification where lower(identifier) in (
+    lower(my_email), 'email-verification-otp-' || lower(my_email), 'sign-in-otp-' || lower(my_email),
+    'forget-password-otp-' || lower(my_email), 'change-email-otp-' || lower(my_email));
+  delete from neon_auth."user" where id::text = me; -- cascades to session, account, member, invitation
+end $$;
+
+create or replace function public.my_data_extras() returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  me text := auth.user_id();
+  r jsonb;
+  extras jsonb := '{}'::jsonb;
+  t record;
+  rows_json jsonb;
+begin
+  if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  select jsonb_build_object('id', u.id, 'name', u.name, 'email', u.email, 'email_verified', u."emailVerified", 'created_at', u."createdAt")
+    into r from neon_auth."user" u where u.id::text = me;
+  for t in
+    select c.table_name from information_schema.columns c
+    join information_schema.tables tb on tb.table_schema = c.table_schema and tb.table_name = c.table_name and tb.table_type = 'BASE TABLE'
+    where c.table_schema = 'public' and c.column_name = 'user_id' and c.data_type = 'text'
+      and c.table_name not in ('live_riders', 'feedback', 'ftp_history', 'activities', 'routes', 'workouts', 'profiles')
+  loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from public.%I x where x.user_id = $1', t.table_name) into rows_json using me;
+    extras := extras || jsonb_build_object(t.table_name, rows_json);
+  end loop;
+  return jsonb_build_object(
+    'account', r,
+    'live_position', (select to_jsonb(l) - 'user_id' from public.live_riders l where l.user_id = me),
+    'ride_ons_sent', (select coalesce(jsonb_agg(jsonb_build_object('emote', emote, 'at', created_at) order by created_at), '[]'::jsonb) from public.ride_ons where from_user = me),
+    'ride_ons_received', (select coalesce(jsonb_agg(jsonb_build_object('emote', emote, 'at', created_at) order by created_at), '[]'::jsonb) from public.ride_ons where to_user = me),
+    'other_tables', extras);
+end $$;
+
+revoke execute on function public.delete_my_account(), public.my_data_extras() from public, anonymous;
+grant execute on function public.delete_my_account(), public.my_data_extras() to authenticated;

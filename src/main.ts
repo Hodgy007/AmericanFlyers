@@ -25,6 +25,8 @@ import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, 
 import { RideRecorder } from './cloud/recorder';
 import { initAccountUi } from './cloud/ui';
 import { initHome } from './home';
+import { initPrivacyUi } from './privacyUi';
+import { leaderboardEligible, leaderboardNote, type RideFlags } from './rideIntegrity';
 import { Presence } from './cloud/presence';
 import { initRidersUi } from './ridersUi';
 import { Ghost, raceTime } from './ghost';
@@ -305,6 +307,8 @@ if (startKm > 0) {
 
 // `?timescale=8` runs the clock 8× faster (up to 20×), for testing whole races in a minute.
 const TIME_SCALE = Math.min(20, Math.max(1, Number(new URLSearchParams(location.search).get('timescale')) || 1));
+// Trust and safety: demo-slider rides and ?timescale rides never get a leaderboard time (src/rideIntegrity.ts).
+const rideFlags: RideFlags = { usedDemo: false, timeScale: TIME_SCALE };
 let lastFrame = performance.now();
 let lastHud = 0;
 
@@ -328,6 +332,7 @@ function frame(now: number) {
     const target = player && !player.done && !player.paused ? player.targetWatts() : null;
     if (target !== null) setDemoPower(Math.round(target + Math.sin(now / 900) * 4));
     live.power = demoPower;
+    if (demoPower > 0) rideFlags.usedDemo = true;
     live.cadence = demoPower <= 0 ? 0
       : settings.virtualShifting && ride.speed > 2 ? Math.round(Math.min(140, gearCadence(ride.speed, vGear)))
       : Math.round(78 + demoPower / 25 + Math.sin(now / 1700) * 3);
@@ -753,7 +758,8 @@ function buildActivity(): Activity {
     hr_zones: zones(stats.hrZones),
     power_zones: zones(stats.powerZones),
     max_hr_setting: settings.maxHr,
-    finish_s: ride.finished && ride.finishTime > 0 ? Math.round(ride.finishTime) : null,
+    finish_s: ride.finished && ride.finishTime > 0 && leaderboardEligible(rideFlags) ? Math.round(ride.finishTime) : null,
+    demo: !leaderboardEligible(rideFlags), // the database also ignores these rides for leaderboards
     samples: recorder.samples,
   };
 }
@@ -861,6 +867,7 @@ function endRide() {
 function resetRide() {
   if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) saveRide({ quiet: true });
   recorder = new RideRecorder();
+  rideFlags.usedDemo = false;
   lastSavedSeconds = 0;
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
@@ -1090,6 +1097,8 @@ function showFinish() {
   }
   showSummary('🏁', title, items, actions, extra);
   $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
+  const offBoard = leaderboardNote(rideFlags);
+  if (offBoard) $('finish-extra').prepend(Object.assign(document.createElement('p'), { className: 'finish-ghost off-board', textContent: `ℹ️ ${offBoard}` }));
   if (vsGhost !== null && ghost) {
     const who = ghost.isMe ? 'your best' : `${ghost.name}’s ghost`;
     $('finish-title').textContent = vsGhost < 0 && ghost.isMe
@@ -1105,7 +1114,7 @@ function showFinish() {
 
 /** After a whole-stage ride is saved: where it puts you on the leaderboard. */
 async function showRank() {
-  if (!account() || !ride.finishTime) return;
+  if (!account() || !ride.finishTime || !leaderboardEligible(rideFlags)) return;
   try {
     const rows = await stageLeaderboard(currentStage().id);
     const me = rows.find((r) => r.is_me);
@@ -1556,6 +1565,7 @@ onAccountChange(async (a) => {
   }
 });
 // The Bluetooth note and the first-ride guide wait until the rider leaves the home page.
+initPrivacyUi(); // the Privacy dialog; any element with data-privacy opens it
 initHome({
   onRiderDetails: saveRiderDetails,
   defaults: () => settings,

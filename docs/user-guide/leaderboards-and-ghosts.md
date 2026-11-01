@@ -17,6 +17,8 @@ Opens the leaderboard for the stage you're on:
 
 Endless stages such as Heartland Rollers have no finish line, so no leaderboard.
 
+**What counts.** Only whole-stage rides from the start line, ridden at normal speed. Rides that used the 🎮 demo slider or a sped-up clock (`?timescale`) don't get a time, and the finish card says so. To keep the boards fair, times that are faster than is physically believable for the stage, rides averaging over 2000 W, and rides with no power data that are suspiciously quick are left off.
+
 ## Ghosts
 
 A ghost is a see-through blue rider replaying a past ride second by second. It moves only while you're moving, so stopping for a drink doesn't cost you.
