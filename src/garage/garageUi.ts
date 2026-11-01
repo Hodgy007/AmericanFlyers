@@ -28,7 +28,7 @@ const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
 export function initGarageUi(o: Options) {
   const dialog = document.getElementById('garage-dialog') as HTMLDialogElement;
-  const canvas = document.getElementById('garage-preview') as HTMLCanvasElement;
+  let canvas = document.getElementById('garage-preview') as HTMLCanvasElement;
   const head = document.getElementById('garage-head')!;
   const tabsEl = document.getElementById('garage-tabs')!;
   const body = document.getElementById('garage-body')!;
@@ -264,7 +264,12 @@ export function initGarageUi(o: Options) {
       tab = startTab;
       tried = null;
       week = null;
+      // The old preview's dispose() force-loses its WebGL context, and a canvas whose context
+      // was lost can't give a new one: each opening gets a fresh canvas, or the second open fails.
       preview?.dispose();
+      const fresh = canvas.cloneNode(false) as HTMLCanvasElement;
+      canvas.replaceWith(fresh);
+      canvas = fresh;
       preview = new GaragePreview(canvas);
       dialog.showModal();
       preview.start();
