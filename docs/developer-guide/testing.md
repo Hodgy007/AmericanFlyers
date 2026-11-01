@@ -27,7 +27,7 @@ npm run build && npm test
 | --- | --- |
 | `physics.test.ts` | `stepSpeed`: terminal speeds on the flat and on climbs, momentum, descents, mass and drag effects |
 | `draft.test.ts` | `draftSaving` by gap, `groupMax`, `lateralOverlap`, `draftFrom` (look-ahead, groups, ghosts, sideways) |
-| `drivetrain.test.ts` | gear tables, virtual gear offsets and cadence, automatic shifting, freewheeling |
+| `drivetrain.test.ts` | gear tables, virtual gear offsets and cadence, automatic shifting, freewheeling, the pedal-stroke rock stays within `MAX_ROCK` |
 | `stages.test.ts` | every stage; each climb's finish distance and total gain match its published figures; hairpin signs; flat stages; the Hell of the West tour stages |
 | `workouts.test.ts` | `expand`, `targetAt`, TSS, the built-ins, `.zwo` export and import round trip, `.erg` / `.mrc` parsing, error messages |
 | `plans.test.ts` | every plan session points at a real workout or stage; `nextSession`, `complete` |
@@ -35,6 +35,13 @@ npm run build && npm test
 | `raceSim.test.ts` | course lines and summit detection, points and bunch-time rules, seeded determinism, plausible finish times, a live player in the crossing orders |
 | `tour.test.ts` | the three classifications, jerseys, recording stages, `simulateStage` |
 | `ghost.test.ts` | ghost replay, interpolation and clamping, `raceTime` |
+| `freewheel.test.ts` | the ratchet tick rate (engagement points × wheel revs gained on the cassette), silence while pedalling, the rendered tick's shape and variants |
+| `trust.test.ts` | which rides may go on leaderboards (demo slider, `?timescale`), the finish-card note, the DELETE confirmation, verification-code entry |
+| `schedule.test.ts` | the daily event schedule and stage rotation (matches the database), join windows |
+| `eventSession.test.ts` | the shared event clock, the "you've been dropped" watcher, merging real and computer-ridden results, fixed-step determinism |
+| `commentary.test.ts` | commentary rate limiting and queueing, race events to voice lines, every clip file exists |
+| `garage.test.ts` | the level curve, rewards, wallet parsing, loadout validation, equipment effect maths against `stepSpeed`, store rules (the Tron bike at 8,848 m), kit strings and the server's regex, the share card |
+| `challenges.test.ts` | ISO weeks and the weekly challenge pick (pinned to the database for several weeks) |
 
 Conventions:
 
