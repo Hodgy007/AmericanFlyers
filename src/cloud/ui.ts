@@ -11,6 +11,9 @@ import { barChart, lineChart, statTiles } from './charts';
 import { toTcx } from './recorder';
 import { mountVerifyBanner } from './verifyBanner';
 import { accountTab } from './accountTab';
+import { loadDebrief } from './aiApi';
+import { COACH_NAME, debriefBody } from '../ai/coachUi';
+import { sanitizeDebrief } from '../ai/sanitize';
 import { adminCreateEvent, adminDeleteEvent, upcomingEvents } from './events';
 import { EVENT_STAGE_POOL, GROUP_RIDE_STAGE, type EventKind } from '../schedule';
 import {
@@ -389,6 +392,15 @@ export function initAccountUi(deps: Deps) {
       zoneBars('Heart-rate zones', HR_ZONES, a.hr_zones, { ref: a.max_hr_setting ?? s.maxHr, unit: 'bpm' }),
       zoneBars('Power zones', POWER_ZONES, a.power_zones, { ref: a.ftp ?? s.ftp, unit: 'W' }),
     ));
+    // The AI coach's debrief for this ride, if the rider had it on when they rode (src/ai/).
+    const coach = h('section', { class: 'coach-card' });
+    coach.hidden = true;
+    el.append(coach);
+    loadDebrief(a.id).then((d) => {
+      if (!d || !sanitizeDebrief(d)) return;
+      coach.replaceChildren(h('header', {}, h('span', { class: 'coach-face', text: '🧢' }), h('strong', { text: COACH_NAME })), debriefBody(sanitizeDebrief(d)!, 'claude', {}));
+      coach.hidden = false;
+    }).catch(() => {});
     const charts = h('div', { class: 'act-charts' }, h('p', { class: 'muted small', text: 'Loading the ride…' }));
     el.append(charts);
     const actions = h('div', { class: 'dialog-actions' });

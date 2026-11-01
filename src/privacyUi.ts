@@ -19,10 +19,14 @@ const BODY = `
     <li><strong>Your rides:</strong> each saved ride, with a power, cadence, heart-rate, speed, distance and height reading every second, plus totals such as time, climbing and energy. Your workouts, routes and FTP history.</li>
     <li><strong>Live position while you ride together:</strong> which stage you are on, how far along, speed, power and cadence, and your kit colours. It is replaced every few seconds and removed after about 10 minutes of silence.</li>
     <li><strong>Ride-ons:</strong> the thumbs-up, flame and other cheers riders send each other. They are cleared after a day.</li>
+    <li><strong>AI coach and rivals:</strong> your on/off choice, how many AI messages you used each day (a counter, no content), your rivals’ memory of you and any coach debrief kept with a ride.</li>
     <li><strong>Feedback:</strong> messages you send from “Ideas &amp; bug reports”, with the stage, browser and trainer name at that moment.</li>
     <li><strong>Error reports:</strong> if the site owner has turned it on, Sentry receives crash reports and slow-page samples. They carry your anonymous account id, not your name, email or IP-based details, and no session recordings.</li>
   </ul>
   <p>We don’t ask for your phone number, address or payment details. Riding without an account stores your settings only in your own browser.</p>
+
+  <h3>The AI coach and AI rivals (only if you turn them on)</h3>
+  <p>These are off until you switch them on in Settings. When on, we send <strong>Anthropic</strong>, the company that makes Claude, what it needs to write the coach’s tips and debriefs and the rivals’ lines: your <strong>first name</strong>, FTP and weight, the numbers from the ride (power, heart rate, cadence, distance, climbing, time in zones, the stage and your place in a race) and your last four weeks of totals. Never your email address, account id or location. A rival’s memory of you (your wins and losses and a few short notes) is kept in our database and sent with later requests; you can make a rival forget you from ☰ Menu → Rivals, and turning the switches off stops anything being sent. Anthropic processes this on our behalf under its API terms. Replies are written by an AI, so they can be wrong; the coach and rivals are characters, not people.</p>
 
   <h3>What other riders see</h3>
   <ul>
@@ -36,6 +40,7 @@ const BODY = `
   <ul>
     <li><strong>Neon</strong> (Postgres database and sign-in), in the EU West 2 (London) region. Each table is protected so an account can only read its own rows.</li>
     <li><strong>Vercel</strong> hosts the website. Like any host, it sees normal request details such as your IP address and browser in its logs.</li>
+    <li><strong>Anthropic</strong> (Claude), only for riders who turn on the AI coach or AI rivals, through a function on our Vercel hosting. See above for what is sent.</li>
     <li><strong>Google Fonts</strong> supplies the typefaces, and <strong>Google</strong> handles sign-in if you choose it.</li>
     <li><strong>Sentry</strong>, for crash reports, only if switched on.</li>
   </ul>

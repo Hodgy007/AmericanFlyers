@@ -31,6 +31,10 @@ export interface Settings {
   miniMap: boolean; // the route mini-map and climb preview (miniMap.ts, climbUi.ts)
   commentary: boolean; // the race commentator's voice lines (commentary.ts); also needs sound on
   loadout: Partial<Loadout> | null; // what you ride and wear from the garage (src/garage); null = the starter kit
+  // ---- AI coach and rivals (src/ai/): opt-in; the database holds the real consent (ai_consent), these mirror it ----
+  aiCoach: boolean; // Coach Marty: ride tips and a debrief after each ride
+  aiRivals: boolean; // AI rivals write fresh lines and remember your rides together
+  coachVoice: boolean; // speak the coach's and rivals' lines aloud
 }
 
 const KEY = 'americanflyers.settings';
@@ -59,6 +63,9 @@ export const DEFAULT_SETTINGS: Settings = {
   miniMap: true,
   commentary: true,
   loadout: null,
+  aiCoach: false,
+  aiRivals: false,
+  coachVoice: false,
 };
 
 export function loadSettings(): Settings {

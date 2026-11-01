@@ -19,3 +19,7 @@ Admin accounts can't be deleted from the app; the message tells you what to do (
 ## Riding without an account
 
 Everything stays in your own browser. There is nothing on our side to delete.
+
+## The AI coach and AI rivals
+
+Both are off until you switch them on (⚙ Settings). When on, your first name, FTP and weight, your ride numbers and your last four weeks of totals are sent through our server to Anthropic (the makers of Claude) to write tips, debriefs and rival lines. Never your email address. Rivals' memory of you (wins, losses and a few short notes) and coach debriefs kept with a ride are stored in your account, appear in **Download my data**, and are deleted with your account. **Forget me** in ☰ Menu → Rivals wipes a rival's memory. See [AI coach and AI rivals](ai-coach-and-rivals.md).

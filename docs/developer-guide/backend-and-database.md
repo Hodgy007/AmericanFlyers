@@ -87,6 +87,10 @@ Neon Realtime (live queries) isn't available in the project's region (`eu-west-2
 
 The browser passes the sender's hashed id through unchanged, so a ride-on received from the rider with id `x` can be drawn over `x`'s rider in the world. `ride_presence()` once took six arguments; the old call still works because `p_kit` defaults to null.
 
+## AI coach and rivals
+
+Four tables (`ai_consent`, `ai_usage`, `rival_memory`, `coach_notes`, no grants) and functions for the opt-in, the quota gate `ai_claim()`, rival memory and saved debriefs. The browser calls the consent, rival and debrief functions directly; `api/ai.ts` calls `ai_claim()` and `rival_record()` with the rider's token. Details in [Database schema](../reference/database-schema.md#ai-coach-and-rivals) and [AI coach and rivals](ai.md).
+
 ## Sync rules
 
 The browser keeps working copies in `localStorage`. The account is the source of truth once you're signed in.

@@ -29,6 +29,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [Riding together](user-guide/riding-together.md): other riders on your stage, drafting and the draft gauge, the Riding now list, Ride with, and privacy.
 - [My kit](user-guide/my-kit.md): design your jersey and bike colours, presets, and how other riders see them.
 - [Garage, credits and challenges](user-guide/garage-and-credits.md): levels, credits, the bike store, the Tron bike, weekly challenges and the share card.
+- [AI coach and AI rivals](user-guide/ai-coach-and-rivals.md): Coach Marty's tips and debriefs, the four rivals who remember you, turning them on, and the daily limits.
 - [Leaderboards and ghosts](user-guide/leaderboards-and-ghosts.md): what counts, the 🏆 leaderboard, and racing ghosts.
 - [Training plans](user-guide/training-plans.md): the three plans and how sessions tick off.
 - [Sound and virtual shifting](user-guide/sound-and-shifting.md): ride sounds, and choosing your own gears.
@@ -52,6 +53,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 
 ## Developer guide
 
+- [AI coach and rivals](developer-guide/ai.md): the `/api/ai` Vercel function, prompts, models, caching, quotas in the database, and how to test without Anthropic.
 - [Architecture](developer-guide/architecture.md): how the pieces fit together, with a module diagram.
 - [Project structure](developer-guide/project-structure.md): every file in `src/` and what it does.
 - [Local development](developer-guide/local-development.md): install, run, build, and testing without a trainer.

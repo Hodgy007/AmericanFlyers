@@ -6,6 +6,14 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### AI coach and AI rivals
+
+- **Coach Marty (opt-in).** ⚙ Settings → AI coach. A ride plan at the start (tips tied to climbs, sprints, summits or workout steps), at most one reactive tip every 5 minutes (slow cadence on a climb, heart-rate drift, over the ERG target, close behind a rider without the draft), and a debrief on the ride summary (headline, summary, two went-well, two work-on, a suggested next session from the built-in workouts and stages with a Load it button). Debriefs are kept with the ride and show in the profile. Optional spoken tips.
+- **Four AI rivals (opt-in memory).** ☰ Menu → 🤺 Rivals: Kit Blaze (showboat sprinter), Sasha Frost (cold climber), Gus Fenwick (crafty veteran) and Tess Wattson (data-obsessed time triallist). Each rides as a bot at about your pace with a style of attack, with a name tag, a speech bubble and a toast. With AI rivals on they write fresh opening and closing lines and remember your head-to-head record and a few notes (forget any time). Demo and sped-up rides do not count. Works with ready-made lines when the AI is off.
+- **One Vercel function** `api/ai.ts` (new dependencies `@anthropic-ai/sdk`, `zod`; `vercel.json`). The rider's Neon token is passed to the database function `ai_claim()`, which checks opt-in, ban and the daily quota. Model `claude-opus-5-5` (override with `AI_MODEL`) at low effort, structured output, refusal fallback, prompt caching. See `docs/developer-guide/ai.md`.
+- **Database.** New tables `ai_consent`, `ai_usage`, `rival_memory`, `coach_notes` and functions `my_ai_consent`, `set_ai_consent`, `ai_claim`, `rival_record`, `my_rivals`, `forget_rival`, `save_coach_debrief`, `my_coach_debrief` (see `db/schema.sql`). Privacy page lists Anthropic as a processor for opted-in riders.
+- **Tests.** Unit tests for the moments, plan, triggers, rival bot, sanitizers, canned text, prompts and the handler (no network), and a Playwright spec with `/api/ai` mocked.
+
 ### Trust and safety: privacy, account deletion, email verification, leaderboard sanity
 
 - **Privacy page.** ☰ Menu → 🔒 Privacy (also linked from the sign-in dialog, the home page small print and the profile) says in plain English what is collected, what other riders see, where it is kept and for how long, and how to delete it. It is a draft for the site owner to review, not legal advice (`src/privacyUi.ts`).

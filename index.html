@@ -94,6 +94,7 @@
             <button id="btn-menu-garage" role="menuitem" title="Bikes, wheels and clothes, earned with credits from riding">🚲 Garage &amp; store</button>
             <button id="btn-tour" role="menuitem" title="Race the three stages of American Flyers">🏆 Hell of the West tour</button>
             <button id="btn-events" role="menuitem" title="Scheduled group rides and races">🗓 Events</button>
+            <button id="btn-rivals" role="menuitem" title="Ride with an AI rival who remembers you">🤺 Rivals</button>
             <hr />
             <button id="btn-sound" role="menuitem" title="Sound on/off (M)">🔊 Sound on</button>
             <button id="btn-fullscreen" role="menuitem" title="Full screen (F)">⛶ Full screen</button>
@@ -332,6 +333,20 @@
         <label class="check"><input name="rideTogether" type="checkbox" /> Ride together
           <span class="hint">Show me to other signed-in riders on the same stage, and show them to me.</span>
         </label>
+        <fieldset class="ai-settings">
+          <legend>AI coach and rivals</legend>
+          <p class="hint">Both are off until you turn them on. When on, your first name, FTP, weight and ride numbers (power, heart rate, cadence, distance, stage and time) are sent to Anthropic, which makes Claude, to write the coach’s tips and debriefs and the rivals’ lines. Never your email address. Under Anthropic’s API terms it isn’t used to train its models. You can turn them off here at any time. <a href="#privacy" data-privacy>More on privacy</a></p>
+          <label class="check"><input name="aiCoach" type="checkbox" /> AI coach
+            <span class="hint">Coach Marty gives tips as you ride and a debrief when you finish, with a suggested next session.</span>
+          </label>
+          <label class="check"><input name="aiRivals" type="checkbox" /> AI rivals
+            <span class="hint">Rivals (☰ Menu → Rivals) write fresh lines and remember your rides together.</span>
+          </label>
+          <label class="check"><input name="coachVoice" type="checkbox" /> Speak their lines aloud
+            <span class="hint">Uses your browser’s voice for the coach and rivals.</span>
+          </label>
+          <p id="ai-signin" class="hint" hidden>Sign in to turn on the AI coach or rivals. <button type="button" id="ai-signin-btn" class="link">Sign in</button></p>
+        </fieldset>
         <p class="settings-extra"><button type="button" id="btn-setup-guide" class="link">Run the setup guide again</button></p>
         <div class="dialog-actions">
           <button value="cancel" formnovalidate>Cancel</button>
@@ -501,6 +516,19 @@
           <button type="button" id="riders-settings">Settings</button>
           <button type="button" id="riders-share" class="primary">Copy link to this stage</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog id="rivals" class="rivals-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Rivals</h2>
+          <button value="cancel" class="icon" aria-label="Close">✕</button>
+        </div>
+        <p class="hint">Pick a rival to ride this stage with. They ride at about your pace and have their own tricks. A rival is an AI character, not a person.</p>
+        <div id="rivals-list" class="rivals-list"></div>
+        <p id="rivals-note" class="hint rivals-note"></p>
+        <div class="dialog-actions"><button value="cancel" class="primary">Done</button></div>
       </form>
     </dialog>
 
