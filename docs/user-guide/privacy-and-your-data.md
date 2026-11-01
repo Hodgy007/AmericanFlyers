@@ -16,9 +16,9 @@ Profile → **🔒 Privacy & data** → type `DELETE` → **Delete my account fo
 
 Admin accounts can't be deleted from the app; the message tells you what to do (ask another admin to remove you from the admin list first).
 
-## Riding without an account
+## An account is needed to ride
 
-Everything stays in your own browser. There is nothing on our side to delete.
+There is no guest mode: you ride with a free account, so your rides, settings, workouts and routes are kept in it. [Download my data](#download-my-data) and [Delete my account](#delete-my-account) cover everything we hold.
 
 ## The AI coach and AI rivals
 

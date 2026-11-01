@@ -780,7 +780,7 @@ function setFtp(ftp: number, source: 'manual' | 'ramp_test') {
 // ------------------------------------------------------- saving rides ----
 
 const MIN_RIDE_S = 60; // shorter rides aren't saved
-const PENDING_KEY = 'americanflyers.pendingRide';
+const OLD_PENDING_KEY = 'americanflyers.pendingRide'; // a ride kept for sign-in by the guest flow this app used to have (see savePendingRide)
 
 function buildActivity(): Activity {
   const st = currentStage();
@@ -830,21 +830,7 @@ async function saveRide(opts: { quiet?: boolean } = {}): Promise<boolean> {
   const note = $('finish-note');
   const showNote = !opts.quiet && !$('finish').hidden;
   if (stats.seconds < MIN_RIDE_S) return false;
-  if (!account()) {
-    if (showNote) {
-      note.replaceChildren('Sign in to save this ride to your profile. ');
-      const b = document.createElement('button');
-      b.className = 'link';
-      b.textContent = 'Sign in';
-      b.addEventListener('click', () => {
-        // Keep the ride so it's saved when the rider comes back from signing in.
-        try { localStorage.setItem(PENDING_KEY, JSON.stringify(buildActivity())); } catch { /* too big: lost */ }
-        accountUi.openSignIn('Sign in to save this ride, and all your future ones.');
-      });
-      note.append(b);
-    }
-    return false;
-  }
+  if (!account()) return false; // an account is required to ride, so this is only a ride that outlived its session
   if (showNote) note.textContent = 'Saving to your rides…';
   try {
     await saveActivity(buildActivity());
@@ -925,13 +911,18 @@ setInterval(() => {
   if (account() && stats.seconds >= MIN_RIDE_S && stats.seconds - lastSavedSeconds > 60) saveRide({ quiet: true });
 }, 5 * 60 * 1000);
 
+/**
+ * One-time migration. Riders used to be able to finish a ride as a guest and keep it in
+ * localStorage while they signed in; nothing writes that key any more, but a ride left
+ * there by an older visit is still saved once at sign-in, then deleted, so it isn't lost.
+ */
 async function savePendingRide() {
   let raw: string | null = null;
-  try { raw = localStorage.getItem(PENDING_KEY); } catch { /* storage blocked */ }
+  try { raw = localStorage.getItem(OLD_PENDING_KEY); } catch { /* storage blocked */ }
   if (!raw) return;
   try {
     await saveActivity(JSON.parse(raw) as Activity);
-    localStorage.removeItem(PENDING_KEY);
+    localStorage.removeItem(OLD_PENDING_KEY);
     accountUi.invalidate();
     toast('Your ride was saved to your profile.');
   } catch (e) {
@@ -1237,7 +1228,7 @@ function attachRace(r: LiveRace) {
 }
 
 async function joinEvent(row: EventRow) {
-  if (!account()) { accountUi.openSignIn('Sign in (free) to join group rides and races.'); return; }
+  if (!account()) return; // (only reachable from the hub and the Events dialog, which need an account)
   await syncServerClock();
   const startsAtMs = new Date(row.starts_at).getTime();
   if (joinState(row.kind, startsAtMs, serverNow()) !== 'open') { toast('That event isn’t open to join right now.'); return; }
@@ -1704,6 +1695,8 @@ const accountUi = initAccountUi({
   onRiderDetails: saveRiderDetails,
   settings: () => settings,
   toast,
+  // Signing out ends the ride (an account is required to ride): keep a ride worth keeping first.
+  beforeSignOut: async () => { if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) await saveRide({ quiet: true }); },
   // 📤 Share on a ride in your profile.
   shareRide: (a) => { import('./garage/shareUi').then((m) => shareRide(m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined), toast)); },
   context: () => ({
@@ -1973,6 +1966,7 @@ initRidersUi({
 onAccountChange(async (a) => {
   setMonitoringUser(a?.id ?? null);
   if (!a) {
+    abandonRide(); // no account, no ride (the home page replaces the hub in src/home.ts)
     forgetLocalCopies();
     ghost = null;
     garage.refresh(); // signed out: back to the starter kit and no wallet
@@ -2026,6 +2020,14 @@ function leaveHub() {
   // A short wait lets a signed-in rider's settings arrive first (they skip it).
   if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) void use(onboarding, (o) => o.open()); }, 1500);
   else bluetoothNote();
+}
+
+/** Stops whatever is under way when the account goes (signed out, or a stale signed-in hint): the rider returns to the home page. */
+function abandonRide() {
+  if (demo) setDemo(false); // the demo ride is for signed-in riders too
+  if (!player && !race && !eventState && stats.seconds === 0) return; // nothing to stop
+  if (player) stopWorkout();
+  resetRide(); // (the ride was saved before sign-out, see beforeSignOut; with no account this saves nothing)
 }
 
 /** Ride: what the hub chose, as a fresh ride (a workout goes on top of its stage). */
@@ -2087,7 +2089,6 @@ const hub = initHub({
     toast(`${plan.name} plan started. First up: ${plan.weeks[0][0].title}.`);
   },
   openProfile: (tab, rideId) => { void use(accountUi.dialogs, (u) => u.openProfile(tab, rideId)); },
-  openSignIn: (why) => accountUi.openSignIn(why),
   openGarage: (tab) => { void use(garageUi, (g) => g.open(tab)); },
   dialogs: {
     workouts: () => { void use(workoutUi, (w) => w.openLibrary()); },
@@ -2103,12 +2104,12 @@ const hub = initHub({
   night: () => world.nightAmount,
   toast,
 });
-initHome({
+const home = initHome({
   onRiderDetails: saveRiderDetails,
   defaults: () => settings,
   openHub: () => hub.open(),
   requestHub: () => { void goToHub(); },
-  onShowHome: () => hub.close(),
+  onShowHome: () => { hub.close(); abandonRide(); },
 });
 
 // Everything that can wait for the first frame (src/lazy.ts): signing in (which loads the
@@ -2124,7 +2125,8 @@ function afterFirstFrame() {
   if (afterFirstFrameDone) return;
   afterFirstFrameDone = true;
   markFirstFrame();
-  restoreSession().then((a) => hub.sessionSettled(a)); // the hub turns into a guest hub if the hint was wrong
+  // If the signed-in hint was stale (no account), drop the hub's cached numbers and show the home page.
+  restoreSession().then((a) => { hub.sessionSettled(a); home.sessionSettled(a); });
   startMonitoring();
   prefetchPrivacy();
   ensureAi(); // a rider who opted in gets the coach and rivals ready for the ride

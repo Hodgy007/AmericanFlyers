@@ -1,6 +1,6 @@
 // Hub → Next event: the next scheduled race and group ride, with a live countdown and Join. The
-// schedule is the same one the Events dialog shows (the daily schedule is known without signing
-// in; signed-in riders get the server's rows, with who is waiting on the line).
+// schedule is the same one the Events dialog shows (the daily schedule is known up front; the
+// server's rows, with who is waiting on the line, replace it once the account is confirmed).
 
 import { account } from '../../cloud/account';
 import { serverNow, upcomingEvents, type EventRow } from '../../cloud/events';
@@ -35,7 +35,7 @@ export const mount: SectionMount = (root, ctx) => {
   function joinLabel(ev: EventRow, now: number): { text: string; disabled: boolean } {
     const start = new Date(ev.starts_at).getTime();
     if (busy === ev.id) return { text: 'Joining…', disabled: true };
-    if (!account()) return { text: 'Sign in to join', disabled: false };
+    if (!account()) return { text: 'Checking your account…', disabled: true }; // the session check is still on its way
     const st = joinState(ev.kind, start, now);
     if (st === 'early') return { text: 'Opens an hour before', disabled: true };
     if (st === 'late') return { text: 'Started too long ago', disabled: true };
@@ -49,7 +49,6 @@ export const mount: SectionMount = (root, ctx) => {
     const join = h('button', { type: 'button', class: label.disabled ? 'hub-event-wait' : 'primary', 'data-fkey': `join-${ev.kind}`, text: label.text });
     join.disabled = label.disabled;
     join.addEventListener('click', async () => {
-      if (!account()) { ctx.deps.openSignIn('Sign in (free) to join group rides and races.'); return; }
       busy = ev.id;
       draw();
       try { await ctx.deps.joinEvent(ev); } finally { busy = ''; draw(); }

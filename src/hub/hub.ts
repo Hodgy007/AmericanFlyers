@@ -1,6 +1,6 @@
 // The Hub: the full-screen screen shown before you ride. Sign-in leads here, and so does opening
-// the app as a signed-in rider (and "Ride without an account" for guests). The header says who you
-// are and what Ride will start; below it sit the sections (Route, Training, Plan, Achievements,
+// the app as a signed-in rider; an account is required, so the hub is never shown without one.
+// The header says who you are and what Ride will start; below it sit the sections (Route, Training, Plan, Achievements,
 // Garage, Stats, Events), each a small module that is loaded the first time it is shown.
 //
 // The hub is light on purpose: it paints from what the browser already has (settings, the saved
@@ -12,7 +12,6 @@
 
 import './hub.css';
 import { account, onAccountChange, type Account } from '../cloud/account';
-import { hint as signedInHint } from '../home';
 import type { Wallet } from '../garage/progression';
 import { allStages, stageById } from '../routes/library';
 import { workoutById } from '../workouts/library';
@@ -59,7 +58,6 @@ export function initHub(deps: HubDeps) {
   root.append(live);
 
   let isOpen = false;
-  let settled = false; // restoreSession() has answered
   let cache: HubCache | null = loadCache();
   let summary: Summary | null = cache?.summary ?? null;
   let status: 'idle' | 'loading' | 'ready' | 'error' = summary ? 'ready' : 'idle';
@@ -74,18 +72,24 @@ export function initHub(deps: HubDeps) {
   let choice: Choice = { stageId: fromUrl ?? validStage(loadStageChoice()) ?? validStage(deps.currentStageId()) ?? FREE_RIDE_STAGE, workoutId: null };
 
   // -------------------------------------------------------------- identity ----
+  // The hub only opens for a signed-in rider, or one the last visit left signed in whose session is still being
+  // checked ('pending': last visit's name and wallet stand in). If that check finds no account the home page replaces the hub.
   function identity(): { state: IdentityState; name: string } {
     const a = account();
-    if (a) return { state: 'in', name: a.name };
-    if (!settled && signedInHint()) return { state: 'pending', name: cache?.name ?? '' };
-    return { state: 'guest', name: '' };
+    return a ? { state: 'in', name: a.name } : { state: 'pending', name: cache?.name ?? '' };
   }
 
   /** The wallet on screen: the live one, or last visit's copy until it arrives. */
   function wallet(): Wallet | null {
-    const id = identity();
-    if (id.state === 'guest') return null;
     return deps.garage.wallet ?? cache?.wallet ?? null;
+  }
+
+  /** Forgets the previous rider's cached numbers (they signed out, or the signed-in hint was stale). */
+  function forget() {
+    cache = null;
+    summary = null;
+    status = 'idle';
+    clearCache();
   }
 
   function remember() {
@@ -130,8 +134,7 @@ export function initHub(deps: HubDeps) {
       ctx.announce(`${label(c)} chosen. Press Ride to start.`);
     },
     identity,
-    signedIn: () => identity().state !== 'guest',
-    summary: () => (identity().state === 'guest' ? null : summary),
+    summary: () => summary,
     summaryStatus: () => status,
     wallet,
     imperial: () => deps.settings().units === 'imperial',
@@ -316,10 +319,8 @@ export function initHub(deps: HubDeps) {
     emit('choice');
     emit('plan');
     emit('local');
-    if (identity().state !== 'guest') {
-      void deps.garage.refresh();
-      if (account()) void loadSummary();
-    }
+    void deps.garage.refresh();
+    if (account()) void loadSummary();
     root.querySelector<HTMLElement>('.hub-scroll')!.scrollTop = 0;
     window.setTimeout(() => header.focusRide(), 0);
     updateActive();
@@ -340,16 +341,10 @@ export function initHub(deps: HubDeps) {
 
   // ---------------------------------------------------- things that change ----
   onAccountChange((a: Account | null) => {
-    settled = true;
     if (a) {
-      if (cache && cache.userId !== a.id) { cache = null; summary = null; status = 'idle'; clearCache(); }
+      if (cache && cache.userId !== a.id) forget();
       if (isOpen) { void deps.garage.refresh(); void loadSummary(); }
-    } else {
-      cache = null;
-      summary = null;
-      status = 'idle';
-      clearCache();
-    }
+    } else forget();
     if (isOpen) { emit('account'); emit('summary'); emit('wallet'); }
   });
 
@@ -393,7 +388,7 @@ export function initHub(deps: HubDeps) {
   const accountBtn = document.getElementById('hub-account')!;
   const syncAccountButton = () => {
     const id = identity();
-    accountBtn.textContent = id.state === 'guest' ? '👤 Sign in' : `👤 ${id.name.split(' ')[0] || 'Profile'}`;
+    accountBtn.textContent = `👤 ${id.name.split(' ')[0] || 'Profile'}`;
   };
   onAccountChange(syncAccountButton);
   syncAccountButton();
@@ -402,18 +397,11 @@ export function initHub(deps: HubDeps) {
     open,
     close,
     isOpen: () => isOpen,
-    /** The first answer from the session check: a signed-in hint that turns out wrong makes the hub a guest's. */
+    /** The first answer from the session check. With no account the signed-in hint was stale: drop last visit's numbers (the home page takes over). */
     sessionSettled(a: Account | null) {
-      settled = true;
-      if (!a) {
-        signedInHint(false);
-        cache = null;
-        summary = null;
-        status = 'idle';
-        clearCache();
-      }
+      if (a) return;
+      forget();
       syncAccountButton();
-      if (isOpen) { emit('account'); emit('summary'); emit('wallet'); }
     },
   };
 }

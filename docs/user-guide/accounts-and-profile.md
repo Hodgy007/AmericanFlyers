@@ -4,7 +4,7 @@ This page covers signing in (Google, or email and password), what syncs to your 
 
 ## Sign in
 
-1. Click **👤 Sign in** (or use the home page). After signing in you arrive at the [hub](the-hub.md); signed-in riders open on it every time.
+1. Use the home page: it is the only way in, and an account is needed to ride. After signing in you arrive at the [hub](the-hub.md); signed-in riders open on it every time.
 2. Choose **Continue with Google**, and you're taken to Google and brought back signed in.
 3. Or use your email:
    - **Create account**: your rider name, email, a password (at least 8 characters), your weight, and your FTP if you know it. That's all: no phone number, no address. You're signed in straight away, and your weight and FTP are saved to your settings.
@@ -13,7 +13,7 @@ This page covers signing in (Google, or email and password), what syncs to your 
 
 Other riders only ever see your rider name shortened to first name and initial, for example *Dave S.*
 
-Riding without an account works fine. Your settings stay in the browser. Signing in is needed for saved rides, profile stats, achievements, feedback and sync across devices.
+You need an account to ride; it's free. It gives you saved rides, profile stats, achievements, feedback and sync across devices.
 
 ## What syncs
 
@@ -42,7 +42,7 @@ The sign-in step merges what's in the browser with what's in your account:
 
 - **Settings:** if your account already has settings, they replace the browser's. If not, the browser's settings are copied to your account.
 - **Workouts and routes:** anything in the browser that your account doesn't have yet is uploaded. Then the browser copies of workouts and routes match your account.
-- **Pending ride:** a ride you were trying to save when you signed in is saved (see below).
+- **A ride kept from an older visit:** earlier versions of the app let you finish a ride without an account and keep it until you signed in. If one is still waiting in the browser, it's saved to your account once when you sign in, then removed.
 
 ### When you sign out
 
@@ -59,17 +59,7 @@ A ride is saved to your account when:
 
 Rides shorter than **one minute** aren't saved. A ride is saved again, in place, each time it's updated, so a long ride doesn't turn into several rides.
 
-You must be signed in for any of this to happen. If you're not signed in, a ride isn't saved. The summary card shows a link to sign in.
-
-### Sign in to save from the summary
-
-If you're not signed in when the ride summary appears, it offers **Sign in** so you can keep the ride:
-
-1. Click **Sign in** in the summary.
-2. The ride is kept in your browser, and the sign-in dialog opens.
-3. After you sign in, the ride is saved to your profile, and you see *Your ride was saved to your profile.*
-
-If you close the summary and start a new ride without signing in, the ride isn't kept.
+If you can't reach the server, the ride is kept on this device and uploads when you're back online (see [Troubleshooting](troubleshooting.md#a-ride-wasnt-saved)).
 
 ## The profile
 
@@ -115,7 +105,7 @@ Click **Rename** in the profile header, type your name in the box that opens, an
 
 ## Sign out
 
-Click **Sign out** in the profile header. The page confirms *Signed out. Your rides are safe in your account.*
+Click **Sign out** in the profile header. A ride you have under way is saved first, then the ride and the hub close and you're back on the home page. The page confirms *Signed out. Your rides are safe in your account.*
 
 ## Your data and privacy
 

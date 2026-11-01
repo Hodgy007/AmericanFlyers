@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test';
 
 // Neon Auth and the Data API are unreachable (and not wanted) in tests: answer them locally.
-// `signedIn: false` is a guest (no session, empty tables). `signedIn: true` is a rider with rides,
-// an FTP history, a plan, a garage wallet and this week's challenges, so the hub has things to show.
+// `signedIn: false` is a visitor with no account (no session, empty tables): the app shows the home page and nothing else.
+// `signedIn: true` is a rider with rides, an FTP history, a plan, a garage wallet and this week's
+// challenges, so the hub has things to show.
 
 /** Neon Auth sends cookies, so the browser wants the page's own origin (not *) and credentials allowed. */
 const cors = (origin: string | undefined) => ({

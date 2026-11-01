@@ -4,7 +4,7 @@ Two optional features that use AI (Claude, made by Anthropic): **Coach Marty**, 
 
 ## Turning them on
 
-1. Sign in (the switches are greyed out while you are signed out, with a Sign in link).
+1. Open the app signed in (you always are when you ride).
 2. ⚙ Settings → **AI coach and rivals**. Tick **AI coach**, **AI rivals**, or both, then **Save**.
 3. Optionally tick **Speak their lines aloud** to hear the coach and rivals with your browser's voice.
 

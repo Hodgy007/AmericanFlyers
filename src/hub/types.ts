@@ -31,7 +31,6 @@ export interface HubDeps {
   /** Start following a training plan. */
   startPlan(id: string): void;
   openProfile(tab: ProfileTab, rideId?: string): void;
-  openSignIn(why: string): void;
   openGarage(tab?: 'week'): void;
   /** The existing dialogs, opened over the hub. */
   dialogs: {
@@ -50,7 +49,8 @@ export interface HubDeps {
   toast(msg: string, ms?: number): void;
 }
 
-export type IdentityState = 'guest' | 'pending' | 'in';
+/** 'pending': the last visit was signed in and the session is still being checked. */
+export type IdentityState = 'pending' | 'in';
 
 /** What a section can see and do. */
 export interface HubCtx {
@@ -58,8 +58,6 @@ export interface HubCtx {
   choice(): Choice;
   pick(c: Choice): void;
   identity(): { state: IdentityState; name: string };
-  /** Signed in, or about to be (the last visit was signed in and the session is still being checked). */
-  signedIn(): boolean;
   summary(): Summary | null;
   summaryStatus(): 'idle' | 'loading' | 'ready' | 'error';
   wallet(): Wallet | null;

@@ -14,7 +14,7 @@ Credits and levels come from your **saved rides**, counted by the server, so the
 
 XP gives you a level from 1 to 50 on a gentle curve (level 2 at 100 XP, level 10 at about 3,400 XP, level 50 at about 50,000 XP), with a title every five levels. Demo rides, rides without power data and rides run on a sped-up clock don't count.
 
-Sign in to earn: signed-out riders can browse the store and see what they would earn.
+Credits come from your saved rides, so they are yours to earn as soon as you ride.
 
 ## Bikes, wheels, tyres and clothing
 

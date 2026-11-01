@@ -28,7 +28,6 @@ const thaw = (page: Page) => page.evaluate(() => {
 const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 interface Fixture {
-  signedIn: boolean;
   consent: { coach: boolean; rivals: boolean };
   rivals: unknown[];
   aiCalls: { kind: string; payload: any; auth: string | undefined }[];
@@ -49,7 +48,6 @@ async function mock(page: Page, f: Fixture) {
   await page.route(/neonauth/, (route) => {
     const req = route.request();
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
-    if (!f.signedIn) return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/json' }, body: 'null' });
     const body = { session: { id: 's1', token: 'plain-session-token', userId: 'u1', expiresAt: '2099-01-01T00:00:00Z' }, user: { id: 'u1', name: 'Alex Rider', email: 'alex@example.invalid', emailVerified: true, image: null } };
     return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/json', 'set-auth-jwt': JWT }, body: JSON.stringify(body) });
   });
@@ -96,7 +94,7 @@ async function ride(page: Page) {
 }
 
 async function setup(page: Page, f: Partial<Fixture> = {}, query = ''): Promise<Fixture> {
-  const fx: Fixture = { signedIn: true, consent: { coach: false, rivals: false }, rivals: [], aiCalls: [], rpcCalls: [], ...f };
+  const fx: Fixture = { consent: { coach: false, rivals: false }, rivals: [], aiCalls: [], rpcCalls: [], ...f };
   await mock(page, fx);
   if (process.env.E2E_DEBUG) page.on('request', (r) => { if (/neonauth|apirest|api\/ai/.test(r.url())) console.log(new Date().toISOString().slice(11, 19), r.method(), r.url().replace(/^.*\/(auth|rest\/v1)/, '$1').slice(0, 90)); });
   await page.addInitScript(() => {
@@ -128,24 +126,25 @@ const errorsOf = (page: Page) => {
   return errors;
 };
 
-test('signed out: the AI switches are off and ask you to sign in', async ({ page }) => {
+test('AI is off until you opt in: the switches are off and rivals ride with ready-made lines', async ({ page }) => {
   const errors = errorsOf(page);
-  await setup(page, { signedIn: false });
+  await setup(page); // an account is required to ride, so this is a signed-in rider who has not opted in
   await press(page, '#btn-menu');
   await press(page, '#btn-settings');
   await expect(page.locator('#settings[open]')).toBeVisible();
-  await expect(page.locator('#settings [name=aiCoach]')).toBeDisabled();
-  await expect(page.locator('#settings [name=aiRivals]')).toBeDisabled();
-  await expect(page.locator('#ai-signin')).toBeVisible();
+  await expect(page.locator('#settings [name=aiCoach]')).toBeEnabled();
+  await expect(page.locator('#settings [name=aiCoach]')).not.toBeChecked();
+  await expect(page.locator('#settings [name=aiRivals]')).not.toBeChecked();
+  await expect(page.locator('#ai-signin')).toBeHidden();
   await page.locator('#settings .ai-settings').scrollIntoViewIfNeeded();
-  await shot(page, '01-settings-signed-out');
+  await shot(page, '01-settings-opted-out');
   await page.evaluate(() => (document.getElementById('settings') as HTMLDialogElement).close());
   // Rivals still open and ride with ready-made lines.
   await press(page, '#btn-menu');
   await press(page, '#btn-rivals');
   await expect(page.locator('#rivals[open]')).toBeVisible();
   await expect(page.locator('.rival-card')).toHaveCount(4);
-  await expect(page.locator('#rivals-note')).toContainText('Sign in');
+  await expect(page.locator('#rivals-note')).toContainText('Turn on AI rivals in Settings');
   expect(errors, errors.join('\n')).toEqual([]);
 });
 

@@ -1,8 +1,8 @@
-// The home page: a welcome screen over the 3D world for riders who aren't
-// signed in, with free sign-in (Google, or email and password) or "ride
-// without an account". Both ways in lead to the hub (src/hub), not straight to the ride.
+// The home page: a welcome screen over the 3D world for riders who aren't signed in.
+// An account is required to ride: free sign-in (Google, or email and password) is the
+// only way past it, and it leads to the hub (src/hub), not straight to the ride.
 
-import { account, onAccountChange, signInWith } from './cloud/account';
+import { onAccountChange, signInWith, type Account } from './cloud/account';
 import type { RiderDetails } from './cloud/emailAuth';
 import { firstFrame, lazy, use } from './lazy';
 
@@ -23,11 +23,11 @@ export function hint(on?: boolean) {
 export const emailAuth = lazy(() => import('./cloud/emailAuth'));
 
 export function initHome(opts: {
-  /** Leave the home page for the hub (sign-in, or "Ride without an account"). */
+  /** Leave the home page for the hub (the rider just signed in). */
   openHub: () => void;
   /** The brand button when signed in: the hub, asking first if a ride is under way. */
   requestHub: () => void;
-  /** The home page is showing again (signed out): the hub must close. */
+  /** The home page is showing: the hub must close and any ride stops (the rider signed out, or a stale hint was wrong). */
   onShowHome?: () => void;
   onRiderDetails: (d: RiderDetails) => void;
   defaults: () => { riderKg: number };
@@ -38,6 +38,7 @@ export function initHome(opts: {
 
   const show = () => {
     opts.onShowHome?.();
+    document.documentElement.removeAttribute('data-start'); // the index.html script hid this page for a signed-in hint
     home.hidden = false;
     document.body.classList.add('at-home');
     hero.play();
@@ -50,15 +51,16 @@ export function initHome(opts: {
   };
 
   // Riders who were signed in last time go straight to the hub; everyone
-  // else starts here. Sign-in state settles a moment later and corrects this.
+  // else starts here. The session check settles a moment later (sessionSettled)
+  // and corrects this if the hint was stale.
   if (hint()) toHub();
   else show();
 
   onAccountChange((a) => {
     hint(!!a);
     if (a) {
-      if (!home.hidden) toHub(); // signing in from the home page; mid-ride sign-ins stay where they are
-    } else show();
+      if (!home.hidden) toHub(); // signing in from the home page
+    } else show(); // signed out: no account, no ride
   });
 
   for (const b of home.querySelectorAll<HTMLButtonElement>('[data-provider]')) {
@@ -89,16 +91,20 @@ export function initHome(opts: {
     }, emailToggle);
   });
 
-  document.getElementById('home-ride')!.addEventListener('click', toHub);
-  document.getElementById('btn-home')!.addEventListener('click', () => {
-    if (account()) opts.requestHub();
-    else show();
-  });
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !home.hidden && !document.querySelector('dialog[open]')) toHub();
-  });
+  // The brand button in the top bar is only reachable once signed in (the home page is the only way in otherwise).
+  document.getElementById('btn-home')!.addEventListener('click', () => opts.requestHub());
 
-  return { show };
+  return {
+    /**
+     * The first answer from the session check. With no account the home page must be
+     * showing: a stale signed-in hint put the hub (or a ride) up, so clear it and go back.
+     */
+    sessionSettled(a: Account | null) {
+      if (a) return;
+      hint(false);
+      if (home.hidden) show();
+    },
+  };
 }
 
 type HeroId = 'dog' | 'rider';

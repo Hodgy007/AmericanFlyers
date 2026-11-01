@@ -7,7 +7,7 @@ This page covers the hub, the screen you see before you ride: what is on it, how
 The hub comes first, every time:
 
 - **Signed in.** Opening the app takes you straight to your hub. There's no home page to click through.
-- **Not signed in.** On the home page, sign in (Google, or email and password) or choose **Ride without an account**. Either way you arrive at the hub. As a guest the sections that need an account show a friendly sign-in prompt instead of your numbers.
+- **Not signed in.** You start on the home page, and it is the only way in: sign in (Google, or email and password) and you arrive at the hub. There is no guest hub, so there's nothing to see or ride without an account. If the app thought you were signed in but your session has ended, it shows the home page instead. Signing out later brings you back to the home page.
 - **After a ride.** Open **☰ Menu → 🏠 Hub** or press **🏠 Back to the hub** on a finish or summary card.
 
 Behind the hub the live 3D world turns slowly round your rider, blurred. On phones, or if your device is set to reduce motion, it barely moves to save battery.
@@ -50,12 +50,12 @@ The turntable and the charts load only when you look at them, and your numbers f
 
 ## Going back to the hub
 
-**☰ Menu → 🏠 Hub** (or the **★ American Flyers** name in the top bar, when signed in) ends the ride and shows the hub.
+**☰ Menu → 🏠 Hub** (or the **★ American Flyers** name in the top bar) ends the ride and shows the hub.
 
 If you've ridden a minute or more, or you're in a race or group ride, you're asked first:
 
 - **Keep riding** closes the question and nothing changes.
-- **Save and go to the hub** saves the ride to your account (as **End / reset ride** does) and shows the hub. If you're not signed in the button says **End ride and go to the hub**, because a guest's ride can't be saved.
+- **Save and go to the hub** saves the ride to your account (as **End / reset ride** does) and shows the hub.
 
 A ride that's already finished needs no question, and neither does one under a minute.
 

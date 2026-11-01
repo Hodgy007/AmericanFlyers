@@ -13,7 +13,7 @@ Buttons across the top of the screen, from left to right:
 | **👥** | Who else is riding this stage. See [Riding together](riding-together.md). |
 | **Connect trainer** / **Disconnect** | Connects or disconnects your trainer. The same is in **☰ Menu → 🔌**, along with **❤️ Heart rate**; both remember your devices. See [Connecting devices](connecting-devices.md). |
 | **☰ Menu** | Everything else, listed below. Click outside it or press Escape to close it. |
-| **👤 Sign in** (or your first name) | Opens sign-in, or your profile when you're signed in. |
+| **👤 Your first name** | Opens your profile. |
 
 The **☰ Menu** holds:
 
@@ -123,7 +123,7 @@ The summary has two buttons:
 - **Keep riding** closes the summary and keeps your ride going.
 - **Start a new ride** clears the ride and starts again.
 
-If you're signed in, the ride is saved when the summary appears. If you're not, the summary offers a **Sign in** link to keep the ride. See [Accounts and profile](accounts-and-profile.md#when-rides-are-saved).
+The ride is saved to your account when the summary appears. See [Accounts and profile](accounts-and-profile.md#when-rides-are-saved).
 
 ## Stage finish screen
 

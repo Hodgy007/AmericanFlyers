@@ -82,9 +82,6 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-xp { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .hub-xp i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--red-hi), var(--blue)); transition: width 0.5s ease; }
 .hub-xp-text, .hub-rider-totals { font-size: 13px; color: #c3cbdc; min-height: 16px; }
-.hub-guest { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
-.hub-guest-note { margin: 0; max-width: 46ch; font-size: 15px; line-height: 1.5; color: #d9dfec; }
-.hub-signin { padding: 10px 22px; }
 
 /* ride panel */
 .hub-ride { display: flex; flex-direction: column; gap: 12px; }
@@ -245,10 +242,6 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-badge-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .hub-badge-body strong { font-size: 15px; }
 .hub-badge-detail { font-size: 12px; color: #dfe5f2; font-variant-numeric: tabular-nums; }
-.hub-signin-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; align-items: center; padding: 22px 26px; border-radius: 18px; background: var(--stripe) top / 100% 3px no-repeat, rgba(10, 16, 38, 0.62); border: 1px solid rgba(255, 255, 255, 0.14); }
-.hub-signin-card h3 { margin: 0 0 8px; font-family: var(--font-display); font-weight: 800; font-size: 30px; letter-spacing: 0.03em; text-transform: uppercase; line-height: 1; }
-.hub-signin-card .hub-desc { font-size: 14.5px; margin-bottom: 14px; max-width: 52ch; }
-.hub-signin-card .hub-badges { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 
 /* ------------------------------------------------------------ garage ---- */
 .hub-garage { display: grid; grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr); gap: 22px; align-items: start; }
@@ -352,7 +345,6 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 @media (max-width: 1100px) {
   .hub-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hub-ftp { grid-column: 1 / -1; }
-  .hub-signin-card { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
   .hub-hero { grid-template-columns: 1fr; }
@@ -391,7 +383,6 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
   .hub-ride-date { grid-column: 1 / -1; }
   .hub-bignum strong { font-size: 52px; }
   .hub-badges { grid-template-columns: 1fr; }
-  .hub-signin-card { padding: 16px; }
   .hub-dock { left: 12px; right: 12px; max-width: none; transform: translate(0, 160%); }
   .hub-dock.show { transform: translate(0, 0); }
 }

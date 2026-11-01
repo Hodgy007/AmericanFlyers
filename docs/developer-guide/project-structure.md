@@ -39,7 +39,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | --- | --- |
 | `main.ts` | Entry point. Owns the ride state, runs the frame loop, controls the trainer, handles the top bar, ☰ menu and dialogs, saves rides, and wires up sign-in, riding together, ghosts, plans, sound, virtual shifting and drafting. |
 | `lazy.ts` | Lazy loading helpers: `lazy()`, `use()`, `loadOnClick()`, `prefetchWhenIdle()`, `firstFrame`. See [Architecture](architecture.md#lazy-loading). |
-| `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up, and *Ride without an account*. Both ways in lead to the hub (`openHub`); `hint()` remembers a signed-in rider. |
+| `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up. It is the only way in without an account and leads to the hub (`openHub`); `hint()` remembers a signed-in rider, and `sessionSettled()` shows the page again if that hint was stale. |
 | `hub/hub.ts` | The hub controller: opens and closes it, tabs (a single column on phones), loads each section on first use, keeps the choice (what Ride starts), the cached wallet and ride summary, and keyboard behaviour. In the main bundle. |
 | `hub/header.ts` | The hub's header: rider card (level, XP, credits) and the Ride panel (the choice, Ride, Free ride, the plan's next session, and the phone dock). |
 | `hub/data.ts` | The hub's pure logic, with no DOM: weekly totals, best times, plan summary, next events, the Ride choice rules, and the `Summary` that is cached. |
@@ -143,4 +143,4 @@ This page lists every file and folder in the repository, with a one-line summary
 
 ## Tests and tooling
 
-The repository has no linter configuration. `tests/unit/` holds the Vitest unit tests (`hub.test.ts` covers the hub's logic), `tests/e2e/` the Playwright smoke test and `mockNeon.ts` (a signed-out or signed-in Neon for tests), and `.github/workflows/ci.yml` runs them with the build on every pull request. See [Testing](testing.md).
+The repository has no linter configuration. `tests/unit/` holds the Vitest unit tests (`hub.test.ts` covers the hub's logic), `tests/e2e/` the Playwright tests (`smoke.spec.ts`, `home.spec.ts` for the no-account home page, and others) and `mockNeon.ts` (a no-account or signed-in Neon for tests), and `.github/workflows/ci.yml` runs them with the build on every pull request. See [Testing](testing.md).

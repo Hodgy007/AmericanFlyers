@@ -54,17 +54,19 @@ Conventions:
 
 ## Browser smoke test (Playwright)
 
-`npm run test:e2e` builds the app and runs `playwright test`. The test, `tests/e2e/smoke.spec.ts`, serves `vite preview` on port 4185 (override with `E2E_PORT`), then:
+`npm run test:e2e` builds the app and runs `playwright test`. An account is required to ride, so a test that rides needs `mockNeon(page, { signedIn: true })` and the `americanflyers.signedIn` hint: without a session the app shows only the home page. The main test, `tests/e2e/smoke.spec.ts`, serves `vite preview` on port 4185 (override with `E2E_PORT`), then:
 
-- mocks Neon with `tests/e2e/mockNeon.ts` (`page.route` on the Auth and Data API hosts; `{ signedIn: true }` is a rider with rides, FTP history, a plan, a garage wallet, challenges and events),
-- skips the home page and the first-ride guide with `localStorage`, so the app opens on the **hub** (a guest's, because the mocked session is empty),
-- checks the hub (header, seven sections, a route and a workout to choose, the sign-in prompt for guests), then presses **Ride**,
+- mocks Neon with `tests/e2e/mockNeon.ts` (`page.route` on the Auth and Data API hosts; `{ signedIn: true }` is a rider with rides, FTP history, a plan, a garage wallet, challenges and events; `{ signedIn: false }` is a visitor with no account),
+- skips the home page and the first-ride guide with `localStorage`, so the app opens on the **hub**,
+- checks the hub (header, seven sections, a route and a workout to choose, no sign-in prompts), then presses **Ride**,
 - starts a demo ride from ☰ Menu and checks the HUD fills in,
-- opens and closes each main dialog (stage, workouts, riders, leaderboard, time and weather, plans, kit, tour, settings, feedback, sign in),
+- opens and closes each main dialog (stage, workouts, riders, leaderboard, time and weather, plans, kit, tour, settings, feedback, profile),
 - goes back with ☰ Menu → 🏠 Hub, checks Escape keeps focus on **Ride**, and rides again,
 - fails on any page error or console error (blocked network requests are ignored).
 
-A second test signs the mocked rider in and checks the hub's name, level, credits, plan row, best times, each section's data, a ride row opening the profile's ride detail, and Ride starting a chosen workout.
+`tests/e2e/home.spec.ts` covers the way in: a visitor with no account sees the home page and no way past it (no *Ride without an account*, Escape does nothing, the hub stays hidden); a stale signed-in hint with no session ends on the home page; signing out returns to it; a ride left by the old guest flow is saved once at sign-in and deleted; and a workout made before accounts were required syncs to the account.
+
+A second test in `smoke.spec.ts` signs the mocked rider in and checks the hub's name, level, credits, plan row, best times, each section's data, a ride row opening the profile's ride detail, and Ride starting a chosen workout.
 
 It takes about a minute with software WebGL. To keep that fast and reliable, the test throttles `requestAnimationFrame` to about 1 fps (set `E2E_FULL_FPS=1` to turn that off) and clicks through the DOM. When you add a main dialog or menu entry, add a line to `DIALOGS` in the spec.
 

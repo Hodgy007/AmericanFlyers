@@ -33,11 +33,8 @@ export function mountHeader(ctx: HubCtx) {
   const xpBar = h('div', { class: 'hub-xp', role: 'img' }, xpFill);
   const xpText = h('div', { class: 'hub-xp-text' });
   const totals = h('div', { class: 'hub-rider-totals' });
-  const signInBtn = button('Sign in', () => ctx.deps.openSignIn('Sign in to save your rides, earn credits, level up and see your stats.'), 'primary hub-signin');
-  const guestNote = h('p', { class: 'hub-guest-note', text: 'You’re riding as a guest. Sign in (it’s free) to save your rides, earn credits and levels, and join group rides and races.' });
-  const guestBox = h('div', { class: 'hub-guest' }, guestNote, signInBtn);
   const statBox = h('div', { class: 'hub-stat-box' }, levelRow, xpBar, xpText, totals);
-  riderBox.replaceChildren(avatar, h('div', { class: 'hub-rider-main' }, eyebrow, name, statBox, guestBox));
+  riderBox.replaceChildren(avatar, h('div', { class: 'hub-rider-main' }, eyebrow, name, statBox));
 
   // ------------------------------------------------------------- ride panel ----
   const ridePanelEyebrow = h('p', { class: 'hub-eyebrow' }, h('span', { class: 'stripe' }), 'Up next');
@@ -71,16 +68,7 @@ export function mountHeader(ctx: HubCtx) {
   function renderRider() {
     const id = ctx.identity();
     const w = ctx.wallet();
-    const guest = id.state === 'guest';
-    riderBox.classList.toggle('guest', guest);
-    guestBox.hidden = !guest;
-    statBox.hidden = guest;
     hello.textContent = greeting(new Date().getHours());
-    if (guest) {
-      avatar.textContent = '★';
-      name.textContent = 'Guest rider';
-      return;
-    }
     const first = firstName(id.name);
     avatar.textContent = (first[0] ?? '★').toUpperCase();
     if (id.state === 'pending' && !first) name.replaceChildren(skeleton('', '220px', '44px'));
@@ -158,7 +146,6 @@ export function mountHeader(ctx: HubCtx) {
     if (topic === 'all' || topic === 'account' || topic === 'wallet' || topic === 'units') renderRider();
     if (topic === 'all' || topic === 'choice' || topic === 'summary' || topic === 'units' || topic === 'local') renderRide();
     if (topic === 'all' || topic === 'plan' || topic === 'local' || topic === 'choice') renderPlan();
-    signInBtn.hidden = ctx.identity().state !== 'guest';
   }
   refresh('all');
 

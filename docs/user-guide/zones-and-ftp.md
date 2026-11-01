@@ -53,7 +53,7 @@ Your FTP changes are recorded in your account when you're signed in. Each change
 | **Ramp test** | You click **Set my FTP** after a ramp test. |
 | **Starting FTP** | The first time your account is created, from the settings on that browser. |
 
-The **Stats** tab charts your FTP over time and shows the change since the first entry. Changes made while signed out aren't recorded, but your settings are.
+The **Stats** tab charts your FTP over time and shows the change since the first entry.
 
 The **Getting stronger** achievement uses this history. See [Achievements](achievements.md).
 

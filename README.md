@@ -153,6 +153,6 @@ src/
   profile.ts         Elevation profile strip
   settings.ts        Saved settings
   hub/               The hub (the screen before you ride): header, sections, cache and logic
-  home.ts            The home page: sign-in, or ride without an account (both lead to the hub)
+  home.ts            The home page: sign in (Google or email) to reach the hub; an account is required to ride
   main.ts            App loop, HUD, controls
 ```

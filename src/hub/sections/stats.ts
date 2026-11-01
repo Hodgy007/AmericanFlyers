@@ -1,6 +1,6 @@
 // Hub → Stats: this week and the last four weeks (distance, time, climbing, TSS), FTP and its
 // history, the weekly distance for two months, and your last few rides (each opens the existing
-// ride detail in your profile). Signed-out riders get a way in instead.
+// ride detail in your profile).
 
 import { raceTime } from '../../ghost';
 import { pickWorkout, climbText, distanceText, durationShort, durationText, type Summary, type Totals } from '../data';
@@ -73,14 +73,6 @@ function weeklyBars(weekly: Summary['weekly'], imp: boolean) {
 
 export const mount: SectionMount = (root, ctx) => {
   function render() {
-    if (!ctx.signedIn()) {
-      root.replaceChildren(h('div', { class: 'hub-signin-card' }, h('div', {},
-        h('h3', { text: 'See how your riding is going' }),
-        h('p', { class: 'hub-desc', text: 'Sign in (it’s free) and every ride you save adds to your weekly totals, your best times and your FTP history.' }),
-        button('Sign in to see your stats', () => ctx.deps.openSignIn('Sign in to save your rides and see your stats.'), 'primary', { 'data-fkey': 'signin' }),
-      )));
-      return;
-    }
     const sum = ctx.summary();
     const imp = ctx.imperial();
     if (!sum) {

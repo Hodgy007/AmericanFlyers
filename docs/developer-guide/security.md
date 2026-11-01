@@ -61,7 +61,7 @@ Don't add a service-role key, a database password or an API key to the client co
 
 ## What the browser stores
 
-`localStorage` holds settings, workouts, routes, and a ride held back until sign-in. It's readable by any script on the same origin, so don't store secrets there. Routes include GPS coordinates, which are personal data. They stay on the device unless you're signed in, and then they're in your account.
+`localStorage` holds settings, workouts, routes, and rides waiting to upload (the offline queue). It's readable by any script on the same origin, so don't store secrets there. Routes include GPS coordinates, which are personal data. They stay on the device unless you're signed in, and then they're in your account.
 
 ## Riding together, leaderboards and ghosts
 
