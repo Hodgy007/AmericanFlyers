@@ -16,6 +16,11 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Home page.** The hero videos start after the first frame; the email form's code loads when *Sign up with email* is first tapped.
 - **Fonts.** The Google Fonts stylesheet is preloaded but no longer blocks the first paint (text shows in the fallback font until it arrives, as `display=swap` already did).
 - **Fixed:** `main.ts` registered the service worker and the install-button handlers again on every animation frame (a copy of that block had ended up inside `frame()`); the copy is removed.
+### Trainer in the menu, and devices that are remembered
+
+- **Trainer and heart rate in the ☰ Menu.** 🔌 Connect trainer / Disconnect *name* and ❤️ Heart rate / Disconnect *name*, with a status line under each; the top-bar button stays. The menu now scrolls on short screens.
+- **Remembered devices.** The trainer and strap you connect are remembered in this browser (`americanflyers.devices`, not synced). In Chrome with persistent Bluetooth permissions (`getDevices`, behind a flag today) they reconnect on load with no chooser; elsewhere a banner and menu item give a one-tap **Reconnect *name*** through a name-filtered chooser. **Forget** per device in the menu and in Settings.
+- **Automatic reconnection.** A remembered device that drops mid-ride is retried after 1, 2, 4, 8 and 15 s; the ride carries on (power reads 0), notifications are re-subscribed and the current resistance is sent again. New modules `src/ble/remembered.ts`, `src/devicesUi.ts`; `connectTrainer`/`connectHeartRate` are split into request and open steps.
 
 ### Trust and safety: privacy, account deletion, email verification, leaderboard sanity
 

@@ -1176,3 +1176,26 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 .lazy-busy { cursor: progress; opacity: 0.65; animation: lazy-pulse 0.9s ease-in-out infinite alternate; }
 @keyframes lazy-pulse { from { opacity: 0.45; } to { opacity: 0.8; } }
 @media (prefers-reduced-motion: reduce) { .lazy-busy { animation: none; } }
+/* ------------------------------------------- remembered devices (devicesUi.ts) ---- */
+/* Menu items for the trainer and heart rate strap have a smaller second line under the label. */
+.actions .menu button .mi-label { display: block; }
+.actions .menu button .mi-sub { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 1px; }
+.actions .menu button .mi-sub:empty { display: none; }
+/* The menu has grown: let it scroll on short screens instead of running off the bottom. */
+.menu { max-height: calc(100dvh - 76px); overflow-y: auto; }
+@media (max-width: 560px) { .menu { max-height: calc(100dvh - 104px); } }
+/* Small banner offering one-tap reconnection when a remembered device isn't connected. */
+.device-banner {
+  position: fixed; left: 16px; bottom: 96px; z-index: 35; /* bottom left: clear of the data blocks, the menu and the toast */
+  display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap;
+  max-width: min(calc(100vw - 32px), 560px); padding: 8px 12px; border-radius: 12px; font-size: 14px;
+  background: rgba(14, 22, 44, 0.94); border: 1px solid var(--glass-border); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.device-banner[hidden], body.at-home .device-banner { display: none; }
+.device-banner .db-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.device-banner button { padding: 6px 12px; font-size: 13px; }
+.device-banner .db-close { background: transparent; border-color: transparent; box-shadow: none; padding: 6px 8px; }
+/* The "Remembered devices" block in Settings. */
+.dev-box { display: grid; gap: 6px; margin: 4px 0 10px; }
+.dev-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.dev-row button { padding: 4px 12px; font-size: 13px; }

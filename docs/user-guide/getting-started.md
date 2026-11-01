@@ -38,12 +38,13 @@ Your weight drives the speed model. FTP sets the power zones and workout targets
 
 ## Your first ride
 
-1. Click **Connect trainer**.
+1. Click **Connect trainer** (or **☰ Menu → 🔌 Connect trainer**).
 2. Choose your trainer from the list your browser shows. Only trainers that advertise the FTMS or Cycling Power service appear.
 3. The status line at the bottom left shows your trainer's name and **resistance follows the road** when the app can control it. If it says **power only**, the app can read your power but can't change the resistance.
-4. Start pedaling. The speed and data blocks update straight away.
-5. The trainer's resistance follows the road. On a climb it gets harder; on a descent it eases. The default difficulty is 50%, so you feel half of the road's grade.
-6. When you've finished, open **☰ Menu → ↺ End / reset ride**. You'll see a ride summary. If you're signed in, the ride is saved.
+4. American Flyers remembers your trainer (and a heart rate strap, if you connect one) on this browser, so next time it reconnects by itself or with one tap on **Reconnect**. See [Connecting devices](connecting-devices.md#remembered-devices-you-only-join-once).
+5. Start pedaling. The speed and data blocks update straight away.
+6. The trainer's resistance follows the road. On a climb it gets harder; on a descent it eases. The default difficulty is 50%, so you feel half of the road's grade.
+7. When you've finished, open **☰ Menu → ↺ End / reset ride**. You'll see a ride summary. If you're signed in, the ride is saved.
 
 ## Try the demo ride
 

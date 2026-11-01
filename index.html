@@ -87,8 +87,12 @@
         <div class="menu-wrap">
           <button id="btn-menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu" title="More">☰ Menu</button>
           <div id="menu" class="menu" role="menu" hidden>
+            <!-- Trainer and heart rate: labels are filled in by src/devicesUi.ts (connected, remembered, reconnecting). -->
+            <button id="btn-menu-trainer" role="menuitem"><span class="mi-label">🔌 Connect trainer</span><small class="mi-sub"></small></button>
+            <button id="btn-hr" role="menuitem"><span class="mi-label">❤️ Heart rate</span><small class="mi-sub"></small></button>
+            <button id="btn-forget-trainer" role="menuitem" hidden>✕ Forget trainer</button>
+            <button id="btn-forget-hr" role="menuitem" hidden>✕ Forget heart rate strap</button>
             <button id="btn-demo" role="menuitem">🎮 Demo ride</button>
-            <button id="btn-hr" role="menuitem">❤️ Heart rate strap</button>
             <button id="btn-camera" role="menuitem" title="Change camera (C)">🎥 Chase view</button>
             <button id="btn-leaderboard" role="menuitem" title="Leaderboard for this stage">🏆 Leaderboard</button>
             <button id="btn-weather" role="menuitem" title="Time of day and weather">🌤 Time &amp; weather</button>
@@ -312,6 +316,11 @@
           <input name="difficulty" type="range" min="0" max="100" step="5" />
           <span class="hint">How much of the road grade the trainer simulates. 100% feels like the real hill.</span>
         </label>
+        <div class="dev-box">
+          <strong>Remembered devices</strong>
+          <span class="hint">This browser remembers the trainer and heart rate strap you last connected, so next time they reconnect without searching. Forgetting one only removes it from this browser.</span>
+          <div id="settings-devices"></div>
+        </div>
         <label class="check"><input name="virtualShifting" type="checkbox" /> Virtual shifting
           <span class="hint">Choose your gear with the on-screen − / + buttons or the − and + keys. Harder gears make the trainer push back harder, like a real bike. Leave your trainer in one gear.</span>
         </label>
@@ -436,7 +445,7 @@
         </section>
         <section class="ob-step" hidden>
           <h2>Your trainer</h2>
-          <p class="muted">Wake your smart trainer by pedalling a few strokes, then connect. Any Bluetooth FTMS trainer works (Wahoo KICKR, Tacx, Elite, Saris, Zwift Hub and more).</p>
+          <p class="muted">Wake your smart trainer by pedalling a few strokes, then connect. Any Bluetooth FTMS trainer works (Wahoo KICKR, Tacx, Elite, Saris, Zwift Hub and more). American Flyers remembers your trainer and strap on this browser, so you won’t have to connect them again next time.</p>
           <div class="ob-devices">
             <button type="button" id="ob-trainer" class="primary">🚲 Connect trainer</button>
             <button type="button" id="ob-hr">❤️ Connect heart rate strap</button>

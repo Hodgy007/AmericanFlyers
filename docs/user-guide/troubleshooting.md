@@ -33,7 +33,13 @@ If you cancel the picker, nothing happens. That's expected.
 
 **Symptom:** The status line says *Trainer disconnected*.
 
-**Fix:** Click **Connect trainer** again. Check the trainer's battery and that it's in range. The trainer's own app may also have taken control.
+**Fix:** A remembered trainer that drops out is retried automatically (1, 2, 4, 8 and 15 seconds); the status line says *Reconnecting…* and your ride carries on. If it gives up, wake the trainer by pedalling, then tap **Reconnect** in the ☰ Menu (or the banner). Check the trainer's battery and that it's in range. The trainer's own app may also have taken control.
+
+## It doesn't reconnect by itself when I open the app
+
+**Cause:** Reconnecting without the picker needs a Chrome feature that is still behind a flag. Everyone else gets a **Reconnect** banner and menu item instead (one tap). To turn it on, see [Browser support for automatic reconnection](connecting-devices.md#browser-support-for-automatic-reconnection). The trainer also has to be awake and in range, and not held by another app.
+
+**Wrong device remembered?** **☰ Menu → ✕ Forget *name***, then connect the right one.
 
 ## No resistance changes
 

@@ -9,6 +9,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 ## Features
 
 - **Bluetooth trainer connection.** Uses the standard FTMS (Fitness Machine) profile, so it works with Wahoo KICKR, KICKR CORE and KICKR SNAP on current firmware, as well as most other smart trainers. Trainers that only expose a Cycling Power service still work in read-only mode.
+- **Remembered devices.** The trainer and heart-rate strap are in the ☰ Menu, remembered on each browser, and reconnect by themselves (Chrome with `getDevices`) or with one tap. A dropped connection is retried without ending the ride.
 - **Resistance follows the road.** The current grade is sent to the trainer once a second, scaled by a *trainer difficulty* setting (default 50%).
 - **Wind and echelons.** Each stage has a wind that the weather scales; headwinds slow you, tailwinds help, your trainer feels the headwind, and in a crosswind the best shelter is diagonal, so the pro teams ride echelons. A wind chip shows the direction and speed.
 - **Group rides and races** (☰ Menu → 🗓 Events): a race every evening and a group ride at midday, plus one-off events, with a synchronised start, a lobby, shared computer-ridden fields and results alongside other riders.

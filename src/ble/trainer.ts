@@ -5,6 +5,8 @@
 // and lets us push the virtual road grade to the trainer as resistance.
 // Falls back to the Cycling Power Service (read-only) for older firmware.
 
+import { onGattDrop } from './remembered';
+
 export interface TrainerReading {
   power?: number; // watts
   cadence?: number; // rpm
@@ -45,19 +47,41 @@ export function bluetoothAvailable(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
 }
 
-export async function connectTrainer(cb: TrainerCallbacks): Promise<Trainer> {
-  const device = await navigator.bluetooth.requestDevice({
-    filters: [{ services: [FTMS_SERVICE] }, { services: [CPS_SERVICE] }],
-    optionalServices: [FTMS_SERVICE, CPS_SERVICE],
-  });
-  const server = await device.gatt!.connect();
-  device.addEventListener('gattserverdisconnected', () => cb.onDisconnect());
+/**
+ * Asks the browser for a trainer. With no name: the full chooser (any FTMS or Cycling Power device).
+ * With a name (a remembered trainer): a chooser that lists just that device. Needs a user gesture.
+ */
+export function requestTrainerDevice(name?: string): Promise<BluetoothDevice> {
+  return navigator.bluetooth.requestDevice(
+    name
+      ? { filters: [{ name }], optionalServices: [FTMS_SERVICE, CPS_SERVICE] }
+      : { filters: [{ services: [FTMS_SERVICE] }, { services: [CPS_SERVICE] }], optionalServices: [FTMS_SERVICE, CPS_SERVICE] },
+  );
+}
 
-  const ftms = await server.getPrimaryService(FTMS_SERVICE).catch(() => null);
-  if (ftms) return connectFtms(device, ftms, cb);
+/**
+ * Connects to a trainer the browser already knows (picked just now, or allowed earlier), finds its
+ * services and subscribes to its notifications. Safe to call again on the same device after a drop:
+ * it sets everything up afresh. FTMS first, Cycling Power as the fallback.
+ */
+export async function openTrainer(device: BluetoothDevice, cb: TrainerCallbacks): Promise<Trainer> {
+  const drop = onGattDrop(device, () => cb.onDisconnect());
+  try {
+    const server = await device.gatt!.connect();
+    const ftms = await server.getPrimaryService(FTMS_SERVICE).catch(() => null);
+    const trainer = ftms
+      ? await connectFtms(device, ftms, cb)
+      : await connectCyclingPower(device, await server.getPrimaryService(CPS_SERVICE), cb);
+    drop.arm();
+    return trainer;
+  } catch (err) {
+    try { device.gatt?.disconnect(); } catch { /* already gone */ }
+    throw err;
+  }
+}
 
-  const cps = await server.getPrimaryService(CPS_SERVICE);
-  return connectCyclingPower(device, cps, cb);
+export async function connectTrainer(cb: TrainerCallbacks, name?: string): Promise<Trainer> {
+  return openTrainer(await requestTrainerDevice(name), cb);
 }
 
 // ---------------------------------------------------------------- FTMS ----
