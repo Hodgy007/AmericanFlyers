@@ -51,7 +51,7 @@
             <button type="button" id="home-email-toggle" class="provider email">✉️ Sign up with email</button>
             <div id="home-email" hidden></div>
             <p id="home-error" class="error" role="alert"></p>
-            <p class="home-small">Free to use: no subscription, no card, no phone number. Signing in saves your rides and plans, and puts you on the road with other riders and on the leaderboards.</p>
+            <p class="home-small">Free to use: no subscription, no card, no phone number. Signing in saves your rides and plans, and puts you on the road with other riders and on the leaderboards. <a href="#privacy" data-privacy>Privacy</a></p>
             <button type="button" id="home-ride" class="home-skip">Ride without an account →</button>
           </div>
         </div>
@@ -91,6 +91,7 @@
             <hr />
             <button id="btn-settings" role="menuitem">⚙ Settings</button>
             <button id="btn-feedback" role="menuitem" title="Ideas & bug reports">💬 Ideas &amp; bug reports</button>
+            <button id="btn-privacy" role="menuitem" data-privacy title="What we collect and how to delete it">🔒 Privacy</button>
             <button id="btn-admin" role="menuitem" title="Admin dashboard" hidden>🛠 Admin dashboard</button>
           </div>
         </div>
@@ -343,7 +344,7 @@
         <div class="or-rule"><span>or use your email</span></div>
         <div id="signin-email"></div>
         <p id="signin-error" class="error" role="alert"></p>
-        <p class="hint">Riding without an account still works; your settings stay in this browser.</p>
+        <p class="hint">Riding without an account still works; your settings stay in this browser. <a href="#privacy" data-privacy>How we use your details</a></p>
         <div class="dialog-actions"><button type="button" id="signin-close">Not now</button></div>
       </div>
     </dialog>
@@ -361,10 +362,12 @@
             <button value="cancel" class="icon" aria-label="Close">✕</button>
           </div>
         </div>
+        <div id="profile-verify" class="verify-banner" hidden></div>
         <div id="profile-tabs" class="tabs" role="tablist">
           <button type="button" role="tab" data-tab="stats">📊 Stats</button>
           <button type="button" role="tab" data-tab="achievements">🏅 Achievements</button>
           <button type="button" role="tab" data-tab="activities">🚴 Rides</button>
+          <button type="button" role="tab" data-tab="privacy">🔒 Privacy &amp; data</button>
           <button type="button" role="tab" data-tab="admin" hidden>🛠 Admin</button>
         </div>
         <div id="profile-body" class="profile-body"></div>
@@ -552,6 +555,25 @@
         <h3>Your suggestions</h3>
         <div id="my-feedback" class="feedback-list"></div>
       </form>
+    </dialog>
+
+    <!-- Trust and safety: the privacy page and the goodbye shown after deleting an account. -->
+    <dialog id="privacy" class="wide-dialog privacy-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Privacy</h2>
+          <div class="head-actions"><button value="cancel" class="icon" aria-label="Close">✕</button></div>
+        </div>
+        <div id="privacy-body" class="privacy-body"></div>
+      </form>
+    </dialog>
+
+    <dialog id="goodbye" class="signin-dialog">
+      <div class="signin-body">
+        <h2>Your account has been deleted</h2>
+        <p>Your rides, settings and everything else linked to your account are gone, and this browser has forgotten them too. Thanks for riding with us. You’re always welcome back.</p>
+        <div class="dialog-actions"><button type="button" id="goodbye-close" class="primary">Close</button></div>
+      </div>
     </dialog>
 
     <script type="module" src="/src/main.ts"></script>

@@ -1,9 +1,12 @@
 // Email sign-in: a small form with three modes. "Create account" asks only
 // for basic rider details (name, email, password, weight, and FTP if known);
 // never a phone number or address. "Sign in" and "Forgot password" do what
-// they say. Used in the sign-in dialog and on the home page.
+// they say. A fourth step, "Verify", asks for the 6-digit code that Neon Auth
+// emails when email verification is switched on (it never appears when it's off).
+// Used in the sign-in dialog and on the home page.
 
-import { requestPasswordReset, signInWithEmail, signUpWithEmail } from './account';
+import { NeedsVerificationError, finishVerification, requestPasswordReset, signInWithEmail, signUpWithEmail } from './account';
+import { mountCodeEntry } from './codeEntry';
 
 export interface RiderDetails {
   riderKg: number;
@@ -16,7 +19,7 @@ interface Options {
   defaults: () => { riderKg: number };
 }
 
-type Mode = 'signup' | 'signin' | 'forgot';
+type Mode = 'signup' | 'signin' | 'forgot' | 'verify';
 
 let seq = 0;
 
@@ -53,10 +56,13 @@ export function mountEmailAuth(container: HTMLElement, o: Options) {
     </div>
     <p class="ea-note" data-show="signup">We only ask what the ride needs. No phone number, no address.</p>
     <p class="ea-note" data-show="forgot">We’ll email you a link to set a new password. It works for 15 minutes.</p>
+    <p class="ea-title" data-show="verify">Check your email</p>
+    <div class="ea-verify" data-show="verify"></div>
     <p class="error ea-error" role="alert"></p>
     <p class="ea-ok" role="status"></p>
     <button type="submit" class="primary ea-submit"></button>
     <div class="ea-links">
+      <button type="button" class="link" data-go="signin" data-show="verify">← Back</button>
       <button type="button" class="link" data-go="forgot" data-show="signin">Forgot password?</button>
       <button type="button" class="link" data-go="signin" data-show="forgot">← Back to sign in</button>
     </div>`;
@@ -75,15 +81,36 @@ export function mountEmailAuth(container: HTMLElement, o: Options) {
     form.dataset.mode = m;
     for (const el of form.querySelectorAll<HTMLElement>('[data-show]')) el.hidden = !el.dataset.show!.split(' ').includes(m);
     for (const t of form.querySelectorAll<HTMLButtonElement>('[data-mode]')) t.setAttribute('aria-selected', String(t.dataset.mode === m));
-    form.querySelector<HTMLElement>('.ea-tabs')!.hidden = m === 'forgot';
-    submit.textContent = { signup: 'Create free account', signin: 'Sign in', forgot: 'Email me a reset link' }[m];
+    form.querySelector<HTMLElement>('.ea-tabs')!.hidden = m === 'forgot' || m === 'verify';
+    submit.hidden = m === 'verify'; // the code box has its own Verify button
+    // Fields that are hidden mustn't block the form with their own validation.
+    field('email').closest('label')!.hidden = m === 'verify';
+    submit.textContent = { signup: 'Create free account', signin: 'Sign in', forgot: 'Email me a reset link', verify: '' }[m];
     field('name').required = m === 'signup';
     field('weight').required = m === 'signup';
-    field('password').required = m !== 'forgot';
+    field('password').required = m === 'signup' || m === 'signin';
     field('password').autocomplete = m === 'signup' ? 'new-password' : 'current-password';
-    field('email').required = true;
+    field('email').required = m !== 'verify';
+    if (m !== 'verify') { code?.destroy(); code = null; }
     error.textContent = '';
     ok.textContent = '';
+  }
+
+  let code: ReturnType<typeof mountCodeEntry> | null = null;
+  let typedPassword = '';
+
+  /** The server wants the emailed code before this account can be used. */
+  function askForCode(email: string, password: string) {
+    typedPassword = password;
+    setMode('verify');
+    code = mountCodeEntry(form.querySelector<HTMLElement>('.ea-verify')!, {
+      email,
+      onVerified: async () => {
+        await finishVerification(email, typedPassword);
+        typedPassword = '';
+      },
+    });
+    code.focus();
   }
 
   form.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as Mode)));
@@ -112,7 +139,8 @@ export function mountEmailAuth(container: HTMLElement, o: Options) {
         ok.textContent = `If there’s an account for ${email}, a reset link is on its way. Check your inbox (and spam).`;
       }
     } catch (err) {
-      error.textContent = (err as Error).message;
+      if (err instanceof NeedsVerificationError) askForCode(email, password);
+      else error.textContent = (err as Error).message;
     } finally {
       submit.disabled = false;
     }
@@ -126,7 +154,8 @@ export function mountEmailAuth(container: HTMLElement, o: Options) {
     reset() {
       form.reset();
       field('weight').value = String(o.defaults().riderKg);
-      setMode(mode === 'forgot' ? 'signin' : mode);
+      typedPassword = '';
+      setMode(mode === 'forgot' || mode === 'verify' ? 'signin' : mode);
     },
   };
 }

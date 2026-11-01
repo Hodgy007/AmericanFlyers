@@ -34,6 +34,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [Data blocks](user-guide/data-blocks.md): choosing and ordering the numbers on screen, with a table of all 24 fields.
 - [Settings](user-guide/settings.md): every setting, its default and what it changes.
 - [Accounts and profile](user-guide/accounts-and-profile.md): signing in, what syncs, when rides are saved, the profile tabs, `.tcx` export, and signing out.
+- [Privacy and your data](user-guide/privacy-and-your-data.md): what other riders see, downloading your data, and deleting your account.
 - [Zones and FTP](user-guide/zones-and-ftp.md): heart-rate and power zones, how time in zone is counted, and FTP history.
 - [Achievements](user-guide/achievements.md): every badge and how to earn it.
 - [Feedback](user-guide/feedback.md): sending ideas and bug reports, statuses and replies.

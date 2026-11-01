@@ -132,6 +132,7 @@ export interface Activity {
   power_zones: number[] | null; // seconds in each power zone
   max_hr_setting: number | null; // the max HR the zones were worked out from
   finish_s?: number | null; // moving time to the finish, for a whole-stage ride
+  demo?: boolean; // ridden with the demo slider or a sped-up clock: never on leaderboards
   samples?: Samples | null;
 }
 

@@ -34,7 +34,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Heart-rate strap** support (optional).
 - **Demo ride** mode for trying it without a trainer: set power with a slider or the ↑/↓ keys.
 - Metric and imperial units. Settings are saved in the browser (and in your account when signed in).
-- **Accounts** (👤 button): sign in with Google, or create a free account with your email (rider name, email, password, weight and optional FTP; never a phone number or address), with password reset by email. Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
+- **Accounts** (👤 button): sign in with Google, or create a free account with your email (rider name, email, password, weight and optional FTP; never a phone number or address), with password reset by email (and an optional 6-digit email verification step, off for now). Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
 - **Profile:**
   - *Stats*: totals, personal bests (5 s, 1, 5 and 20 min power), distance per week, FTP progress, and time in heart-rate and power zones across all rides.
   - *Achievements*: badges for finishing the stages, distance and climbing milestones, streaks, power targets, ramp tests and FTP gains.
@@ -111,6 +111,8 @@ Accounts and data live in Neon (project `americanflyers`, eu-west-2):
 
 - **Neon Auth** handles sign-in with Google, and with email and password (sign-up on, verification off, password reset by email). Add each site URL under *Auth → Trusted domains*.
 - The **Data API** lets the browser read and write the tables directly; row-level security limits each rider to their own rows, and admin functions check `public.is_admin()`.
+- Riders can download their data and delete their account from the profile (**Privacy & data** tab); `delete_my_account()` removes their rows and their Neon Auth user. A Privacy page is in ☰ Menu.
+- Leaderboards ignore implausible, demo and sped-up rides (`stage_limits`, `ride_is_plausible()`).
 - The schema is in `db/schema.sql`. Admins are listed in `public.admins` (by email).
 - The endpoints default to the production project; override with `VITE_NEON_AUTH_URL` and `VITE_NEON_DATA_API_URL`.
 

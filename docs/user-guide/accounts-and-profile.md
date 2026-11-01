@@ -28,6 +28,14 @@ When you're signed in, these are kept in your account:
 | **FTP history** | Recorded each time your FTP changes. |
 | **Feedback** you send | Stored with your account, so you can see replies. |
 
+### Privacy & data
+
+The profile's **🔒 Privacy & data** tab has **Download my data** (a JSON file of everything stored about you) and **Delete my account**. See [Privacy and your data](privacy-and-your-data.md).
+
+### Verifying your email
+
+If your email address isn't verified, a note at the top of your profile offers **Email me a code**. Type the 6-digit code from the email (it works for 15 minutes; you can ask for a new one after 30 seconds). When email verification is switched on for new accounts, the code box also appears right after you create an account or sign in. Google accounts are already verified.
+
 ### When you sign in on a browser
 
 The sign-in step merges what's in the browser with what's in your account:
