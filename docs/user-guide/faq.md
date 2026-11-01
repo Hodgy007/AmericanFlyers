@@ -4,7 +4,7 @@ This page answers common questions about the app, trainers, accounts, data and w
 
 ## Do I need an account?
 
-No. You can ride, use the demo ride, upload routes and workouts, and change settings without signing in. Your settings, routes and workouts stay in the browser. Signing in adds saved rides, profile stats, achievements, feedback and sync between devices. See [Accounts and profile](accounts-and-profile.md).
+Yes, and it's free: no subscription, no card. You sign in with Google, or sign up with an email address, on the home page, which is the only way into the app. The account saves your rides, plans and progress and syncs them between devices. The demo ride, routes, workouts and settings are all there once you're signed in. Settings, routes and workouts you made in this browser before accounts were required are copied to your account the first time you sign in. See [Accounts and profile](accounts-and-profile.md).
 
 ## Which trainers work?
 

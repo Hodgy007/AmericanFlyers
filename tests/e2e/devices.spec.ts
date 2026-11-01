@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockNeon } from './mockNeon';
 
 // Trainer and heart rate in the ☰ Menu, remembered devices, one-tap reconnect, the
 // no-chooser reconnect on load (getDevices), and automatic reconnection after a drop.
@@ -7,16 +8,6 @@ import { expect, test, type Page } from '@playwright/test';
 test.use({ viewport: { width: 960, height: 600 } });
 
 const SHOTS = process.env.E2E_SHOTS; // set to a folder to save screenshots
-
-const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
-
-async function mockNeon(page: Page) {
-  await page.route(/neonauth|apirest/, (route) => {
-    const req = route.request();
-    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
-    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/json' }, body: /neonauth/.test(req.url()) ? 'null' : '[]' });
-  });
-}
 
 const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
@@ -28,7 +19,7 @@ interface MockOptions {
 }
 
 async function setup(page: Page, o: MockOptions) {
-  await mockNeon(page);
+  await mockNeon(page, { signedIn: true }); // an account is required to ride
   await page.addInitScript((opts: MockOptions) => {
     localStorage.setItem('americanflyers.signedIn', '1');
     localStorage.setItem('americanflyers.onboarded', '1');
@@ -250,6 +241,10 @@ test('a dropped trainer reconnects by itself, with a backoff, and gets the resis
     const seen: string[] = [];
     (window as any).__statusSeen = seen;
     new MutationObserver(() => seen.push(document.getElementById('trainer-status')!.textContent ?? '')).observe(document.getElementById('trainer-status')!, { childList: true, characterData: true, subtree: true });
+    // Record the toasts too: the account's "Signed in as …" toast can arrive on a slow machine and replace "Reconnected" before it is checked.
+    const toasts: string[] = [];
+    (window as any).__toastsSeen = toasts;
+    new MutationObserver(() => toasts.push(document.getElementById('toast')!.textContent ?? '')).observe(document.getElementById('toast')!, { childList: true, characterData: true, subtree: true });
     (window as any).__bt.log.failNext = 1;
     (window as any).__bt.drop('trainer-1');
   });
@@ -261,7 +256,7 @@ test('a dropped trainer reconnects by itself, with a backoff, and gets the resis
   await expect.poll(async () => (await bt(page)).writes.slice(before).filter((w: number[]) => w[0] === 0x11).length, { timeout: 10_000 }).toBeGreaterThan(0);
   // Notifications were re-subscribed: new data reaches the HUD.
   await expect(page.locator('#hud')).toContainText(/Power[1-9]\d*W/, { timeout: 15_000 });
-  await expect(page.locator('#toast')).toContainText(/Reconnected/);
+  await expect.poll(() => page.evaluate(() => (window as any).__toastsSeen.some((t: string) => /Reconnected/.test(t)))).toBe(true);
 });
 
 test('forget removes a device from the menu and from Settings', async ({ page }) => {

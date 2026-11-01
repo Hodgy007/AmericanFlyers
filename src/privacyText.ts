@@ -22,7 +22,7 @@ export const PRIVACY_HTML = `
     <li><strong>Feedback:</strong> messages you send from “Ideas &amp; bug reports”, with the stage, browser and trainer name at that moment.</li>
     <li><strong>Error reports:</strong> if the site owner has turned it on, Sentry receives crash reports and slow-page samples. They carry your anonymous account id, not your name, email or IP-based details, and no session recordings.</li>
   </ul>
-  <p>We don’t ask for your phone number, address or payment details. Riding without an account stores your settings only in your own browser.</p>
+  <p>We don’t ask for your phone number, address or payment details. You need a free account to ride, so your settings, rides and progress are kept in it (settings are also kept in your browser).</p>
 
   <h3>The AI coach and AI rivals (only if you turn them on)</h3>
   <p>These are off until you switch them on in Settings. When on, we send <strong>Anthropic</strong>, the company that makes Claude, what it needs to write the coach’s tips and debriefs and the rivals’ lines: your <strong>first name</strong>, FTP and weight, the numbers from the ride (power, heart rate, cadence, distance, climbing, time in zones, the stage and your place in a race) and your last four weeks of totals. Never your email address, account id or location. A rival’s memory of you (your wins and losses and a few short notes) is kept in our database and sent with later requests; you can make a rival forget you from ☰ Menu → Rivals, and turning the switches off stops anything being sent. Anthropic processes this on our behalf under its API terms. Replies are written by an AI, so they can be wrong; the coach and rivals are characters, not people.</p>
@@ -51,7 +51,7 @@ export const PRIVACY_HTML = `
   <ul>
     <li><strong>Download my data</strong> gives you everything we store about you as a file.</li>
     <li><strong>Delete my account</strong> permanently removes your account and all of the above. Both are in your profile, under “Privacy &amp; data”.</li>
-    <li>You can delete single rides, workouts and routes at any time, and ride without an account.</li>
+    <li>You can delete single rides, workouts and routes at any time.</li>
     <li>Questions or requests: use “Ideas &amp; bug reports” in the menu, or ask the person who runs your copy of the app.</li>
   </ul>
   <p class="muted small">This page describes the app in good faith and is not legal advice.</p>`;

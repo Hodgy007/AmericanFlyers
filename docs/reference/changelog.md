@@ -6,6 +6,16 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### An account is required: no more guest riding
+
+- **The home page is the only way in without an account.** *Ride without an account* is gone, and so is everything else that left the home page for the hub or the ride with no account (the Escape key, the brand button for a guest). Sign in with Google, or sign up with email; it's free. The home page copy now reads *Free: no subscription, no card. A free account saves your rides, plans and progress.*
+- **Signed-in riders open on the hub, as before** (the `americanflyers.signedIn` hint skips the home page). If the session check then finds no account, the hint is cleared and the home page shows. Signing out (or the account disappearing) closes the hub and the ride and shows the home page; the profile's *Sign out* saves a ride under way first.
+- **No guest hub.** The guest rider card, the sign-in prompts in the Achievements, Stats and Garage sections, and *Sign in to join* on events are removed; the hub's types and logic lost their guest state (`IdentityState` is `pending` or `in`; `signedIn()` and `openSignIn` are gone from the hub's context and deps).
+- **Guest leftovers removed.** The finish card's *Sign in to save this ride* note and the pending guest ride are gone. An old `americanflyers.pendingRide` left in the browser is still saved once at sign-in and then deleted, so no ride is lost. The offline ride queue (for signed-in riders) is unchanged.
+- **Unchanged:** settings, workouts and routes made on this device before accounts were required still sync to the account at first sign-in (`syncOnSignIn`). The demo ride stays, for signed-in riders.
+- **Privacy text** no longer says riding without an account keeps settings only in the browser; it says an account is needed to ride.
+- **Tests.** The smoke test, devices and AI tests ride as a signed-in rider; new `tests/e2e/home.spec.ts` covers the no-account home page, a stale hint, sign-out and the old-ride and old-workout migrations; `tests/unit/home.test.ts` covers the hint.
+
 ### Rides saved while offline
 
 - If a signed-in rider's ride can't be saved (no connection, or the server doesn't answer), it's kept on the device and uploads by itself when the connection comes back, at sign-in, when the tab is shown again, and every two minutes while any are waiting. The finish card (or a toast, once per ride) says "Saved on this device". Saving is an upsert by the ride's id, so a retry never duplicates a ride. Up to 20 rides are kept per device; a long ride that won't fit in the browser's storage is kept without its 1-second samples. A ride that keeps failing while online is given up after 12 tries, with a message. New module `src/rideQueue.ts`; tests in `tests/unit/rideQueue.test.ts` and `tests/e2e/offline.spec.ts`.

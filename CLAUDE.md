@@ -15,6 +15,7 @@ Browser-based 3D indoor cycling app (Vite + TypeScript + Three.js) that connects
 ## Deployment
 
 - Vercel project `americanflyers` (team "hodgy007's projects") builds `main` automatically on every push.
+- Google sign-in on Vercel previews: Neon Auth only redirects to trusted domains, and wildcards must be a whole leftmost label. When opening a PR, add that branch's fixed preview URL (`https://americanflyers-git-<branch-with-slashes-as-dashes>-hodgy007s-projects.vercel.app`) to Neon Auth's trusted domains, and remove it after merging.
 
 ## Backend
 

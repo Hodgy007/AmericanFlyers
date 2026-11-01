@@ -14,13 +14,13 @@ const press = (page: Page, selector: string) => page.locator(selector).evaluate(
 
 /**
  * Each entry opens a dialog from the top bar or from ☰ Menu. `dialog` lists the
- * dialogs that count as success: signed out, some entries ask you to sign in instead.
+ * dialogs that count as success. (An account is required to ride, so every entry opens its own dialog.)
  */
 const DIALOGS: { name: string; button: string; dialog: string[]; menu?: boolean }[] = [
   { name: 'stages', button: '#btn-stage', dialog: ['#stages'] },
   { name: 'workouts', button: '#btn-workouts', dialog: ['#workouts'] },
   { name: 'riders', button: '#btn-riders', dialog: ['#riders'] },
-  { name: 'leaderboard', button: '#btn-leaderboard', dialog: ['#leaderboard', '#signin'], menu: true },
+  { name: 'leaderboard', button: '#btn-leaderboard', dialog: ['#leaderboard'], menu: true },
   { name: 'time and weather', button: '#btn-weather', dialog: ['#atmosphere'], menu: true },
   { name: 'training plans', button: '#btn-menu-plans', dialog: ['#plans'], menu: true },
   { name: 'kit', button: '#btn-menu-kit', dialog: ['#kit-dialog'], menu: true },
@@ -29,9 +29,9 @@ const DIALOGS: { name: string; button: string; dialog: string[]; menu?: boolean 
   { name: 'events', button: '#btn-events', dialog: ['#events'], menu: true },
   { name: 'rivals', button: '#btn-rivals', dialog: ['#rivals'], menu: true },
   { name: 'settings', button: '#btn-settings', dialog: ['#settings'], menu: true },
-  { name: 'feedback', button: '#btn-feedback', dialog: ['#feedback-dialog', '#signin'], menu: true },
+  { name: 'feedback', button: '#btn-feedback', dialog: ['#feedback-dialog'], menu: true },
   { name: 'privacy', button: '#btn-privacy', dialog: ['#privacy'], menu: true },
-  { name: 'sign in', button: '#btn-account', dialog: ['#signin'] },
+  { name: 'profile', button: '#btn-account', dialog: ['#profile-dialog'] },
 ];
 
 /** The ids of the dialogs that are open right now. */
@@ -50,7 +50,7 @@ test('loads, starts a demo ride and opens every main dialog without errors', asy
     errors.push(`console.error: ${text}`);
   });
 
-  await mockNeon(page);
+  await mockNeon(page, { signedIn: true }); // an account is required to ride
   await page.addInitScript(() => {
     // Skip the home page and the first-ride guide.
     localStorage.setItem('americanflyers.signedIn', '1');
@@ -69,21 +69,22 @@ test('loads, starts a demo ride and opens every main dialog without errors', asy
   await page.goto('/');
   await expect(page.locator('canvas').first()).toBeAttached();
 
-  // The hub comes first (the session check finds no rider, so it is the guest's hub): header, seven sections, a route to pick.
+  // The hub comes first: header, seven sections, a route to pick.
   await expect(page.locator('#hub')).toBeVisible();
   await expect(page.locator('#home')).toBeHidden();
   await expect(page.locator('.hub-ride-title')).toHaveText('Heartland Rollers');
   await expect(page.locator('.hub-tab')).toHaveCount(7);
-  await expect(page.locator('#hub-name')).toHaveText('Guest rider');
+  await expect(page.locator('#hub-name')).toHaveText('Sam');
   await expect(page.locator('#hub-s-route .hub-stage')).not.toHaveCount(0);
   await press(page, '#hub-tab-training');
   await expect(page.locator('#hub-s-training .hub-workout').first()).toBeVisible();
   await press(page, '#hub-tab-route');
   await press(page, '[data-fkey="stage-route66"]');
   await expect(page.locator('.hub-ride-title')).toHaveText('Route 66 Flats');
-  // Guests get a friendly sign-in prompt where a section needs an account.
+  // There is no guest hub: no sign-in prompts, every section is the rider's own.
   await press(page, '#hub-tab-achievements');
-  await expect(page.locator('#hub-s-achievements .hub-signin-card')).toBeVisible();
+  await expect(page.locator('#hub-s-achievements .hub-bignum strong')).toHaveText('7');
+  await expect(page.locator('#hub .hub-guest, #hub .hub-signin-card')).toHaveCount(0);
   await press(page, '#hub-go');
   await expect(page.locator('#hub')).toBeHidden();
   await expect(page.locator('.topbar')).toBeVisible();

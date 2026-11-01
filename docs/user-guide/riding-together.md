@@ -4,7 +4,7 @@ Everyone who is signed in and riding the same stage at the same time appears on 
 
 ## How it works
 
-- Sign in (free) with Google or your email. Signed-out riders ride alone.
+- Everyone who rides has a free account, so everyone can be on the road together. Switch **Ride together** off in Settings to ride alone.
 - Pick a stage. Everyone on that stage, anywhere along it, is in the same ride.
 - Riders within about 300 m behind and 900 m ahead are drawn on the road (up to 12 at once). Riders further away still count in the list.
 - Names are shortened to first name and last initial, for example *Steve H.*
@@ -43,7 +43,7 @@ Ride-ons you haven't seen are kept for a day at most. Banned riders' ride-ons ar
 
 ## Pro teams
 
-Five computer-ridden pro teams ride every stage with you, signed in or not. Each rides two by two in its own kit at a steady pace: 2.0, 2.6, 3.1, 3.6 and 4.2 W/kg, slowing on the climbs and flying down the descents like you do. The front rider's tag shows the team and its pace.
+Five computer-ridden pro teams ride every stage with you. Each rides two by two in its own kit at a steady pace: 2.0, 2.6, 3.1, 3.6 and 4.2 W/kg, slowing on the climbs and flying down the descents like you do. The front rider's tag shows the team and its pace.
 
 The team names are affectionate near-misses of the real ones (*Plasma | Lease-a-Trike*, *INEPTOS Grenadines*, *Scandal Quick-Slip*, *UAE Team Emigrates* and more). The riders are made up.
 

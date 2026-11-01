@@ -43,17 +43,18 @@ Device events (trainer and heart-rate notifications) arrive as Bluetooth callbac
 ```
 signed in last time? (localStorage americanflyers.signedIn)
   yes -> hub (placeholders from index.html paint first, then cached data, then the account's)
-  no  -> home page -> sign in, or "Ride without an account" -> hub
+  no  -> home page -> sign in (Google, or email) -> hub   (the only way in: an account is required)
+the session check finds no account (stale hint, or signed out) -> back to the home page
 hub -> Ride (or Free ride, Ride it, Race, Join) -> the ride
 ride -> ☰ Menu -> 🏠 Hub, or the finish card's "Back to the hub" -> hub
 ```
 
 - **Before the hub (the old flow):** a signed-in rider skipped the home page and landed on the bike; everyone else saw the home page, and both of its exits hid it and showed the ride.
-- **The home page** (`home.ts`) now only leads to the hub: `openHub` for sign-in and *Ride without an account*, `requestHub` for the brand button. A sign-in made mid-ride changes nothing on screen.
+- **The home page** (`home.ts`) is the only screen for someone with no account, and it has no way past it: no *Ride without an account*, and Escape does nothing. `openHub` runs when a sign-in is made from it, `requestHub` is the brand button (signed-in riders only reach it). A sign-in made mid-ride changes nothing on screen. Its `show()` also removes the `data-start` attribute the `index.html` script sets for a signed-in hint, so the home page isn't left hidden.
 - **The hub** (`src/hub/`) is a full-screen layer over the world. `hub.open()` adds the body classes `at-home` (the ride's own panels, riding together and ride-ons stand down, as on the home page) and `at-hub`, and tells `main.ts` through `onVisibility`. While it is open `frame()` does no ride physics: `hubFrame()` only renders the world, slowly orbiting your rider (`World.setOrbit()`), at about 30 fps (1 fps on phones and with reduced motion).
 - **Ride** calls `startFromHub()` in `main.ts`: close the hub, `chooseStage()` if the stage differs (which starts afresh), then `startWorkout()` if a workout was chosen. The first time, `leaveHub()` also starts the first-ride guide or the Bluetooth note, as leaving the home page used to.
 - **Back to the hub** is `goToHub()`: for a ride of a minute or more, a race or a group ride it asks first (`hub/leave.ts`), then stops the workout, calls `resetRide()` (which quietly saves a ride worth keeping and leaves a race or event) and opens the hub.
-- **The session check** (`restoreSession()`) answers after the hub is up. `hub.sessionSettled()` turns the hub into a guest's if a signed-in hint turned out wrong.
+- **The session check** (`restoreSession()`) answers after the hub is up. With no account, `home.sessionSettled()` clears the stale `americanflyers.signedIn` hint and shows the home page (which closes the hub through `onShowHome`), and `hub.sessionSettled()` drops last visit's cached name, wallet and rides. There is no guest hub: until the check answers the hub is a *pending* rider's, showing last visit's cache. Signing out (or the account disappearing) does the same through `onAccountChange`: `main.ts` `abandonRide()` stops the demo, workout, race or group ride and resets the ride, then the home page shows. The profile's *Sign out* first saves a ride under way (`beforeSignOut` in `cloud/ui.ts`).
 - **Things the hub listens for.** `main.ts` dispatches `af:hub-refresh` on `document` (`stage`, `ride`, `plan`) when the app moves under an open hub; the hub also looks again when any dialog closes and when the garage's wallet changes.
 - **Speed.** The shell and header are in the main bundle; each section is a dynamic `import()` loaded when first shown (and warmed when idle); the turntable (`garage/preview.ts`, three.js) is imported only when the Garage section is on screen and is disposed when it isn't; canvases draw only while visible (`dom.ts`); account data is fetched after the first paint.
 

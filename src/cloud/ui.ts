@@ -29,6 +29,8 @@ export interface Deps {
   context: () => Record<string, unknown>;
   /** Weight and FTP from the email sign-up form, saved before the account is made. */
   onRiderDetails: (d: RiderDetails) => void;
+  /** Runs just before signing out, so a ride under way can be saved while there is still an account. */
+  beforeSignOut?: () => Promise<void>;
   /** Makes a share card for a ride (src/garage/shareUi.ts). */
   shareRide?: (a: Activity) => void;
 }
@@ -232,6 +234,7 @@ export function initAccountDialogs(deps: Deps) {
   });
   $('profile-signout').addEventListener('click', async () => {
     profileDialog.close();
+    try { await deps.beforeSignOut?.(); } catch { /* signing out comes first */ }
     await signOut();
     deps.toast('Signed out. Your rides are safe in your account.');
   });

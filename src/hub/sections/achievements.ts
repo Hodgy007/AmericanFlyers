@@ -1,7 +1,7 @@
 // Hub → Achievements: the badges you have earned and the next few to go, from the same
 // achievements data as the profile. The full list is the profile's Achievements tab.
 
-import { achievements as allAchievements, type Achievement } from '../../cloud/achievements';
+import type { Achievement } from '../../cloud/achievements';
 import { achievementPicks } from '../data';
 import { button, h, skeleton } from '../dom';
 import type { SectionMount } from '../types';
@@ -24,19 +24,6 @@ export const mount: SectionMount = (root, ctx) => {
   const open = () => ctx.deps.openProfile('achievements');
 
   function render() {
-    if (!ctx.signedIn()) {
-      // Signed out: a taste of what there is to earn, and a way in.
-      const teaser = achievementPicks(allAchievements([], [], ctx.deps.settings().riderKg), 4);
-      root.replaceChildren(h('div', { class: 'hub-signin-card' },
-        h('div', {},
-          h('h3', { text: 'Earn badges for your riding' }),
-          h('p', { class: 'hub-desc', text: `Sign in (it’s free) and your rides count towards ${teaser.total} badges: first ride, the hour of power, Alpe d’Huez, a century, a ramp test and more.` }),
-          button('Sign in to start earning', () => ctx.deps.openSignIn('Sign in to earn achievements for your rides.'), 'primary', { 'data-fkey': 'signin' }),
-        ),
-        h('ul', { class: 'hub-badges' }, ...teaser.next.map((a) => badge(a, false))),
-      ));
-      return;
-    }
     const sum = ctx.summary();
     if (!sum) {
       root.replaceChildren(ctx.summaryStatus() === 'error'

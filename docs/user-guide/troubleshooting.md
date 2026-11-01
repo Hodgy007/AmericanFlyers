@@ -89,10 +89,9 @@ If you cancel the picker, nothing happens. That's expected.
 
 **Possible causes:**
 
-- **You're not signed in.** Rides are only saved to an account. Sign in, and rides from then on are saved.
 - **The ride was under a minute.** Shorter rides aren't saved.
 - **The ride is still going.** Rides are saved when you finish a stage or workout, when you press Reset, and every 5 minutes on long rides. Press Reset to save it now.
-- **You started a new ride without signing in.** The ride wasn't kept. Sign in before you start a new one, or use **Sign in** in the summary to keep the ride.
+- **Your session ended.** If you were signed out mid-ride (for example your session expired), the app returns to the home page and rides after that point can't be saved until you sign in again.
 - **You were offline when it saved.** The ride is kept on this device (*Saved on this device*) and uploads by itself when the connection is back, the next time you sign in, or when you return to the tab. You'll see *Uploaded your ride* when it's done. It only uploads to the account it was ridden on, so sign in to that account on the same browser. Clearing the browser's site data before then loses it.
 - **A save kept failing.** If a ride still can't be saved after 12 tries while online, it's removed from the device with a message naming it. Saves that fail for other reasons show *Couldn't save this ride:* with the reason.
 

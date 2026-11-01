@@ -5,7 +5,7 @@
 import { account } from '../../cloud/account';
 import { itemById, SLOT_LABEL, SLOTS, styleOf } from '../../garage/catalogue';
 import { fetchChallenges } from '../../garage/api';
-import { isComplete, previewWeek, progressText, type WeekState } from '../../garage/challenges';
+import { isComplete, progressText, type WeekState } from '../../garage/challenges';
 import { levelFraction, levelTitle } from '../../garage/progression';
 import { lookWithStyle } from '../../kit';
 import { button, h, skeleton } from '../dom';
@@ -49,13 +49,6 @@ export const mount: SectionMount = (root, ctx) => {
   // ------------------------------------------------------------------ level ----
   function renderLevel() {
     const w = ctx.wallet();
-    if (!ctx.signedIn()) {
-      levelBox.replaceChildren(
-        h('p', { class: 'hub-desc', text: 'Ride, earn credits, level up, and spend them on bikes, wheels and clothes. Credits come from your saved rides: 1 per km and 1 per 10 m climbed.' }),
-        button('Sign in to earn credits', () => ctx.deps.openSignIn('Sign in to earn credits for your rides and unlock new bikes, wheels and clothes.'), 'primary', { 'data-fkey': 'signin' }),
-      );
-      return;
-    }
     if (!w) {
       levelBox.replaceChildren(skeleton('', '60%', '22px'), skeleton('', '100%', '12px'), skeleton('', '40%', '14px'));
       return;
@@ -82,14 +75,9 @@ export const mount: SectionMount = (root, ctx) => {
 
   async function loadWeek() {
     const a = account();
-    const who = a?.id ?? '';
+    if (!a) return; // the session check is still on its way: the placeholders stay until 'account' fires
+    const who = a.id;
     if (weekLoading || (week && weekFor === who)) return;
-    if (!a) {
-      week = previewWeek();
-      weekFor = '';
-      renderWeek();
-      return;
-    }
     weekLoading = true;
     try {
       week = await fetchChallenges();
@@ -102,21 +90,20 @@ export const mount: SectionMount = (root, ctx) => {
   }
 
   function renderWeek() {
-    const signed = !!account();
     if (!week) {
-      weekBox.replaceChildren(...(ctx.signedIn() ? [skeleton('', '100%', '46px'), skeleton('', '100%', '46px')] : [h('p', { class: 'hub-note', text: 'Sign in to take on this week’s challenges.' })]));
+      weekBox.replaceChildren(skeleton('', '100%', '46px'), skeleton('', '100%', '46px'));
       return;
     }
     weekBox.replaceChildren(...week.challenges.map((c) => {
       const done = isComplete(c);
       const pct = Math.min(100, Math.round((c.progress / c.target) * 100));
       const bar = h('span', { class: 'hub-bar small', 'aria-hidden': 'true' }, h('i'));
-      (bar.firstChild as HTMLElement).style.width = `${signed ? pct : 0}%`;
-      const state = c.claimed ? '✓ Claimed' : signed && done ? 'Ready to claim' : '';
-      return h('div', { class: `hub-challenge${c.claimed ? ' claimed' : signed && done ? ' ready' : ''}` },
+      (bar.firstChild as HTMLElement).style.width = `${pct}%`;
+      const state = c.claimed ? '✓ Claimed' : done ? 'Ready to claim' : '';
+      return h('div', { class: `hub-challenge${c.claimed ? ' claimed' : done ? ' ready' : ''}` },
         h('div', { class: 'hub-challenge-top' }, h('strong', { text: c.title }), h('span', { class: 'hub-chip gold', text: `🪙 ${c.reward}` })),
         bar,
-        h('div', { class: 'hub-challenge-foot' }, h('span', { text: signed ? progressText(c, ctx.imperial()) : `Target ${progressText({ ...c, progress: 0 }, ctx.imperial()).split(' / ')[1]}` }), state ? h('span', { class: 'hub-challenge-state', text: state }) : null),
+        h('div', { class: 'hub-challenge-foot' }, h('span', { text: progressText(c, ctx.imperial()) }), state ? h('span', { class: 'hub-challenge-state', text: state }) : null),
       );
     }));
   }

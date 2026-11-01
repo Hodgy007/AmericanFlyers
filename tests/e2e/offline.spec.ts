@@ -31,7 +31,7 @@ test('a ride saved while offline is kept on the device and uploads when the conn
 
   await page.goto('/?timescale=20');
   await expect(page.locator('#hub')).toBeVisible();
-  await expect(page.locator('#hub-name')).not.toHaveText('Guest rider', { timeout: 30_000 }); // the session has settled
+  await expect(page.locator('#hub-name')).toHaveText('Sam', { timeout: 30_000 }); // the session has settled
   await press(page, '#hub-go');
   await expect(page.locator('#hub')).toBeHidden();
   await press(page, '#btn-demo');
