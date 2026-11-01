@@ -96,6 +96,9 @@ export class World {
     this.atmosphere.setChoice(time, weather);
   }
 
+  /** The weather being shown right now (clear, cloudy or rain), for the wind. */
+  get weather() { return this.atmosphere.currentWeather; }
+
   /** 0..1: how hard it's raining (for the rain sound). */
   get rainLevel() { return this.atmosphere.rainLevel; }
 

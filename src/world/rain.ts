@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { wind } from './wind';
 
 // Rain: a few thousand short streaks in a box that follows the camera. Every
 // streak's position is worked out in the vertex shader from the clock, so the
@@ -55,6 +56,8 @@ export class Rain {
   };
   private readonly reduced: boolean;
   private level = 0;
+  private fallScale = 1; // 0.55 for reduced motion
+  private readonly baseFall = new THREE.Vector3(0, -11, 0);
 
   constructor() {
     this.reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -94,6 +97,7 @@ export class Rain {
     this.object.visible = false;
     if (this.reduced) {
       // Gentler: slower, shorter, fainter streaks.
+      this.fallScale = 0.55;
       this.uniforms.fall.value.multiplyScalar(0.55);
       this.uniforms.streak.value = 0.6;
       this.uniforms.opacity.value = 0.3;
@@ -112,6 +116,9 @@ export class Rain {
     if (!on) return;
     const u = this.uniforms;
     u.time.value += dt;
+    // The wind slants the rain: drops carry about half the wind's speed sideways.
+    const w = wind.vector();
+    u.fall.value.set(w.x * 0.5, this.baseFall.y, w.z * 0.5).multiplyScalar(this.fallScale);
     // The box sits a little ahead of the camera, where you're looking.
     camera.getWorldDirection(u.centre.value);
     u.centre.value.multiplyScalar(9).add(camera.position);

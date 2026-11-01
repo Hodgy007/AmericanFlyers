@@ -4,7 +4,7 @@ import { initMonitoring, setMonitoringContext, setMonitoringUser } from './monit
 initMonitoring(); // first, so it catches errors while the app starts
 import { bluetoothAvailable, connectTrainer, type Trainer, type TrainerReading } from './ble/trainer';
 import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
-import { currentStage, elevationAt, gradeAt, setStage } from './course';
+import { currentStage, elevationAt, gradeAt, headingAt, setStage } from './course';
 import type { Stage } from './stages';
 import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
 import { parseGpx } from './routes/gpx';
@@ -32,6 +32,11 @@ import { initLeaderboardUi } from './leaderboardUi';
 import { Sound } from './sound';
 import { Peloton } from './peloton';
 import { draftFrom, DRAFT_MAX_GAP, DRAFT_SWEET_SPOT, type Draft } from './draft';
+// Wind, echelons, the mini-map and the climb preview (world/wind.ts, miniMap.ts, climbUi.ts, windUi.ts).
+import { draftShift, wind } from './world/wind';
+import { initWindUi } from './windUi';
+import { MiniMap } from './miniMap';
+import { initClimbUi } from './climbUi';
 import { complete, nextSession, planById, type Session } from './plans';
 import { initPlansUi } from './plansUi';
 import { initOnboarding, onboarded } from './onboarding';
@@ -78,6 +83,7 @@ const peloton = new Peloton(); // computer-ridden pro teams
 let race: LiveRace | null = null; // the race being ridden, if any
 const raceUi = initRaceUi();
 let draft: Draft | null = null; // the rider just ahead, if any
+let lastCrossShift = 0; // crosswind echelon: metres right of a rider's line the shelter sits
 let draftSaving = 0; // fraction of air drag saved, eased
 let roadRiders: OtherRider[] = []; // live riders and pro teams on the road now (for ride-ons)
 const rideWorkout = { started: null as string | null, completed: null as string | null };
@@ -142,12 +148,18 @@ async function toggleHeartRate() {
   }
 }
 
+/** Wind into your face (head, m/s; negative is a tail wind) and across the road (cross, towards your right) at a distance on this stage. */
+function roadWind(distance: number) {
+  return wind.at(headingAt(distance));
+}
+
 // Control the trainer once a second: ERG (hold the workout's target watts)
 // during a workout, otherwise the road grade scaled by the difficulty setting.
 // With virtual shifting on, the chosen gear adds to (or takes off) the grade.
 let lastSentGrade = NaN;
 let lastSentWatts = NaN;
 let lastSentWind = 1;
+let lastSentHeadwind = 0;
 function controlTrainer() {
   if (!trainer?.canControl) return;
   const watts = player && !player.done ? player.targetWatts() : null;
@@ -162,12 +174,15 @@ function controlTrainer() {
   const gear = settings.virtualShifting ? gearGradeOffset(vGear) : 0;
   const target = Math.round(Math.max(-10, Math.min(20, road + gear)) * 10) / 10;
   // In someone's draft the trainer's wind resistance drops too, so it feels easier.
-  const wind = Math.round((1 - draftSaving) * 20) / 20;
-  if (Math.abs(target - lastSentGrade) < 0.1 && wind === lastSentWind) return;
+  const dragFactor = Math.round((1 - draftSaving) * 20) / 20;
+  // The road's wind goes to the trainer's simulation too (headwind positive), in half-metre steps.
+  const headwind = Math.round(roadWind(ride.distance).head * 2) / 2;
+  if (Math.abs(target - lastSentGrade) < 0.1 && dragFactor === lastSentWind && headwind === lastSentHeadwind) return;
   lastSentGrade = target;
-  lastSentWind = wind;
+  lastSentWind = dragFactor;
+  lastSentHeadwind = headwind;
   lastSentWatts = NaN;
-  trainer.setGrade(target, wind).catch(() => { lastSentGrade = NaN; });
+  trainer.setGrade(target, dragFactor, headwind).catch(() => { lastSentGrade = NaN; });
 }
 setInterval(controlTrainer, 1000);
 
@@ -236,6 +251,11 @@ function markerConfig() {
 setStage(stageById(new URLSearchParams(location.search).get('stage')));
 const world = new World($<HTMLCanvasElement>('scene'), markerConfig());
 world.setAtmosphere(settings.timeOfDay, settings.weather);
+// Wind, and the mini-map and climb preview.
+let windStage: Stage | null = null;
+const windUi = initWindUi($('wind-chip'), $('wind-arrow'), $('wind-text'));
+const miniMap = new MiniMap($('minimap'), $<HTMLCanvasElement>('minimap-canvas'));
+const climbUi = initClimbUi({ card: $('climb-card'), title: $('cc-title'), sub: $('cc-sub'), canvas: $<HTMLCanvasElement>('cc-profile') });
 const steering = new Steering(); // where you ride across the road
 // Your kit (src/kit.ts): the world's rider follows it, including any tour jersey laid over it.
 onLookChange((look) => world.setPlayerLook(look));
@@ -254,6 +274,14 @@ let lastFrame = performance.now();
 let lastHud = 0;
 
 const lateralOf = (id: string) => world.lateralOf(id);
+
+// `?wind=8,90` forces the wind: speed in m/s, then the degrees it blows towards, turning right from the way the stage starts (90 = from the left). For testing.
+const urlWind = (() => {
+  const raw = new URLSearchParams(location.search).get('wind');
+  if (!raw) return undefined;
+  const [ms, angle] = raw.split(',').map(Number);
+  return Number.isFinite(ms) ? { ms, angle: Number.isFinite(angle) ? angle : 90 } : undefined;
+})();
 
 function frame(now: number) {
   // rAF timestamps can precede the load-time clock reading, so clamp at 0.
@@ -274,6 +302,17 @@ function frame(now: number) {
     live.cadence = 0;
   }
 
+  // The wind: follows the stage and the weather being shown.
+  if (windStage !== currentStage()) {
+    windStage = currentStage();
+    wind.setStage(urlWind ? { id: windStage.id, wind: urlWind } : windStage, headingAt(0));
+  }
+  wind.enabled = settings.wind;
+  wind.setWeather(world.weather);
+  wind.update(dt);
+  const crossShift = draftShift(roadWind(ride.distance).cross); // the sheltered spot sits this far to the right of a rider's line
+  lastCrossShift = crossShift;
+
   // Other riders on the road, and the draft from the one just ahead.
   const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders() : [];
   if (race) race.update(dt, ride.distance, ride.speed); // the field races with you
@@ -282,9 +321,9 @@ function frame(now: number) {
     liveRiders.push(...peloton.riders());
   }
   roadRiders = liveRiders;
-  steering.update(dt, { autoSteer: settings.autoSteer, distance: ride.distance, riders: liveRiders, lateralOf: lateralOf });
+  steering.update(dt, { autoSteer: settings.autoSteer, distance: ride.distance, riders: liveRiders, lateralOf: lateralOf, shift: crossShift });
   world.setLane(steering.target);
-  draft = draftFrom(ride.distance, liveRiders, 60, { lane: world.currentLane, lateralOf });
+  draft = draftFrom(ride.distance, liveRiders, 60, { lane: world.currentLane, lateralOf, shift: crossShift });
   draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
 
   const grade = gradeAt(ride.distance);
@@ -292,7 +331,7 @@ function frame(now: number) {
     ...DEFAULT_PARAMS,
     massKg: settings.riderKg + settings.bikeKg,
     cda: DEFAULT_PARAMS.cda * (1 - draftSaving),
-  });
+  }, roadWind(ride.distance).head); // air speed = road speed + headwind
   if (race?.holding) ride.speed = 0; // waiting on the line for the start
   ride.distance += ride.speed * dt;
   if (ride.speed > 0.3 && !ride.finished) {
@@ -333,6 +372,9 @@ function frame(now: number) {
   if (g) others.push(g);
   world.setOthers(others);
   world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: drivetrain.crankAngle, rock: drivetrain.rock }, dt);
+  if (settings.miniMap && !ride.finished) {
+    miniMap.update(now, { distance: ride.distance, riders: others, lines: race ? race.course.lines.filter((l) => l.kind !== 'finish').map((l) => ({ kind: l.kind, d: l.d })) : [] });
+  }
 
   if (now - lastHud > 200) {
     lastHud = now;
@@ -341,6 +383,10 @@ function frame(now: number) {
       planDone({ stage: currentStage().id });
     }
     updateHud(grade);
+    miniMap.setVisible(settings.miniMap && !ride.finished);
+    windUi.update(ride.distance, settings.units === 'imperial');
+    climbUi.update(ride.distance, settings.miniMap, !ride.finished, settings.units === 'imperial');
+    placeBelowHud();
     raceUi.countdown(race?.countText ?? null);
     raceUi.panel(race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null, settings.units === 'imperial');
     if (player) {
@@ -476,7 +522,8 @@ function updateDraftPanel() {
   const imperial = settings.units === 'imperial';
   const gapText = imperial ? `${Math.round(draft.gap * 3.28084)} ft` : `${draft.gap < 10 ? draft.gap.toFixed(1) : Math.round(draft.gap)} m`;
   const v = ride.speed;
-  const watts = 0.5 * 1.225 * DEFAULT_PARAMS.cda * v * v * v * draftSaving / 0.976;
+  const airSpeed = Math.max(0, v + roadWind(ride.distance).head);
+  const watts = 0.5 * 1.225 * DEFAULT_PARAMS.cda * airSpeed * airSpeed * v * draftSaving / 0.976;
   // Behind them but off their line: the gauge says which way to move.
   const offLine = draft.gap <= DRAFT_MAX_GAP && draft.overlap < 0.5;
   const move = draft.offset < 0 ? '◀' : '▶';
@@ -488,7 +535,7 @@ function updateDraftPanel() {
   $('draft-title').textContent = inDraft ? `In ${who}’s draft${group}` : `${who} ahead${group}`;
   $('draft-gap').textContent = gapText;
   $('draft-hint').textContent = offLine
-    ? `Move ${move} into their wheel${draft.gap > DRAFT_SWEET_SPOT * 2 ? ' and close up' : ''}`
+    ? `Move ${move} ${Math.abs(lastCrossShift) >= 0.3 ? 'to the sheltered side of their wheel (crosswind)' : 'into their wheel'}${draft.gap > DRAFT_SWEET_SPOT * 2 ? ' and close up' : ''}`
     : inDraft
     ? `−${Math.round(draftSaving * 100)}% drag${watts >= 5 ? ` · saving ~${Math.round(watts)} W` : ''}${draft.overlap < 0.9 ? ` · line up on their wheel ${move}` : draft.gap > DRAFT_SWEET_SPOT ? ` · closer than ${imperial ? '7 ft' : `${DRAFT_SWEET_SPOT} m`} for the most` : ''}`
     : `Close to ${imperial ? '40 ft' : `${DRAFT_MAX_GAP} m`} to get in the draft`;
@@ -509,6 +556,13 @@ function placeWorkoutPanel() {
   $('workout-panel').style.top = `${Math.round(above.getBoundingClientRect().bottom + 10)}px`;
 }
 window.addEventListener('resize', placeWorkoutPanel);
+
+/** Tells the CSS where the free space under the data blocks starts (the climb card, and the mini-map on phones). */
+function placeBelowHud() {
+  const side = settings.hudPosition !== 'center' && window.innerWidth > 560;
+  const above = side ? document.querySelector('.topbar')! : document.querySelector('.hud-wrap')!;
+  document.documentElement.style.setProperty('--below-hud', `${Math.round(above.getBoundingClientRect().bottom + 8)}px`);
+}
 
 /** Keeps the data blocks just below the top bar, however many rows its buttons take. */
 const topbar = document.querySelector<HTMLElement>('.topbar')!;
@@ -1087,6 +1141,8 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     autoSteer: data.get('autoSteer') === 'on',
     ghost: data.get('ghost') === 'on',
     virtualShifting: data.get('virtualShifting') === 'on',
+    wind: data.get('wind') === 'on',
+    miniMap: data.get('miniMap') === 'on',
   };
   saveSettings(settings);
   pushSettings(settings);
@@ -1094,6 +1150,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
   world.setMarkers(markerConfig());
   lastSentGrade = NaN;
   updateGearPanel();
+  updateMapMenu();
   if (!settings.rideTogether) presence.leave();
   if (!settings.ghost) ghost = null;
   else if (!ghost) loadMyGhost();
@@ -1102,6 +1159,20 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
 $('settings').querySelector<HTMLInputElement>('[name=difficulty]')!.addEventListener('input', (e) => {
   $('difficulty-out').textContent = `${(e.target as HTMLInputElement).value}%`;
 });
+
+/** The ☰ Menu entry for the mini-map and climb preview mirrors the Settings switch. */
+function updateMapMenu() {
+  $('btn-minimap').textContent = settings.miniMap ? '🗺 Mini-map on' : '🗺 Mini-map off';
+  miniMap.setVisible(settings.miniMap && !ride.finished);
+  if (!settings.miniMap) climbUi.update(0, false, false, false);
+}
+$('btn-minimap').addEventListener('click', () => {
+  settings = { ...settings, miniMap: !settings.miniMap };
+  saveSettings(settings);
+  pushSettings(settings);
+  updateMapMenu();
+});
+updateMapMenu();
 
 $('btn-trainer').addEventListener('click', toggleTrainer);
 $('btn-hr').addEventListener('click', toggleHeartRate);
@@ -1427,6 +1498,7 @@ onAccountChange(async (a) => {
       lastSentGrade = NaN;
       setSound(settings.sound);
       updateGearPanel();
+      updateMapMenu();
       applyHudPosition(settings.hudPosition);
       world.setAtmosphere(settings.timeOfDay, settings.weather);
       // A returning rider on a new device: they've done the setup before.

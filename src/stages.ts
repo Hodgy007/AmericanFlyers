@@ -67,6 +67,8 @@ export interface Stage {
   race?: RacePoints;
   /** Part of the Hell of the West tour, with its stage number. */
   tourStage?: number;
+  /** Prevailing wind here (see world/wind.ts). Left out: the built-in table, or a mild wind picked from the id. */
+  wind?: import('./world/wind').StageWind;
 }
 
 // --------------------------------------------------------------- helpers ----

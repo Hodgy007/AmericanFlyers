@@ -12,6 +12,7 @@
 import { DEFAULT_PARAMS, stepSpeed } from './physics';
 import { rng } from './world/noise';
 import type { RacePoints } from './stages';
+import { draftShift, SHIFT_MAX } from './world/wind';
 
 export const PRO_KG = 68;
 const MASS = PRO_KG + 7.5; // rider + bike
@@ -172,6 +173,12 @@ export interface SimOptions {
   startFront?: number;
   /** Is the player one of the riders in the roster (a simulated stage), or ridden live? */
   playerInRoster?: string;
+  /**
+   * Wind at a distance along the course (m/s: headwind into the face, crosswind towards the right).
+   * Left out: still air, as in the "simulate this stage" shortcut. A live race passes the road's wind
+   * so the field feels what you feel and forms echelons in a crosswind.
+   */
+  wind?: (d: number) => { head: number; cross: number };
 }
 
 export class RaceSim {
@@ -181,6 +188,7 @@ export class RaceSim {
   groups: RGroup[] = [];
   events: RaceEvent[] = [];
   private readonly rand: () => number;
+  private readonly windAt: SimOptions['wind'];
   private nextGroupId = 1;
   private breakAt: number;
   private breakDone = false;
@@ -190,6 +198,7 @@ export class RaceSim {
   constructor(course: RaceCourse, roster: RosterEntry[], opts: SimOptions) {
     this.course = course;
     this.rand = rng(opts.seed);
+    this.windAt = opts.wind;
     this.breakAt = 90 + this.rand() * 110;
     const start = opts.startFront ?? 0;
     const g: RGroup = this.newGroup(start, 0);
@@ -248,11 +257,20 @@ export class RaceSim {
     const w = this.widthFor(n);
     const lanes = LANES[w];
     const k = snap ? 1 : 1 - Math.exp(-dt / 1.4);
+    // In a crosswind the bunch fans out into diagonal echelons: each row sits a little further downwind
+    // than the one ahead (a big bunch wraps into several echelons, four rows each).
+    const shift = this.windAt ? draftShift(this.windAt(g.front).cross) : 0;
+    const squeeze = 1 - 0.45 * Math.min(1, Math.abs(shift) / SHIFT_MAX);
     g.riders.forEach((r, i) => {
       const row = Math.floor(i / w);
       const targetOff = row * ROW + (i % w) * 0.25;
       r.off += (targetOff - r.off) * k;
-      r.lane += (lanes[i % w] - r.lane) * k;
+      let lane = lanes[i % w];
+      if (shift !== 0) {
+        lane = 2.3 + (lane - 2.3) * squeeze + ((row % 4) - 1.5) * shift;
+        lane = Math.min(4.0, Math.max(0.6, lane));
+      }
+      r.lane += (lane - r.lane) * k;
     });
   }
 
@@ -451,7 +469,7 @@ export class RaceSim {
 
     const cda = DEFAULT_PARAMS.cda * (n === 1 ? g.draft : n >= 10 ? 0.9 : n >= 5 ? 0.93 : 0.95);
     const mass = g.riders.reduce((a, r) => a + r.mass, 0) / n;
-    g.speed = stepSpeed(g.speed, P, grade, dt, { massKg: mass, cda, crr: DEFAULT_PARAMS.crr });
+    g.speed = stepSpeed(g.speed, P, grade, dt, { massKg: mass, cda, crr: DEFAULT_PARAMS.crr }, this.windAt?.(g.front).head ?? 0);
     g.speed = Math.max(g.speed, 1.3); // even the steepest ramp is climbed, if only by weaving
     g.front += g.speed * dt;
 

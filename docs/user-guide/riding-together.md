@@ -60,6 +60,7 @@ Ride close behind another rider and you're in their slipstream: you need fewer w
 - The percentage is the same at any speed, but the watts it saves grow fast with speed: on one wheel about 130 W at 45 km/h, 25 W at 25 km/h, and almost nothing on a steep climb.
 - With a smart trainer, the trainer gets lighter too.
 - It has to be on their line, too: full saving when you're within about 0.3 m of their line, fading to nothing about 1.1 m to one side. Steer with **←** / **→** (see [Riding](riding.md#steering)).
+- **In a crosswind** the shelter is on the downwind side of their wheel, not straight behind: up to about 0.8 m sideways, so riders (and the pro teams) line up diagonally in an echelon. The gauge's *Move ◀ / ▶* hint points at the sheltered spot. See [Riding](riding.md#wind-and-echelons).
 - Ghosts don't make a draft; real riders and the pro teams do.
 - On a steep climb you're slow, so drag (and the draft) matters much less than on the flat.
 
