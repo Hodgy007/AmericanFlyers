@@ -1,6 +1,7 @@
 import type { PlanProgress } from './plans';
 import type { Kit } from './kit';
 import type { TourProgress } from './tour';
+import type { Loadout } from './garage/catalogue';
 
 export type Units = 'metric' | 'imperial';
 export type TimeOfDay = 'auto' | 'dawn' | 'day' | 'dusk' | 'night';
@@ -28,6 +29,8 @@ export interface Settings {
   tour: TourProgress | null; // the Hell of the West tour in progress
   wind: boolean; // wind on the road: headwinds slow you, crosswinds make echelons (world/wind.ts)
   miniMap: boolean; // the route mini-map and climb preview (miniMap.ts, climbUi.ts)
+  commentary: boolean; // the race commentator's voice lines (commentary.ts); also needs sound on
+  loadout: Partial<Loadout> | null; // what you ride and wear from the garage (src/garage); null = the starter kit
 }
 
 const KEY = 'americanflyers.settings';
@@ -54,6 +57,8 @@ export const DEFAULT_SETTINGS: Settings = {
   tour: null,
   wind: true,
   miniMap: true,
+  commentary: true,
+  loadout: null,
 };
 
 export function loadSettings(): Settings {

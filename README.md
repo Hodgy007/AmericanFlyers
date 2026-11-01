@@ -11,6 +11,8 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Bluetooth trainer connection.** Uses the standard FTMS (Fitness Machine) profile, so it works with Wahoo KICKR, KICKR CORE and KICKR SNAP on current firmware, as well as most other smart trainers. Trainers that only expose a Cycling Power service still work in read-only mode.
 - **Resistance follows the road.** The current grade is sent to the trainer once a second, scaled by a *trainer difficulty* setting (default 50%).
 - **Wind and echelons.** Each stage has a wind that the weather scales; headwinds slow you, tailwinds help, your trainer feels the headwind, and in a crosswind the best shelter is diagonal, so the pro teams ride echelons. A wind chip shows the direction and speed.
+- **Group rides and races** (☰ Menu → 🗓 Events): a race every evening and a group ride at midday, plus one-off events, with a synchronised start, a lobby, shared computer-ridden fields and results alongside other riders.
+- **Race commentator:** voice lines call the race and how you are doing; switch off in Settings.
 - **Mini-map and climb preview.** A route map with you, riders, teams, ghost and race markers, and a card for the next climb when it is within 2 km.
 - **Stages** (🏁 button):
   - *Heartland Rollers*: endless farmland, free ride.
@@ -34,7 +36,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Heart-rate strap** support (optional).
 - **Demo ride** mode for trying it without a trainer: set power with a slider or the ↑/↓ keys.
 - Metric and imperial units. Settings are saved in the browser (and in your account when signed in).
-- **Accounts** (👤 button): sign in with Google, or create a free account with your email (rider name, email, password, weight and optional FTP; never a phone number or address), with password reset by email. Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
+- **Accounts** (👤 button): sign in with Google, or create a free account with your email (rider name, email, password, weight and optional FTP; never a phone number or address), with password reset by email (and an optional 6-digit email verification step, off for now). Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
 - **Profile:**
   - *Stats*: totals, personal bests (5 s, 1, 5 and 20 min power), distance per week, FTP progress, and time in heart-rate and power zones across all rides.
   - *Achievements*: badges for finishing the stages, distance and climbing milestones, streaks, power targets, ramp tests and FTP gains.
@@ -45,6 +47,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Riding together** (👥 button): signed-in riders on the same stage see each other on the road, with name tags, a *Riding now* list with gaps, and *Ride with* to join someone. Switch it off in Settings.
 - **Ride-ons** (👍 🔥 💪 👋): send a quick emoji to a rider from 👥, or press **R** for a 👍 to the rider ahead. It floats over their head on the road. No free-text chat.
 - **My kit** (☰ Menu → 🎨): choose your jersey, second colour and bike frame, or a preset. Your rider wears it and other riders see it.
+- **Garage & store** (☰ Menu → 🚲): earn credits and levels from your saved rides (1 credit per km, 1 per 10 m climbed), then buy better bikes, wheels, tyres, helmets and jersey designs. Each shows its real effect in watts or seconds. Climb 8,848 m in total to unlock the glowing **Tron bike**. Weekly challenges pay extra credits, and a **📤 Share** card turns a ride into a picture.
 - **Racing and the Hell of the West tour** (🏁 Race this stage; ☰ Menu → 🏆): race 12 pro teams over a stage, with a 3-2-1 start, attacks, breakaways, chases and a sprint, a live race panel and results tables. The tour races the film's three stages in order with general, points and mountains classifications (yellow, green and polka-dot jerseys).
 - **Pro teams**: five computer-ridden teams with comedic near-miss names ride every stage two by two at 2.0–4.2 W/kg, in their own kit. Join one from 👥 and sit in.
 - **Drafting**: ride close behind someone and you save up to about a third of your air drag (and a smart trainer gets lighter). A slipstream gauge shows the gap to the wheel ahead and the watts you're saving.
@@ -111,6 +114,8 @@ Accounts and data live in Neon (project `americanflyers`, eu-west-2):
 
 - **Neon Auth** handles sign-in with Google, and with email and password (sign-up on, verification off, password reset by email). Add each site URL under *Auth → Trusted domains*.
 - The **Data API** lets the browser read and write the tables directly; row-level security limits each rider to their own rows, and admin functions check `public.is_admin()`.
+- Riders can download their data and delete their account from the profile (**Privacy & data** tab); `delete_my_account()` removes their rows and their Neon Auth user. A Privacy page is in ☰ Menu.
+- Leaderboards ignore implausible, demo and sped-up rides (`stage_limits`, `ride_is_plausible()`).
 - The schema is in `db/schema.sql`. Admins are listed in `public.admins` (by email).
 - The endpoints default to the production project; override with `VITE_NEON_AUTH_URL` and `VITE_NEON_DATA_API_URL`.
 

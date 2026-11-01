@@ -6,7 +6,7 @@
 import type { OtherRider } from '../world/others';
 import { account, onAccountChange } from './account';
 import { neon } from './client';
-import { parseKitString } from '../kit';
+import { parseKitString, parseKitStyle } from '../kit';
 
 const INTERVAL_MS = 2000;
 const MAX_EXTRAPOLATE_S = 6;
@@ -53,9 +53,11 @@ export class Presence {
       const t = Math.min(MAX_EXTRAPOLATE_S, (now - k.at + k.age_ms) / 1000);
       // Their kit, if they've designed one (colours only from a valid kit string).
       const kit = parseKitString(k.kit);
+      const style = parseKitStyle(k.kit); // their bike and clothes, after the colours
       return {
         id: k.id, name: k.name, distance: k.distance + k.speed * t, speedMs: k.speed, power: k.power, cadence: k.cadence,
         ...(kit ? { jersey: kit.jersey, accent: kit.accent, frame: kit.frame } : {}),
+        ...(style ? { style } : {}),
       };
     });
   }

@@ -38,6 +38,12 @@ Hover a bar to see its date and count. Days with no activity show an empty bar.
 
 If nothing has been recorded, the table says *None yet*.
 
+## Group rides and races
+
+Below the stage tables, **Group rides & races** lists the events from 12 hours ago to two weeks ahead (the daily evening race and midday group ride appear on their own; see [Group rides, races and the commentator](../user-guide/events-and-commentary.md)). Each row shows when, the title, the kind and how many riders have a result. **Remove** deletes an event nobody has a result in yet (an automatic one can be created again by the schedule, because it is created on demand).
+
+The form under the list adds a **one-off event**: pick Race or Group ride, the stage, the start time (in your time zone), a title of 3 to 80 characters and, for a group ride, the pace in W/kg. Start times must be within the next 90 days. Only admins can do this: the database checks `is_admin()`.
+
 ## Riders
 
 The rider list shows every account, newest first, with a count in the heading.

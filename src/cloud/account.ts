@@ -2,12 +2,15 @@
 // email address and password.
 
 import { neon } from './client';
+import { isNotVerifiedError, signUpNeedsCode } from './verification';
 
 export interface Account {
   id: string;
   name: string;
   email: string;
   image?: string | null;
+  /** False for an email account that hasn't entered its 6-digit code yet. */
+  emailVerified?: boolean;
 }
 
 type Listener = (account: Account | null) => void;
@@ -35,7 +38,7 @@ export async function restoreSession() {
   try {
     const { data } = await neon.auth.getSession();
     const u = data?.user;
-    set(u ? { id: u.id, name: u.name || u.email, email: u.email, image: u.image } : null);
+    set(u ? { id: u.id, name: u.name || u.email, email: u.email, image: u.image, emailVerified: u.emailVerified !== false } : null);
   } catch {
     set(null);
   }
@@ -75,17 +78,47 @@ async function attempt(call: () => Promise<{ error?: AuthError }>): Promise<{ er
   }
 }
 
-/** Creates an account with email and password, and signs in. */
+/** Thrown when the account exists but its email address still needs the 6-digit code. */
+export class NeedsVerificationError extends Error {
+  constructor(readonly email: string) {
+    super('Enter the 6-digit code we emailed you to finish.');
+  }
+}
+
+/**
+ * Creates an account with email and password. Resolves when the rider is
+ * signed in; throws NeedsVerificationError when the server wants the emailed
+ * code first (only when email verification is switched on in Neon Auth).
+ */
 export async function signUpWithEmail(name: string, email: string, password: string) {
-  const { error } = await attempt(() => neon.auth.signUp.email({ name, email, password }));
+  let data: unknown;
+  const { error } = await attempt(async () => {
+    const res = await neon.auth.signUp.email({ name, email, password });
+    data = res?.data;
+    return res;
+  });
   if (error) throw new Error(explain(error, 'Couldn’t create your account.'));
+  if (signUpNeedsCode(data as Parameters<typeof signUpNeedsCode>[0])) throw new NeedsVerificationError(email);
   return restoreSession();
 }
 
 export async function signInWithEmail(email: string, password: string) {
   const { error } = await attempt(() => neon.auth.signIn.email({ email, password }));
+  if (isNotVerifiedError(error)) throw new NeedsVerificationError(email);
   if (error) throw new Error(explain(error, 'Couldn’t sign in.'));
   return restoreSession();
+}
+
+/** The server just accepted this account's code: show it as verified even if the SDK's cached session is stale. */
+export function markEmailVerified(email: string) {
+  if (current && current.email.toLowerCase() === email.toLowerCase()) current = { ...current, emailVerified: true };
+}
+
+/** After a correct code: pick up the session the server started, or sign in with the password just typed. */
+export async function finishVerification(email: string, password?: string) {
+  const a = await restoreSession();
+  if (a || !password) return a;
+  return signInWithEmail(email, password);
 }
 
 /** Emails a password reset link that comes back to this site with `?token=…`. */

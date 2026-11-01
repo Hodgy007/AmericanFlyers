@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { currentStage, ensureRoad, roadPoint, gradeAt } from '../course';
 import { Landmarks } from './landmarks';
 import { OtherRiders, type OtherRider } from './others';
-import { RiderModel } from './rider';
+import { RiderModel, updateGlow } from './rider';
+import type { BikeStyle } from '../garage/style';
 import { Road, type MarkerConfig } from './road';
 import { Sky, HORIZON_COLOR } from './sky';
 import { Atmosphere } from './atmosphere';
@@ -102,6 +103,9 @@ export class World {
   /** 0..1: how hard it's raining (for the rain sound). */
   get rainLevel() { return this.atmosphere.rainLevel; }
 
+  /** 0..1: how dark it is (the Tron bike glows more at night). */
+  get nightAmount() { return this.atmosphere.nightAmount; }
+
   cycleCamera(): CameraMode {
     this.mode = CAMERA_MODES[(CAMERA_MODES.indexOf(this.mode) + 1) % CAMERA_MODES.length];
     this.rider.setPersonVisible(this.mode !== 'rider');
@@ -116,7 +120,7 @@ export class World {
   }
 
   /** Changes what your rider wears (kit and bike colours) at runtime; see src/kit.ts. */
-  setPlayerLook(look: { frame?: string; jersey?: string; kit?: [string, string] | null }) {
+  setPlayerLook(look: { frame?: string; jersey?: string; kit?: [string, string] | null; style?: BikeStyle }) {
     this.rider.setLook(look);
   }
 
@@ -215,6 +219,7 @@ export class World {
     this.atmosphere.update(dt, state.speedMs > 0.3, riderPos, forward, this.camera);
     this.sun.position.copy(riderPos).addScaledVector(this.atmosphere.lightDir, 200);
 
+    updateGlow(performance.now() / 1000, this.atmosphere.nightAmount); // the Tron bike's pulse
     this.sky.update(this.camera, dt);
     this.renderer.render(this.scene, this.camera);
   }

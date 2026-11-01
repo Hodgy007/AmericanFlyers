@@ -24,9 +24,11 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [Riding](user-guide/riding.md): the top bar, data blocks, the elevation strip, camera views, demo controls, and Reset and the ride summary.
 - [Stages and routes](user-guide/stages-and-routes.md): each built-in stage, finish lines, uploading GPX routes, and deleting routes.
 - [Racing and the tour](user-guide/racing-and-the-tour.md): racing the pro teams, the race panel, points and jerseys, and the three-stage Hell of the West tour.
+- [Group rides, races and the commentator](user-guide/events-and-commentary.md): the scheduled Events (a race every evening, a group ride at midday), the synchronised start, results, and the race commentator.
 - [Workouts](user-guide/workouts.md): built-in workouts, ERG mode, uploading `.zwo`, `.erg` and `.mrc` files, the ramp test, the workout creator, and `.zwo` export.
 - [Riding together](user-guide/riding-together.md): other riders on your stage, drafting and the draft gauge, the Riding now list, Ride with, and privacy.
 - [My kit](user-guide/my-kit.md): design your jersey and bike colours, presets, and how other riders see them.
+- [Garage, credits and challenges](user-guide/garage-and-credits.md): levels, credits, the bike store, the Tron bike, weekly challenges and the share card.
 - [Leaderboards and ghosts](user-guide/leaderboards-and-ghosts.md): what counts, the 🏆 leaderboard, and racing ghosts.
 - [Training plans](user-guide/training-plans.md): the three plans and how sessions tick off.
 - [Sound and virtual shifting](user-guide/sound-and-shifting.md): ride sounds, and choosing your own gears.
@@ -34,6 +36,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [Data blocks](user-guide/data-blocks.md): choosing and ordering the numbers on screen, with a table of all 24 fields.
 - [Settings](user-guide/settings.md): every setting, its default and what it changes.
 - [Accounts and profile](user-guide/accounts-and-profile.md): signing in, what syncs, when rides are saved, the profile tabs, `.tcx` export, and signing out.
+- [Privacy and your data](user-guide/privacy-and-your-data.md): what other riders see, downloading your data, and deleting your account.
 - [Zones and FTP](user-guide/zones-and-ftp.md): heart-rate and power zones, how time in zone is counted, and FTP history.
 - [Achievements](user-guide/achievements.md): every badge and how to earn it.
 - [Feedback](user-guide/feedback.md): sending ideas and bug reports, statuses and replies.

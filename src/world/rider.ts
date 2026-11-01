@@ -1,13 +1,15 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { cleanStyle, DEFAULT_STYLE, type BikeStyle } from '../garage/style';
+import { applyKitStyle, buildHelmetShell, buildWheel, groundGlow, haloMat, neonMat, tronBody, WHEEL_R } from './bikeParts';
+
+export { updateGlow } from './bikeParts';
 
 // Bike and rider built from primitives. Local frame: +x forward, +y up,
 // +z to the rider's right (the drive side). Units are metres; the origin is
 // on the ground directly under the bottom bracket.
 
-const WHEEL_R = 0.34;
 const CRANK = 0.17;
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -72,24 +74,6 @@ function ik(root: THREE.Vector3, end: THREE.Vector3, l1: number, l2: number, ben
   return out.set(root.x + l1 * Math.cos(ang), root.y + l1 * Math.sin(ang), root.z + (end.z - root.z) * (l1 / (l1 + l2)));
 }
 
-function buildWheel(): THREE.Group {
-  const wheel = new THREE.Group();
-  const tire = new THREE.Mesh(new THREE.TorusGeometry(WHEEL_R - 0.016, 0.016, 8, 48), M.black);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(WHEEL_R - 0.055, 0.028, 6, 48).scale(1, 1, 0.55), M.rim);
-  const spokes: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 18; i++) {
-    const s = new THREE.CylinderGeometry(0.0022, 0.0022, WHEEL_R - 0.08, 4)
-      .translate(0, (WHEEL_R - 0.08) / 2, (i % 2 ? 1 : -1) * 0.01)
-      .rotateZ((i / 18) * Math.PI * 2);
-    spokes.push(s);
-  }
-  const spokeMesh = new THREE.Mesh(mergeGeometries(spokes)!, M.alloy);
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.1, 12).rotateX(Math.PI / 2), M.alloy);
-  const decal = new THREE.Mesh(new THREE.TorusGeometry(WHEEL_R - 0.055, 0.03, 6, 12, 0.6).scale(1, 1, 0.6), M.accent);
-  for (const m of [tire, rim, spokeMesh, hub, decal]) { m.castShadow = true; wheel.add(m); }
-  return wheel;
-}
-
 /** The rigged rider, loaded once and cloned for every rider on the road. */
 let riderGltf: Promise<GLTF | null> | null = null;
 function loadRiderModel() {
@@ -106,51 +90,8 @@ export interface RiderLook {
   ghost?: boolean; // see-through, for the ghost of a past ride
   /** Team kit: the rigged rider's navy becomes the first colour and its red the second. */
   kit?: [string, string];
-}
-
-const kitMats = new Map<string, THREE.Material>();
-/**
- * Recolours the rigged rider's stars-and-stripes kit for a team. The texture is
- * navy, red, white, skin and black; a fragment-shader tweak swaps navy and red
- * for the team colours (keeping the shading), and leaves the rest alone.
- */
-function applyKit(root: THREE.Object3D, kit: [string, string] | null) {
-  root.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    // Remember the model's own material so the kit can change (or be taken off) later.
-    const src = (mesh.userData.kitSrc ??= mesh.material) as THREE.MeshStandardMaterial;
-    if (!kit) { mesh.material = src; return; }
-    const key = `${src.uuid}|${kit.join('|')}`;
-    let m = kitMats.get(key);
-    if (!m) {
-      const mat = src.clone();
-      const a = new THREE.Color(kit[0]);
-      const b = new THREE.Color(kit[1]);
-      mat.onBeforeCompile = (shader) => {
-        shader.uniforms.kitA = { value: a };
-        shader.uniforms.kitB = { value: b };
-        shader.fragmentShader = shader.fragmentShader
-          .replace('void main() {', 'uniform vec3 kitA;\nuniform vec3 kitB;\nvoid main() {')
-          .replace('#include <map_fragment>', `
-#ifdef USE_MAP
-  vec4 sampledDiffuseColor = texture2D( map, vMapUv );
-  vec3 kc = sampledDiffuseColor.rgb;
-  float klum = dot( kc, vec3( 0.2126, 0.7152, 0.0722 ) );
-  float isNavy = step( kc.r * 1.6 + 0.004, kc.b ) * step( kc.g * 1.25 + 0.002, kc.b );
-  float isRed = step( kc.g * 3.0 + 0.02, kc.r ) * step( kc.b * 3.0 + 0.02, kc.r );
-  kc = mix( kc, kitA * clamp( klum / 0.03, 0.45, 1.3 ), isNavy );
-  kc = mix( kc, kitB * clamp( klum / 0.16, 0.45, 1.3 ), isRed );
-  sampledDiffuseColor.rgb = kc;
-  diffuseColor *= sampledDiffuseColor;
-#endif`);
-      };
-      mat.customProgramCacheKey = () => 'team-kit';
-      kitMats.set(key, mat);
-      m = mat;
-    }
-    mesh.material = m;
-  });
+  /** Bike, wheels, helmet, jersey pattern and socks (src/garage/style.ts). Left out: the plain starter kit. */
+  style?: BikeStyle;
 }
 
 const ghostMats = new Map<THREE.Material, THREE.Material>();
@@ -179,9 +120,11 @@ export class RiderModel {
   readonly body = new THREE.Group();
   /** Everything above the bike (hidden in first-person view). */
   readonly person = new THREE.Group();
+  /** The parts of the bike that change with the garage style (frame, wheels, bars); rebuilt by setLook({ style }). */
+  private readonly bike = new THREE.Group();
 
-  private readonly rearWheel = buildWheel();
-  private readonly frontWheel = buildWheel();
+  private rearWheel = new THREE.Group();
+  private frontWheel = new THREE.Group();
   private readonly bb = v(0, 0.27);
   private readonly legs: { side: number; thigh: Segment; shin: Segment; sock: Segment; shoe: Segment; knee: THREE.Mesh; crank: Segment; pedal: THREE.Mesh }[] = [];
   private readonly tmp = { knee: v(0, 0), ankle: v(0, 0), pedal: v(0, 0), toe: v(0, 0), sock: v(0, 0), crankEnd: v(0, 0), crankStart: v(0, 0) };
@@ -192,14 +135,21 @@ export class RiderModel {
   private frameMat: THREE.MeshStandardMaterial;
   private jerseyMat: THREE.MeshStandardMaterial;
   private kit: [string, string] | null = null;
+  private style: BikeStyle;
+  private helmet: THREE.Object3D | null = null;
+  private primHelmet: THREE.Mesh | null = null;
+  private readonly ghost: boolean;
   private disposed = false;
 
   constructor(look: RiderLook = {}) {
     this.frameMat = look.frame ? mat(look.frame, { metalness: 0.35, roughness: 0.35 }) : M.frame;
     this.jerseyMat = look.jersey ? mat(look.jersey, { roughness: 0.7 }) : M.jersey;
     this.kit = look.kit ?? null;
+    this.style = look.style ? cleanStyle(look.style) : { ...DEFAULT_STYLE };
+    this.ghost = !!look.ghost;
     this.group.add(this.body);
     this.body.add(this.person);
+    this.body.add(this.bike);
     this.buildBike();
     this.buildRider();
     if (look.ghost) makeGhost(this.body, true);
@@ -208,10 +158,21 @@ export class RiderModel {
       if (!gltf || this.disposed) return;
       this.rig = new Rig(cloneSkinned(gltf.scene));
       if (look.ghost) makeGhost(this.rig.root, true);
-      else if (this.kit) applyKit(this.rig.root, this.kit);
+      else this.dressRig();
       this.body.add(this.rig.root);
       this.setPersonVisible(this.personVisible);
     });
+  }
+
+  /** The rigged rider's kit, pattern, socks, helmet and (for a time-trial bike) riding position. */
+  private dressRig() {
+    const rig = this.rig;
+    if (!rig || this.ghost) return;
+    applyKitStyle(rig.root, this.kit, this.style.pattern, this.style.socks);
+    rig.tt = this.style.frame === 'tt';
+    if (this.helmet) this.helmet.removeFromParent();
+    this.helmet = buildHelmetShell(this.style.helmet);
+    if (this.helmet) rig.head()?.add(this.helmet);
   }
 
   /** Frees this rider's own materials (shared geometry and textures stay). */
@@ -227,13 +188,27 @@ export class RiderModel {
    * the original stars and stripes back). Used for your own rider and for
    * other riders who change their kit.
    */
-  setLook(look: { frame?: string; jersey?: string; kit?: [string, string] | null }) {
+  setLook(look: { frame?: string; jersey?: string; kit?: [string, string] | null; style?: BikeStyle }) {
     if (look.frame) this.frameMat = this.recolour(this.frameMat, M.frame, look.frame, { metalness: 0.35, roughness: 0.35 });
     if (look.jersey) this.jerseyMat = this.recolour(this.jerseyMat, M.jersey, look.jersey, { roughness: 0.7 });
-    if (look.kit !== undefined) {
-      this.kit = look.kit;
-      if (this.rig) applyKit(this.rig.root, this.kit);
+    let dress = false;
+    if (look.kit !== undefined) { this.kit = look.kit; dress = true; }
+    if (look.style) {
+      const next = cleanStyle(look.style);
+      const changed = (Object.keys(next) as (keyof BikeStyle)[]).filter((k) => next[k] !== this.style[k]);
+      if (changed.length) {
+        this.style = next;
+        dress = true;
+        if (changed.some((k) => k === 'frame' || k === 'wheels' || k === 'tyres')) this.rebuildBike();
+      }
     }
+    if (dress && this.rig) this.dressRig();
+    if (dress) this.dressPrimitive();
+  }
+
+  /** The primitive rider's helmet and socks (the fallback when the rigged model isn't there). */
+  private dressPrimitive() {
+    if (this.primHelmet) this.primHelmet.material = this.style.helmet === 'black' || this.style.helmet === 'aerodark' ? M.black : M.white;
   }
 
   /** Recolours a material this rider owns; a shared one is swapped for its own copy first. */
@@ -290,56 +265,9 @@ export class RiderModel {
     if (this.rig?.root.visible) this.rig.pose(this.body, this.pedals);
   }
 
+  /** Cranks, pedals and the legs, built once: they don't change with the bike's style. */
   private buildBike() {
     const b = this.body;
-    const rear = v(-0.41, WHEEL_R);
-    const front = v(0.6, WHEEL_R);
-    const seat = v(-0.14, 0.76);
-    const headTop = v(0.47, 0.79);
-    const headBottom = v(0.51, 0.65);
-    const tube = (a: THREE.Vector3, c: THREE.Vector3, r: number, m: THREE.Material, depth = 1) => new Segment(b, r, m, depth).set(a, c);
-
-    this.rearWheel.position.copy(rear);
-    this.frontWheel.position.copy(front);
-    b.add(this.rearWheel, this.frontWheel);
-
-    for (const side of [-1, 1]) {
-      tube(this.bb.clone().setZ(0.03 * side), rear.clone().setZ(0.055 * side), 0.012, this.frameMat); // chainstays
-      tube(seat.clone().setZ(0.02 * side), rear.clone().setZ(0.055 * side), 0.01, this.frameMat); // seatstays
-      tube(headBottom.clone().setZ(0.02 * side), front.clone().setZ(0.05 * side), 0.012, M.black); // fork legs
-    }
-    tube(this.bb, seat, 0.019, this.frameMat); // seat tube
-    tube(seat, headTop, 0.019, this.frameMat, 1.2); // top tube
-    tube(this.bb, headBottom, 0.026, this.frameMat, 1.3); // down tube
-    tube(headBottom, headTop, 0.024, this.frameMat); // head tube
-    tube(this.bb.clone().lerp(headBottom, 0.3), this.bb.clone().lerp(headBottom, 0.65), 0.0275, M.accent, 1.3);
-
-    // Seatpost and saddle.
-    tube(seat, v(-0.18, 0.86), 0.012, M.black);
-    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.035, 0.13), M.black);
-    saddle.position.set(-0.19, 0.875, 0);
-    saddle.castShadow = true;
-    b.add(saddle);
-
-    // Stem and drop bars.
-    tube(headTop, v(0.58, 0.84), 0.014, M.black);
-    tube(v(0.58, 0.84, -0.21), v(0.58, 0.84, 0.21), 0.012, M.black);
-    for (const side of [-1, 1]) {
-      const z = 0.21 * side;
-      tube(v(0.58, 0.84, z), v(0.64, 0.8, z), 0.012, M.black);
-      tube(v(0.64, 0.8, z), v(0.63, 0.71, z), 0.012, M.black);
-      tube(v(0.63, 0.71, z), v(0.56, 0.7, z), 0.012, M.black);
-    }
-
-    // Drivetrain on the right.
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.006, 32).rotateX(Math.PI / 2), M.alloy);
-    ring.position.set(this.bb.x, this.bb.y, 0.055);
-    const cassette = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 20).rotateX(Math.PI / 2), M.alloy);
-    cassette.position.set(rear.x, rear.y, 0.05);
-    b.add(ring, cassette);
-    tube(v(0, 0.37, 0.055), v(-0.41, 0.385, 0.05), 0.004, M.black);
-    tube(v(0, 0.17, 0.055), v(-0.41, 0.295, 0.05), 0.004, M.black);
-
     for (const side of [-1, 1]) {
       const crank = new Segment(b, 0.012, M.black, 1.6);
       const pedal = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.015, 0.08), M.black);
@@ -356,6 +284,116 @@ export class RiderModel {
         knee: sphere(this.person, 0.055, M.skin),
       });
     }
+    this.buildFrame();
+  }
+
+  /** Throws away the frame, wheels and bars and builds them again for the current style. */
+  private rebuildBike() {
+    for (const child of [...this.bike.children]) this.bike.remove(child); // geometry and materials are shared, so nothing to free
+    this.buildFrame();
+    if (this.ghost) makeGhost(this.bike, true);
+  }
+
+  /** Frame, fork, wheels, saddle, bars and drivetrain, in the current style. */
+  private buildFrame() {
+    const b = this.bike;
+    const st = this.style;
+    const tron = st.frame === 'tron';
+    const tt = st.frame === 'tt';
+    const aero = st.frame === 'aero' || tt;
+    const climber = st.frame === 'climber';
+    const rear = v(-0.41, WHEEL_R);
+    const front = v(0.6, WHEEL_R);
+    const seat = tt ? v(-0.1, 0.78) : v(-0.14, 0.76);
+    const headTop = tt ? v(0.47, 0.76) : v(0.47, 0.79);
+    const headBottom = tt ? v(0.51, 0.64) : v(0.51, 0.65);
+    const body = tron ? tronBody : this.frameMat;
+    const fork = tron ? tronBody : M.black;
+
+    // Tube sizes: [radius, depth] where depth scales the sideways thickness.
+    // Aero tubes are deep in the airflow and thin across it.
+    const sz = aero
+      ? { chain: [0.013, 0.7], stay: [0.011, 0.6], fork: [0.017, 0.55], seat: [tt ? 0.034 : 0.031, 0.42], top: [0.026, 0.5], down: [tt ? 0.04 : 0.037, 0.42], head: [0.03, 0.6] }
+      : climber
+        ? { chain: [0.009, 1], stay: [0.0075, 1], fork: [0.0095, 1], seat: [0.014, 1], top: [0.014, 1.1], down: [0.019, 1.1], head: [0.019, 1] }
+        : { chain: [0.012, 1], stay: [0.01, 1], fork: [0.012, 1], seat: [0.019, 1], top: [0.019, 1.2], down: [0.026, 1.3], head: [0.024, 1] };
+
+    /** Tron's neon: a glowing line down each side of a tube, plus a soft halo. */
+    const neon = (a: THREE.Vector3, c: THREE.Vector3, r: number, depth: number, halo: boolean) => {
+      for (const side of [-1, 1]) {
+        new Segment(b, r * 0.42, neonMat).set(a.clone().setZ(a.z + side * r * depth), c.clone().setZ(c.z + side * r * depth));
+      }
+      if (halo) {
+        const h = new Segment(b, r * 2.2, haloMat, depth * 0.9).set(a, c).mesh;
+        h.renderOrder = 2;
+        h.castShadow = false;
+      }
+    };
+    const tube = (a: THREE.Vector3, c: THREE.Vector3, [r, depth]: number[], m: THREE.Material, glow = false) => {
+      new Segment(b, r, m, depth).set(a, c);
+      if (tron && glow) neon(a, c, r, depth, true);
+    };
+
+    this.rearWheel = buildWheel(st.wheels, st.tyres, tron, true);
+    this.frontWheel = buildWheel(st.wheels, st.tyres, tron, false);
+    this.rearWheel.position.copy(rear);
+    this.frontWheel.position.copy(front);
+    b.add(this.rearWheel, this.frontWheel);
+
+    for (const side of [-1, 1]) {
+      tube(this.bb.clone().setZ(0.03 * side), rear.clone().setZ(0.055 * side), sz.chain, body); // chainstays
+      tube(seat.clone().setZ(0.02 * side), rear.clone().setZ(0.055 * side), sz.stay, body); // seatstays
+      tube(headBottom.clone().setZ(0.02 * side), front.clone().setZ(0.05 * side), sz.fork, fork, true); // fork legs
+    }
+    tube(this.bb, seat, sz.seat, body, true); // seat tube
+    tube(seat, headTop, sz.top, body, true); // top tube
+    tube(this.bb, headBottom, sz.down, body, true); // down tube
+    tube(headBottom, headTop, sz.head, body); // head tube
+    if (!tron) new Segment(b, aero ? 0.04 : 0.0275, M.accent, aero ? 0.46 : 1.3).set(this.bb.clone().lerp(headBottom, 0.3), this.bb.clone().lerp(headBottom, 0.65));
+
+    // Seatpost and saddle.
+    new Segment(b, 0.012, M.black).set(seat, tt ? v(-0.14, 0.88) : v(-0.18, 0.86));
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.035, 0.13), M.black);
+    saddle.position.set(tt ? -0.15 : -0.19, tt ? 0.895 : 0.875, 0);
+    saddle.castShadow = true;
+    b.add(saddle);
+
+    // Stem and bars: drops on a road bike; a base bar with tri-bar extensions and elbow pads on the time-trial bike.
+    if (tt) {
+      const stem = v(0.56, 0.8);
+      new Segment(b, 0.014, M.black).set(headTop, stem);
+      new Segment(b, 0.012, M.black).set(stem.clone().setZ(-0.2), stem.clone().setZ(0.2));
+      for (const side of [-1, 1]) {
+        new Segment(b, 0.011, M.black).set(stem.clone().setZ(0.2 * side), v(0.6, 0.79, 0.2 * side)); // bull-horn tip
+        new Segment(b, 0.011, M.black).set(v(0.53, 0.83, 0.1 * side), v(0.8, 0.82, 0.07 * side)); // extension
+        new Segment(b, 0.011, M.black).set(v(0.8, 0.82, 0.07 * side), v(0.84, 0.86, 0.07 * side)); // upturned end
+        new Segment(b, 0.011, M.black).set(stem.clone().setZ(0.2 * side), v(0.53, 0.83, 0.1 * side));
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.016, 0.07), M.black);
+        pad.position.set(0.5, 0.855, 0.1 * side);
+        b.add(pad);
+      }
+    } else {
+      new Segment(b, 0.014, M.black).set(headTop, v(0.58, 0.84));
+      new Segment(b, 0.012, M.black).set(v(0.58, 0.84, -0.21), v(0.58, 0.84, 0.21));
+      for (const side of [-1, 1]) {
+        const z = 0.21 * side;
+        new Segment(b, 0.012, M.black).set(v(0.58, 0.84, z), v(0.64, 0.8, z));
+        new Segment(b, 0.012, M.black).set(v(0.64, 0.8, z), v(0.63, 0.71, z));
+        new Segment(b, 0.012, M.black).set(v(0.63, 0.71, z), v(0.56, 0.7, z));
+      }
+    }
+
+    // Drivetrain on the right.
+    const ring = new THREE.Mesh(tron ? new THREE.TorusGeometry(0.096, 0.005, 6, 36) : new THREE.CylinderGeometry(0.1, 0.1, 0.006, 32).rotateX(Math.PI / 2), tron ? neonMat : M.alloy);
+    ring.position.set(this.bb.x, this.bb.y, 0.055);
+    const cassette = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 20).rotateX(Math.PI / 2), M.alloy);
+    cassette.position.set(rear.x, rear.y, 0.05);
+    b.add(ring, cassette);
+    new Segment(b, 0.004, M.black).set(v(0, 0.37, 0.055), v(-0.41, 0.385, 0.05));
+    new Segment(b, 0.004, M.black).set(v(0, 0.17, 0.055), v(-0.41, 0.295, 0.05));
+
+    // The Tron bike lights the road under it.
+    if (tron) b.add(groundGlow());
   }
 
   private buildRider() {
@@ -393,6 +431,7 @@ export class RiderModel {
     helmet.position.copy(head).add(v(-0.015, 0.02));
     helmet.rotation.z = -0.3;
     helmet.castShadow = true;
+    this.primHelmet = helmet;
     const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.012, 6, 24, Math.PI), M.accent);
     stripe.scale.set(1.3, 0.9, 1);
     stripe.position.copy(helmet.position);
@@ -411,7 +450,10 @@ const HIP_CENTRE = v(-0.17, 0.93); // midpoint between the hip joints, just abov
 const BACK_ANGLE = (40 * Math.PI) / 180; // hip-to-shoulder line, measured from horizontal
 const PELVIS_TILT = (28 * Math.PI) / 180; // pelvis rolled forward on the saddle
 const HAND = (side: number) => v(0.6, 0.865, 0.2 * side); // on the brake hoods
+const HAND_TT = (side: number) => v(0.78, 0.84, 0.07 * side); // on the tri-bar extensions
+const BACK_ANGLE_TT = (22 * Math.PI) / 180; // a flat time-trial back
 const HEAD_UP = v(0.42, 0.91).normalize(); // head tilted up to look along the road
+const HEAD_UP_TT = v(0.8, 0.6).normalize(); // chin down, eyes up the road
 const ELBOW_POLE = (side: number) => v(-0.2, -1, 0.5 * side); // elbows bend down and out
 const KNEE_POLE = (side: number) => v(1, 0.15, 0.12 * side); // knees point forward
 const BB_HEIGHT = 0.27; // bottom bracket height, as in RiderModel
@@ -424,6 +466,8 @@ const TOE_DROP = 0.045; // toe target below the pedal: a level shoe over the top
  */
 class Rig {
   readonly root = new THREE.Group();
+  /** On a time-trial bike: forearms on the pads, hands on the extensions, a flatter back. */
+  tt = false;
   private readonly bones = new Map<string, THREE.Object3D>();
   private readonly rest = new Map<THREE.Object3D, THREE.Quaternion>();
   private readonly len = new Map<string, number>();
@@ -463,6 +507,11 @@ class Rig {
     this.root.position.copy(HIP_CENTRE).sub(hips);
   }
 
+  /** The head bone, to hang a helmet on. */
+  head(): THREE.Object3D | null {
+    return this.bones.get('Head') ?? null;
+  }
+
   private bone(name: string) {
     const b = this.bones.get(name);
     if (!b) throw new Error(`rider.glb has no bone named ${name}`);
@@ -480,16 +529,17 @@ class Rig {
     // curves instead of hinging, ending with the neck on a BACK_ANGLE line
     // from the hip joints.
     this.aim('Hips', 'Spine02', pos('Hips').add(dir(v(Math.sin(PELVIS_TILT), Math.cos(PELVIS_TILT)))));
-    const neck = world(v(HIP_CENTRE.x + this.torso * Math.cos(BACK_ANGLE), HIP_CENTRE.y + this.torso * Math.sin(BACK_ANGLE)));
+    const back = this.tt ? BACK_ANGLE_TT : BACK_ANGLE;
+    const neck = world(v(HIP_CENTRE.x + this.torso * Math.cos(back), HIP_CENTRE.y + this.torso * Math.sin(back)));
     this.aim('Spine02', 'neck', neck, 0.6);
     this.aim('Spine01', 'neck', neck, 0.8);
     this.aim('Spine', 'neck', neck, 1);
     const head = pos('Head');
-    this.aim('Head', 'head_end', head.add(dir(HEAD_UP).multiplyScalar(0.2)));
+    this.aim('Head', 'head_end', head.add(dir(this.tt ? HEAD_UP_TT : HEAD_UP).multiplyScalar(0.2)));
 
     for (const [side, s] of [[-1, 'Left'], [1, 'Right']] as const) {
       // Arms to the hoods.
-      const hand = world(HAND(side));
+      const hand = world(this.tt ? HAND_TT(side) : HAND(side));
       const elbow = ik3(pos(`${s}Arm`), hand, this.len.get(`${s}Upper`)!, this.len.get(`${s}Fore`)!, dir(ELBOW_POLE(side)));
       this.aim(`${s}Arm`, `${s}ForeArm`, elbow);
       this.aim(`${s}ForeArm`, `${s}Hand`, hand);

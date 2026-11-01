@@ -37,7 +37,7 @@ These are the current settings (Neon Console → **Auth**):
 | --- | --- | --- |
 | Email and password | On | Riders can create accounts without Google. |
 | Allow sign-up | On | |
-| Verify email on sign-up | Off | No code to type in; riders start riding straight away. |
+| Verify email on sign-up | Off | No code to type in; riders start riding straight away. See [Turning on email verification](#turning-on-email-verification). |
 | App name | *American Flyers* | Shown in password reset emails. |
 | Email sender | Neon's shared sender (`auth@mail.myneon.app`) | Fine to start with. For better delivery, add your own email provider in the Neon Console. |
 
@@ -47,7 +47,24 @@ These are the current settings (Neon Console → **Auth**):
 
 ### Turning on email verification
 
-If you want proof that riders own their email address, turn on **Verify email on sign-up** in the Neon Console. The app would then need a step to enter the code Neon emails; ask a developer to add it first, or new riders won't be able to finish signing up.
+The app already has the verification step (a 6-digit code), so this can be switched on without a new deploy. In the Neon Console go to the project's branch **Settings → Auth → Email and password** and set:
+
+| Setting | Value | Effect |
+| --- | --- | --- |
+| Verify email on sign-up (`verify_email_on_sign_up`) | On | Neon emails a 6-digit code when someone signs up. |
+| Verification method (`email_verification_method`) | Verification code (`otp`; already the current value) | Codes, not links. Links need your own email provider. |
+| Require email verification (`require_email_verification`) | On | The account isn't signed in until the code is entered, so the app shows the code box after sign-up. If you leave this Off, riders are signed in at once and only see the "Verify your email" banner in their profile. |
+| Verify email on sign-in (`verify_email_on_sign_in`) | On | An existing unverified account that signs in is emailed a code, and the app shows the code box. |
+| Auto sign in after verification (`auto_sign_in_after_verification`) | On (already) | The rider is signed in as soon as the code is right. |
+
+With the CLI: `neon neon-auth config email-password update --enabled --require-email-verification`. The same settings are in the API's *Update email and password configuration* endpoint.
+
+Things to know before switching it on:
+
+- **Existing email accounts are unverified.** With "Require" on, they can't sign in until they enter a code; the app asks for it and Neon sends it (that is why "Verify on sign-in" should be On). Google accounts are already verified.
+- Codes last 15 minutes and are rate limited. Neon's shared sender (`auth@mail.myneon.app`) has low limits, so add your own email provider first for real use (see Neon's [production checklist](https://neon.com/docs/auth/production-checklist#email-provider)).
+- Test with a new address: sign up, check the email, enter the code. Then sign out and sign back in.
+- The app works the same with everything Off: no code step is shown.
 
 Admins need a verified email (see [Managing admins](managing-admins.md)). Google accounts are verified; email accounts aren't while verification is off.
 

@@ -30,7 +30,13 @@ export interface PanelData {
   jerseys: { yellow: string | null; green: string | null; polka: string | null };
   message: string | null;
   raceTime: number;
+  /** Metres: the front-most rider on the road (you included). */
+  leadPos: number;
 }
+
+/** Scheduled races step the field in fixed slices (seconds) so it is the same on every device. */
+export const EVENT_STEP = 0.25;
+const EVENT_CATCH_UP_STEPS = 600; // at most 150 s of racing caught up per frame (for late joiners)
 
 const short = (t: number) => TEAMS[t]?.short ?? '';
 
@@ -40,6 +46,8 @@ export class LiveRace {
   readonly roster: RosterEntry[];
   private countdown = 3; // seconds until GO (3, 2, 1, GO!)
   private shown = 4;
+  /** Scheduled event (events.ts): seconds since the event's start by the server's clock (negative before it). */
+  private clock: (() => number) | null = null;
   private message: { text: string; until: number } | null = null;
   private done: ResultRow[] | null = null;
   /** Called on each countdown beep (`true` for the long one as the race starts). */
@@ -71,16 +79,36 @@ export class LiveRace {
 
   get countText(): string | null {
     if (this.phase !== 'countdown') return this.phase === 'racing' && this.time < 1.2 ? 'GO!' : null;
+    if (this.countdown > 3) return null; // waiting in an event lobby: the 3-2-1 begins at 3
     return String(Math.max(1, Math.ceil(this.countdown)));
+  }
+
+  /** Seconds until the start (only meaningful in the countdown). */
+  get untilGo() {
+    return this.countdown;
+  }
+
+  /**
+   * Makes this a scheduled event race: the start and the race clock come from `secondsSinceStart`
+   * (the server's clock minus the event's start), so every rider's 3-2-1 and the bots (stepped in
+   * fixed slices from the event's seed) line up. Someone joining late starts with the field already racing.
+   */
+  useEventClock(secondsSinceStart: () => number) {
+    this.clock = secondsSinceStart;
+    const t = secondsSinceStart();
+    this.countdown = -t;
+    this.phase = t >= 0 ? 'racing' : 'countdown';
+    if (t >= 0) this.shown = 0;
   }
 
   /** Advances the race by one frame. `distance` and `speed` are the player's. */
   update(dt: number, distance: number, speed: number) {
     const sim = this.field.sim;
     if (this.phase === 'countdown') {
-      this.countdown -= dt;
+      if (this.clock) this.countdown = -this.clock();
+      else this.countdown -= dt;
       const n = Math.max(0, Math.ceil(this.countdown));
-      if (n < this.shown) {
+      if (n < this.shown && n <= 3) {
         this.shown = n;
         this.onBeep(n === 0);
       }
@@ -88,7 +116,11 @@ export class LiveRace {
       return;
     }
     if (this.phase === 'finished') return;
-    sim.step(dt);
+    if (this.clock) {
+      // Fixed slices up to the shared race clock keep the bots the same on every device.
+      const target = this.clock();
+      for (let i = 0; i < EVENT_CATCH_UP_STEPS && sim.t + EVENT_STEP <= target; i++) sim.step(EVENT_STEP);
+    } else sim.step(dt);
     sim.reportPlayer(ME, distance, speed);
     for (const e of sim.events.splice(0)) {
       this.message = { text: e.text, until: performance.now() + 12000 };
@@ -166,6 +198,7 @@ export class LiveRace {
       jerseys: this.jerseys(states, lead, leadSpeed, distance),
       message: this.message && this.message.until > performance.now() ? this.message.text : null,
       raceTime: sim.t,
+      leadPos: lead,
     };
   }
 

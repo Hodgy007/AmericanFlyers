@@ -25,6 +25,8 @@ import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, 
 import { RideRecorder } from './cloud/recorder';
 import { initAccountUi } from './cloud/ui';
 import { initHome } from './home';
+import { initPrivacyUi } from './privacyUi';
+import { leaderboardEligible, leaderboardNote, type RideFlags } from './rideIntegrity';
 import { Presence } from './cloud/presence';
 import { initRidersUi } from './ridersUi';
 import { Ghost, raceTime } from './ghost';
@@ -46,12 +48,22 @@ import { Steering } from './steering';
 import { initAtmosphereUi } from './atmosphereUi';
 import { kitString, onLookChange, playerLook, setPlayerKit, setTourJersey } from './kit';
 import { initKitUi } from './kitUi';
+import { Garage, rewardText } from './garage/garage';
+import { initGarageUi } from './garage/garageUi';
+import { attachShare, shareDataFromRide, shareRideFromActivity, runShare } from './garage/shareUi';
+import { levelTitle } from './garage/progression';
 import { RideOns } from './cloud/rideOns';
 import { initRideOnsUi } from './rideOnsUi';
 // Racing and the Hell of the West tour (race.ts, raceUi.ts, tour.ts, tourUi.ts).
 import { LiveRace, raceSetup, type ResultRow } from './race';
 import { initRaceUi, resultsNode } from './raceUi';
 import { initTourUi } from './tourUi';
+// Scheduled group rides and races, and the race commentator (schedule.ts, eventSession.ts, eventsUi.ts, commentary.ts, cloud/events.ts).
+import { ClipPlayer, Commentator, RaceCommentary } from './commentary';
+import { DropWatcher, EVENT_REF_WKG, eventOver, mergeEventResults, secondsSinceStart, type ActiveEvent, type RealResult } from './eventSession';
+import { eventResultsNode, initEventBar, initEventsUi } from './eventsUi';
+import { eventResults, serverNow, submitEventResult, syncServerClock, type EventRow } from './cloud/events';
+import { countdownLabel, eventStageKey, joinState } from './schedule';
 import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChange, priorTotals, recordStage, refWkg, simulateStage, tourComplete, tourJersey, tourStageNumber } from './tour';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -69,7 +81,7 @@ let demo = false;
 let demoPower = 150;
 
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
-const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false };
+const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 };
 const drivetrain = new Drivetrain(); // keeps the legs in step with the wheels
 const powerSamples: { t: number; p: number }[] = [];
 const zoneRefs = () => settings;
@@ -82,6 +94,14 @@ const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
 let race: LiveRace | null = null; // the race being ridden, if any
 const raceUi = initRaceUi();
+// The race commentator: voice lines for race events, quieter ride sounds while it speaks.
+const clipPlayer = new ClipPlayer();
+clipPlayer.onDuck = (on) => sound.duck(on);
+const commentator = new Commentator(clipPlayer, () => performance.now() / 1000);
+let raceCommentary: RaceCommentary | null = null;
+let clipsPreloaded = false;
+/** The scheduled event you have joined (a race or a group ride), if any. */
+let eventState: { ev: ActiveEvent; drop: DropWatcher; demoUsed: boolean } | null = null;
 let draft: Draft | null = null; // the rider just ahead, if any
 let lastCrossShift = 0; // crosswind echelon: metres right of a rider's line the shelter sits
 let draftSaving = 0; // fraction of air drag saved, eased
@@ -173,8 +193,9 @@ function controlTrainer() {
   const road = gradeAt(ride.distance) * 100 * (settings.difficulty / 100);
   const gear = settings.virtualShifting ? gearGradeOffset(vGear) : 0;
   const target = Math.round(Math.max(-10, Math.min(20, road + gear)) * 10) / 10;
-  // In someone's draft the trainer's wind resistance drops too, so it feels easier.
-  const dragFactor = Math.round((1 - draftSaving) * 20) / 20;
+  // In someone's draft the trainer's wind resistance drops too, so it feels easier;
+  // aero kit from the garage (frame, wheels, helmet, suit) trims it a little as well.
+  const dragFactor = Math.round((1 - draftSaving) * garage.effects().cdaFactor * 50) / 50;
   // The road's wind goes to the trainer's simulation too (headwind positive), in half-metre steps.
   const headwind = Math.round(roadWind(ride.distance).head * 2) / 2;
   if (Math.abs(target - lastSentGrade) < 0.1 && dragFactor === lastSentWind && headwind === lastSentHeadwind) return;
@@ -224,7 +245,7 @@ function setDemo(on: boolean) {
 }
 
 // Demo rides: click or tap the profile strip at the bottom to jump along the
-// route. Not in races (that would be cheating) or workouts (the strip shows the
+// route. Not in races or scheduled events (that would be cheating) or workouts (the strip shows the
 // workout then). The jump doesn't count as distance or climbing, and moves the
 // start too, so the ride never earns a full-stage time on the leaderboard.
 
@@ -237,7 +258,7 @@ function profileSpan(): [number, number] {
 }
 
 function canJump() {
-  return demo && !player && !race;
+  return demo && !player && !race && !eventState;
 }
 
 function profileDistanceAt(clientX: number) {
@@ -295,6 +316,16 @@ const steering = new Steering(); // where you ride across the road
 // Your kit (src/kit.ts): the world's rider follows it, including any tour jersey laid over it.
 onLookChange((look) => world.setPlayerLook(look));
 setPlayerKit(settings.kit);
+// The garage (src/garage): what you ride and wear, your level and credits. Its loadout is saved with the settings.
+const garage = new Garage({
+  saved: () => settings.loadout,
+  save: (l) => {
+    settings = { ...settings, loadout: l };
+    saveSettings(settings);
+    pushSettings(settings);
+  },
+  toast: (m, ms) => toast(m, ms),
+});
 const profileCanvas = $<HTMLCanvasElement>('profile');
 // `?start=12` begins the ride 12 km in, handy for jumping to the hills.
 const startKm = Number(new URLSearchParams(location.search).get('start'));
@@ -305,6 +336,8 @@ if (startKm > 0) {
 
 // `?timescale=8` runs the clock 8× faster (up to 20×), for testing whole races in a minute.
 const TIME_SCALE = Math.min(20, Math.max(1, Number(new URLSearchParams(location.search).get('timescale')) || 1));
+// Trust and safety: demo-slider rides and ?timescale rides never get a leaderboard time (src/rideIntegrity.ts).
+const rideFlags: RideFlags = { usedDemo: false, timeScale: TIME_SCALE };
 let lastFrame = performance.now();
 let lastHud = 0;
 
@@ -328,6 +361,7 @@ function frame(now: number) {
     const target = player && !player.done && !player.paused ? player.targetWatts() : null;
     if (target !== null) setDemoPower(Math.round(target + Math.sin(now / 900) * 4));
     live.power = demoPower;
+    if (demoPower > 0) rideFlags.usedDemo = true;
     live.cadence = demoPower <= 0 ? 0
       : settings.virtualShifting && ride.speed > 2 ? Math.round(Math.min(140, gearCadence(ride.speed, vGear)))
       : Math.round(78 + demoPower / 25 + Math.sin(now / 1700) * 3);
@@ -351,7 +385,7 @@ function frame(now: number) {
   // Other riders on the road, and the draft from the one just ahead.
   const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders() : [];
   if (race) race.update(dt, ride.distance, ride.speed); // the field races with you
-  if (settings.proTeams || race) {
+  if (settings.proTeams || race || eventState) {
     peloton.update(dt);
     liveRiders.push(...peloton.riders());
   }
@@ -362,12 +396,19 @@ function frame(now: number) {
   draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
 
   const grade = gradeAt(ride.distance);
+  // ---- Garage equipment (src/garage): frame, wheels, tyres, helmet and suit change mass, drag area and rolling resistance. ----
+  const equipment = garage.effects();
   ride.speed = stepSpeed(ride.speed, live.power, grade, dt, {
     ...DEFAULT_PARAMS,
-    massKg: settings.riderKg + settings.bikeKg,
-    cda: DEFAULT_PARAMS.cda * (1 - draftSaving),
+    massKg: settings.riderKg + settings.bikeKg + equipment.massKg,
+    cda: DEFAULT_PARAMS.cda * equipment.cdaFactor * (1 - draftSaving),
+    crr: DEFAULT_PARAMS.crr + equipment.crrDelta,
   }, roadWind(ride.distance).head); // air speed = road speed + headwind
-  if (race?.holding) ride.speed = 0; // waiting on the line for the start
+  // ---- end of garage equipment ----
+  // Distance ridden within 30 m of a pro team (a weekly challenge).
+  if (!ride.finished && ride.speed > 0.3 && liveRiders.some((r) => r.team && Math.abs(r.distance - ride.distance) < 30)) ride.proM += ride.speed * dt;
+  if (race?.holding || eventHolding()) ride.speed = 0; // waiting on the line for the start
+  if (eventState && demo) eventState.demoUsed = true; // demo riding keeps you off the event results
   ride.distance += ride.speed * dt;
   if (ride.speed > 0.3 && !ride.finished) {
     ride.movingTime += dt;
@@ -423,7 +464,10 @@ function frame(now: number) {
     climbUi.update(ride.distance, settings.miniMap, !ride.finished, settings.units === 'imperial');
     placeBelowHud();
     raceUi.countdown(race?.countText ?? null);
-    raceUi.panel(race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null, settings.units === 'imperial');
+    const panelData = race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null;
+    raceUi.panel(panelData, settings.units === 'imperial');
+    updateCommentary(panelData);
+    updateEvent();
     if (player) {
       drawWorkout(profileCanvas, player.steps, { elapsed: player.elapsed, trace: player.trace });
     } else {
@@ -558,7 +602,7 @@ function updateDraftPanel() {
   const gapText = imperial ? `${Math.round(draft.gap * 3.28084)} ft` : `${draft.gap < 10 ? draft.gap.toFixed(1) : Math.round(draft.gap)} m`;
   const v = ride.speed;
   const airSpeed = Math.max(0, v + roadWind(ride.distance).head);
-  const watts = 0.5 * 1.225 * DEFAULT_PARAMS.cda * airSpeed * airSpeed * v * draftSaving / 0.976;
+  const watts = 0.5 * 1.225 * DEFAULT_PARAMS.cda * garage.effects().cdaFactor * airSpeed * airSpeed * v * draftSaving / 0.976;
   // Behind them but off their line: the gauge says which way to move.
   const offLine = draft.gap <= DRAFT_MAX_GAP && draft.overlap < 0.5;
   const move = draft.offset < 0 ? '◀' : '▶';
@@ -753,7 +797,11 @@ function buildActivity(): Activity {
     hr_zones: zones(stats.hrZones),
     power_zones: zones(stats.powerZones),
     max_hr_setting: settings.maxHr,
-    finish_s: ride.finished && ride.finishTime > 0 ? Math.round(ride.finishTime) : null,
+    finish_s: ride.finished && ride.finishTime > 0 && leaderboardEligible(rideFlags) ? Math.round(ride.finishTime) : null,
+    demo: !leaderboardEligible(rideFlags), // the database also ignores these rides for leaderboards
+    race_place: ride.racePlace > 0 ? ride.racePlace : null, // weekly challenges: race wins and podiums
+    race_size: ride.raceSize > 0 ? ride.raceSize : null,
+    pro_m: ride.proM > 0 ? Math.round(ride.proM) : null, // metres ridden with a pro team
     samples: recorder.samples,
   };
 }
@@ -789,6 +837,13 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
     lastSavedSeconds = stats.seconds;
     accountUi.invalidate();
     if (showNote) note.textContent = '✓ Saved to your rides';
+    // Credits and levels come from the server's count of your saved rides.
+    garage.afterRide().then((r) => {
+      if (!r || opts.quiet) return;
+      const text = rewardText(r);
+      if (text && showNote) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
+      if (r.levelAfter > r.levelBefore) toast(`⭐ Level ${r.levelAfter}!`, 5000);
+    }).catch(() => { /* credits are a bonus */ });
   } catch (e) {
     if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
     else if (!opts.quiet) toast(`Couldn’t save your ride: ${(e as Error).message}`);
@@ -861,11 +916,15 @@ function endRide() {
 function resetRide() {
   if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) saveRide({ quiet: true });
   recorder = new RideRecorder();
+  rideFlags.usedDemo = false;
   lastSavedSeconds = 0;
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
-  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false });
+  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
   if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); } // starting afresh ends a race
+  raceCommentary = null;
+  clipPlayer.stop();
+  endEvent(); // ...and leaves a scheduled event
   drivetrain.reset();
   powerSamples.length = 0;
   stats = new RideStats(zoneRefs);
@@ -992,7 +1051,7 @@ function beginRace(stage: Stage, tourStage: number | null = null) {
   const { roster, course } = raceSetup(stage, seed);
   const field = peloton.startRace(course, roster, refWkg(settings.ftp, settings.riderKg), seed);
   race = new LiveRace(stage, field, priorTotals(tour, stage.id), tourStage);
-  race.onBeep = (last) => sound.beep(last);
+  attachRace(race);
   const stageNo = tourStage ? `Stage ${tourStage} of the tour · ` : '';
   toast(`${stageNo}${stage.name.replace('Hell of the West · ', '')}: roll up to the line.`, 4000);
 }
@@ -1049,6 +1108,165 @@ function updateTourJersey() {
 }
 updateTourJersey();
 
+// ------------------------------------------------- scheduled events ----
+// Group rides and races at set times (schedule.ts; the server keeps the schedule and the
+// clock). Joining puts you on the start line of the event's stage, in a presence room of
+// its own, with a 3-2-1 that starts at the same moment for everyone.
+
+const eventBar = initEventBar(() => {
+  const was = eventState?.ev;
+  resetRide();
+  if (was) toast(`You left ${was.title}.`);
+});
+
+initEventsUi({
+  join: (row) => { joinEvent(row); },
+  stageName: (id) => stageById(id).name,
+  openSignIn: (why) => accountUi.openSignIn(why),
+  currentEventId: () => eventState?.ev.id ?? null,
+});
+
+function eventHolding() {
+  return !!eventState && eventState.ev.kind === 'group_ride' && secondsSinceStart(eventState.ev, serverNow()) < 0;
+}
+
+/** Wires a new race to the beeps and the commentator (single races, tour stages and events). */
+function attachRace(r: LiveRace) {
+  r.onBeep = (last) => sound.beep(last);
+  commentator.reset();
+  raceCommentary = new RaceCommentary(commentator);
+  r.onEvent = (text, kind) => raceCommentary?.event(text, kind);
+  if (!clipsPreloaded && settings.commentary && sound.enabled) { clipsPreloaded = true; ClipPlayer.preload(); }
+}
+
+async function joinEvent(row: EventRow) {
+  if (!account()) { accountUi.openSignIn('Sign in (free) to join group rides and races.'); return; }
+  await syncServerClock();
+  const startsAtMs = new Date(row.starts_at).getTime();
+  if (joinState(row.kind, startsAtMs, serverNow()) !== 'open') { toast('That event isn’t open to join right now.'); return; }
+  const stage = stageById(row.stage_id);
+  if (stage.id !== row.stage_id || (row.kind === 'race' && stage.finish === null)) { toast('Sorry, that event’s stage isn’t available.'); return; }
+  if (stage !== currentStage()) chooseStage(stage);
+  else resetRide();
+  const ev: ActiveEvent = {
+    id: row.id, kind: row.kind, stageId: row.stage_id, title: row.title, startsAtMs, seed: row.seed, paceWkg: row.pace_wkg, durationMin: row.duration_min,
+  };
+  eventState = { ev, drop: new DropWatcher(), demoUsed: false };
+  const clock = () => secondsSinceStart(ev, serverNow());
+  if (ev.kind === 'race') {
+    const { roster, course } = raceSetup(stage, ev.seed);
+    const field = peloton.startRace(course, roster, EVENT_REF_WKG, ev.seed);
+    race = new LiveRace(stage, field, new Map(), null);
+    race.useEventClock(clock);
+    attachRace(race);
+  } else {
+    peloton.startGroupRide(ev.paceWkg ?? 2.6, ev.seed, clock);
+  }
+  presence.restage(); // only riders in this event see each other
+  toast(clock() < 0 ? `You’re on the line for ${ev.title}. The start is synchronised for everyone.` : `${ev.title} is under way. Go!`, 5000);
+  updateEvent();
+}
+
+/** Leaves the event (you finish, reset, or pick another stage): the road goes back to normal. */
+function endEvent() {
+  if (!eventState) return;
+  eventState = null;
+  peloton.endGroupRide(ride.distance);
+  eventBar.hide();
+  presence.restage();
+}
+
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** About five times a second: the lobby countdown, the group ride's "you've been dropped" notes. */
+function updateEvent() {
+  if (!eventState) return;
+  const { ev } = eventState;
+  const t = secondsSinceStart(ev, serverNow());
+  const others = presence.count;
+  if (t < 0) {
+    const where = others > 0 ? ` · ${others} other rider${others === 1 ? '' : 's'} on the line` : '';
+    eventBar.show(ev.title, `${t > -3600 ? `Starts in ${mmss(-t)}` : countdownLabel(-t * 1000)}${where}`);
+    return;
+  }
+  if (ev.kind === 'race') { eventBar.hide(); return; }
+  // Group ride.
+  if (eventOver(ev, serverNow())) {
+    toast('The group ride is over. Thanks for riding!', 6000);
+    resetRide();
+    return;
+  }
+  const g = peloton.groupRide;
+  if (!g) return;
+  const gap = peloton.back(g) - ride.distance; // metres behind the back of the group
+  const note = eventState.drop.update(gap, performance.now() / 1000);
+  if (note === 'dropped') toast('You’ve been dropped. The group keeps its pace and won’t wait: dig in to get back on, or ride your own ride.', 6000);
+  if (note === 'back') toast('Back with the group. Nice work!', 3500);
+  const status = eventState.drop.isDropped
+    ? `${Math.round(gap)} m off the back`
+    : gap > 8 ? `${Math.round(gap)} m behind the group` : gap < -8 ? `${Math.round(-gap)} m ahead of the group` : 'with the group';
+  eventBar.show(ev.title, `${status} · ${mmss(t)} in`);
+}
+
+/** The race commentator: feeds it this frame's race picture. Called with the live panel's numbers. */
+function updateCommentary(panel: ReturnType<LiveRace['panel']> | null) {
+  commentator.enabled = settings.commentary && sound.enabled;
+  if (!race || !raceCommentary) return;
+  if (race.phase === 'countdown' && race.untilGo > 5 && race.untilGo <= 30) raceCommentary.lobby();
+  if (!panel) { commentator.tick(); return; }
+  raceCommentary.update({
+    t: panel.raceTime,
+    place: panel.place,
+    total: panel.total,
+    myDistance: ride.distance,
+    leadDistance: panel.leadPos,
+    finish: race.course.finish,
+    power: live.power,
+    ftp: settings.ftp,
+    groups: panel.groups,
+    yellowIsYou: panel.jerseys.yellow === 'You',
+    tour: race.tourStage !== null,
+    summits: race.course.lines.filter((l) => l.kind === 'summit').map((l) => l.d),
+    dt: 0.2,
+  });
+}
+
+/**
+ * The finish card's event table: your time, the real riders who have finished and the computer
+ * field, merged by time. Sends your result (unless this was a demo ride or a sped-up clock) and
+ * keeps looking for new results while the card is open.
+ */
+function eventFinishPanel(ev: ActiveEvent, rows: ResultRow[], myTime: number, avgPower: number, demoUsed: boolean): Node {
+  const box = document.createElement('div');
+  const bots = rows.map((r) => ({ name: r.name, time: r.time, team: r.team, you: r.you }));
+  const draw = (real: RealResult[]) => box.replaceChildren(eventResultsNode(mergeEventResults(bots, real, myTime), real.filter((r) => !r.is_me).length + 1));
+  draw([]);
+  const eligible = !demoUsed && TIME_SCALE === 1 && avgPower > 0;
+  const note = document.createElement('p');
+  note.className = 'muted small';
+  if (!eligible) note.textContent = 'Demo rides and sped-up clocks don’t count towards the event results.';
+  const refresh = async () => {
+    try {
+      const real = await eventResults(ev.id);
+      draw(real.map((r) => ({ name: r.name, finish_s: r.finish_s, is_me: r.is_me })));
+      if (!eligible) box.append(note);
+    } catch { /* results are a bonus */ }
+  };
+  (async () => {
+    if (eligible) {
+      try { await submitEventResult(ev.id, myTime, avgPower); } catch (e) { note.textContent = `Couldn’t send your result: ${(e as Error).message}`; box.append(note); }
+    }
+    await refresh();
+    // Other riders are still finishing: look again every 15 s while the card is open (up to 10 minutes).
+    let n = 0;
+    const timer = window.setInterval(() => {
+      if ($('finish').hidden || ++n > 40) { window.clearInterval(timer); return; }
+      refresh();
+    }, 15000);
+  })();
+  return box;
+}
+
 function showFinish() {
   ride.finished = true;
   sound.fanfare();
@@ -1075,21 +1293,44 @@ function showFinish() {
   ];
   let extra: Node[] = zoneSummary(stats);
   let title = `${currentStage().name}: finished!`;
+  let shareHeadline: string | undefined;
+  const shareBadges: string[] = [];
   if (racing) {
     racing.update(0.001, ride.distance, ride.speed); // make sure the line is recorded for this frame
     const r = finishRace(racing);
+    ride.racePlace = r.place;
+    ride.raceSize = r.rows.length;
+    shareHeadline = `${ordinal(r.place)} of ${r.rows.length}`;
+    if (r.tour) shareBadges.push(...myJerseys(r.tour).map((j) => `👕 ${JERSEY_NAMES[j]}`));
     items.splice(0, 1, ['Place', `${ordinal(r.place)} of ${r.rows.length}`], ['Race time', raceTime(r.me.time)]);
     items.splice(2, 0, ['Points', `${r.me.sprint} sprint · ${r.me.kom} mountain`]);
     items.length = Math.min(items.length, 6);
     title = `${currentStage().name}: ${ordinal(r.place)}`;
     extra = [resultsNode(r.rows, r.tour), ...extra];
     actions = r.actions;
+    raceCommentary?.finished(r.place);
+    if (eventState?.ev.kind === 'race') extra = [eventFinishPanel(eventState.ev, r.rows, r.me.time, avgPower, eventState.demoUsed), ...extra];
     race = null; // the race is over: the teams go back to riding the road
     peloton.endRace(ride.distance);
     raceUi.panel(null, false);
+    endEvent(); // the lobby and presence go back to the normal road
   }
   showSummary('🏁', title, items, actions, extra);
   $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
+  const offBoard = leaderboardNote(rideFlags);
+  if (offBoard) $('finish-extra').prepend(Object.assign(document.createElement('p'), { className: 'finish-ghost off-board', textContent: `ℹ️ ${offBoard}` }));
+  // 📤 Share: a picture of the ride (route, numbers, place, your colours).
+  const finishStage = currentStage();
+  const finishFrom = ride.startDistance;
+  const finishTo = ride.distance;
+  attachShare($('finish-actions'), () => shareDataFromRide({
+    stage: finishStage, fromM: finishFrom, toM: finishTo, title: finishStage.name.replace('Hell of the West · ', ''),
+    subtitle: `${racing ? 'Race · ' : ''}${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    timeS: ride.movingTime, avgPower, climbedM: ride.climbed, distanceM: finishTo - finishFrom,
+    headline: shareHeadline ?? (vsGhost !== null && vsGhost < 0 && ghost?.isMe ? 'New personal best' : undefined),
+    badges: shareBadges, imperial, kit: settings.kit,
+    rider: garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined,
+  }), toast);
   if (vsGhost !== null && ghost) {
     const who = ghost.isMe ? 'your best' : `${ghost.name}’s ghost`;
     $('finish-title').textContent = vsGhost < 0 && ghost.isMe
@@ -1105,7 +1346,7 @@ function showFinish() {
 
 /** After a whole-stage ride is saved: where it puts you on the leaderboard. */
 async function showRank() {
-  if (!account() || !ride.finishTime) return;
+  if (!account() || !ride.finishTime || !leaderboardEligible(rideFlags)) return;
   try {
     const rows = await stageLeaderboard(currentStage().id);
     const me = rows.find((r) => r.is_me);
@@ -1178,6 +1419,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     virtualShifting: data.get('virtualShifting') === 'on',
     wind: data.get('wind') === 'on',
     miniMap: data.get('miniMap') === 'on',
+    commentary: data.get('commentary') === 'on',
   };
   saveSettings(settings);
   pushSettings(settings);
@@ -1342,6 +1584,8 @@ const accountUi = initAccountUi({
   onRiderDetails: saveRiderDetails,
   settings: () => settings,
   toast,
+  // 📤 Share on a ride in your profile.
+  shareRide: (a) => runShare(shareDataFromRide(shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined)), toast),
   context: () => ({
     stage: currentStage().name,
     workout: player?.workout.name ?? null,
@@ -1357,7 +1601,7 @@ onSyncError((msg) => toast(msg, 6000));
 
 const presence = new Presence(
   () => settings.rideTogether && !document.body.classList.contains('at-home')
-    ? { stageId: currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence, kit: kitString(playerLook()) }
+    ? { stageId: eventState ? eventStageKey(currentStage().id, eventState.ev.id) : currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence, kit: kitString(playerLook()) }
     : null,
   () => true,
 );
@@ -1502,6 +1746,16 @@ const kitUi = initKitUi({
   },
 });
 $('btn-menu-kit').addEventListener('click', () => kitUi.open());
+// 🚲 Garage & store (src/garage): bikes, wheels and clothes, bought with credits earned from riding.
+const garageUi = initGarageUi({
+  garage,
+  ctx: () => ({ riderKg: settings.riderKg, bikeKg: settings.bikeKg, ftp: settings.ftp }),
+  imperial: () => settings.units === 'imperial',
+  night: () => world.nightAmount,
+  openSignIn: (why) => accountUi.openSignIn(why),
+  toast,
+});
+$('btn-menu-garage').addEventListener('click', () => garageUi.open());
 
 initRidersUi({
   presence,
@@ -1523,14 +1777,17 @@ onAccountChange(async (a) => {
   if (!a) {
     forgetLocalCopies();
     ghost = null;
+    garage.refresh(); // signed out: back to the starter kit and no wallet
     return;
   }
+  garage.refresh(); // level, credits and what you own (this also applies your loadout)
   try {
     const remote = await syncOnSignIn(settings);
     if (remote) {
       settings = { ...settings, ...remote };
       saveSettings(settings);
       setPlayerKit(settings.kit);
+      garage.apply(); // the account's loadout
       loadTour(settings.tour);
       updateTourJersey();
       hud.setFields(settings.dataFields);
@@ -1548,6 +1805,7 @@ onAccountChange(async (a) => {
       if (ob.open) ob.close();
     }
     await savePendingRide();
+    garage.refresh(); // a ride saved just now may have earned credits
     accountUi.checkAdmin(); // the session is settled now
     loadMyGhost();
     toast(`Signed in as ${a.name}`);
@@ -1556,6 +1814,7 @@ onAccountChange(async (a) => {
   }
 });
 // The Bluetooth note and the first-ride guide wait until the rider leaves the home page.
+initPrivacyUi(); // the Privacy dialog; any element with data-privacy opens it
 initHome({
   onRiderDetails: saveRiderDetails,
   defaults: () => settings,

@@ -29,6 +29,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `public/images/hero*.jpg`, `hero*.mp4` | The home page hero (still and looping video, with smaller phone versions). |
 | `public/images/hero-dog*.jpg`, `hero-dog*.mp4` | The second hero: a pit bull chasing the rider. The home page rotates between the two heroes (`heroRotator()` in `src/home.ts`; `?hero=dog` or `?hero=rider` pins one). |
 | `public/icons/` | App icons (192, 512, maskable 512, Apple touch icon, favicon). |
+| `public/audio/commentary/*.mp3` | The race commentator's 39 voice lines (generated with Higgsfield; `CLIPS` in `src/commentary.ts` says what each one says). |
 | `public/manifest.webmanifest` | Makes the app installable: name, icons, full-screen display, colours. |
 | `public/sw.js` | Service worker: network-first pages, cached build files, models and textures. Never caches Neon. |
 
@@ -52,6 +53,11 @@ This page lists every file and folder in the repository, with a one-line summary
 | `raceSim.ts` | The race engine: riders in groups, attacks, breaks, chases, cracks, merges, sprints, lines and points. No DOM or Three.js. |
 | `race.ts` | The race you are riding: countdown, live panel numbers, jersey holders and results. |
 | `raceUi.ts` | The 3-2-1, the live race panel, and the result tables. |
+| `schedule.ts` | The daily event schedule as a pure function (client mirror of the SQL), countdown text and the join window. |
+| `eventSession.ts` | Pure logic for scheduled events: the shared clock, `DropWatcher` for group rides, and merging real and computer-ridden results. |
+| `eventsUi.ts` | The 🗓 Events dialog, the lobby bar and the finish card's event results. |
+| `commentary.ts` | The race commentator: rate-limited voice lines (`Commentator`), the race-to-lines mapping (`RaceCommentary`) and the audio player. |
+| `cloud/events.ts` | Event RPC calls and the server clock offset. |
 | `tour.ts` | The Hell of the West tour: progress in `settings.tour`, classifications, `tourJersey()`, and "simulate this stage". |
 | `tourUi.ts` | The tour dialog. |
 | `draft.ts` | Drafting: the drag saved at a given gap behind another rider, and the rider just ahead. |
@@ -64,6 +70,14 @@ This page lists every file and folder in the repository, with a one-line summary
 | `rideOnsUi.ts` | Ride-ons in the app: sending (from 👥 and the **R** key), the toast for ones you get, the floating emoji, and pro riders replying. |
 | `kit.ts` | Your kit (jersey, second colour, frame): the presets, validation, the kit string sent to the server, and `setTourJersey()` for tours. |
 | `kitUi.ts` | The ☰ Menu → 🎨 *My kit* dialog. |
+| `garage/catalogue.ts` | The store catalogue (items, prices, unlock rules, effects), loadout validation and `equipmentEffects()`. `scripts/gen-store-sql.mjs` prints the matching SQL seed. |
+| `garage/style.ts` | The bike and clothing style names the 3D model understands and the `;f=tron;…` codes in the kit string. |
+| `garage/progression.ts`, `garage/challenges.ts`, `garage/md5.ts` | The level curve, wallet parsing, and the weekly challenge pool and pick (mirrors the database). |
+| `garage/effects.ts` | What an item does in watts and seconds, from the ride's physics. |
+| `garage/store.ts`, `garage/garage.ts`, `garage/api.ts` | Item states and equipping, the controller (wallet, loadout, rewards) and the database calls. |
+| `garage/garageUi.ts`, `garage/preview.ts` | The Garage dialog and its turntable renderer. |
+| `garage/shareCard.ts`, `garage/shareUi.ts` | The share card canvas and the Share buttons. |
+| `world/bikeParts.ts` | Wheels, the Tron glow (`updateGlow`), helmets, and the jersey pattern and sock shader. |
 | `leaderboardUi.ts` | The 🏆 leaderboard dialog and *Race* buttons. |
 | `style.css` | All styles, including the layout for phones. |
 | `hud.ts` | The 24 data-block fields, the HUD tiles, and the data-block chooser dialog. |
@@ -103,6 +117,10 @@ This page lists every file and folder in the repository, with a one-line summary
 | `cloud/recorder.ts` | Records one sample per second while moving, and writes `.tcx` files. |
 | `cloud/achievements.ts` | Works out the 17 achievements from rides and FTP history. |
 | `cloud/charts.ts` | Draws the bar charts, line charts and stat tiles in the profile. |
+| `cloud/verification.ts` | Email verification codes: pure helpers (code cleaning, resend timer, error wording) and the two SDK calls. |
+| `cloud/codeEntry.ts`, `cloud/verifyBanner.ts` | The 6-digit code box (used in the email form and the profile banner). |
+| `cloud/privacy.ts`, `cloud/accountTab.ts` | "Download my data" and "Delete my account", and the profile tab that offers them. |
+| `privacyUi.ts`, `rideIntegrity.ts` | The Privacy dialog (any `data-privacy` element opens it); which rides may be on leaderboards. |
 | `cloud/ui.ts` | The sign-in and password-reset dialogs, the profile tabs, the feedback dialog, and the admin dashboard. |
 
 ## Tests and tooling

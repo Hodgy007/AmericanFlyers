@@ -170,3 +170,5 @@ When a rider sends feedback, the app attaches a context object: stage name, work
 - [Database schema](../reference/database-schema.md) for every column and constraint.
 - [Security](security.md) for what protects what.
 - [Admin guide](../admin-guide/managing-admins.md) for how admins are granted access.
+
+Garage, credits and challenges are described in [Garage, credits and challenges](garage.md).

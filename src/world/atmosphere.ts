@@ -267,6 +267,11 @@ export class Atmosphere {
   }
 
   /** The hour on the clock (0–24), for the readout and tests. */
+  /** 0..1: how dark it is (stars and moon showing); the Tron bike glows brighter with it. */
+  get nightAmount() {
+    return this.cur.night;
+  }
+
   get clockHour() {
     return this.hour;
   }

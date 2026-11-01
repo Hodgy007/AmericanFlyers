@@ -30,3 +30,7 @@ Press **Save kit** to keep it. **Cancel** (or ✕) puts your rider back as it wa
 When you ride together with other signed-in riders, your kit is sent along with your position, and they see your jersey and bike colours on the road, and their name tag for you gets a stripe in your jersey colour. You see theirs in the same way. Riders who haven't chosen a kit appear in a colour picked for them.
 
 Only the three colours are shared. Switch off **Ride together** in ⚙ Settings and nobody sees your kit.
+
+## Bikes and clothes from the garage
+
+Your kit colours are the base. What you buy in the [Garage & store](garage-and-credits.md) (frames, wheels, helmets, jersey designs, socks) is worn on top, and other riders see it too.

@@ -17,9 +17,10 @@ This page lists every setting, its default and range, and what it changes. Open 
 | Wind | On | On or off | Headwinds slow you and tailwinds help, crosswinds make the best shelter diagonal, and your trainer feels the headwind. See [Riding](riding.md#wind-and-echelons). |
 | Mini-map and climb preview | On | On or off | A small route map with riders on it, and a card for the next climb. Also in ☰ Menu. See [Riding](riding.md#mini-map-and-climb-preview). |
 | Pro teams on the road | On | On or off | Computer-ridden teams riding the stage at different paces. See [Riding together](riding-together.md#pro-teams). |
+| Race commentary | On | On or off | A commentator calls the action in races. Needs sound on. See [Group rides, races and the commentator](events-and-commentary.md#the-race-commentator). |
 | Ride together | On | On or off | Show you to other signed-in riders on the same stage, and them to you. See [Riding together](riding-together.md). |
 
-Your kit colours (☰ Menu → 🎨 My kit, see [My kit](my-kit.md)) are saved with your settings too, but you change them in their own dialog.
+Your kit colours (☰ Menu → 🎨 My kit, see [My kit](my-kit.md)) are saved with your settings too, but you change them in their own dialog. What you ride and wear from the [Garage](garage-and-credits.md) (`loadout`) is saved with your settings in the same way.
 
 Changing **FTP** in Settings adds an entry to your FTP history when you're signed in. See [Zones and FTP](zones-and-ftp.md).
 
