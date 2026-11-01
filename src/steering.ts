@@ -57,6 +57,8 @@ export class Steering {
     distance: number;
     riders: OtherRider[];
     lateralOf: (id: string) => number | undefined;
+    /** Crosswind echelon: the sheltered spot is this many metres to the right of their line (draft.ts). */
+    shift?: number;
   }) {
     if (this.held) {
       this.heldFor += dt;
@@ -79,7 +81,7 @@ export class Steering {
       if (gap >= 0 && gap <= AUTO_RANGE && gap < bestGap) { best = r; bestGap = gap; }
     }
     if (!best) return;
-    const line = clampLane(opts.lateralOf(best.id) ?? best.lane ?? this.target);
+    const line = clampLane((opts.lateralOf(best.id) ?? best.lane ?? this.target) + (opts.shift ?? 0));
     const diff = line - this.target;
     if (Math.abs(diff) < AUTO_DEADBAND) return;
     this.target = clampLane(this.target + Math.sign(diff) * Math.min(Math.abs(diff), AUTO_SPEED * dt));

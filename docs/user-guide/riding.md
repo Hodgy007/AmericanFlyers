@@ -49,6 +49,23 @@ Why steer? To line up on someone's wheel for the draft (see [Riding together](ri
 - **Auto** weather uses the stage's own (the Tourmalet is cloudy, the rest clear) and now and then changes.
 - **Night** has a moon and stars and a soft light from your front light on the road ahead. **Rain** brings streaks, thicker mist, a darker, glossier road and a gentle rain sound (with sound on).
 
+## Wind and echelons
+
+There's a breeze on every stage, and it changes with the weather: light on a clear day, stronger under cloud, strongest in the rain, with gusts. The **wind chip** at the right of the status line shows an arrow (up is the way you ride, so an arrow pointing down is a headwind), the speed, and words such as *Headwind*, *Tailwind* or *Crosswind from the left*.
+
+- A **headwind** slows you for the same power; a **tailwind** helps. Your smart trainer is told about the headwind too, so it feels harder or easier.
+- In a **crosswind** the shelter behind a rider isn't straight behind them but on their downwind side: about a quarter of a metre sideways for every metre per second of crosswind, up to about 0.8 m. Line up diagonally and you keep the draft. The draft gauge's *Move ◀ / ▶* hint points at the sheltered spot, and auto-steer aims for it.
+- The pro teams ride a diagonal **echelon** when it blows across the road, in a race as well as on a free ride.
+- Clouds drift with the wind, and the rain slants.
+
+Switch the wind off with **Wind** in ⚙ Settings if you'd rather ride in still air.
+
+## Mini-map and climb preview
+
+A round **mini-map** in the corner shows the shape of the route with you (white dot, red nose), other riders (blue), the pro teams (their colours), your ghost (a ring) and the finish (checkered). In a race it also marks intermediate sprints (green diamonds) and climb summits (red triangles). Click it to switch between the whole route with north up and a view that follows your heading and shows the road ahead. Turn it on or off in **☰ Menu → 🗺 Mini-map** or in ⚙ Settings.
+
+When a **climb** (steeper than 3% for more than 500 m) starts within 2 km, a card appears under the data blocks: *Next climb in 1.4 km, 3.2 km at 7.1%, max 11%*, with a coloured profile. Once you're on it the card shows the distance to the top and the average grade still to come. The card is part of the same setting.
+
 ## Data blocks
 
 The row of numbers across the top is made of **data blocks**. The first block is the largest. The **✎** button at the right of the row opens the chooser, where you pick which of the 24 fields to show and in what order. See [Data blocks](data-blocks.md).

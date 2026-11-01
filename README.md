@@ -10,6 +10,8 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 
 - **Bluetooth trainer connection.** Uses the standard FTMS (Fitness Machine) profile, so it works with Wahoo KICKR, KICKR CORE and KICKR SNAP on current firmware, as well as most other smart trainers. Trainers that only expose a Cycling Power service still work in read-only mode.
 - **Resistance follows the road.** The current grade is sent to the trainer once a second, scaled by a *trainer difficulty* setting (default 50%).
+- **Wind and echelons.** Each stage has a wind that the weather scales; headwinds slow you, tailwinds help, your trainer feels the headwind, and in a crosswind the best shelter is diagonal, so the pro teams ride echelons. A wind chip shows the direction and speed.
+- **Mini-map and climb preview.** A route map with you, riders, teams, ghost and race markers, and a card for the next climb when it is within 2 km.
 - **Stages** (🏁 button):
   - *Heartland Rollers*: endless farmland, free ride.
   - *Route 66 Flats*: 25 km time trial.
@@ -137,6 +139,8 @@ src/
   world/atmosphere.ts  Time of day and weather: sky, sun, fog, exposure, headlight, wet road
   world/rain.ts      Rain streaks that follow the camera
   steering.ts        Lane steering and auto-steer
+  world/wind.ts      Wind per stage and weather: headwind, crosswind, echelon shift
+  miniMap.ts         Route mini-map; climb.ts and climbUi.ts: climb preview card
   world/noise.ts     Deterministic noise helpers
   profile.ts         Elevation profile strip
   settings.ts        Saved settings

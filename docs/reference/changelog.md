@@ -4,6 +4,15 @@ This page is the history of merged work on `main`, grouped into releases by the 
 
 The repository has no tags, so each group is named for the pull request that merged it.
 
+## Unreleased
+
+### Wind and echelons, mini-map and climb preview
+
+- **Wind.** Each stage has a prevailing wind (speed and direction) that the weather scales: light on clear days, stronger under cloud and strongest in rain, with gusts and a slow swing in direction. Drag now works on air speed (road speed plus headwind), so headwinds slow you, tailwinds help, and the pro teams and race field feel it too. A smart trainer is sent the headwind in its simulation parameters. Clouds drift with the wind and rain slants with it. A wind chip in the status bar shows an arrow (up is the way you ride), the speed and "Headwind", "Tailwind" or "Crosswind from the left". New setting **Wind** (on by default). `?wind=<m/s>,<degrees>` forces the wind for testing. New module `src/world/wind.ts`; `stepSpeed()` and `Trainer.setGrade()` gained optional headwind arguments.
+- **Echelons.** In a crosswind the sheltered spot behind a rider moves to their downwind side (about 0.25 m per m/s of crosswind, up to 0.8 m). `draftFrom()` takes an optional `shift` in its `lateral` argument, auto-steer and the draft gauge's hint use it, and live riders line up on the diagonal. The pro teams (free ride, `peloton.ts`) and the race field (`raceSim.ts`, new optional `wind` option) form diagonal echelons.
+- **Mini-map.** A round mini-map of the route (from the course centreline) with you, live riders, pro teams, the ghost, the finish and, in a race, sprint and summit markers. Click it to switch between the whole route (north up) and the road ahead (heading up). Redraws about 5 times a second. New settings switch **Mini-map and climb preview**, also in ☰ Menu.
+- **Climb preview.** When a climb (over 3% for more than 500 m) starts within 2 km, a card shows its length, average and steepest grade and a coloured profile; on the climb it shows the distance to the top and the average grade still to come. New modules `src/climb.ts`, `src/climbUi.ts`, `src/miniMap.ts`, `src/windUi.ts`.
+
 ## Before pull request #1
 
 ### Initial commit (2026-10-30)

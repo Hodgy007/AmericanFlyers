@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { wind } from './wind';
 import { fbm, rng } from './noise';
 
 // Live sky state. These start as a clear mid-morning and are changed in place
@@ -10,6 +11,8 @@ export const ZENITH_COLOR = new THREE.Color('#2f6db5');
 export const SUN_COLOR = new THREE.Color('#ffe9c0');
 // Where the moon hangs in the sky (low and ahead-right, so it clears the numbers across the top).
 export const MOON_DIRECTION = new THREE.Vector3(Math.cos(0.16) * Math.cos(0.5), Math.sin(0.16), Math.cos(0.16) * Math.sin(0.5)).normalize();
+
+const CLOUD_RANGE = 3700; // metres from the sky's centre along the wind before a cloud wraps round
 
 /** Sky dome, distant mountain ring and clouds. Everything here follows the camera. */
 export class Sky {
@@ -30,6 +33,8 @@ export class Sky {
   private readonly cloudList: THREE.Group[] = [];
   private readonly mountainTint = new THREE.Color('#ffffff');
   private cloudCover = NaN; // nothing applied yet
+  private cloudBase: number[] = []; // each cloud's scale before the edge fade
+  private cloudEdge: number[] = [];
 
   constructor(mountainScale = 1) {
     this.ring = this.mountains(mountainScale);
@@ -63,6 +68,14 @@ export class Sky {
     for (let i = 0; i < n; i++) {
       // Each cloud grows in as the cover passes its turn; above 1 they swell into an overcast.
       const s = Math.min(1, Math.max(0, cover * n - i)) * (1 + 0.5 * Math.max(0, cover - 0.6));
+      this.cloudBase[i] = s;
+    }
+    this.applyCloudScale();
+  }
+
+  private applyCloudScale() {
+    for (let i = 0; i < this.cloudList.length; i++) {
+      const s = (this.cloudBase[i] ?? 0) * (this.cloudEdge[i] ?? 1);
       this.cloudList[i].scale.setScalar(Math.max(s, 0.0001));
       this.cloudList[i].visible = s > 0.01;
     }
@@ -80,7 +93,32 @@ export class Sky {
   update(camera: THREE.Camera, dt: number) {
     // Follow the camera, including most of its climb, so the horizon stays put.
     this.group.position.set(camera.position.x, camera.position.y - 60, camera.position.z);
-    this.clouds.rotation.y += dt * 0.002;
+    this.driftClouds(dt);
+  }
+
+  /** Clouds travel with the wind (high winds run faster than the ones on the road); a cloud leaving one edge of the sky shrinks away and comes back from the other. */
+  private driftClouds(dt: number) {
+    const w = wind.vector();
+    const speed = Math.hypot(w.x, w.z);
+    // Never quite still, even on a calm day or with wind switched off.
+    const k = 3 * Math.max(speed, 0.7);
+    const dx = speed > 0.01 ? w.x / speed : 1;
+    const dz = speed > 0.01 ? w.z / speed : 0;
+    let changed = false;
+    for (let i = 0; i < this.cloudList.length; i++) {
+      const c = this.cloudList[i];
+      c.position.x += dx * k * dt;
+      c.position.z += dz * k * dt;
+      let along = c.position.x * dx + c.position.z * dz;
+      if (along > CLOUD_RANGE) {
+        c.position.x -= dx * 2 * along;
+        c.position.z -= dz * 2 * along;
+        along = -along;
+      }
+      const e = Math.min(1, Math.max(0, (CLOUD_RANGE - Math.abs(along)) / 500));
+      if (Math.abs(e - (this.cloudEdge[i] ?? 1)) > 0.005) { this.cloudEdge[i] = e; changed = true; }
+    }
+    if (changed) this.applyCloudScale();
   }
 
   private dome() {

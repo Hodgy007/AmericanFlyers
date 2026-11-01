@@ -4,6 +4,7 @@ import { Drivetrain } from '../drivetrain';
 import { RiderModel } from './rider';
 import { DEFAULT_LANE } from '../steering';
 import { modelKit } from '../kit';
+import { draftShift, wind } from './wind';
 
 // Other riders on the road: live riders on the same stage, and the ghost of
 // your best ride. Positions arrive a couple of times a second at most, so each
@@ -165,6 +166,8 @@ export class OtherRiders {
   /** `playerLane` is where you are across the road: riders pull out to pass you and line up in front of you by it. */
   update(playerDistance: number, dt: number, camera: THREE.Camera, playerLane = DEFAULT_LANE) {
     const now = performance.now();
+    // In a crosswind a rider you're tucked behind sits upwind of you, so the line-up is on the diagonal.
+    const shift = draftShift(wind.at(roadPoint(playerDistance).heading).cross);
     const near = this.list
       .filter((o) => o.distance > playerDistance - SHOW_BEHIND && o.distance < playerDistance + SHOW_AHEAD)
       .sort((a, b) => Math.abs(a.distance - playerDistance) - Math.abs(b.distance - playerDistance))
@@ -206,8 +209,8 @@ export class OtherRiders {
       let target = s.lane;
       if (!o.ghost && Math.abs(gap) < 1.9 && Math.abs(s.lane - playerLane) < 0.9) {
         target = s.lane < playerLane ? playerLane - 1 : playerLane + 1;
-      } else if (!o.ghost && !o.team && gap >= 1.9 && gap < 14 && Math.abs(s.lane - playerLane) < 1.3) {
-        target = playerLane; // you're on their wheel: line up in front of you, as in a paceline
+      } else if (!o.ghost && !o.team && gap >= 1.9 && gap < 14 && Math.abs(s.lane + shift - playerLane) < 1.3) {
+        target = Math.min(4.2, Math.max(0.4, playerLane - shift)); // you're on their wheel: line up in front of you, as in a paceline
       }
       s.lateral += (target - s.lateral) * (1 - Math.exp(-dt / 0.6));
 
