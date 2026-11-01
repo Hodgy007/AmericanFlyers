@@ -6,6 +6,10 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Rides saved while offline
+
+- If a signed-in rider's ride can't be saved (no connection, or the server doesn't answer), it's kept on the device and uploads by itself when the connection comes back, at sign-in, when the tab is shown again, and every two minutes while any are waiting. The finish card (or a toast, once per ride) says "Saved on this device". Saving is an upsert by the ride's id, so a retry never duplicates a ride. Up to 20 rides are kept per device; a long ride that won't fit in the browser's storage is kept without its 1-second samples. A ride that keeps failing while online is given up after 12 tries, with a message. New module `src/rideQueue.ts`; tests in `tests/unit/rideQueue.test.ts` and `tests/e2e/offline.spec.ts`.
+
 ### Faster loading: a much smaller first download
 
 - **Code splitting.** The first visit now downloads only the entry chunk and `vendor-three`; the Neon SDK, the Sentry SDK and every dialog that isn't on screen at the start load on first use (workouts, garage and store with its 3D turntable, share card, sign-in, profile and admin, tour, events, leaderboard, plans, kit, time and weather, first-ride guide, privacy text, race screens, commentator, email sign-up form, GPX import). A button whose code is still arriving pulses; a failed load shows a toast and the next click tries again. After the first frame the likely next dialogs are fetched one at a time in spare moments (not on data saver or 2G). See "Lazy loading" in the architecture guide for how to add a lazy module (`src/lazy.ts`).

@@ -3,7 +3,8 @@ import { initMonitoring, setMonitoringContext, setMonitoringUser, startMonitorin
 
 initMonitoring(); // first, so it catches errors while the app starts
 import { bluetoothAvailable, type Trainer, type TrainerReading } from './ble/trainer';
-import { initDevices } from './devicesUi'; // ☰ Menu trainer and heart rate entries, remembered devices
+import { initDevices } from './devicesUi';
+import { RideQueue } from './rideQueue'; // rides saved on this device while offline // ☰ Menu trainer and heart rate entries, remembered devices
 import { currentStage, elevationAt, gradeAt, headingAt, setStage } from './course';
 import type { Stage } from './stages';
 import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
@@ -826,10 +827,49 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
       if (r.levelAfter > r.levelBefore) toast(`⭐ Level ${r.levelAfter}!`, 5000);
     }).catch(() => { /* credits are a bonus */ });
   } catch (e) {
-    if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
+    // No connection (or the server didn't answer): keep it on this device and upload it later (src/rideQueue.ts).
+    const me = account()?.id;
+    const activity = buildActivity();
+    const alreadyQueued = rideQueue.list().some((r) => r.activity.id === activity.id);
+    const kept = me ? rideQueue.add(me, activity) : 'failed';
+    if (kept !== 'failed') {
+      lastSavedSeconds = stats.seconds; // queued: the 5-minute autosave needn't retry it (a later save replaces the copy)
+      const msg = kept === 'trimmed'
+        ? '📶 Couldn’t reach the server. Saved on this device (the summary; the second-by-second detail didn’t fit). It uploads when you’re back online.'
+        : '📶 Couldn’t reach the server. Saved on this device: it uploads as soon as you’re back online.';
+      if (showNote) note.textContent = msg;
+      else if (!opts.quiet || !alreadyQueued) toast(msg, 6000); // quiet saves (back to the hub, autosave) say so once per ride
+      hubNotify('ride');
+    } else if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
     else if (!opts.quiet) toast(`Couldn’t save your ride: ${(e as Error).message}`);
   }
 }
+
+// --------------------------------------------------- rides saved offline ----
+// Rides that couldn't be saved wait on this device (src/rideQueue.ts) and upload when
+// the connection comes back, when the rider signs in, when the tab is shown again, and
+// every two minutes while any are waiting.
+const rideQueue = new RideQueue(
+  (() => { try { return localStorage; } catch { return null; } })(),
+  saveActivity,
+  () => navigator.onLine !== false,
+);
+
+async function uploadQueuedRides() {
+  const me = account()?.id;
+  if (!me || !rideQueue.count(me)) return;
+  const r = await rideQueue.flush(me);
+  if (r.uploaded.length) {
+    accountUi.invalidate();
+    hubNotify('ride');
+    garage.refresh(); // credits and levels for the uploaded rides
+    toast(r.uploaded.length === 1 ? `✓ Uploaded your ride “${r.uploaded[0].title}” (saved while offline).` : `✓ Uploaded ${r.uploaded.length} rides saved while offline.`, 5000);
+  }
+  for (const a of r.givenUp) toast(`Couldn’t upload “${a.title}” (${new Date(a.started_at).toLocaleDateString()}) after several tries, so it was removed from this device.`, 8000);
+}
+window.addEventListener('online', () => { void uploadQueuedRides(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void uploadQueuedRides(); });
+setInterval(() => { if (navigator.onLine !== false) void uploadQueuedRides(); }, 2 * 60 * 1000);
 
 // Save long rides every few minutes, so a closed tab doesn't lose them.
 setInterval(() => {
@@ -1819,6 +1859,7 @@ onAccountChange(async (a) => {
       if (ob.open) ob.close();
     }
     await savePendingRide();
+    await uploadQueuedRides(); // rides saved on this device while offline
     garage.refresh(); // a ride saved just now may have earned credits
     accountUi.checkAdmin(); // the session is settled now
     loadMyGhost();
