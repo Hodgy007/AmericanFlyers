@@ -91,6 +91,7 @@
             <button id="btn-minimap" role="menuitem" title="Show or hide the route mini-map and climb preview">🗺 Mini-map on</button>
             <button id="btn-menu-plans" role="menuitem">📅 Training plans</button>
             <button id="btn-menu-kit" role="menuitem" title="Design your jersey and bike">🎨 My kit</button>
+            <button id="btn-menu-garage" role="menuitem" title="Bikes, wheels and clothes, earned with credits from riding">🚲 Garage &amp; store</button>
             <button id="btn-tour" role="menuitem" title="Race the three stages of American Flyers">🏆 Hell of the West tour</button>
             <button id="btn-events" role="menuitem" title="Scheduled group rides and races">🗓 Events</button>
             <hr />
@@ -520,6 +521,20 @@
         </div>
         <p class="hint">Auto uses the stage’s own weather, and now and then it changes.</p>
         <div class="dialog-actions"><button value="cancel" class="primary">Done</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="garage-dialog" class="garage-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>🚲 Garage &amp; store</h2>
+          <button value="close" class="icon" aria-label="Close">✕</button>
+        </div>
+        <div id="garage-head" class="gar-head"></div>
+        <canvas id="garage-preview" class="gar-preview" aria-label="Your rider on the bike you’re trying. Drag to turn it."></canvas>
+        <p id="garage-setup" class="gar-setup muted small"></p>
+        <div id="garage-tabs" class="gar-tabs" role="tablist"></div>
+        <div id="garage-body" class="gar-body"></div>
       </form>
     </dialog>
 

@@ -4,6 +4,11 @@
 //
 // A tour jersey (yellow, green, polka-dot) can be laid on top of the chosen
 // kit with setTourJersey(); the lead session wires the tour to it.
+//
+// Your bike and clothing from the garage (src/garage) ride along as a "style"
+// (setPlayerStyle) and travel in the kit string after the three colours.
+
+import { cleanStyle, DEFAULT_STYLE, parseStyleSuffix, styleSuffix, type BikeStyle } from './garage/style';
 
 export interface Kit {
   jersey: string; // main jersey colour
@@ -17,6 +22,8 @@ export interface PlayerLook {
   kit: [string, string] | null;
   jersey: string;
   frame: string;
+  /** Bike, wheels, helmet, jersey design and socks from the garage. */
+  style: BikeStyle;
 }
 
 export const DEFAULT_JERSEY = '#d62839';
@@ -63,30 +70,51 @@ export function cleanKit(k: unknown): Kit | null {
 
 /** "#jersey,#accent,#frame", as sent to the server; null for the default kit. */
 export function kitString(look: PlayerLook | null): string | null {
+  if (!look) return null;
+  const suffix = styleSuffix(look.style);
   // look.kit is [accent, jersey] (see modelKit); the server string is jersey, accent, frame.
-  return look?.kit ? `${look.kit[1]},${look.kit[0]},${look.frame}`.toLowerCase() : null;
+  if (look.kit) return `${look.kit[1]},${look.kit[0]},${look.frame}${suffix}`.toLowerCase();
+  // The original stars and stripes, but on a different bike or in other clothes: spell the colours out.
+  return suffix ? `${DEFAULT_JERSEY},#14213d,${look.frame}${suffix}`.toLowerCase() : null;
 }
 
 /** Reads the server's kit string; null if it isn't three hex colours. */
 export function parseKitString(s: unknown): Kit | null {
   if (typeof s !== 'string') return null;
-  const [jersey, accent, frame, ...rest] = s.split(',');
+  const [colours] = s.split(';');
+  const [jersey, accent, frame, ...rest] = colours.split(',');
   return rest.length ? null : cleanKit({ jersey, accent, frame });
+}
+
+/** The bike and clothing part of a kit string (";f=tron;w=deep80…"), or null if it's all defaults. */
+export function parseKitStyle(s: unknown): BikeStyle | null {
+  if (typeof s !== 'string') return null;
+  return parseStyleSuffix(s.split(';').slice(1));
 }
 
 let kit: Kit | null = null;
 let tour: [string, string] | null = null;
+let style: BikeStyle = { ...DEFAULT_STYLE };
 let listener: (look: PlayerLook) => void = () => {};
 
 /** Your rider's look: the saved kit, with any tour jersey over its jersey and accent. */
 export function playerLook(): PlayerLook {
   const k = kit;
   if (tour && isHex(tour[0]) && isHex(tour[1])) {
-    return { kit: modelKit(tour[0], tour[1]), jersey: tour[0], frame: k?.frame ?? DEFAULT_FRAME };
+    // A tour jersey is worn plain: no pattern or skinsuit over it.
+    return { kit: modelKit(tour[0], tour[1]), jersey: tour[0], frame: k?.frame ?? DEFAULT_FRAME, style: { ...style, pattern: 'plain' } };
   }
   return k
-    ? { kit: modelKit(k.jersey, k.accent), jersey: k.jersey, frame: k.frame }
-    : { kit: null, jersey: DEFAULT_JERSEY, frame: DEFAULT_FRAME };
+    ? { kit: modelKit(k.jersey, k.accent), jersey: k.jersey, frame: k.frame, style }
+    : { kit: null, jersey: DEFAULT_JERSEY, frame: DEFAULT_FRAME, style };
+}
+
+/** Your kit's colours on a given bike and clothes (without any tour jersey), for the garage preview. */
+export function lookWithStyle(next: BikeStyle): PlayerLook {
+  const k = kit;
+  return k
+    ? { kit: modelKit(k.jersey, k.accent), jersey: k.jersey, frame: k.frame, style: next }
+    : { kit: null, jersey: DEFAULT_JERSEY, frame: DEFAULT_FRAME, style: next };
 }
 
 /** Called with the new look whenever the kit or tour jersey changes. */
@@ -107,5 +135,11 @@ export function setPlayerKit(next: unknown) {
  */
 export function setTourJersey(colours: [string, string] | null) {
   tour = colours;
+  listener(playerLook());
+}
+
+/** Set what your bike and clothes look like (from the garage loadout). */
+export function setPlayerStyle(next: unknown) {
+  style = cleanStyle(next);
   listener(playerLook());
 }

@@ -267,7 +267,7 @@ language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_column
 declare
   me text := auth.user_id();
-  my_kit text := case when p_kit ~ '^#[0-9a-fA-F]{6},#[0-9a-fA-F]{6},#[0-9a-fA-F]{6}$' then lower(p_kit) else null end;
+  my_kit text := case when p_kit ~ '^#[0-9a-fA-F]{6},#[0-9a-fA-F]{6},#[0-9a-fA-F]{6}(;[a-z]{1,2}=[a-z0-9]{1,12}){0,8}$' then lower(p_kit) else null end;
 begin
   if me is null then raise exception 'Sign in to ride with others' using errcode = '42501'; end if;
   if p_visible then
@@ -764,4 +764,246 @@ revoke execute on function public.server_now(), public.upcoming_events(integer),
   public.admin_delete_event(uuid), public.submit_event_result(uuid, integer, real), public.event_results(uuid) from public, anonymous;
 grant execute on function public.server_now(), public.upcoming_events(integer), public.admin_create_event(text, text, timestamptz, text, real),
   public.admin_delete_event(uuid), public.submit_event_result(uuid, integer, real), public.event_results(uuid) to authenticated;
+
+-- ------------------------------------- garage, credits, levels, challenges ----
+-- Credits and XP come from saved rides (never from the browser): per ride, 1
+-- credit per km and 1 per 10 m climbed, 5 XP per km and 0.5 XP per metre
+-- climbed, plus weekly-challenge rewards (credits) and 25 XP per challenge.
+-- Rides count only if they have power data (avg_power <= 1500 W), last at
+-- least a minute, aren't demo rides, and distance/climb are capped by what's
+-- physically possible for the ride's duration. Levels 1-50 follow
+-- level_xp(n) = 100 * (n - 1)^1.6. rider_progress is a high-water mark of km and
+-- climbing, so deleting a ride never takes an unlocked item (or the Tron
+-- bike, 8,848 m of climbing) away. No direct table access: everything goes
+-- through the security-definer functions below.
+
+alter table public.activities add column if not exists race_place smallint;  -- finishing place in a race
+alter table public.activities add column if not exists race_size smallint;   -- riders in that race
+alter table public.activities add column if not exists pro_m real;           -- metres ridden alongside a pro team
+
+create table if not exists public.store_items (
+  id text primary key,
+  slot text not null,                 -- frame | wheels | tyres | helmet | jersey | socks
+  name text not null,
+  price integer not null,
+  level_req integer not null default 1,
+  unlock jsonb not null default '{}', -- e.g. {"climbed_m": 8848}
+  effects jsonb not null default '{}',-- {"cda": -0.025, "mass": -0.8, "crr": -0.0005}: informational, the app applies them
+  starter boolean not null default false,
+  sort integer not null default 0
+);
+create table if not exists public.purchases (
+  user_id text not null default auth.user_id(),
+  item_id text not null,
+  price integer not null,
+  bought_at timestamptz not null default now(),
+  primary key (user_id, item_id)
+);
+create table if not exists public.challenge_claims (
+  user_id text not null default auth.user_id(),
+  challenge_id text not null,
+  week text not null,                 -- ISO week, e.g. 2026-W44
+  credits integer not null,
+  claimed_at timestamptz not null default now(),
+  primary key (user_id, challenge_id, week)
+);
+create table if not exists public.rider_progress (
+  user_id text primary key,
+  km numeric not null default 0,
+  climbed_m numeric not null default 0,
+  updated_at timestamptz not null default now()
+);
+alter table public.store_items enable row level security;
+alter table public.purchases enable row level security;
+alter table public.challenge_claims enable row level security;
+alter table public.rider_progress enable row level security;
+-- (no policies: only the functions below, which run as their owner, touch them)
+
+-- The catalogue. Generated from src/garage/catalogue.ts by `node scripts/gen-store-sql.mjs`.
+insert into public.store_items (id, slot, name, price, level_req, unlock, effects, starter, sort) values
+  ('frame-classic', 'frame', 'Classic road bike', 0, 1, '{}'::jsonb, '{}'::jsonb, true, 0),
+  ('frame-aero', 'frame', 'Aero road frame', 700, 4, '{}'::jsonb, '{"cda":-0.025}'::jsonb, false, 1),
+  ('frame-climber', 'frame', 'Climbing frame', 700, 4, '{}'::jsonb, '{"mass":-0.8}'::jsonb, false, 2),
+  ('frame-tt', 'frame', 'Time-trial bike', 1200, 8, '{}'::jsonb, '{"cda":-0.05,"mass":0.4}'::jsonb, false, 3),
+  ('frame-tron', 'frame', 'The Tron bike', 0, 1, '{"climbed_m":8848}'::jsonb, '{"cda":-0.025,"mass":-0.3}'::jsonb, false, 4),
+  ('wheels-alloy35', 'wheels', '35 mm alloy wheels', 0, 1, '{}'::jsonb, '{}'::jsonb, true, 5),
+  ('wheels-carbon50', 'wheels', '50 mm carbon wheels', 450, 3, '{}'::jsonb, '{"cda":-0.015}'::jsonb, false, 6),
+  ('wheels-deep80', 'wheels', '80 mm deep wheels', 650, 6, '{}'::jsonb, '{"cda":-0.025,"mass":0.25}'::jsonb, false, 7),
+  ('wheels-climb', 'wheels', 'Lightweight climbing wheels', 500, 5, '{}'::jsonb, '{"mass":-0.45}'::jsonb, false, 8),
+  ('wheels-disc', 'wheels', 'Disc wheel (time-trial bike only)', 900, 10, '{}'::jsonb, '{"cda":-0.035,"mass":0.4}'::jsonb, false, 9),
+  ('tyres-standard', 'tyres', 'Standard tyres', 0, 1, '{}'::jsonb, '{}'::jsonb, true, 10),
+  ('tyres-race', 'tyres', 'Race tyres', 250, 2, '{}'::jsonb, '{"crr":-0.0005}'::jsonb, false, 11),
+  ('helmet-standard', 'helmet', 'White road helmet', 0, 1, '{}'::jsonb, '{}'::jsonb, true, 12),
+  ('helmet-black', 'helmet', 'Black road helmet', 60, 1, '{}'::jsonb, '{}'::jsonb, false, 13),
+  ('helmet-aero', 'helmet', 'Aero helmet', 300, 3, '{}'::jsonb, '{"cda":-0.015}'::jsonb, false, 14),
+  ('helmet-aero-dark', 'helmet', 'Aero helmet (carbon black)', 340, 3, '{}'::jsonb, '{"cda":-0.015}'::jsonb, false, 15),
+  ('jersey-plain', 'jersey', 'Plain jersey', 0, 1, '{}'::jsonb, '{}'::jsonb, true, 16),
+  ('jersey-stripes', 'jersey', 'Stripes', 120, 2, '{}'::jsonb, '{}'::jsonb, false, 17),
+  ('jersey-hoops', 'jersey', 'Hoops', 150, 3, '{}'::jsonb, '{}'::jsonb, false, 18),
+  ('jersey-chevrons', 'jersey', 'Chevrons', 200, 3, '{}'::jsonb, '{}'::jsonb, false, 19),
+  ('jersey-stars', 'jersey', 'Stars', 220, 5, '{}'::jsonb, '{}'::jsonb, false, 20),
+  ('jersey-dots', 'jersey', 'Polka dots', 220, 5, '{}'::jsonb, '{}'::jsonb, false, 21),
+  ('jersey-skinsuit', 'jersey', 'Skinsuit', 500, 7, '{}'::jsonb, '{"cda":-0.02}'::jsonb, false, 22),
+  ('socks-white', 'socks', 'White socks', 0, 1, '{}'::jsonb, '{}'::jsonb, true, 23),
+  ('socks-black', 'socks', 'Black socks', 40, 1, '{}'::jsonb, '{}'::jsonb, false, 24),
+  ('socks-red', 'socks', 'Red socks', 50, 1, '{}'::jsonb, '{}'::jsonb, false, 25),
+  ('socks-neon', 'socks', 'Neon socks', 90, 2, '{}'::jsonb, '{}'::jsonb, false, 26)
+on conflict (id) do update set slot = excluded.slot, name = excluded.name, price = excluded.price, level_req = excluded.level_req,
+  unlock = excluded.unlock, effects = excluded.effects, starter = excluded.starter, sort = excluded.sort;
+
+create or replace function public.level_xp(n integer) returns integer
+language sql immutable set search_path = '' as $$ select round(100 * power(greatest(n, 1) - 1, 1.6))::integer $$;
+
+create or replace function public.rider_totals(uid text, since timestamptz default null)
+returns table (km numeric, climbed_m numeric, rides integer)
+language sql stable security definer set search_path = '' as $$
+  select coalesce(sum(least(a.distance_m, a.duration_s * 18.0, 400000)), 0) / 1000.0,
+         coalesce(sum(least(a.climbed_m, a.duration_s * 0.7, a.distance_m * 0.25, 10000)), 0),
+         count(*)::integer
+  from public.activities a
+  where a.user_id = uid and a.avg_power is not null and a.avg_power <= 1500 and a.duration_s >= 60
+    and not coalesce(a.demo, false) and (since is null or a.started_at >= since)
+$$;
+
+-- Everything about a rider's progress: level, XP, credits, totals and owned items.
+create or replace function public.wallet_of(uid text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare
+  v_km numeric; v_climb numeric; v_rides integer;
+  v_claims integer; v_claim_credits integer;
+  v_xp integer; v_level integer; v_earned integer; v_spent integer; v_owned jsonb;
+begin
+  select t.km, t.climbed_m, t.rides into v_km, v_climb, v_rides from public.rider_totals(uid) t;
+  insert into public.rider_progress as rp (user_id, km, climbed_m) values (uid, v_km, v_climb)
+    on conflict (user_id) do update set km = greatest(rp.km, excluded.km), climbed_m = greatest(rp.climbed_m, excluded.climbed_m), updated_at = now()
+    returning rp.km, rp.climbed_m into v_km, v_climb;
+  select count(*), coalesce(sum(credits), 0) into v_claims, v_claim_credits from public.challenge_claims where user_id = uid;
+  v_earned := floor(v_km + v_climb / 10.0)::integer + v_claim_credits;
+  v_xp := floor(v_km * 5 + v_climb * 0.5)::integer + v_claims * 25;
+  select max(n) into v_level from generate_series(1, 50) n where public.level_xp(n) <= v_xp;
+  select coalesce(sum(price), 0) into v_spent from public.purchases where user_id = uid;
+  select coalesce(jsonb_agg(id order by sort), '[]'::jsonb) into v_owned
+    from public.store_items where starter or id in (select item_id from public.purchases where user_id = uid);
+  return jsonb_build_object(
+    'level', v_level, 'xp', v_xp, 'xp_this', public.level_xp(v_level),
+    'xp_next', case when v_level >= 50 then null else public.level_xp(v_level + 1) end,
+    'credits_earned', v_earned, 'credits_spent', v_spent, 'balance', v_earned - v_spent,
+    'km', round(v_km, 1), 'climbed_m', round(v_climb), 'rides', v_rides,
+    'challenges_done', v_claims, 'owned', v_owned);
+end $$;
+
+create or replace function public.my_wallet() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.user_id() is null then raise exception 'Sign in to use the garage' using errcode = '42501'; end if;
+  return public.wallet_of(auth.user_id());
+end $$;
+
+-- Buys (or, for a free unlock such as the Tron bike, claims) an item. Checks level, unlock rule and balance.
+create or replace function public.buy_item(p_item text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  me text := auth.user_id();
+  it public.store_items;
+  w jsonb;
+begin
+  if me is null then raise exception 'Sign in to use the garage' using errcode = '42501'; end if;
+  perform pg_advisory_xact_lock(hashtext('wallet:' || me));
+  select * into it from public.store_items where id = p_item;
+  if not found then raise exception 'There is no such item'; end if;
+  if it.starter or exists (select 1 from public.purchases where user_id = me and item_id = it.id) then
+    raise exception 'You already own this';
+  end if;
+  w := public.wallet_of(me);
+  if (w ->> 'level')::integer < it.level_req then raise exception 'Reach level % to get this', it.level_req; end if;
+  if (it.unlock ->> 'climbed_m') is not null and (w ->> 'climbed_m')::numeric < (it.unlock ->> 'climbed_m')::numeric then
+    raise exception 'Climb % m in total to unlock this', (it.unlock ->> 'climbed_m');
+  end if;
+  if (it.unlock ->> 'km') is not null and (w ->> 'km')::numeric < (it.unlock ->> 'km')::numeric then
+    raise exception 'Ride % km in total to unlock this', (it.unlock ->> 'km');
+  end if;
+  if (w ->> 'balance')::integer < it.price then raise exception 'Not enough credits'; end if;
+  insert into public.purchases (user_id, item_id, price) values (me, it.id, it.price);
+  return public.wallet_of(me);
+end $$;
+
+-- The weekly pool: one challenge from each family is picked per ISO week (by md5 of week + id; the app does the same to preview them).
+create or replace function public.challenge_pool()
+returns table (id text, family text, title text, metric text, target numeric, reward integer)
+language sql immutable set search_path = '' as $$
+  values
+    ('climb-1000', 'climb', 'Climb 1,000 m', 'climbed_m', 1000::numeric, 80),
+    ('climb-2000', 'climb', 'Climb 2,000 m', 'climbed_m', 2000::numeric, 150),
+    ('ride-50', 'distance', 'Ride 50 km', 'km', 50::numeric, 80),
+    ('ride-100', 'distance', 'Ride 100 km', 'km', 100::numeric, 150),
+    ('stages-1', 'stages', 'Finish a stage', 'stages', 1::numeric, 50),
+    ('stages-3', 'stages', 'Finish 3 stages', 'stages', 3::numeric, 120),
+    ('race-win', 'special', 'Win a race', 'race_wins', 1::numeric, 200),
+    ('race-podium', 'special', 'Finish on a race podium', 'race_podiums', 1::numeric, 120),
+    ('pro-20', 'special', 'Ride with a pro team for 20 km', 'pro_km', 20::numeric, 120),
+    ('days-4', 'special', 'Ride on 4 different days', 'days', 4::numeric, 100)
+$$;
+
+create or replace function public.my_challenges() returns jsonb
+language plpgsql stable security definer set search_path = '' as $fn$
+declare
+  me text := auth.user_id();
+  wk text := to_char(now() at time zone 'utc', 'IYYY-"W"IW');
+  start_at timestamptz := date_trunc('week', now() at time zone 'utc') at time zone 'utc';
+  res jsonb;
+begin
+  if me is null then raise exception 'Sign in to see your challenges' using errcode = '42501'; end if;
+  with picked as (
+    select distinct on (p.family) p.* from public.challenge_pool() p order by p.family, md5(wk || p.id)
+  ), prog as (
+    select
+      coalesce(sum(least(a.climbed_m, a.duration_s * 0.7, a.distance_m * 0.25, 10000)), 0)::numeric as climbed_m,
+      (coalesce(sum(least(a.distance_m, a.duration_s * 18.0, 400000)), 0) / 1000.0)::numeric as km,
+      (count(*) filter (where a.finished and a.distance_m >= 3000))::numeric as stages,
+      (count(*) filter (where a.race_place = 1))::numeric as race_wins,
+      (count(*) filter (where a.race_place between 1 and 3))::numeric as race_podiums,
+      (coalesce(sum(least(coalesce(a.pro_m, 0), a.distance_m, 400000)), 0) / 1000.0)::numeric as pro_km,
+      (count(distinct (a.started_at at time zone 'utc')::date) filter (where a.duration_s >= 600))::numeric as days
+    from public.activities a
+    where a.user_id = me and a.started_at >= start_at and a.avg_power is not null and a.avg_power <= 1500 and a.duration_s >= 60 and not coalesce(a.demo, false)
+  )
+  select jsonb_build_object('week', wk, 'starts_at', start_at, 'ends_at', start_at + interval '7 days',
+    'challenges', coalesce(jsonb_agg(jsonb_build_object(
+      'id', k.id, 'title', k.title, 'metric', k.metric, 'target', k.target, 'reward', k.reward,
+      'progress', round(case k.metric when 'climbed_m' then g.climbed_m when 'km' then g.km when 'stages' then g.stages
+                         when 'race_wins' then g.race_wins when 'race_podiums' then g.race_podiums when 'pro_km' then g.pro_km else g.days end, 1),
+      'claimed', exists (select 1 from public.challenge_claims c where c.user_id = me and c.challenge_id = k.id and c.week = wk)
+    ) order by k.family), '[]'::jsonb))
+  into res from picked k cross join prog g;
+  return res;
+end $fn$;
+
+-- Pays out a finished challenge once (the primary key makes a second claim impossible).
+create or replace function public.claim_challenge(p_id text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  me text := auth.user_id();
+  wk text := to_char(now() at time zone 'utc', 'IYYY-"W"IW');
+  ch jsonb;
+begin
+  if me is null then raise exception 'Sign in to claim rewards' using errcode = '42501'; end if;
+  perform pg_advisory_xact_lock(hashtext('wallet:' || me));
+  select c into ch from jsonb_array_elements(public.my_challenges() -> 'challenges') c where c ->> 'id' = p_id;
+  if ch is null then raise exception 'That challenge isn''t on this week'; end if;
+  if (ch ->> 'claimed')::boolean then raise exception 'You already claimed this one'; end if;
+  if (ch ->> 'progress')::numeric < (ch ->> 'target')::numeric then raise exception 'Not finished yet'; end if;
+  insert into public.challenge_claims (user_id, challenge_id, week, credits) values (me, p_id, wk, (ch ->> 'reward')::integer);
+  return public.wallet_of(me);
+end $$;
+
+revoke execute on function public.level_xp(integer), public.rider_totals(text, timestamptz), public.wallet_of(text),
+  public.challenge_pool() from public, anonymous, authenticated;
+revoke execute on function public.my_wallet(), public.buy_item(text), public.my_challenges(), public.claim_challenge(text) from public, anonymous;
+grant execute on function public.my_wallet(), public.buy_item(text), public.my_challenges(), public.claim_challenge(text) to authenticated;
+
+-- ride_presence(): the kit string may now carry the bike and clothes after the three colours,
+-- e.g. '#d62839,#14213d,#1f3c88;f=tron;w=deep80' (up to 8 short key=value parts):
+--   my_kit text := case when p_kit ~ '^#[0-9a-fA-F]{6},#[0-9a-fA-F]{6},#[0-9a-fA-F]{6}(;[a-z]{1,2}=[a-z0-9]{1,12}){0,8}$' then lower(p_kit) else null end;
+-- (applied in the ride_presence() definition above; same signature as before)
 notify pgrst, 'reload schema';
