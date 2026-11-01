@@ -26,6 +26,8 @@ Changing **FTP** in Settings adds an entry to your FTP history when you're signe
 
 Changing **Trainer difficulty** takes effect straight away, on the next grade update.
 
+**Remembered devices** lists the trainer and heart rate strap this browser remembers, with a **Forget** button for each. See [Connecting devices](connecting-devices.md#remembered-devices-you-only-join-once). It isn't part of your synced settings: it stays on this browser.
+
 **Auto-steer into the draft** is on by default: with no steering for about 3 seconds and a rider within 12 m ahead, you ease onto their line. See [Riding](riding.md#steering).
 
 Time of day and weather live in **☰ Menu → 🌤 Time & weather**, not in this dialog, but they're saved with your settings. See [Riding](riding.md#time-of-day-and-weather).

@@ -6,6 +6,12 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Trainer in the menu, and devices that are remembered
+
+- **Trainer and heart rate in the ☰ Menu.** 🔌 Connect trainer / Disconnect *name* and ❤️ Heart rate / Disconnect *name*, with a status line under each; the top-bar button stays. The menu now scrolls on short screens.
+- **Remembered devices.** The trainer and strap you connect are remembered in this browser (`americanflyers.devices`, not synced). In Chrome with persistent Bluetooth permissions (`getDevices`, behind a flag today) they reconnect on load with no chooser; elsewhere a banner and menu item give a one-tap **Reconnect *name*** through a name-filtered chooser. **Forget** per device in the menu and in Settings.
+- **Automatic reconnection.** A remembered device that drops mid-ride is retried after 1, 2, 4, 8 and 15 s; the ride carries on (power reads 0), notifications are re-subscribed and the current resistance is sent again. New modules `src/ble/remembered.ts`, `src/devicesUi.ts`; `connectTrainer`/`connectHeartRate` are split into request and open steps.
+
 ### Trust and safety: privacy, account deletion, email verification, leaderboard sanity
 
 - **Privacy page.** ☰ Menu → 🔒 Privacy (also linked from the sign-in dialog, the home page small print and the profile) says in plain English what is collected, what other riders see, where it is kept and for how long, and how to delete it. It is a draft for the site owner to review, not legal advice (`src/privacyUi.ts`).

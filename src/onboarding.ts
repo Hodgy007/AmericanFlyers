@@ -85,11 +85,11 @@ export function initOnboarding(o: Options) {
   trainerBtn.addEventListener('click', async () => {
     if (await o.connectTrainer()) {
       trainerBtn.textContent = '✓ Trainer connected';
-      status.textContent = 'Great! Your trainer will follow the road, or hold the target power in workouts.';
+      status.textContent = 'Great! Your trainer will follow the road, or hold the target power in workouts. It’s remembered on this browser, so next time it reconnects (or is one tap away in the ☰ Menu).';
     }
   });
   hrBtn.addEventListener('click', async () => {
-    if (await o.connectHeartRate()) hrBtn.textContent = '✓ Heart rate connected';
+    if (await o.connectHeartRate()) { hrBtn.textContent = '✓ Heart rate connected'; if (!trainerBtn.textContent!.startsWith('✓')) status.textContent = 'Heart rate strap connected and remembered on this browser.'; }
   });
 
   dialog.querySelectorAll<HTMLButtonElement>('[data-ob-next]').forEach((b) => b.addEventListener('click', () => {

@@ -90,6 +90,8 @@ This page lists every file and folder in the repository, with a one-line summary
 | `profile.ts` | The elevation strip, and the grade-to-color function. |
 | `ble/trainer.ts` | Trainer connection: FTMS and Cycling Power, parsing, and the control point (grade with a wind-resistance factor, and target power). |
 | `ble/heartRate.ts` | Heart-rate strap connection and parsing. |
+| `ble/remembered.ts` | Remembered devices (`americanflyers.devices` in `localStorage`), the no-chooser reconnect helpers (`getDevices`, `watchAdvertisements`), the retry schedule (`Reconnector`) and the menu labels. Pure and feature-detected; unit-tested. |
+| `devicesUi.ts` | Trainer and heart-rate connection life cycle: the ☰ Menu items, Forget, the Settings list, the "Reconnect" banner, reconnect on load and after a drop. `main.ts` only receives change callbacks. |
 | `routes/gpx.ts` | Parses GPX files, and turns a route into a stage. |
 | `routes/library.ts` | Saved GPX routes in `localStorage`, and the full stage list (built-in plus uploaded). |
 | `workouts/model.ts` | Workout types, expansion into steps, TSS estimation, the ten built-in workouts, and the zone colors. |

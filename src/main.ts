@@ -2,8 +2,8 @@ import './style.css';
 import { initMonitoring, setMonitoringContext, setMonitoringUser } from './monitoring';
 
 initMonitoring(); // first, so it catches errors while the app starts
-import { bluetoothAvailable, connectTrainer, type Trainer, type TrainerReading } from './ble/trainer';
-import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
+import { bluetoothAvailable, type Trainer, type TrainerReading } from './ble/trainer';
+import { initDevices } from './devicesUi'; // ☰ Menu trainer and heart rate entries, remembered devices
 import { currentStage, elevationAt, gradeAt, headingAt, setStage } from './course';
 import type { Stage } from './stages';
 import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
@@ -76,7 +76,6 @@ let settings = loadSettings();
 // ---------------------------------------------------------------- state ----
 
 let trainer: Trainer | null = null;
-let hrm: HeartRateMonitor | null = null;
 let demo = false;
 let demoPower = 150;
 
@@ -118,55 +117,22 @@ function onReading(r: TrainerReading) {
   live.lastReadingAt = now;
 }
 
-async function toggleTrainer() {
-  if (trainer) {
-    trainer.disconnect();
-    return;
-  }
-  try {
-    setStatus('Searching…', 'pending');
-    trainer = await connectTrainer({
-      onReading,
-      onDisconnect: () => {
-        trainer = null;
-        setStatus('Trainer disconnected', 'off');
-        $('btn-trainer').textContent = 'Connect trainer';
-        toast('Trainer disconnected');
-      },
-    });
-    if (demo) setDemo(false);
-    lastSentGrade = NaN;
-    $('btn-trainer').textContent = 'Disconnect';
+// Connecting, remembering and reconnecting the trainer and heart-rate strap live in devicesUi.ts
+// (and ble/remembered.ts). main.ts only hears about changes and keeps the ride state in step.
+const devices = initDevices({
+  toast: (m, ms) => toast(m, ms),
+  setStatus: (text, state) => setStatus(text, state),
+  onReading,
+  onHeartRate: (bpm) => { live.heartRate = bpm; live.lastHrAt = performance.now(); },
+  trainerChanged: (t) => {
+    trainer = t;
+    lastSentGrade = NaN; // a (re)connected trainer is sent the grade (or ERG watts) again at the next tick
     lastSentWatts = NaN;
-    setStatus(
-      `${trainer.name} · ${trainer.canControl ? 'resistance follows the road' : 'power only (no resistance control)'}`,
-      'on',
-    );
-    toast(`Connected to ${trainer.name}`);
-  } catch (err) {
-    trainer = null;
-    setStatus('No trainer connected', 'off');
-    if ((err as DOMException)?.name !== 'NotFoundError') toast(`Couldn't connect: ${(err as Error).message}`);
-  }
-}
-
-async function toggleHeartRate() {
-  if (hrm) {
-    hrm.disconnect();
-    return;
-  }
-  try {
-    hrm = await connectHeartRate(
-      (bpm) => { live.heartRate = bpm; live.lastHrAt = performance.now(); },
-      () => { hrm = null; live.heartRate = 0; $('btn-hr').textContent = '❤️ Heart rate strap'; toast('Heart rate strap disconnected'); },
-    );
-    $('btn-hr').textContent = '❤️ Heart rate ✓';
-    toast(`Connected to ${hrm.name}`);
-  } catch (err) {
-    hrm = null;
-    if ((err as DOMException)?.name !== 'NotFoundError') toast(`Couldn't connect: ${(err as Error).message}`);
-  }
-}
+    if (t && demo) setDemo(false);
+    if (!t) { live.power = 0; live.cadence = 0; } // the ride carries on; power falls to zero until it is back
+  },
+  hrChanged: (h) => { if (!h) live.heartRate = 0; },
+});
 
 /** Wind into your face (head, m/s; negative is a tail wind) and across the road (cross, towards your right) at a distance on this stage. */
 function roadWind(distance: number) {
@@ -1451,8 +1417,7 @@ $('btn-minimap').addEventListener('click', () => {
 });
 updateMapMenu();
 
-$('btn-trainer').addEventListener('click', toggleTrainer);
-$('btn-hr').addEventListener('click', toggleHeartRate);
+// (the trainer and heart rate buttons are wired in devicesUi.ts)
 $('btn-demo').addEventListener('click', () => setDemo(!demo));
 profileCanvas.addEventListener('click', (e) => { if (canJump()) jumpTo(profileDistanceAt(e.clientX)); });
 profileCanvas.addEventListener('pointermove', (e) => {
@@ -1560,7 +1525,7 @@ $('btn-weather').addEventListener('click', () => atmosphereUi.open());
 
 let bluetoothNote = () => {};
 if (!bluetoothAvailable()) {
-  for (const id of ['btn-trainer', 'btn-hr']) {
+  for (const id of ['btn-trainer', 'btn-menu-trainer', 'btn-hr']) {
     const b = $<HTMLButtonElement>(id);
     b.disabled = true;
     b.title = 'Web Bluetooth is not available in this browser';
@@ -1569,6 +1534,7 @@ if (!bluetoothAvailable()) {
   bluetoothNote = () => toast('This browser can’t use Bluetooth. Open in Chrome or Edge to connect your trainer. Demo ride works anywhere.', 7000);
 } else {
   setStatus('No trainer connected', 'off');
+  devices.start(); // reconnect remembered devices without the chooser where the browser allows it
 }
 
 // --------------------------------------------------------------- account ----
@@ -1663,8 +1629,8 @@ const onboarding = initOnboarding({
     if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch(() => {});
     world.setMarkers(markerConfig());
   },
-  connectTrainer: async () => { if (!trainer) await toggleTrainer(); return !!trainer; },
-  connectHeartRate: async () => { if (!hrm) await toggleHeartRate(); return !!hrm; },
+  connectTrainer: () => devices.connectTrainer(),
+  connectHeartRate: () => devices.connectHeartRate(),
   bluetooth: bluetoothAvailable(),
   startDemo: () => { if (!demo) setDemo(true); },
   rampTest: () => { const w = workoutById(RAMP_TEST_ID); if (w) startWorkout(w); },

@@ -16,7 +16,19 @@ Source: [`src/ble/trainer.ts`](../../src/ble/trainer.ts), [`src/ble/heartRate.ts
 | Heart Rate Service | `0x180D` | Heart-rate straps. |
 | Heart Rate Measurement | `0x2A37` | Notifications: heart rate. |
 
-`connectTrainer()` requests a device that advertises either FTMS or CPS, and lists both as optional services. It connects to GATT, then tries FTMS first. If FTMS isn't there, it uses CPS.
+`requestTrainerDevice()` asks for a device that advertises either FTMS or CPS, and lists both as optional services. `openTrainer(device, callbacks)` connects to GATT, then tries FTMS first. If FTMS isn't there, it uses CPS. (`connectTrainer()` does both.) The heart-rate strap has the same split: `requestHeartRateDevice()` and `openHeartRate()`. The split is what lets a remembered device be reopened without the chooser; `openTrainer` is safe to call again on the same `BluetoothDevice` after a drop, and each call replaces the earlier `gattserverdisconnected` listener (`onGattDrop` in `ble/remembered.ts`) so a drop is reported once.
+
+## Remembered devices and reconnecting
+
+Logic: [`src/ble/remembered.ts`](../../src/ble/remembered.ts) (pure helpers, unit-tested in `tests/unit/remembered.test.ts`) and [`src/devicesUi.ts`](../../src/devicesUi.ts) (the connection life cycle and the UI).
+
+- **Storage.** `localStorage` key `americanflyers.devices`: `{ trainer?: {id, name}, hr?: {id, name} }`. Per browser, never synced (a Bluetooth `id` is meaningless elsewhere). Saved on every successful connect, removed by Forget (which also calls `device.forget()` where the browser has it).
+- **On load, no chooser (feature-detected).** If `navigator.bluetooth.getDevices` exists, the remembered id is looked up in it, `watchAdvertisements()` waits for the first `advertisementreceived` (8 s timeout), then `gatt.connect()` runs (it is tried even after the timeout). Chrome exposes `getDevices` behind `chrome://flags/#enable-web-bluetooth-new-permissions-backend`; chromestatus lists shipping by default for Chrome 169. Without it nothing here runs.
+- **Otherwise, one tap.** A banner and the ☰ Menu show **Reconnect *name***. The click handler calls `requestDevice({ filters: [{ name }], optionalServices })` so the chooser lists just that device (a user gesture is required, so it is wired directly to the click). A `NotFoundError` after a named request produces a "didn't find" toast; the plain **Connect trainer** button always opens the full chooser.
+- **Drops.** A remembered device that fires `gattserverdisconnected` is retried on the same `BluetoothDevice` with waits of 1, 2, 4, 8 and 15 s (`RECONNECT_DELAYS_MS`, `Reconnector`), then the app gives up with a toast and leaves the Reconnect buttons. A manual Disconnect never retries. The ride is not ended: `trainerChanged(null)` zeroes live power and cadence.
+- **After a reconnect.** `openTrainer()` re-subscribes to Indoor Bike Data and the Control Point and redoes Request Control / Start. `devicesUi` calls `trainerChanged(trainer)`, and `main.ts` clears `lastSentGrade` and `lastSentWatts`, so the next `controlTrainer()` tick sends the current grade (or ERG watts) again.
+
+Tests: `tests/e2e/devices.spec.ts` replaces `navigator.bluetooth` with a mock (FTMS trainer, heart-rate strap, optional `getDevices`, simulated drops, failing connects) and covers the banner, the name-filtered request, the no-chooser path, automatic reconnection with backoff, the resend of resistance, and Forget.
 
 ## Connection sequence (FTMS)
 
