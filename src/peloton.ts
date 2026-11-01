@@ -71,6 +71,8 @@ export class Peloton {
   /** Set while a race is on: the whole field races (race mode) instead of the steady groups. */
   race: RaceField | null = null;
   private time = 0;
+  /** Set during a scheduled group ride (events.ts): one pace group that holds its W/kg on the server's clock. */
+  private ride: { clock: () => number; t: number } | null = null;
 
   get racing() {
     return this.race !== null;
@@ -83,6 +85,46 @@ export class Peloton {
     return this.race;
   }
 
+  /**
+   * A scheduled group ride: a single bunch of 12 rolling at a steady `wkg` from the start line,
+   * stepped in fixed slices up to `secondsSinceStart()` so everyone riding sees it in the same place.
+   * It waits on the line (just ahead of the riders) until the clock reaches zero.
+   */
+  startGroupRide(wkg: number, seed: number, secondsSinceStart: () => number) {
+    const names = pick(FIRST_NAMES, 12, seed);
+    const team = TEAMS[Math.abs(seed) % TEAMS.length];
+    this.race = null;
+    this.ride = { clock: secondsSinceStart, t: 0 };
+    this.groups = [{
+      id: 'ride-group', team, wkg, distance: 14, speed: 0,
+      riders: names.map((name, i) => ({ id: `ride-${i}`, name, row: Math.floor(i / 2), side: i % 2 ? 1 : -1 })),
+      phase: 0,
+    }];
+  }
+
+  /** The pace group, if a group ride is on. */
+  get groupRide(): Group | null {
+    return this.ride ? this.groups[0] ?? null : null;
+  }
+
+  endGroupRide(around = 0) {
+    if (!this.ride) return;
+    this.ride = null;
+    this.reset(around);
+  }
+
+  private stepGroupRide(ride: { clock: () => number; t: number }) {
+    const g = this.groups[0];
+    const target = ride.clock();
+    for (let i = 0; i < 800 && ride.t + 0.25 <= target; i++) {
+      ride.t += 0.25;
+      const grade = gradeAt(g.distance);
+      const power = g.wkg * RIDER_KG * (grade < -0.04 ? 0.35 : 1);
+      g.speed = stepSpeed(g.speed, power, grade, 0.25, { massKg: RIDER_KG + BIKE_KG, cda: PACK_CDA, crr: DEFAULT_PARAMS.crr }, windAtDistance(g.distance).head);
+      g.distance += g.speed * 0.25;
+    }
+  }
+
   /** Back to the free-ride groups. */
   endRace(around = 0) {
     if (!this.race) return;
@@ -92,6 +134,7 @@ export class Peloton {
 
   /** New groups spread around the rider, as when a stage is chosen. */
   reset(around: number) {
+    this.ride = null; // choosing another stage ends a group ride
     const seed = Math.floor(Math.random() * 100000);
     const teams = pick(TEAMS, PACES.length, seed);
     const offsets = [-140, 70, 260, 620, 1150].sort(() => Math.random() - 0.5);
@@ -115,6 +158,7 @@ export class Peloton {
 
   update(dt: number) {
     if (this.race) return;
+    if (this.ride) { if (this.groups[0]) this.stepGroupRide(this.ride); return; }
     this.time += dt;
     const finish = currentStage().finish;
     for (const g of this.groups) {

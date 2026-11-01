@@ -18,6 +18,8 @@ Any stage with a finish line can be raced. Open **🏁 Stage** and press **🏁 
 
 The riders are scaled to **you**: the field's strength follows your FTP and weight (set them in ⚙ Settings), so the race is close whatever your level. Riding at about your FTP keeps you with the middle of the field.
 
+Races at set times, with other riders, are in **☰ Menu → 🗓 Events**: see [Group rides, races and the commentator](events-and-commentary.md). A commentator calls every race; turn him off in Settings.
+
 ## The race panel
 
 A small panel on the left (on the right if your data blocks are on the left) shows:

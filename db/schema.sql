@@ -401,3 +401,197 @@ $$;
 
 revoke execute on function public.stage_leaderboard(text, timestamptz), public.stage_ghost(uuid) from public, anonymous;
 grant execute on function public.stage_leaderboard(text, timestamptz), public.stage_ghost(uuid) to authenticated;
+
+-- ------------------------------------------- scheduled rides and races ----
+-- A daily race (19:30 UTC) and a group ride (12:30 UTC) appear on their own:
+-- upcoming_events() lazily creates the schedule, so there is always something
+-- on without an admin. Admins can add one-off events. Riders in an event see
+-- each other through ride_presence() under the stage key "<stage>#event-<id>".
+-- Everyone in an event races the same seeded bots (the seed is on the event).
+-- All access goes through the functions below; the tables have no grants.
+
+-- Stages the schedule rotates through (built-in stages with a finish line).
+create table if not exists public.event_stage_pool (
+  stage_id text primary key,
+  name text not null,
+  length_m integer not null,
+  position integer not null
+);
+alter table public.event_stage_pool enable row level security;
+insert into public.event_stage_pool (stage_id, name, length_m, position) values
+  ('hotw-morgul-bismark', 'Morgul-Bismark', 42263, 0),
+  ('alpe-dhuez', 'Alpe d''Huez', 14000, 1),
+  ('hotw-tour-of-the-moon', 'Tour of the Moon', 37000, 2),
+  ('stelvio', 'Stelvio Pass', 24500, 3),
+  ('route66', 'Route 66 Flats', 25000, 4),
+  ('ventoux', 'Mont Ventoux', 21400, 5),
+  ('hell-of-the-west', 'Echo Lake', 20800, 6),
+  ('tourmalet', 'Col du Tourmalet', 19000, 7),
+  ('zoncolan', 'Monte Zoncolan', 10100, 8)
+on conflict (stage_id) do nothing;
+
+create table if not exists public.events (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('race', 'group_ride')),
+  stage_id text not null check (stage_id ~ '^[a-z0-9-]{1,60}$'),
+  starts_at timestamptz not null,
+  title text not null check (char_length(title) between 3 and 80),
+  created_by text, -- the admin who added it; null = the automatic schedule
+  seed integer not null, -- seeds the bots, so everyone sees the same field
+  pace_wkg real check (pace_wkg is null or pace_wkg between 1 and 6), -- group rides: the pace group's W/kg
+  created_at timestamptz not null default now(),
+  unique (kind, stage_id, starts_at)
+);
+create index if not exists events_starts_idx on public.events (starts_at);
+alter table public.events enable row level security;
+
+create table if not exists public.event_results (
+  event_id uuid not null references public.events (id) on delete cascade,
+  user_id text not null,
+  finish_s integer not null check (finish_s > 0),
+  avg_power real,
+  created_at timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+alter table public.event_results enable row level security;
+
+-- The server's clock, so clients can line up their start (offset = server - local).
+create or replace function public.server_now() returns timestamptz
+language sql stable security definer set search_path = '' as $$ select now() $$;
+
+-- Events from 12 hours ago to p_hours ahead, creating the schedule as needed.
+create or replace function public.upcoming_events(p_hours integer default 48)
+returns table (id uuid, kind text, stage_id text, title text, starts_at timestamptz, seed integer, pace_wkg real,
+               duration_min integer, waiting integer, results integer, my_finish_s integer)
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare
+  me text := auth.user_id();
+  hrs integer := greatest(1, least(coalesce(p_hours, 48), 24 * 14));
+  n integer := (select count(*) from public.event_stage_pool);
+  day0 timestamptz := date_trunc('day', now() at time zone 'utc') at time zone 'utc';
+  d timestamptz;
+  idx integer;
+  pool record;
+begin
+  if me is null then raise exception 'Sign in to see events' using errcode = '42501'; end if;
+  if n > 0 then
+    for i in -1 .. (hrs / 24 + 1) loop
+      d := day0 + i * interval '1 day';
+      idx := (extract(epoch from d)::bigint / 86400)::integer;
+      select p.stage_id, p.name into pool from public.event_stage_pool p where p.position = idx % n;
+      -- The evening race.
+      if d + interval '19 hours 30 minutes' > now() - interval '3 hours' and d + interval '19 hours 30 minutes' < now() + make_interval(hours => hrs) then
+        insert into public.events (kind, stage_id, starts_at, title, seed)
+        values ('race', pool.stage_id, d + interval '19 hours 30 minutes', 'Evening race: ' || pool.name,
+                ('x' || lpad(substr(md5('race' || d::text), 1, 7), 8, '0'))::bit(32)::integer)
+        on conflict (kind, stage_id, starts_at) do nothing;
+      end if;
+      -- The midday group ride on Heartland Rollers.
+      if d + interval '12 hours 30 minutes' > now() - interval '3 hours' and d + interval '12 hours 30 minutes' < now() + make_interval(hours => hrs) then
+        insert into public.events (kind, stage_id, starts_at, title, seed, pace_wkg)
+        values ('group_ride', 'heartland', d + interval '12 hours 30 minutes', 'Group ride: Heartland Rollers, 2.6 W/kg',
+                ('x' || lpad(substr(md5('ride' || d::text), 1, 7), 8, '0'))::bit(32)::integer, 2.6)
+        on conflict (kind, stage_id, starts_at) do nothing;
+      end if;
+    end loop;
+  end if;
+  return query
+    select e.id, e.kind, e.stage_id, e.title, e.starts_at, e.seed, e.pace_wkg,
+           case when e.kind = 'race' then 150 else 90 end,
+           (select count(*)::integer from public.live_riders l
+             where l.stage_id = left(e.stage_id || '#event-' || e.id::text, 80) and l.updated_at > now() - interval '15 seconds'),
+           (select count(*)::integer from public.event_results r where r.event_id = e.id),
+           (select r.finish_s from public.event_results r where r.event_id = e.id and r.user_id = me)
+    from public.events e
+    where e.starts_at > now() - interval '12 hours' and e.starts_at < now() + make_interval(hours => hrs)
+    order by e.starts_at;
+end $$;
+
+-- Admins add one-off events (a race or a group ride on any stage).
+create or replace function public.admin_create_event(p_kind text, p_stage text, p_starts_at timestamptz, p_title text, p_pace_wkg real default null)
+returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare new_id uuid;
+begin
+  if not public.is_admin() then raise exception 'Admins only' using errcode = '42501'; end if;
+  if p_kind not in ('race', 'group_ride') then raise exception 'Kind must be race or group_ride'; end if;
+  if p_stage !~ '^[a-z0-9-]{1,60}$' then raise exception 'Stage id looks wrong'; end if;
+  if p_starts_at < now() - interval '1 hour' or p_starts_at > now() + interval '90 days' then raise exception 'Pick a start time within the next 90 days'; end if;
+  insert into public.events (kind, stage_id, starts_at, title, created_by, seed, pace_wkg)
+  values (p_kind, p_stage, p_starts_at, left(trim(p_title), 80), auth.user_id(), floor(random() * 268435455)::integer,
+          case when p_kind = 'group_ride' then coalesce(p_pace_wkg, 2.6) else null end)
+  returning events.id into new_id;
+  return new_id;
+end $$;
+
+-- Admins can take back an event nobody has a result in yet.
+create or replace function public.admin_delete_event(p_event uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.is_admin() then raise exception 'Admins only' using errcode = '42501'; end if;
+  if exists (select 1 from public.event_results where event_id = p_event) then raise exception 'That event already has results'; end if;
+  delete from public.events where id = p_event;
+end $$;
+
+-- One result per rider per event: moving time from the event's start. Checked against the
+-- clock (you can't take longer than has passed, or finish before the event) and against
+-- sanity limits (the stage length at 80 km/h, public.stage_limits when it exists, power).
+create or replace function public.submit_event_result(p_event uuid, p_finish_s integer, p_avg_power real default null)
+returns boolean
+language plpgsql security definer set search_path = '' as $$
+declare
+  me text := auth.user_id();
+  ev public.events;
+  len integer;
+  floor_s integer;
+  lim integer;
+  n integer;
+begin
+  if me is null then raise exception 'Sign in to submit a result' using errcode = '42501'; end if;
+  if exists (select 1 from neon_auth."user" u where u.id::text = me and coalesce(u.banned, false)) then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  select * into ev from public.events where id = p_event;
+  if not found then raise exception 'No such event'; end if;
+  if ev.kind <> 'race' then raise exception 'Only races have results'; end if;
+  if now() < ev.starts_at then raise exception 'The event has not started'; end if;
+  if now() > ev.starts_at + interval '4 hours' then raise exception 'That event is over'; end if;
+  if p_finish_s is null or p_finish_s <= 0 or p_finish_s > extract(epoch from now() - ev.starts_at) + 20 then
+    raise exception 'That time does not fit the event';
+  end if;
+  if p_avg_power is null or p_avg_power <= 0 or p_avg_power > 2000 then raise exception 'That power does not look right'; end if;
+  select length_m into len from public.event_stage_pool where stage_id = ev.stage_id;
+  floor_s := coalesce(ceil(len / 22.0)::integer, 300);
+  if to_regclass('public.stage_limits') is not null then
+    begin
+      execute 'select min_finish_s from public.stage_limits where stage_id = $1' into lim using ev.stage_id;
+      floor_s := greatest(floor_s, coalesce(lim, 0));
+    exception when others then null;
+    end;
+  end if;
+  if p_finish_s < floor_s then raise exception 'That time is faster than the stage allows'; end if;
+  insert into public.event_results (event_id, user_id, finish_s, avg_power) values (p_event, me, p_finish_s, p_avg_power)
+  on conflict (event_id, user_id) do nothing;
+  get diagnostics n = row_count;
+  return n > 0;
+end $$;
+
+-- The real riders' results for an event, fastest first (short names).
+create or replace function public.event_results(p_event uuid)
+returns table (rank bigint, name text, finish_s integer, avg_power real, is_me boolean)
+language sql stable security definer set search_path = '' as $$
+  select rank() over (order by r.finish_s, r.created_at), public.short_name(u.name), r.finish_s, r.avg_power, r.user_id = auth.user_id()
+  from public.event_results r
+  join neon_auth."user" u on u.id::text = r.user_id and not coalesce(u.banned, false)
+  where r.event_id = p_event and auth.user_id() is not null
+  order by r.finish_s, r.created_at
+  limit 100
+$$;
+
+revoke all on public.events, public.event_results, public.event_stage_pool from public, anonymous, authenticated;
+revoke execute on function public.server_now(), public.upcoming_events(integer), public.admin_create_event(text, text, timestamptz, text, real),
+  public.admin_delete_event(uuid), public.submit_event_result(uuid, integer, real), public.event_results(uuid) from public, anonymous;
+grant execute on function public.server_now(), public.upcoming_events(integer), public.admin_create_event(text, text, timestamptz, text, real),
+  public.admin_delete_event(uuid), public.submit_event_result(uuid, integer, real), public.event_results(uuid) to authenticated;
+notify pgrst, 'reload schema';

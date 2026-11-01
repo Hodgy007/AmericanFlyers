@@ -40,6 +40,7 @@ const DIALOGS: { name: string; button: string; dialog: string[]; menu?: boolean 
   { name: 'training plans', button: '#btn-menu-plans', dialog: ['#plans'], menu: true },
   { name: 'kit', button: '#btn-menu-kit', dialog: ['#kit-dialog'], menu: true },
   { name: 'tour', button: '#btn-tour', dialog: ['#tour'], menu: true },
+  { name: 'events', button: '#btn-events', dialog: ['#events'], menu: true },
   { name: 'settings', button: '#btn-settings', dialog: ['#settings'], menu: true },
   { name: 'feedback', button: '#btn-feedback', dialog: ['#feedback-dialog', '#signin'], menu: true },
   { name: 'sign in', button: '#btn-account', dialog: ['#signin'] },

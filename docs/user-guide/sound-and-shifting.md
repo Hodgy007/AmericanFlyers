@@ -9,6 +9,7 @@ Rides have sound, made in the browser with no downloads:
 - Crowds cheering on the hairpins of the climbs and over the last 700 m to the finish, with the odd whistle.
 - Beeps at 3, 2 and 1 seconds before a workout step changes, and a long beep as it changes.
 - A fanfare at the finish line.
+- In races, a commentator's voice lines (switch off with **Race commentary** in ⚙ Settings); the other sounds dip while he speaks. See [Group rides, races and the commentator](events-and-commentary.md#the-race-commentator).
 
 Turn sound on or off with **☰ Menu → 🔊 Sound** or the **M** key. Browsers start sound only after your first click or key press.
 

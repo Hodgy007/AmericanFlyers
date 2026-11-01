@@ -9,6 +9,8 @@ import { achievements, weekIndex } from './achievements';
 import { mountEmailAuth, type RiderDetails } from './emailAuth';
 import { barChart, lineChart, statTiles } from './charts';
 import { toTcx } from './recorder';
+import { adminCreateEvent, adminDeleteEvent, upcomingEvents } from './events';
+import { EVENT_STAGE_POOL, GROUP_RIDE_STAGE, type EventKind } from '../schedule';
 import {
   activitySamples, adminDeleteFeedback, adminFeedback, adminOverview, adminSetBan, adminUpdateFeedback, adminUsers,
   deleteActivity, ftpHistory, isAdmin, listActivities, myFeedback, submitFeedback,
@@ -480,6 +482,9 @@ export function initAccountUi(deps: Deps) {
       h('div', {}, h('h3', { text: 'Top workouts' }), table(['Workout', 'Rides', 'Riders'], (o.top_workouts ?? []).map((r) => [r.name, String(r.rides), String(r.riders)]))),
     ));
 
+    // Scheduled events
+    root.append(await adminEventsSection());
+
     // Riders
     root.append(h('h3', { text: `Riders (${users.length})` }));
     const search = h('input', { class: 'search' });
@@ -529,6 +534,57 @@ export function initAccountUi(deps: Deps) {
     drawInbox();
     root.append(inbox);
     return root;
+  }
+
+  /** Upcoming group rides and races, and a small form to add a one-off (the daily ones create themselves). */
+  async function adminEventsSection() {
+    const box = h('div', { class: 'admin-events' }, h('h3', { text: 'Group rides & races' }));
+    const list = h('div');
+    const draw = async () => {
+      try {
+        const events = await upcomingEvents(24 * 14);
+        const t = h('table', { class: 'admin-table' });
+        t.append(h('thead', {}, h('tr', {}, ...['When', 'Event', 'Kind', 'Results', ''].map((x) => h('th', { text: x })))));
+        const body = h('tbody');
+        for (const e of events) {
+          const del = e.results ? '' : button('Remove', async () => {
+            if (!confirm(`Remove “${e.title}”? The daily schedule may add it back if it is one of the automatic events.`)) return;
+            try { await adminDeleteEvent(e.id); deps.toast('Event removed'); draw(); } catch (err) { deps.toast(errMsg(err)); }
+          });
+          body.append(h('tr', {}, h('td', { text: new Date(e.starts_at).toLocaleString() }), h('td', { text: e.title }), h('td', { text: e.kind === 'race' ? 'Race' : 'Group ride' }), h('td', { text: String(e.results) }), h('td', {}, del)));
+        }
+        if (!events.length) body.append(h('tr', {}, h('td', { class: 'muted', text: 'Nothing scheduled' })));
+        t.append(body);
+        list.replaceChildren(h('div', { class: 'table-wrap' }, t));
+      } catch (err) {
+        list.replaceChildren(h('p', { class: 'muted', text: errMsg(err) }));
+      }
+    };
+    await draw();
+
+    const kind = h('select');
+    for (const [v, label] of [['race', 'Race'], ['group_ride', 'Group ride']]) { const o = h('option', { text: label }); o.value = v; kind.append(o); }
+    const stage = h('select');
+    for (const st of [...EVENT_STAGE_POOL, { id: GROUP_RIDE_STAGE, name: 'Heartland Rollers (group rides)' }]) { const o = h('option', { text: st.name }); o.value = st.id; stage.append(o); }
+    const starts = h('input');
+    starts.type = 'datetime-local';
+    const title = h('input');
+    title.placeholder = 'Title, e.g. Saturday showdown';
+    title.maxLength = 80;
+    const pace = h('input');
+    pace.type = 'number'; pace.min = '1'; pace.max = '6'; pace.step = '0.1'; pace.value = '2.6'; pace.title = 'Group ride pace, W/kg';
+    const add = button('Add event', async () => {
+      if (!starts.value) { deps.toast('Pick a start time'); return; }
+      if (title.value.trim().length < 3) { deps.toast('Give the event a title (3+ characters)'); return; }
+      try {
+        await adminCreateEvent(kind.value as EventKind, stage.value, new Date(starts.value), title.value.trim(), kind.value === 'group_ride' ? Number(pace.value) : undefined);
+        deps.toast('Event added');
+        title.value = '';
+        draw();
+      } catch (err) { deps.toast(errMsg(err)); }
+    }, 'primary');
+    box.append(list, h('div', { class: 'admin-event-form' }, kind, stage, starts, title, h('label', { class: 'muted small', text: 'W/kg ' }, pace), add));
+    return box;
   }
 
   function adminFeedbackCard(f: Feedback, onDelete: () => void) {

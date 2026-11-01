@@ -197,6 +197,12 @@ export class Sound {
     return !!this.ctx && this.on && this.ctx.state === 'running';
   }
 
+  /** Quiets the ride sounds a little while the race commentator speaks. */
+  duck(on: boolean) {
+    if (!this.ctx || !this.master) return;
+    this.master.gain.setTargetAtTime(on ? 0.45 : 0.8, this.ctx.currentTime, 0.12);
+  }
+
   /** Countdown beep before a workout step changes; `last` is the long one as it changes. */
   beep(last = false) {
     if (!this.ready()) return;

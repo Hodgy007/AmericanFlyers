@@ -42,6 +42,35 @@ Riders are individual units that travel in **groups**. A group has a front wheel
 
 `settings.tour` is a `TourProgress`: `{ id, seed, stage, results }`. `results` holds one `TourStageResult` per stage, `[rider id, time, sprint points, mountain points]` rows. The field is regenerated from `seed` with `makeRoster()`, so it is not stored. `tour.ts` keeps the current progress, saves through `onTourChange()` (main saves and syncs the settings), and computes the general, points and mountains classifications. `tourJersey()` returns `[main, second]` kit colours if you lead a classification after the stages raced so far (yellow, then green, then polka dots), or `null`; the kit system can call it. The player's rider model is not changed by this module.
 
+## Scheduled events
+
+Group rides and races at set times (see the [user guide](../user-guide/events-and-commentary.md)):
+
+| Module | Role |
+| --- | --- |
+| [`src/schedule.ts`](../../src/schedule.ts) | Pure: the stage pool, `dailySchedule()` (a client mirror of the SQL schedule, so the Events dialog works signed out), `countdownLabel()`, `joinState()`, `eventStageKey()`. |
+| [`src/eventSession.ts`](../../src/eventSession.ts) | Pure: `ActiveEvent`, `secondsSinceStart()`, `EVENT_REF_WKG`, `DropWatcher` (group rides) and `mergeEventResults()` (finish card). |
+| [`src/cloud/events.ts`](../../src/cloud/events.ts) | The RPC calls, and the server clock: `syncServerClock()` stores `server − local` from the quickest of three round trips and `serverNow()` applies it. |
+| [`src/eventsUi.ts`](../../src/eventsUi.ts) | The `#events` dialog, the `#event-bar` strip and the finish card's results table. |
+| `src/main.ts` (section "scheduled events") | `joinEvent()`, `endEvent()`, `updateEvent()` and `eventFinishPanel()`. |
+
+How the start is shared:
+
+- The event is identified by `id`, `starts_at` and `seed`. `LiveRace.useEventClock(() => secondsSinceStart(...))` makes the countdown follow the server's clock, and in the racing phase steps the sim in **fixed** `EVENT_STEP` (0.25 s) slices up to the clock instead of by frame `dt`. The sim never reads the player (only `reportPlayer()` records crossings), so the same seed, the same fixed `EVENT_REF_WKG` (3.4) and the same slices give identical bots on every device. A late joiner's first frames catch the sim up (up to 600 slices a frame).
+- A group ride is `Peloton.startGroupRide(wkg, seed, clock)`: one 12-rider group stepped the same way at a steady W/kg, from just ahead of the start line. `Peloton.reset()` (choosing another stage) ends it.
+- Presence uses the stage key `eventStageKey(stage, event id)`, so only riders in the event see each other.
+- Result time is `sim.t` at the line (race time since the event's start). `submit_event_result` sends it with the average power, unless the ride used the demo or `?timescale` (guard: `eventState.demoUsed`, `TIME_SCALE`). The finish card merges the sim's field, the server's results (polled every 15 s) and your own time.
+
+## The commentator
+
+[`src/commentary.ts`](../../src/commentary.ts):
+
+- **`Commentator`** (pure, injected player and clock) decides whether a line may play now: one at a time, a 3 s pause, a cooldown per kind of line (`COOLDOWN`), at most 5 lines a minute (must-hear priority-3 lines excepted), a one-slot queue for priority 2 and 3 lines that expires after 8 s, and never the same variant twice in a row.
+- **`RaceCommentary`** maps `LiveRace.onEvent(text, kind)` (attack, break, caught, sprint) and a per-tick `RaceSnapshot` (built in `updateCommentary()` in `main.ts` from `race.panel()`) to clips: start, lobby, halfway, last kilometre, summits, gaps, and lines about the player (lead, attack, dropped and back, yellow jersey, finish).
+- **`ClipPlayer`** plays `public/audio/commentary/<key>-<n>.mp3` with an `<audio>` element and calls `Sound.duck()` (master gain 0.8 to 0.45) while a line plays. `ClipPlayer.preload()` fetches the clips when the first race starts.
+- `CLIPS` holds what each file says. A unit test checks every entry has a file. The clips (39, mono 48 kbps, about 1 MB in all) were generated with Higgsfield (model `seed_audio`, one preset male voice) and converted with ffmpeg: `ffmpeg -ac 1 -ar 24000 -b:a 48k` with leading and trailing silence trimmed and `loudnorm`. To add or change a line, edit `CLIPS`, generate the audio the same way, and save it as `<key>-<n>.mp3`.
+- Setting `commentary` (default on); `commentator.enabled = settings.commentary && sound.enabled`.
+
 ## Testing
 
 `npm run build` type-checks everything. The engine can be run headless: bundle `raceSim.ts` and `peloton.ts` (for `makeRoster`) with esbuild and step a `RaceSim` to the end; the races take 75 to 105 simulated minutes at a 2.7 W/kg reference. In the browser, `?timescale=8` runs the clock faster (see [URL parameters](../reference/keyboard-and-url-params.md)).

@@ -52,6 +52,12 @@ import { initRideOnsUi } from './rideOnsUi';
 import { LiveRace, raceSetup, type ResultRow } from './race';
 import { initRaceUi, resultsNode } from './raceUi';
 import { initTourUi } from './tourUi';
+// Scheduled group rides and races, and the race commentator (schedule.ts, eventSession.ts, eventsUi.ts, commentary.ts, cloud/events.ts).
+import { ClipPlayer, Commentator, RaceCommentary } from './commentary';
+import { DropWatcher, EVENT_REF_WKG, eventOver, mergeEventResults, secondsSinceStart, type ActiveEvent, type RealResult } from './eventSession';
+import { eventResultsNode, initEventBar, initEventsUi } from './eventsUi';
+import { eventResults, serverNow, submitEventResult, syncServerClock, type EventRow } from './cloud/events';
+import { countdownLabel, eventStageKey, joinState } from './schedule';
 import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChange, priorTotals, recordStage, refWkg, simulateStage, tourComplete, tourJersey, tourStageNumber } from './tour';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -82,6 +88,14 @@ const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
 let race: LiveRace | null = null; // the race being ridden, if any
 const raceUi = initRaceUi();
+// The race commentator: voice lines for race events, quieter ride sounds while it speaks.
+const clipPlayer = new ClipPlayer();
+clipPlayer.onDuck = (on) => sound.duck(on);
+const commentator = new Commentator(clipPlayer, () => performance.now() / 1000);
+let raceCommentary: RaceCommentary | null = null;
+let clipsPreloaded = false;
+/** The scheduled event you have joined (a race or a group ride), if any. */
+let eventState: { ev: ActiveEvent; drop: DropWatcher; demoUsed: boolean } | null = null;
 let draft: Draft | null = null; // the rider just ahead, if any
 let lastCrossShift = 0; // crosswind echelon: metres right of a rider's line the shelter sits
 let draftSaving = 0; // fraction of air drag saved, eased
@@ -316,7 +330,7 @@ function frame(now: number) {
   // Other riders on the road, and the draft from the one just ahead.
   const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders() : [];
   if (race) race.update(dt, ride.distance, ride.speed); // the field races with you
-  if (settings.proTeams || race) {
+  if (settings.proTeams || race || eventState) {
     peloton.update(dt);
     liveRiders.push(...peloton.riders());
   }
@@ -332,7 +346,8 @@ function frame(now: number) {
     massKg: settings.riderKg + settings.bikeKg,
     cda: DEFAULT_PARAMS.cda * (1 - draftSaving),
   }, roadWind(ride.distance).head); // air speed = road speed + headwind
-  if (race?.holding) ride.speed = 0; // waiting on the line for the start
+  if (race?.holding || eventHolding()) ride.speed = 0; // waiting on the line for the start
+  if (eventState && demo) eventState.demoUsed = true; // demo riding keeps you off the event results
   ride.distance += ride.speed * dt;
   if (ride.speed > 0.3 && !ride.finished) {
     ride.movingTime += dt;
@@ -388,7 +403,10 @@ function frame(now: number) {
     climbUi.update(ride.distance, settings.miniMap, !ride.finished, settings.units === 'imperial');
     placeBelowHud();
     raceUi.countdown(race?.countText ?? null);
-    raceUi.panel(race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null, settings.units === 'imperial');
+    const panelData = race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null;
+    raceUi.panel(panelData, settings.units === 'imperial');
+    updateCommentary(panelData);
+    updateEvent();
     if (player) {
       drawWorkout(profileCanvas, player.steps, { elapsed: player.elapsed, trace: player.trace });
     } else {
@@ -831,6 +849,9 @@ function resetRide() {
   rideWorkout.completed = null;
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false });
   if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); } // starting afresh ends a race
+  raceCommentary = null;
+  clipPlayer.stop();
+  endEvent(); // ...and leaves a scheduled event
   drivetrain.reset();
   powerSamples.length = 0;
   stats = new RideStats(zoneRefs);
@@ -957,7 +978,7 @@ function beginRace(stage: Stage, tourStage: number | null = null) {
   const { roster, course } = raceSetup(stage, seed);
   const field = peloton.startRace(course, roster, refWkg(settings.ftp, settings.riderKg), seed);
   race = new LiveRace(stage, field, priorTotals(tour, stage.id), tourStage);
-  race.onBeep = (last) => sound.beep(last);
+  attachRace(race);
   const stageNo = tourStage ? `Stage ${tourStage} of the tour · ` : '';
   toast(`${stageNo}${stage.name.replace('Hell of the West · ', '')}: roll up to the line.`, 4000);
 }
@@ -1014,6 +1035,165 @@ function updateTourJersey() {
 }
 updateTourJersey();
 
+// ------------------------------------------------- scheduled events ----
+// Group rides and races at set times (schedule.ts; the server keeps the schedule and the
+// clock). Joining puts you on the start line of the event's stage, in a presence room of
+// its own, with a 3-2-1 that starts at the same moment for everyone.
+
+const eventBar = initEventBar(() => {
+  const was = eventState?.ev;
+  resetRide();
+  if (was) toast(`You left ${was.title}.`);
+});
+
+initEventsUi({
+  join: (row) => { joinEvent(row); },
+  stageName: (id) => stageById(id).name,
+  openSignIn: (why) => accountUi.openSignIn(why),
+  currentEventId: () => eventState?.ev.id ?? null,
+});
+
+function eventHolding() {
+  return !!eventState && eventState.ev.kind === 'group_ride' && secondsSinceStart(eventState.ev, serverNow()) < 0;
+}
+
+/** Wires a new race to the beeps and the commentator (single races, tour stages and events). */
+function attachRace(r: LiveRace) {
+  r.onBeep = (last) => sound.beep(last);
+  commentator.reset();
+  raceCommentary = new RaceCommentary(commentator);
+  r.onEvent = (text, kind) => raceCommentary?.event(text, kind);
+  if (!clipsPreloaded && settings.commentary && sound.enabled) { clipsPreloaded = true; ClipPlayer.preload(); }
+}
+
+async function joinEvent(row: EventRow) {
+  if (!account()) { accountUi.openSignIn('Sign in (free) to join group rides and races.'); return; }
+  await syncServerClock();
+  const startsAtMs = new Date(row.starts_at).getTime();
+  if (joinState(row.kind, startsAtMs, serverNow()) !== 'open') { toast('That event isn’t open to join right now.'); return; }
+  const stage = stageById(row.stage_id);
+  if (stage.id !== row.stage_id || (row.kind === 'race' && stage.finish === null)) { toast('Sorry, that event’s stage isn’t available.'); return; }
+  if (stage !== currentStage()) chooseStage(stage);
+  else resetRide();
+  const ev: ActiveEvent = {
+    id: row.id, kind: row.kind, stageId: row.stage_id, title: row.title, startsAtMs, seed: row.seed, paceWkg: row.pace_wkg, durationMin: row.duration_min,
+  };
+  eventState = { ev, drop: new DropWatcher(), demoUsed: false };
+  const clock = () => secondsSinceStart(ev, serverNow());
+  if (ev.kind === 'race') {
+    const { roster, course } = raceSetup(stage, ev.seed);
+    const field = peloton.startRace(course, roster, EVENT_REF_WKG, ev.seed);
+    race = new LiveRace(stage, field, new Map(), null);
+    race.useEventClock(clock);
+    attachRace(race);
+  } else {
+    peloton.startGroupRide(ev.paceWkg ?? 2.6, ev.seed, clock);
+  }
+  presence.restage(); // only riders in this event see each other
+  toast(clock() < 0 ? `You’re on the line for ${ev.title}. The start is synchronised for everyone.` : `${ev.title} is under way. Go!`, 5000);
+  updateEvent();
+}
+
+/** Leaves the event (you finish, reset, or pick another stage): the road goes back to normal. */
+function endEvent() {
+  if (!eventState) return;
+  eventState = null;
+  peloton.endGroupRide(ride.distance);
+  eventBar.hide();
+  presence.restage();
+}
+
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** About five times a second: the lobby countdown, the group ride's "you've been dropped" notes. */
+function updateEvent() {
+  if (!eventState) return;
+  const { ev } = eventState;
+  const t = secondsSinceStart(ev, serverNow());
+  const others = presence.count;
+  if (t < 0) {
+    const where = others > 0 ? ` · ${others} other rider${others === 1 ? '' : 's'} on the line` : '';
+    eventBar.show(ev.title, `${t > -3600 ? `Starts in ${mmss(-t)}` : countdownLabel(-t * 1000)}${where}`);
+    return;
+  }
+  if (ev.kind === 'race') { eventBar.hide(); return; }
+  // Group ride.
+  if (eventOver(ev, serverNow())) {
+    toast('The group ride is over. Thanks for riding!', 6000);
+    resetRide();
+    return;
+  }
+  const g = peloton.groupRide;
+  if (!g) return;
+  const gap = peloton.back(g) - ride.distance; // metres behind the back of the group
+  const note = eventState.drop.update(gap, performance.now() / 1000);
+  if (note === 'dropped') toast('You’ve been dropped. The group keeps its pace and won’t wait: dig in to get back on, or ride your own ride.', 6000);
+  if (note === 'back') toast('Back with the group. Nice work!', 3500);
+  const status = eventState.drop.isDropped
+    ? `${Math.round(gap)} m off the back`
+    : gap > 8 ? `${Math.round(gap)} m behind the group` : gap < -8 ? `${Math.round(-gap)} m ahead of the group` : 'with the group';
+  eventBar.show(ev.title, `${status} · ${mmss(t)} in`);
+}
+
+/** The race commentator: feeds it this frame's race picture. Called with the live panel's numbers. */
+function updateCommentary(panel: ReturnType<LiveRace['panel']> | null) {
+  commentator.enabled = settings.commentary && sound.enabled;
+  if (!race || !raceCommentary) return;
+  if (race.phase === 'countdown' && race.untilGo > 5 && race.untilGo <= 30) raceCommentary.lobby();
+  if (!panel) { commentator.tick(); return; }
+  raceCommentary.update({
+    t: panel.raceTime,
+    place: panel.place,
+    total: panel.total,
+    myDistance: ride.distance,
+    leadDistance: panel.leadPos,
+    finish: race.course.finish,
+    power: live.power,
+    ftp: settings.ftp,
+    groups: panel.groups,
+    yellowIsYou: panel.jerseys.yellow === 'You',
+    tour: race.tourStage !== null,
+    summits: race.course.lines.filter((l) => l.kind === 'summit').map((l) => l.d),
+    dt: 0.2,
+  });
+}
+
+/**
+ * The finish card's event table: your time, the real riders who have finished and the computer
+ * field, merged by time. Sends your result (unless this was a demo ride or a sped-up clock) and
+ * keeps looking for new results while the card is open.
+ */
+function eventFinishPanel(ev: ActiveEvent, rows: ResultRow[], myTime: number, avgPower: number, demoUsed: boolean): Node {
+  const box = document.createElement('div');
+  const bots = rows.map((r) => ({ name: r.name, time: r.time, team: r.team, you: r.you }));
+  const draw = (real: RealResult[]) => box.replaceChildren(eventResultsNode(mergeEventResults(bots, real, myTime), real.filter((r) => !r.is_me).length + 1));
+  draw([]);
+  const eligible = !demoUsed && TIME_SCALE === 1 && avgPower > 0;
+  const note = document.createElement('p');
+  note.className = 'muted small';
+  if (!eligible) note.textContent = 'Demo rides and sped-up clocks don’t count towards the event results.';
+  const refresh = async () => {
+    try {
+      const real = await eventResults(ev.id);
+      draw(real.map((r) => ({ name: r.name, finish_s: r.finish_s, is_me: r.is_me })));
+      if (!eligible) box.append(note);
+    } catch { /* results are a bonus */ }
+  };
+  (async () => {
+    if (eligible) {
+      try { await submitEventResult(ev.id, myTime, avgPower); } catch (e) { note.textContent = `Couldn’t send your result: ${(e as Error).message}`; box.append(note); }
+    }
+    await refresh();
+    // Other riders are still finishing: look again every 15 s while the card is open (up to 10 minutes).
+    let n = 0;
+    const timer = window.setInterval(() => {
+      if ($('finish').hidden || ++n > 40) { window.clearInterval(timer); return; }
+      refresh();
+    }, 15000);
+  })();
+  return box;
+}
+
 function showFinish() {
   ride.finished = true;
   sound.fanfare();
@@ -1049,9 +1229,12 @@ function showFinish() {
     title = `${currentStage().name}: ${ordinal(r.place)}`;
     extra = [resultsNode(r.rows, r.tour), ...extra];
     actions = r.actions;
+    raceCommentary?.finished(r.place);
+    if (eventState?.ev.kind === 'race') extra = [eventFinishPanel(eventState.ev, r.rows, r.me.time, avgPower, eventState.demoUsed), ...extra];
     race = null; // the race is over: the teams go back to riding the road
     peloton.endRace(ride.distance);
     raceUi.panel(null, false);
+    endEvent(); // the lobby and presence go back to the normal road
   }
   showSummary('🏁', title, items, actions, extra);
   $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
@@ -1143,6 +1326,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     virtualShifting: data.get('virtualShifting') === 'on',
     wind: data.get('wind') === 'on',
     miniMap: data.get('miniMap') === 'on',
+    commentary: data.get('commentary') === 'on',
   };
   saveSettings(settings);
   pushSettings(settings);
@@ -1316,7 +1500,7 @@ onSyncError((msg) => toast(msg, 6000));
 
 const presence = new Presence(
   () => settings.rideTogether && !document.body.classList.contains('at-home')
-    ? { stageId: currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence, kit: kitString(playerLook()) }
+    ? { stageId: eventState ? eventStageKey(currentStage().id, eventState.ev.id) : currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence, kit: kitString(playerLook()) }
     : null,
   () => true,
 );
