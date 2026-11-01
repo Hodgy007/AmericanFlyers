@@ -11,6 +11,8 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Bluetooth trainer connection.** Uses the standard FTMS (Fitness Machine) profile, so it works with Wahoo KICKR, KICKR CORE and KICKR SNAP on current firmware, as well as most other smart trainers. Trainers that only expose a Cycling Power service still work in read-only mode.
 - **Resistance follows the road.** The current grade is sent to the trainer once a second, scaled by a *trainer difficulty* setting (default 50%).
 - **Wind and echelons.** Each stage has a wind that the weather scales; headwinds slow you, tailwinds help, your trainer feels the headwind, and in a crosswind the best shelter is diagonal, so the pro teams ride echelons. A wind chip shows the direction and speed.
+- **Group rides and races** (☰ Menu → 🗓 Events): a race every evening and a group ride at midday, plus one-off events, with a synchronised start, a lobby, shared computer-ridden fields and results alongside other riders.
+- **Race commentator:** voice lines call the race and how you are doing; switch off in Settings.
 - **Mini-map and climb preview.** A route map with you, riders, teams, ghost and race markers, and a card for the next climb when it is within 2 km.
 - **Stages** (🏁 button):
   - *Heartland Rollers*: endless farmland, free ride.

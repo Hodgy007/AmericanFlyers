@@ -28,6 +28,7 @@ export interface Settings {
   tour: TourProgress | null; // the Hell of the West tour in progress
   wind: boolean; // wind on the road: headwinds slow you, crosswinds make echelons (world/wind.ts)
   miniMap: boolean; // the route mini-map and climb preview (miniMap.ts, climbUi.ts)
+  commentary: boolean; // the race commentator's voice lines (commentary.ts); also needs sound on
 }
 
 const KEY = 'americanflyers.settings';
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tour: null,
   wind: true,
   miniMap: true,
+  commentary: true,
 };
 
 export function loadSettings(): Settings {

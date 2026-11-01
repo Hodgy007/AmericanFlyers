@@ -92,6 +92,7 @@
             <button id="btn-menu-plans" role="menuitem">📅 Training plans</button>
             <button id="btn-menu-kit" role="menuitem" title="Design your jersey and bike">🎨 My kit</button>
             <button id="btn-tour" role="menuitem" title="Race the three stages of American Flyers">🏆 Hell of the West tour</button>
+            <button id="btn-events" role="menuitem" title="Scheduled group rides and races">🗓 Events</button>
             <hr />
             <button id="btn-sound" role="menuitem" title="Sound on/off (M)">🔊 Sound on</button>
             <button id="btn-fullscreen" role="menuitem" title="Full screen (F)">⛶ Full screen</button>
@@ -158,6 +159,11 @@
       <div id="rp-msg" class="rp-msg" hidden></div>
     </aside>
     <div id="race-count" class="race-count" hidden aria-live="assertive"></div>
+    <!-- Scheduled events (events.ts): the lobby and the group-ride status. -->
+    <aside id="event-bar" class="event-bar" hidden aria-live="polite">
+      <div class="eb-main"><strong id="eb-title"></strong><span id="eb-status"></span></div>
+      <button type="button" id="eb-leave">Leave</button>
+    </aside>
 
     <div id="demo-panel" class="demo-panel" hidden>
       <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
@@ -319,6 +325,9 @@
         <label class="check"><input name="miniMap" type="checkbox" /> Mini-map and climb preview
           <span class="hint">A small map of the route with riders on it, and a card for the next climb when it is within 2 km.</span>
         </label>
+        <label class="check"><input name="commentary" type="checkbox" /> Race commentary
+          <span class="hint">A commentator calls the action in races: the start, attacks, the break, sprints and how you are doing. Needs sound on.</span>
+        </label>
         <label class="check"><input name="rideTogether" type="checkbox" /> Ride together
           <span class="hint">Show me to other signed-in riders on the same stage, and show them to me.</span>
         </label>
@@ -462,6 +471,17 @@
         </div>
         <div id="lb-body"></div>
         <p id="lb-ghost" class="muted small"></p>
+      </form>
+    </dialog>
+
+    <dialog id="events" class="riders-dialog events-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Events</h2>
+          <button value="cancel" class="icon" aria-label="Close">✕</button>
+        </div>
+        <p id="events-note" class="muted small"></p>
+        <div id="events-list"></div>
       </form>
     </dialog>
 

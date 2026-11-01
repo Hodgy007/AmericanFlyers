@@ -29,6 +29,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `public/images/hero*.jpg`, `hero*.mp4` | The home page hero (still and looping video, with smaller phone versions). |
 | `public/images/hero-dog*.jpg`, `hero-dog*.mp4` | The second hero: a pit bull chasing the rider. The home page rotates between the two heroes (`heroRotator()` in `src/home.ts`; `?hero=dog` or `?hero=rider` pins one). |
 | `public/icons/` | App icons (192, 512, maskable 512, Apple touch icon, favicon). |
+| `public/audio/commentary/*.mp3` | The race commentator's 39 voice lines (generated with Higgsfield; `CLIPS` in `src/commentary.ts` says what each one says). |
 | `public/manifest.webmanifest` | Makes the app installable: name, icons, full-screen display, colours. |
 | `public/sw.js` | Service worker: network-first pages, cached build files, models and textures. Never caches Neon. |
 
@@ -52,6 +53,11 @@ This page lists every file and folder in the repository, with a one-line summary
 | `raceSim.ts` | The race engine: riders in groups, attacks, breaks, chases, cracks, merges, sprints, lines and points. No DOM or Three.js. |
 | `race.ts` | The race you are riding: countdown, live panel numbers, jersey holders and results. |
 | `raceUi.ts` | The 3-2-1, the live race panel, and the result tables. |
+| `schedule.ts` | The daily event schedule as a pure function (client mirror of the SQL), countdown text and the join window. |
+| `eventSession.ts` | Pure logic for scheduled events: the shared clock, `DropWatcher` for group rides, and merging real and computer-ridden results. |
+| `eventsUi.ts` | The 🗓 Events dialog, the lobby bar and the finish card's event results. |
+| `commentary.ts` | The race commentator: rate-limited voice lines (`Commentator`), the race-to-lines mapping (`RaceCommentary`) and the audio player. |
+| `cloud/events.ts` | Event RPC calls and the server clock offset. |
 | `tour.ts` | The Hell of the West tour: progress in `settings.tour`, classifications, `tourJersey()`, and "simulate this stage". |
 | `tourUi.ts` | The tour dialog. |
 | `draft.ts` | Drafting: the drag saved at a given gap behind another rider, and the rider just ahead. |

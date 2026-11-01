@@ -261,6 +261,17 @@ One row per built-in stage with a finish line: `stage_id` (primary key), `distan
 ### `activities.demo`
 
 `boolean`, default `false`. Set by the app when a ride used the demo power slider or `?timescale`. Such rides never count for leaderboards or ghosts.
+## Scheduled group rides and races
+
+No direct table access: `events`, `event_results` and `event_stage_pool` have row-level security on and no grants. Everything goes through the functions below (all `security definer`, `search_path = ''`, executable by signed-in riders only).
+
+### Tables
+
+| Table | Columns |
+| --- | --- |
+| `event_stage_pool` | `stage_id` (primary key), `name`, `length_m`, `position`: the nine stages the evening race rotates through, in order. |
+| `events` | `id` (uuid), `kind` (`race` or `group_ride`), `stage_id`, `starts_at`, `title` (3 to 80 characters), `created_by` (the admin, or null for the automatic schedule), `seed` (seeds the computer-ridden field, so everyone sees the same bots), `pace_wkg` (group rides, 1 to 6), `created_at`. Unique on `(kind, stage_id, starts_at)`. |
+| `event_results` | `event_id` (cascades), `user_id`, `finish_s`, `avg_power`, `created_at`. Primary key `(event_id, user_id)`: one result per rider per event. |
 
 ### Functions
 
@@ -270,6 +281,14 @@ One row per built-in stage with a finish line: `stage_id` (primary key), `distan
 | `stage_leaderboard(...)`, `stage_ghost(...)` | Signed in | Unchanged signatures and columns; both now skip rides that fail `ride_is_plausible()`. |
 | `my_data_extras()` | Signed in | JSON for "Download my data": the caller's account (id, name, email, verified, created), live position, ride-ons sent and received (emoji and time only, no names) and the rows of any other table with a text `user_id` column. |
 | `delete_my_account()` | Signed in | Deletes the caller's rows from every public table with a text `user_id` (plus ride-ons in both directions), their pending verification codes, and their Neon Auth user (sessions, linked accounts and memberships go with it by foreign-key cascade). Refuses accounts whose email is in `public.admins`. Only ever touches the caller's own data. |
+| `server_now()` | Signed in | The database's clock, so the browser can line its start up (offset = server minus local). |
+| `upcoming_events(p_hours default 48)` | Signed in | Creates the recurring schedule on demand (a race at 19:30 UTC on `event_stage_pool[(days since 1970) mod 9]`, and a 2.6 W/kg group ride at 12:30 UTC on `heartland`), then returns events from 12 hours ago to `p_hours` ahead (at most 14 days): `id`, `kind`, `stage_id`, `title`, `starts_at`, `seed`, `pace_wkg`, `duration_min` (150 for a race, 90 for a ride), `waiting` (riders in its presence room in the last 15 s), `results` and the caller's `my_finish_s`. |
+| `admin_create_event(p_kind, p_stage, p_starts_at, p_title, p_pace_wkg default null)` | Admins | Adds a one-off event (start within 1 hour ago to 90 days ahead) and returns its id. Checks `is_admin()`. |
+| `admin_delete_event(p_event)` | Admins | Removes an event that has no results. |
+| `submit_event_result(p_event, p_finish_s, p_avg_power default null)` | Signed in, not banned | Records the caller's time for a race, once. Raises an error before the start or more than 4 hours after it, for a time longer than has passed (plus 20 s), for no power or more than 2,000 W, and for a time faster than the stage allows (the stage length at 22 m/s, or `stage_limits.min_finish_s` if that table exists). Returns true if stored, false if the caller already had a result. |
+| `event_results(p_event)` | Signed in | The real riders' results, fastest first, up to 100: `rank`, short name, `finish_s`, `avg_power`, `is_me`. Banned riders are left out. |
+
+Riders in an event share a presence room: the client calls `ride_presence()` with the stage key `<stage_id>#event-<event id>` (at most 80 characters), so event riders only see each other.
 
 ## Changing the schema
 

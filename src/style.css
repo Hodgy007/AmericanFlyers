@@ -1106,3 +1106,31 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 .ea-verify .code-intro { color: inherit; opacity: 0.85; }
 @media (max-width: 560px) { .privacy-dialog { width: 96vw; } }
 .code-entry label { display: grid; gap: 4px; }
+/* -------------------------------------------- scheduled events (events.ts) ---- */
+.events-dialog { width: min(94vw, 600px); }
+.event-actions button.event-wait:disabled { opacity: 1; color: var(--muted, #9aa6bf); background: transparent; border-style: dashed; box-shadow: none; cursor: default; }
+.event-card { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; margin-bottom: 8px; border-radius: 12px; background: var(--field, rgba(255, 255, 255, 0.05)); border: 1px solid var(--line, rgba(255, 255, 255, 0.08)); }
+.event-head { display: grid; gap: 2px; min-width: 0; }
+.event-head strong { color: var(--text); font-size: 15px; }
+.event-sub, .event-count { font-size: 12px; color: var(--muted); }
+.event-count { grid-column: 1; font-variant-numeric: tabular-nums; }
+.event-actions { grid-column: 2; grid-row: 1 / span 2; display: grid; gap: 4px; justify-items: end; }
+.event-mine { font-size: 12px; color: var(--text); font-weight: 600; }
+.event-results { grid-column: 1 / -1; margin-top: 6px; }
+.event-finish { margin: 8px 0; }
+
+/* The strip shown while you wait on the line or ride a group ride. */
+.event-bar {
+  position: fixed; top: var(--below-hud, 130px); left: 50%; transform: translateX(-50%); z-index: 6;
+  display: flex; align-items: center; gap: 12px; max-width: min(92vw, 560px); padding: 7px 8px 7px 14px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font-size: 13px; color: var(--muted);
+}
+.event-bar[hidden], body.at-home .event-bar { display: none; }
+.eb-main { display: grid; gap: 1px; min-width: 0; }
+.eb-main strong { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eb-main span { font-variant-numeric: tabular-nums; }
+.event-bar button { padding: 5px 12px; font-size: 12px; border-radius: 999px; flex: none; }
+@media (max-width: 560px) { .event-bar { top: auto; bottom: 84px; max-width: 94vw; } }
+.admin-event-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 14px; }
+.admin-event-form input[type='number'] { width: 70px; }
