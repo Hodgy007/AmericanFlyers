@@ -70,6 +70,22 @@ The frame loop eases the saving over about 0.6 s (so it doesn't jump with each 2
 
 The draft gauge shows the gap to the rider ahead (within 60 m), the drag saved, and the watts that saves: `½ × ρ × CdA × v³ × saving / 0.976`. Riders you're following line up in your lane from 14 m back, as in a paceline, and pull aside when you overlap.
 
+## Wind and echelons
+
+[`src/world/wind.ts`](../../src/world/wind.ts) owns the wind: one shared `wind` object (`WindState`) with no DOM or Three.js. `setStage()` reads the stage's wind (optional `Stage.wind`, else the `STAGE_WINDS` table for the built-in stages, else a mild one picked from the stage id); `setWeather()` scales it (clear 0.6, cloudy 1, rain 1.5) and sets the gustiness; `update(dt)` eases the mean towards that, adds gusts (a sum of sines, so it is deterministic) and a slow swing in direction. Angles are on the ground plane like `headingAt` (0 = +x). `wind.at(heading)` returns `head` (m/s into the face, negative for a tailwind) and `cross` (m/s towards the rider's right, positive when it blows from the left). The frame loop in `main.ts` steps it with the weather being shown (`World.weather`), once per frame.
+
+- **Drag** uses air speed: `stepSpeed(speed, power, grade, dt, params, headwindMs = 0)` computes drag from `speed + headwind`, signed so a strong tailwind pushes. The old five-argument call is unchanged.
+- **Trainer**: `Trainer.setGrade(grade, windFactor = 1, headwindMs = 0)` writes the headwind (0.001 m/s units, positive = headwind) into the FTMS Indoor Bike Simulation Parameters wind-speed field. `controlTrainer()` resends when it moves by half a metre per second.
+- **Echelons**: `draftShift(cross)` = 0.25 m per m/s of crosswind, capped at 0.8 m, the distance to the right of a rider's line where the shelter sits. `draftFrom(..., lateral)` takes it as the optional `lateral.shift`; the returned `offset` and `overlap` are then measured to the sheltered spot (this is what the draft gauge hint and auto-steer use). `echelonLane()` lays out the free-ride teams (`peloton.ts`) as two parallel diagonals; the race engine (`raceSim.ts`) takes an optional `wind(d)` in `SimOptions`, applies the headwind to every group and fans the lanes out into echelons of four rows. Without the option (the "simulate this stage" shortcut) the sim is in still air, as before.
+- **Visuals**: clouds in `world/sky.ts` move with the wind (three times its speed, wrapping at the edge of the sky), and `world/rain.ts` slants the drops by half the wind speed. `windUi.ts` draws the wind chip.
+- `?wind=<m/s>,<degrees>` forces the stage wind (the speed is the cloudy-day speed), for testing.
+
+Wind changes leaderboard times a little, as the weather does: a stage's wind is mild by default (2–7 m/s on a cloudy day). It can be switched off in Settings.
+
+## Mini-map and climb preview
+
+[`src/miniMap.ts`](../../src/miniMap.ts) draws the mini-map on a canvas at about 5 Hz. For a stage with a finish it samples the centreline (`roadPoint`) once into at most about 1,500 points and keeps it; for an endless stage it draws the road from 600 m behind to 4 km ahead. North-up fits the whole route in the box; heading-up rotates the road by your heading and puts you low in the box. The orientation is remembered in `localStorage` (`americanflyers.mapMode`). [`src/climb.ts`](../../src/climb.ts) finds climbs from an elevation function (grade over 100 m of at least 3%, dips under 120 m joined, longer than 500 m, average at least 3%), and `climbStatus()` says whether one starts within 2 km or you're on one; [`src/climbUi.ts`](../../src/climbUi.ts) draws the card with `drawProfile()`. The Settings switch is `settings.miniMap`.
+
 ## Pro teams
 
 [`src/peloton.ts`](../../src/peloton.ts) moves each team as one group with `stepSpeed()`: a 68 kg rider on a 7.5 kg bike at the team's W/kg (with slow ±5% surges), a pack drag area of 72% of a solo rider's, and 35% power on descents steeper than 4%. Riders sit two by two, 2.1 m between rows, in lanes just right of the centre line. They count as riders for drafting, so sitting on the back of a team saves you drag. Teams that pass a finish line by 120 m restart the stage. **Join** places you 2.5 m behind the last row at the group's speed.

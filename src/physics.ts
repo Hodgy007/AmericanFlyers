@@ -23,11 +23,14 @@ export function stepSpeed(
   gradeFraction: number,
   dt: number,
   p: RiderParams = DEFAULT_PARAMS,
+  /** Wind into your face, m/s (negative: a tailwind). Drag works on air speed = road speed + headwind. Left out: still air. */
+  headwindMs = 0,
 ): number {
   const theta = Math.atan(gradeFraction);
   const gravity = p.massKg * G * Math.sin(theta);
   const rolling = speedMs > 0.01 ? p.crr * p.massKg * G * Math.cos(theta) : 0;
-  const drag = 0.5 * AIR_DENSITY * p.cda * speedMs * speedMs;
+  const airSpeed = speedMs + headwindMs;
+  const drag = 0.5 * AIR_DENSITY * p.cda * airSpeed * Math.abs(airSpeed); // signed: a strong tailwind pushes you along
   // Cap propulsive force at very low speed (P / v blows up as v → 0).
   const propulsion = (Math.max(0, powerW) * DRIVETRAIN_EFFICIENCY) / Math.max(speedMs, 1.5);
   const accel = (propulsion - gravity - rolling - drag) / (p.massKg + 1.5); // + wheel inertia

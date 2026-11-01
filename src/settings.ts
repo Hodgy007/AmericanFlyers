@@ -26,6 +26,8 @@ export interface Settings {
   weather: Weather; // 'auto' uses the stage's weather, changing now and then
   kit: Kit | null; // your jersey and bike colours (null = the default stars and stripes)
   tour: TourProgress | null; // the Hell of the West tour in progress
+  wind: boolean; // wind on the road: headwinds slow you, crosswinds make echelons (world/wind.ts)
+  miniMap: boolean; // the route mini-map and climb preview (miniMap.ts, climbUi.ts)
 }
 
 const KEY = 'americanflyers.settings';
@@ -50,6 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
   weather: 'auto',
   kit: null,
   tour: null,
+  wind: true,
+  miniMap: true,
 };
 
 export function loadSettings(): Settings {

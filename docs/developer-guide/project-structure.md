@@ -42,6 +42,11 @@ This page lists every file and folder in the repository, with a one-line summary
 | `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish. |
 | `draft.ts` | Drafting: the drag saved at a given gap behind another rider (and how far across from their line), and the rider just ahead. |
 | `steering.ts` | Your lane across the road: ← / → steps, key and button hold-to-repeat, and auto-steer into the draft. |
+| `world/wind.ts` | The wind: per-stage speed and direction scaled by weather, gusts, head and cross components, the echelon shift. No DOM or Three.js. |
+| `windUi.ts` | The wind chip in the status line. |
+| `miniMap.ts` | The route mini-map (north-up or heading-up) with riders, ghost, finish, sprint and summit markers. |
+| `climb.ts` | Climb detection from an elevation profile, and where you are relative to the next climb. |
+| `climbUi.ts` | The climb preview card. |
 | `atmosphereUi.ts` | The ☰ Menu → Time & weather dialog. |
 | `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish; and race mode (`startRace`, `makeRoster`, `RaceField`) that hands the field to the race engine. |
 | `raceSim.ts` | The race engine: riders in groups, attacks, breaks, chases, cracks, merges, sprints, lines and points. No DOM or Three.js. |

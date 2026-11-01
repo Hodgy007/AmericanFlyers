@@ -30,6 +30,11 @@ export function lateralOverlap(offset: number) {
 export interface Lateral {
   lane: number; // your lane, metres right of the centre line
   lateralOf(id: string): number | undefined; // a rider's lane as drawn, if known
+  /**
+   * Crosswind echelon: metres to the right of a rider's line where their shelter is
+   * (negative: to the left), from `draftShift(crosswind)` in world/wind.ts. Left out: 0, straight behind.
+   */
+  shift?: number;
 }
 
 /** Fraction of air drag saved at a wheel-to-wheel gap of `gap` metres. */
@@ -54,7 +59,7 @@ export interface Draft {
   name: string; // the rider ahead
   riders: number; // riders in the group ahead of you (1 = a single wheel)
   team?: string; // the pro team, when it's one of theirs
-  /** Their lane minus yours, metres (negative: they're to your left). 0 when sideways isn't being tracked. */
+  /** Their sheltered spot (their lane, plus the crosswind shift) minus your lane, metres (negative: it's to your left). 0 when sideways isn't being tracked. */
   offset: number;
   /** Share of the draft kept for being on their line, 0..1. */
   overlap: number;
@@ -78,7 +83,7 @@ export function draftFrom(myDistance: number, riders: OtherRider[], lookAhead = 
     const gap = r.distance - myDistance - BIKE_LENGTH;
     if (gap < 0 || gap > lookAhead + GROUP_SPAN) continue; // alongside or behind you, or too far ahead
     const lane = lateral ? lateral.lateralOf(r.id) ?? r.lane : undefined;
-    const offset = lateral && lane !== undefined ? lane - lateral.lane : 0;
+    const offset = lateral && lane !== undefined ? lane + (lateral.shift ?? 0) - lateral.lane : 0;
     ahead.push({ r, gap, offset, overlap: lateral ? lateralOverlap(offset) : 1 });
   }
   let best: Cand | null = null;

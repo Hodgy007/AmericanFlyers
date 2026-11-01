@@ -3,11 +3,15 @@
 // and flying down the descents like you do. The team names are (lovingly)
 // comedic near-misses of real ones; the riders are made up.
 
-import { gradeAt, currentStage } from './course';
+import { gradeAt, headingAt, currentStage } from './course';
 import { DEFAULT_PARAMS, stepSpeed } from './physics';
 import type { OtherRider } from './world/others';
 import { RaceSim, type RaceCourse, type RosterEntry } from './raceSim';
 import { rng } from './world/noise';
+import { draftShift, echelonLane, wind } from './world/wind';
+
+/** The road's wind at a distance along the course, for the race field. */
+export const windAtDistance = (d: number) => wind.at(headingAt(d));
 
 export interface Team {
   name: string;
@@ -118,7 +122,7 @@ export class Peloton {
       // Steady effort with gentle surges; they soft-pedal steep descents.
       const surge = 1 + 0.05 * Math.sin(this.time / 23 + g.phase) + 0.03 * Math.sin(this.time / 7 + g.phase * 2);
       const power = g.wkg * RIDER_KG * surge * (grade < -0.04 ? 0.35 : 1);
-      g.speed = stepSpeed(g.speed, power, grade, dt, { massKg: RIDER_KG + BIKE_KG, cda: PACK_CDA, crr: DEFAULT_PARAMS.crr });
+      g.speed = stepSpeed(g.speed, power, grade, dt, { massKg: RIDER_KG + BIKE_KG, cda: PACK_CDA, crr: DEFAULT_PARAMS.crr }, windAtDistance(g.distance).head);
       g.distance += g.speed * dt;
       // Over the line: they roll out and start the stage again.
       if (finish !== null && g.distance > finish + 120) {
@@ -134,6 +138,8 @@ export class Peloton {
     const out: OtherRider[] = [];
     for (const g of this.groups) {
       const power = Math.round(g.wkg * RIDER_KG);
+      // In a crosswind the teams ride a diagonal echelon, each row tucked on the downwind side of the one ahead.
+      const shift = draftShift(windAtDistance(g.distance).cross);
       for (const r of g.riders) {
         out.push({
           id: r.id,
@@ -146,7 +152,7 @@ export class Peloton {
           team: g.team.name,
           jersey: g.team.color,
           frame: g.team.frame,
-          lane: 2.6 + r.side * 0.42, // two by two, just right of centre
+          lane: echelonLane(r.row, r.side, shift), // two by two, just right of centre (a diagonal in a crosswind)
         });
       }
     }
@@ -221,6 +227,6 @@ export class RaceField {
   readonly roster: RosterEntry[];
   constructor(course: RaceCourse, roster: RosterEntry[], refWkg: number, seed: number) {
     this.roster = roster;
-    this.sim = new RaceSim(course, roster, { refWkg, seed, startFront: -2.2 });
+    this.sim = new RaceSim(course, roster, { refWkg, seed, startFront: -2.2, wind: windAtDistance });
   }
 }
