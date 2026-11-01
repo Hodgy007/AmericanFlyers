@@ -41,6 +41,8 @@ npm run build && npm test
 | `eventSession.test.ts` | the shared event clock, the "you've been dropped" watcher, merging real and computer-ridden results, fixed-step determinism |
 | `commentary.test.ts` | commentary rate limiting and queueing, race events to voice lines, every clip file exists |
 | `garage.test.ts` | the level curve, rewards, wallet parsing, loadout validation, equipment effect maths against `stepSpeed`, store rules (the Tron bike at 8,848 m), kit strings and the server's regex, the share card |
+| `aiLogic.test.ts` | the AI coach and rivals: text trimming, reply sanitizers, canned text for every moment and trigger, the coach moments and their rate limits, the plan runner, rival triggers and line limiter, the rival bot (pace, styles, result) |
+| `aiApi.test.ts` | `api/ai.ts` with the Anthropic client and the Data API injected: 401/403/429/503 mapping, the rider's token reaching `ai_claim`, refusal and unusable replies falling back to canned text, the exact Claude request, prompt contents and injection hygiene |
 | `challenges.test.ts` | ISO weeks and the weekly challenge pick (pinned to the database for several weeks) |
 
 Conventions:
@@ -54,11 +56,15 @@ Conventions:
 
 `npm run test:e2e` builds the app and runs `playwright test`. The test, `tests/e2e/smoke.spec.ts`, serves `vite preview` on port 4185 (override with `E2E_PORT`), then:
 
-- mocks Neon (`page.route` on the Auth and Data API hosts, signed out, empty tables),
-- skips the home page and the first-ride guide with `localStorage`,
+- mocks Neon with `tests/e2e/mockNeon.ts` (`page.route` on the Auth and Data API hosts; `{ signedIn: true }` is a rider with rides, FTP history, a plan, a garage wallet, challenges and events),
+- skips the home page and the first-ride guide with `localStorage`, so the app opens on the **hub** (a guest's, because the mocked session is empty),
+- checks the hub (header, seven sections, a route and a workout to choose, the sign-in prompt for guests), then presses **Ride**,
 - starts a demo ride from ☰ Menu and checks the HUD fills in,
 - opens and closes each main dialog (stage, workouts, riders, leaderboard, time and weather, plans, kit, tour, settings, feedback, sign in),
+- goes back with ☰ Menu → 🏠 Hub, checks Escape keeps focus on **Ride**, and rides again,
 - fails on any page error or console error (blocked network requests are ignored).
+
+A second test signs the mocked rider in and checks the hub's name, level, credits, plan row, best times, each section's data, a ride row opening the profile's ride detail, and Ride starting a chosen workout.
 
 It takes about a minute with software WebGL. To keep that fast and reliable, the test throttles `requestAnimationFrame` to about 1 fps (set `E2E_FULL_FPS=1` to turn that off) and clicks through the DOM. When you add a main dialog or menu entry, add a line to `DIALOGS` in the spec.
 
@@ -95,7 +101,7 @@ Signed-in screens need Neon's Auth and Data API. Mock them with Playwright's `pa
 - the Auth session endpoint, to return a fake signed-in user, and
 - the Data API endpoints for `profiles`, `activities`, `ftp_history`, `feedback`, and the admin RPC functions, to return fixture JSON.
 
-Fulfill each request with the shape the code expects. The shapes are in [`src/cloud/sync.ts`](../../src/cloud/sync.ts) (for example `Activity`, `FtpEntry`, `Feedback`, `AdminOverview`, `AdminUser`). Mocked responses only test the UI; they don't test Row-Level Security. Test RLS against a Neon branch, using the SQL in [Database schema](../reference/database-schema.md).
+`tests/e2e/mockNeon.ts` does all of this (the Data API wants a JWT, which Neon Auth sends in the `set-auth-jwt` header of the session response; the mock sends an unsigned one). Fulfill each request with the shape the code expects. The shapes are in [`src/cloud/sync.ts`](../../src/cloud/sync.ts) (for example `Activity`, `FtpEntry`, `Feedback`, `AdminOverview`, `AdminUser`). Mocked responses only test the UI; they don't test Row-Level Security. Test RLS against a Neon branch, using the SQL in [Database schema](../reference/database-schema.md).
 
 ### Keep screenshots out of the repository
 

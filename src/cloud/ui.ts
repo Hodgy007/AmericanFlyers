@@ -11,6 +11,9 @@ import { barChart, lineChart, statTiles } from './charts';
 import { toTcx } from './recorder';
 import { mountVerifyBanner } from './verifyBanner';
 import { accountTab } from './accountTab';
+import { loadDebrief } from './aiApi';
+import { COACH_NAME, debriefBody } from '../ai/coachUi';
+import { sanitizeDebrief } from '../ai/sanitize';
 import { adminCreateEvent, adminDeleteEvent, upcomingEvents } from './events';
 import { EVENT_STAGE_POOL, GROUP_RIDE_STAGE, type EventKind } from '../schedule';
 import {
@@ -19,7 +22,7 @@ import {
   type Activity, type Feedback, type FeedbackCategory, type FeedbackStatus,
 } from './sync';
 
-interface Deps {
+export interface Deps {
   settings: () => Settings;
   toast: (msg: string, ms?: number) => void;
   /** Extra context sent with feedback (stage, browser, trainer…). */
@@ -72,8 +75,7 @@ const errMsg = (e: unknown) => (e as Error)?.message ?? String(e);
 
 const BEST_LABELS: Record<number, string> = { 5: '5 s', 60: '1 min', 300: '5 min', 1200: '20 min' };
 
-export function initAccountUi(deps: Deps) {
-  const accountBtn = $<HTMLButtonElement>('btn-account');
+export function initAccountDialogs(deps: Deps) {
   const adminBtn = $<HTMLButtonElement>('btn-admin');
   const signinDialog = $<HTMLDialogElement>('signin');
   const profileDialog = $<HTMLDialogElement>('profile-dialog');
@@ -130,23 +132,6 @@ export function initAccountUi(deps: Deps) {
     setTimeout(() => dialog.showModal(), 300);
   }
 
-  // On returning from Google with an error, the URL carries it.
-  const params = new URLSearchParams(location.search);
-  if (params.has('error')) {
-    deps.toast(`Sign-in didn’t finish: ${params.get('error_description') ?? params.get('error')}`, 7000);
-    const url = new URL(location.href);
-    url.searchParams.delete('error');
-    url.searchParams.delete('error_description');
-    history.replaceState(null, '', url);
-  }
-
-  async function refreshAccountButton() {
-    const a = account();
-    accountBtn.textContent = a ? `👤 ${a.name.split(' ')[0]}` : '👤 Sign in';
-    accountBtn.title = a ? `${a.name} (${a.email}): profile & stats` : 'Sign in or create a free account';
-    await checkAdmin();
-  }
-
   async function checkAdmin() {
     const id = account()?.id;
     const yes = id ? await isAdmin() : false;
@@ -157,7 +142,7 @@ export function initAccountUi(deps: Deps) {
   }
 
   onAccountChange(() => {
-    refreshAccountButton();
+    checkAdmin();
     if (account()) {
       if (signinDialog.open) signinDialog.close();
       const then = pendingAfterSignIn;
@@ -165,11 +150,7 @@ export function initAccountUi(deps: Deps) {
       then?.();
     } else if (profileDialog.open) profileDialog.close();
   });
-  refreshAccountButton();
-
-  accountBtn.addEventListener('click', () => (account() ? openProfile('stats') : openSignIn()));
-  adminBtn.addEventListener('click', () => openProfile('admin'));
-  $('btn-feedback').addEventListener('click', () => openFeedback());
+  checkAdmin();
 
   // ----------------------------------------------------------- profile ----
 
@@ -187,9 +168,11 @@ export function initAccountUi(deps: Deps) {
     return activities;
   }
 
-  function openProfile(tab: Tab) {
+  /** Opens the profile on a tab; with `rideId` (and the activities tab) that ride's detail is opened too (used by the hub). */
+  function openProfile(tab: Tab, rideId?: string) {
     const a = account();
     if (!a) return openSignIn();
+    focusRide = rideId ?? null;
     $('profile-name').textContent = a.name;
     $('profile-email').textContent = a.email;
     verifyBanner.refresh(); // a note to riders whose email isn't verified yet
@@ -211,6 +194,7 @@ export function initAccountUi(deps: Deps) {
   });
 
   let tabToken = 0;
+  let focusRide: string | null = null; // a ride to open once the activities tab is drawn
   async function showTab(tab: Tab) {
     for (const b of $('profile-tabs').querySelectorAll<HTMLElement>('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
     const body = $('profile-body');
@@ -222,7 +206,14 @@ export function initAccountUi(deps: Deps) {
         : tab === 'activities' ? await activitiesTab()
         : tab === 'privacy' ? accountTab({ toast: deps.toast, close: () => profileDialog.close() })
         : await adminTab();
-      if (token === tabToken) body.replaceChildren(content);
+      if (token === tabToken) {
+        body.replaceChildren(content);
+        if (tab === 'activities' && focusRide) {
+          const row = body.querySelector<HTMLDetailsElement>(`details[data-id="${CSS.escape(focusRide)}"]`);
+          if (row) { row.open = true; row.scrollIntoView({ block: 'nearest' }); }
+        }
+        focusRide = null;
+      }
     } catch (e) {
       if (token === tabToken) body.replaceChildren(h('p', { class: 'error', text: `Couldn’t load this: ${errMsg(e)}` }));
     }
@@ -352,6 +343,7 @@ export function initAccountUi(deps: Deps) {
     }
     for (const a of acts) {
       const row = h('details', { class: 'activity' });
+      row.dataset.id = a.id;
       const summary = h('summary', {},
         h('span', { class: 'act-date', text: new Date(a.started_at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }),
         h('strong', { text: a.title }),
@@ -389,6 +381,15 @@ export function initAccountUi(deps: Deps) {
       zoneBars('Heart-rate zones', HR_ZONES, a.hr_zones, { ref: a.max_hr_setting ?? s.maxHr, unit: 'bpm' }),
       zoneBars('Power zones', POWER_ZONES, a.power_zones, { ref: a.ftp ?? s.ftp, unit: 'W' }),
     ));
+    // The AI coach's debrief for this ride, if the rider had it on when they rode (src/ai/).
+    const coach = h('section', { class: 'coach-card' });
+    coach.hidden = true;
+    el.append(coach);
+    loadDebrief(a.id).then((d) => {
+      if (!d || !sanitizeDebrief(d)) return;
+      coach.replaceChildren(h('header', {}, h('span', { class: 'coach-face', text: '🧢' }), h('strong', { text: COACH_NAME })), debriefBody(sanitizeDebrief(d)!, 'claude', {}));
+      coach.hidden = false;
+    }).catch(() => {});
     const charts = h('div', { class: 'act-charts' }, h('p', { class: 'muted small', text: 'Loading the ride…' }));
     el.append(charts);
     const actions = h('div', { class: 'dialog-actions' });
@@ -696,7 +697,7 @@ export function initAccountUi(deps: Deps) {
     }
   });
 
-  return { openSignIn, openProfile, invalidate, checkAdmin };
+  return { openSignIn, openProfile, openFeedback, invalidate, checkAdmin };
 }
 
 const STATUSES: FeedbackStatus[] = ['new', 'planned', 'in_progress', 'done', 'declined'];

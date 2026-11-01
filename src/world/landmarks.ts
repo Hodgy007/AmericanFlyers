@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { currentStage, gradeAt, roadPoint } from '../course';
-import { FARM_LANDMARKS, STAGES, type LandmarkKind } from '../stages';
+import type { LandmarkKind } from '../stages';
 import { heightAt } from './terrain';
 
 // Roadside landmarks loaded from GLB models in public/models/. Each stage
@@ -53,20 +53,26 @@ export class Landmarks {
   private readonly prepared = new Map<LandmarkKind, THREE.Object3D>(); // kind → scaled model
   private readonly placed = new Map<string, THREE.Object3D>();
 
-  constructor() {
-    const loader = new GLTFLoader();
-    const files = new Set([...STAGES, { landmarks: FARM_LANDMARKS }].flatMap((s) => s.landmarks.map((k) => k.file)));
-    for (const file of files) {
-      loader.load(
-        `${import.meta.env.BASE_URL}models/${file}`,
-        (gltf) => this.sources.set(file, gltf.scene),
-        undefined,
-        () => {
-          this.sources.set(file, null);
-          console.info(`Landmark model not found: models/${file} (skipped)`);
-        },
-      );
-    }
+  private readonly loader = new GLTFLoader();
+  private readonly requested = new Set<string>(); // files already being fetched
+
+  /**
+   * A model file is fetched the first time a landmark that uses it comes within
+   * range (1.5 km ahead is minutes of riding), not all up front: the nine files
+   * add up to 7.5 MB, and a stage uses only some of them.
+   */
+  private request(file: string) {
+    if (this.requested.has(file)) return;
+    this.requested.add(file);
+    this.loader.load(
+      `${import.meta.env.BASE_URL}models/${file}`,
+      (gltf) => this.sources.set(file, gltf.scene),
+      undefined,
+      () => {
+        this.sources.set(file, null);
+        console.info(`Landmark model not found: models/${file} (skipped)`);
+      },
+    );
   }
 
   /** Removes everything placed (after a stage change). */
@@ -78,6 +84,7 @@ export class Landmarks {
   private model(kind: LandmarkKind) {
     let m = this.prepared.get(kind);
     if (!m) {
+      this.request(kind.file);
       const src = this.sources.get(kind.file);
       if (!src) return null; // still loading, or missing
       m = normalise(src.clone(true), kind);

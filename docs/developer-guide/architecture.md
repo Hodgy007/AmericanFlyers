@@ -7,7 +7,7 @@ This page explains how the modules fit together: the frame loop, the trainer and
 | Part | Language or format | Notes |
 | --- | --- | --- |
 | App code | **TypeScript** (strict), compiled to JavaScript | Everything in `src/`. `npm run build` type-checks with `tsc --noEmit`, then bundles with Vite. |
-| Page markup | **HTML** | `index.html`: the home page, top bar, panels and every dialog. |
+| Page markup | **HTML** | `index.html`: the home page, the hub's header and containers, top bar, panels and every dialog. |
 | Styles | **CSS** | `src/style.css`, plain CSS with custom properties (no preprocessor or framework). |
 | Database | **SQL** (PostgreSQL, PL/pgSQL functions) | `db/schema.sql`: tables, row-level security policies and security-definer functions, run on Neon. |
 | Service worker | **JavaScript** | `public/sw.js`, served as-is (not bundled). |
@@ -17,7 +17,7 @@ This page explains how the modules fit together: the frame loop, the trainer and
 | 3D models | **glTF binary** (`.glb`) | `public/models/`, generated with Higgsfield. |
 | Docs | **Markdown** | `docs/` and `README.md`. |
 
-Libraries: **Three.js** (3D rendering), **@neon/neon-js** (Neon Auth and the Data API). Browser APIs: **Web Bluetooth** (trainer and heart-rate strap), **WebGL** (through Three.js), **Web Audio** (ride sounds), the **Fullscreen** and **Service Worker** APIs. Build tool: **Vite**. Hosting: **Vercel**. Backend: **Neon** (Postgres, Neon Auth, Data API). There's no server code of our own: the browser talks to Neon directly, and the database enforces who can see what.
+Libraries: **Three.js** (3D rendering), **@neon/neon-js** (Neon Auth and the Data API), **@sentry/browser** (crash reports, only when the build has a DSN), and on the server **@anthropic-ai/sdk** with **zod** (the AI function in `api/`). Browser APIs: **Web Bluetooth** (trainer and heart-rate strap), **WebGL** (through Three.js), **Web Audio** (ride sounds), the **Fullscreen** and **Service Worker** APIs. Build tool: **Vite**. Hosting: **Vercel**. Backend: **Neon** (Postgres, Neon Auth, Data API). There's no server code of our own: the browser talks to Neon directly, and the database enforces who can see what.
 
 ## The shape of the app
 
@@ -35,6 +35,27 @@ Four things run on a timer or event, alongside the frame loop:
 | Settings sync | 800 ms after the last change | Writes settings to the account. | `pushSettings` in `src/cloud/sync.ts` |
 
 Device events (trainer and heart-rate notifications) arrive as Bluetooth callbacks and are stored in a shared `live` object. The frame loop reads that object once per frame.
+
+## How the app starts: home, hub, ride
+
+`main.ts` builds the world and every module, then hands over to the start flow:
+
+```
+signed in last time? (localStorage americanflyers.signedIn)
+  yes -> hub (placeholders from index.html paint first, then cached data, then the account's)
+  no  -> home page -> sign in, or "Ride without an account" -> hub
+hub -> Ride (or Free ride, Ride it, Race, Join) -> the ride
+ride -> ☰ Menu -> 🏠 Hub, or the finish card's "Back to the hub" -> hub
+```
+
+- **Before the hub (the old flow):** a signed-in rider skipped the home page and landed on the bike; everyone else saw the home page, and both of its exits hid it and showed the ride.
+- **The home page** (`home.ts`) now only leads to the hub: `openHub` for sign-in and *Ride without an account*, `requestHub` for the brand button. A sign-in made mid-ride changes nothing on screen.
+- **The hub** (`src/hub/`) is a full-screen layer over the world. `hub.open()` adds the body classes `at-home` (the ride's own panels, riding together and ride-ons stand down, as on the home page) and `at-hub`, and tells `main.ts` through `onVisibility`. While it is open `frame()` does no ride physics: `hubFrame()` only renders the world, slowly orbiting your rider (`World.setOrbit()`), at about 30 fps (1 fps on phones and with reduced motion).
+- **Ride** calls `startFromHub()` in `main.ts`: close the hub, `chooseStage()` if the stage differs (which starts afresh), then `startWorkout()` if a workout was chosen. The first time, `leaveHub()` also starts the first-ride guide or the Bluetooth note, as leaving the home page used to.
+- **Back to the hub** is `goToHub()`: for a ride of a minute or more, a race or a group ride it asks first (`hub/leave.ts`), then stops the workout, calls `resetRide()` (which quietly saves a ride worth keeping and leaves a race or event) and opens the hub.
+- **The session check** (`restoreSession()`) answers after the hub is up. `hub.sessionSettled()` turns the hub into a guest's if a signed-in hint turned out wrong.
+- **Things the hub listens for.** `main.ts` dispatches `af:hub-refresh` on `document` (`stage`, `ride`, `plan`) when the app moves under an open hub; the hub also looks again when any dialog closes and when the garage's wallet changes.
+- **Speed.** The shell and header are in the main bundle; each section is a dynamic `import()` loaded when first shown (and warmed when idle); the turntable (`garage/preview.ts`, three.js) is imported only when the Garage section is on screen and is disposed when it isn't; canvases draw only while visible (`dom.ts`); account data is fetched after the first paint.
 
 ## Module diagram
 
@@ -170,7 +191,9 @@ Persistent state is in `localStorage`, under these keys:
 | `americanflyers.workouts` | The rider's own workouts | `src/workouts/library.ts` |
 | `americanflyers.routes` | The rider's uploaded GPX routes | `src/routes/library.ts` |
 | `americanflyers.pendingRide` | A ride held back until sign-in | `src/main.ts` |
-| `americanflyers.signedIn` | A hint that skips the home page for signed-in riders | `src/home.ts` |
+| `americanflyers.signedIn` | A hint that skips the home page for signed-in riders (they open on the hub) | `src/home.ts` |
+| `americanflyers.hub` | The hub's cache: your name, garage wallet and ride summary from last visit, so it paints at once | `src/hub/cache.ts` |
+| `americanflyers.hubStage` | The stage last started from the hub | `src/hub/cache.ts` |
 | `americanflyers.onboarded` | The first-ride guide has been done or skipped | `src/onboarding.ts` |
 
 Settings now also hold the training plan in progress, the data-block position, sound, virtual shifting, ghost and ride-together switches. The service worker keeps its own cache of the app's files (see [Project structure](project-structure.md)).
@@ -182,6 +205,42 @@ When you sign in, the account is the source of truth. The browser's copies are a
 `src/cloud/` talks to Neon. `client.ts` builds the client from `@neon/neon-js`. `account.ts` holds the current user and signs in with Google or with email and password (sign-up, sign-in, password reset). `emailAuth.ts` draws the email form. `presence.ts` runs riding together. `sync.ts` reads and writes every table the browser can touch, including the admin functions. `recorder.ts` records rides and writes `.tcx` files. `achievements.ts` works out badges from rides and FTP history. `ui.ts` draws the sign-in, profile, feedback and admin dialogs, and `charts.ts` draws their charts.
 
 Nothing in the cloud layer runs on the frame loop. Every call is triggered by a user action, a ride event, the 2-second riding-together update, or the 5-minute autosave.
+
+## Lazy loading
+
+The first visit downloads only what draws the first frame: the entry chunk (`main.ts` and the ride, world and HUD code) and the `vendor-three` chunk. Everything else is split off with dynamic `import()` and loaded on first use, so a phone isn't parsing the garage, the admin dashboard or the privacy text before the road appears.
+
+| What | Where it loads from | Loads when |
+| --- | --- | --- |
+| Neon SDK (`vendor-neon`) | `cloud/client.ts` | After the first frame (`restoreSession()`), or at the first database call. `neon` there is a small recording proxy: `neon.from(...).select(...)` and `neon.auth.getSession()` look and chain as before, and awaiting one loads the SDK and replays the calls on the real client. |
+| Sentry SDK | `monitoring.ts` | After the first frame (`startMonitoring()`). Until then two tiny listeners keep crashes, and hand them to Sentry once it is up. |
+| Sign-in, profile, feedback, admin dialogs | `cloud/ui.ts` (via `cloud/accountBar.ts`, which keeps the 👤 button and admin button) | First click on 👤, Admin, Feedback, or any `openSignIn()`. |
+| Workout library and creator, `.zwo` import | `workouts/ui.ts` | First click on Workouts. |
+| Garage and store, with its 3D turntable | `garage/garageUi.ts`, `garage/preview.ts` | First click on Garage. |
+| Share card | `garage/shareUi.ts`, `shareCard.ts` (buttons in `garage/shareButton.ts`) | First press of a 📤 Share button. |
+| Tour, Events, Leaderboard, Plans, Kit, Time & weather dialogs | `tourUi.ts`, `eventsUi.ts`, `leaderboardUi.ts`, `plansUi.ts`, `kitUi.ts`, `atmosphereUi.ts` | First click on their button. |
+| First-ride guide | `onboarding.ts` (`onboardingState.ts` stays eager) | When it first opens. |
+| Privacy text | `privacyText.ts` (loaded by `privacyUi.ts`) | First time the dialog opens. |
+| Race screens and the commentator | `raceUi.ts`, `commentary.ts` | When a race starts. |
+| Email sign-up form on the home page | `cloud/emailAuth.ts` | First tap of *Sign up with email*. |
+| GPX parser | `routes/gpx.ts` | When a file is chosen. |
+| Landmark models (`public/models/*.glb`) | `world/landmarks.ts` | When a landmark that uses the file comes within range. |
+| Hero videos | `home.ts` | After the first frame. |
+| AI coach and rival controller | `ai/create.ts` (builds `AiRide` from `ai/aiRide.ts`, with `cloud/aiApi.ts` and the rest of `src/ai/`) | When the rider has opted in (`settings.aiCoach` or `aiRivals`) at the first frame, the start of a ride or after sign-in, when a rival is chosen, when the Rivals dialog opens, when the AI switches in Settings are saved, or when a ride summary needs the coach's card (that card is also the invitation to turn the coach on). Until it arrives `ai` in `main.ts` is `null` and every hook (`ai?.…`, the frame hook, the debrief) does nothing; the summary gets a placeholder that fills in. |
+| Rivals dialog, AI switches in Settings | `ai/rivalsUi.ts`, `ai/consentUi.ts` | First open of ☰ → Rivals or of Settings (both prefetched when idle). Settings opens without the AI switches until the small consent module is here. |
+
+How it works, in `src/lazy.ts`:
+
+- `lazy(() => import('./x'))` wraps a module (or `import(...).then((m) => m.initX(deps))` to build a UI once). `.get()` loads it once, `.peek()` returns it if it has arrived, `.prefetch()` loads it quietly.
+- `use(lazyThing, (ui) => ui.open(), button)` runs something as soon as the module is there. If the wait passes 150 ms the button gets the `lazy-busy` class (a pulse, `cursor: progress`); if the load fails a toast says so and the next click tries again.
+- `loadOnClick(button, lazyThing)` is for modules that attach their own handler to a button when built (Events, Leaderboard): the first click loads the module, then is replayed.
+- `prefetchWhenIdle([...])`, called from `afterFirstFrame()` in `main.ts`, fetches the likely next dialogs one at a time in spare moments (not on data saver or 2G). By the time a rider taps, the chunk is usually cached. The service worker caches `/assets/*` on first fetch, so chunks work offline after the first visit.
+
+The AI is the example of a feature that is off for most riders: `main.ts` keeps only the settings fields and a shim (`aiLazy`, `ensureAi()`, `aiDebrief()`, `syncAiConsent()`), imports `src/ai/*` as types only, and hands the controller its host through `ai/create.ts`. After sign-in the opt-in is read with the small `cloud/aiApi.ts` chunk, which loads the controller only if the rider has opted in.
+
+**Adding a new lazy module:** give it an `initX(deps)` that returns `{ open() }`, wrap it in `lazy()` in `main.ts` next to the others, open it with `use(...)`, and add it to the list in `afterFirstFrame()` if it's likely to be opened. Don't import it statically from anywhere on the first-frame path (`import type` is fine); if another module needs a small part of it, move that part into its own file, as `onboardingState.ts` and `shareButton.ts` do. Check `npm run build`: the module should show up as its own file in `dist/assets/` and not in the entry chunk.
+
+`vite.config.ts` puts `three`, the Neon libraries and Sentry in `vendor-*` chunks. They change far less often than the app, so browsers keep them across deploys.
 
 ## Racing
 

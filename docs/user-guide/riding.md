@@ -11,7 +11,7 @@ Buttons across the top of the screen, from left to right:
 | **🏁 Stage** | Opens the stage picker. See [Stages and routes](stages-and-routes.md). |
 | **🏋 Workouts** | Opens the workout library and training plans. See [Workouts](workouts.md) and [Training plans](training-plans.md). |
 | **👥** | Who else is riding this stage. See [Riding together](riding-together.md). |
-| **Connect trainer** / **Disconnect** | Connects or disconnects your trainer. See [Connecting devices](connecting-devices.md). |
+| **Connect trainer** / **Disconnect** | Connects or disconnects your trainer. The same is in **☰ Menu → 🔌**, along with **❤️ Heart rate**; both remember your devices. See [Connecting devices](connecting-devices.md). |
 | **☰ Menu** | Everything else, listed below. Click outside it or press Escape to close it. |
 | **👤 Sign in** (or your first name) | Opens sign-in, or your profile when you're signed in. |
 
@@ -19,6 +19,7 @@ The **☰ Menu** holds:
 
 | Item | What it does |
 | --- | --- |
+| **🏠 Hub** | Ends the ride and goes back to the [hub](the-hub.md). If you've ridden a minute or more it asks first: *Keep riding*, or *Save and go to the hub*. |
 | **🎮 Demo ride** / **Stop demo** | Turns the demo ride on or off. See [Getting started](getting-started.md#try-the-demo-ride). |
 | **❤️ Heart rate strap** / **Heart rate ✓** | Connects or disconnects a heart-rate strap. |
 | **🎥 Chase view** (or Side view, Rider's view) | Changes the camera. The label shows the current view. Shortcut: **C**. |
@@ -74,7 +75,7 @@ The row of numbers across the top is made of **data blocks**. The first block is
 
 The bottom-left corner shows two things:
 
-- **Trainer status**, with a colored dot: connected, searching, or not connected.
+- **Trainer status**, with a colored dot: connected, searching, reconnecting (a remembered trainer that dropped out; the ride carries on), or not connected.
 - **Stage name and progress.** On a stage with a finish line, this shows the distance to go and the next numbered hairpin, for example *Alpe d'Huez · 8.4 km to go · next: Virage 14 in 230 m*. On Heartland Rollers it shows just the name.
 
 ## Panels at the bottom of the screen

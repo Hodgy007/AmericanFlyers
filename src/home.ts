@@ -1,13 +1,14 @@
 // The home page: a welcome screen over the 3D world for riders who aren't
 // signed in, with free sign-in (Google, or email and password) or "ride
-// without an account".
+// without an account". Both ways in lead to the hub (src/hub), not straight to the ride.
 
 import { account, onAccountChange, signInWith } from './cloud/account';
-import { mountEmailAuth, type RiderDetails } from './cloud/emailAuth';
+import type { RiderDetails } from './cloud/emailAuth';
+import { firstFrame, lazy, use } from './lazy';
 
-const HINT_KEY = 'americanflyers.signedIn'; // remembered so signed-in riders skip the home page
+const HINT_KEY = 'americanflyers.signedIn'; // remembered so signed-in riders skip the home page (and open on the hub)
 
-function hint(on?: boolean) {
+export function hint(on?: boolean) {
   try {
     if (on === undefined) return localStorage.getItem(HINT_KEY) === '1';
     if (on) localStorage.setItem(HINT_KEY, '1');
@@ -18,33 +19,46 @@ function hint(on?: boolean) {
   return false;
 }
 
-export function initHome(opts: { onEnterApp?: () => void; onRiderDetails: (d: RiderDetails) => void; defaults: () => { riderKg: number } }) {
+/** The email sign-up form's code, loaded on first use. */
+export const emailAuth = lazy(() => import('./cloud/emailAuth'));
+
+export function initHome(opts: {
+  /** Leave the home page for the hub (sign-in, or "Ride without an account"). */
+  openHub: () => void;
+  /** The brand button when signed in: the hub, asking first if a ride is under way. */
+  requestHub: () => void;
+  /** The home page is showing again (signed out): the hub must close. */
+  onShowHome?: () => void;
+  onRiderDetails: (d: RiderDetails) => void;
+  defaults: () => { riderKg: number };
+}) {
   const home = document.getElementById('home')!;
   const error = document.getElementById('home-error')!;
   const hero = heroRotator(home);
 
   const show = () => {
+    opts.onShowHome?.();
     home.hidden = false;
     document.body.classList.add('at-home');
     hero.play();
   };
-  let entered = false;
-  const hide = () => {
-    if (!entered) { entered = true; opts.onEnterApp?.(); }
+  /** The hub takes over: it manages the body classes from here. */
+  const toHub = () => {
     home.hidden = true;
-    document.body.classList.remove('at-home');
     hero.pause();
+    opts.openHub();
   };
 
-  // Riders who were signed in last time go straight to the bike; everyone
+  // Riders who were signed in last time go straight to the hub; everyone
   // else starts here. Sign-in state settles a moment later and corrects this.
-  if (hint()) hide();
+  if (hint()) toHub();
   else show();
 
   onAccountChange((a) => {
     hint(!!a);
-    if (a) hide();
-    else show();
+    if (a) {
+      if (!home.hidden) toHub(); // signing in from the home page; mid-ride sign-ins stay where they are
+    } else show();
   });
 
   for (const b of home.querySelectorAll<HTMLButtonElement>('[data-provider]')) {
@@ -61,25 +75,30 @@ export function initHome(opts: { onEnterApp?: () => void; onRiderDetails: (d: Ri
     });
   }
 
-  // Email sign-up opens in place of the button.
+  // Email sign-up opens in place of the button. The form's code loads on the first
+  // tap (and in a spare moment before that: main.ts prefetches it), not with the page.
   const emailBox = document.getElementById('home-email')!;
   const emailToggle = document.getElementById('home-email-toggle')!;
-  mountEmailAuth(emailBox, { onDetails: opts.onRiderDetails, defaults: opts.defaults });
+  let emailMounted = false;
   emailToggle.addEventListener('click', () => {
-    emailToggle.hidden = true;
-    emailBox.hidden = false;
-    emailBox.querySelector<HTMLInputElement>('input[name=name]')?.focus();
+    use(emailAuth, (m) => {
+      if (!emailMounted) { emailMounted = true; m.mountEmailAuth(emailBox, { onDetails: opts.onRiderDetails, defaults: opts.defaults }); }
+      emailToggle.hidden = true;
+      emailBox.hidden = false;
+      emailBox.querySelector<HTMLInputElement>('input[name=name]')?.focus();
+    }, emailToggle);
   });
 
-  document.getElementById('home-ride')!.addEventListener('click', hide);
+  document.getElementById('home-ride')!.addEventListener('click', toHub);
   document.getElementById('btn-home')!.addEventListener('click', () => {
-    if (!account()) show();
+    if (account()) opts.requestHub();
+    else show();
   });
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !home.hidden && !document.querySelector('dialog[open]')) hide();
+    if (e.key === 'Escape' && !home.hidden && !document.querySelector('dialog[open]')) toHub();
   });
 
-  return { show, hide };
+  return { show };
 }
 
 type HeroId = 'dog' | 'rider';
@@ -106,6 +125,9 @@ function heroRotator(home: HTMLElement) {
   const small = matchMedia('(max-width: 768px)').matches;
 
   interface Slide { id: HeroId; el: HTMLElement; video?: HTMLVideoElement }
+  // The looping clips (up to a megabyte each) wait for the first frame of the world, so they
+  // don't compete with the code and models for the connection. The still shows meanwhile.
+  let videosReady = false;
   const makeVideo = (id: HeroId, slide: HTMLElement) => {
     const video = document.createElement('video');
     video.className = 'home-video';
@@ -125,7 +147,7 @@ function heroRotator(home: HTMLElement) {
     bg.classList.add(`hero-${id}`);
     bg.setAttribute('aria-label', HEROES[id].label);
     el.append(bg);
-    return { id, el, video: moving ? makeVideo(id, el) : undefined };
+    return { id, el, video: moving && videosReady ? makeVideo(id, el) : undefined };
   };
 
   // The still in the markup becomes the first slide.
@@ -138,6 +160,14 @@ function heroRotator(home: HTMLElement) {
   let current = 0;
   let playing = false;
   let timer = 0;
+
+  if (moving) {
+    firstFrame.then(() => {
+      videosReady = true;
+      for (const s of slides) s.video ??= makeVideo(s.id, s.el);
+      if (playing) slides[current].video?.play().catch(() => {});
+    });
+  }
 
   // The second hero is only fetched once the first has been up a while.
   const addSecond = () => {

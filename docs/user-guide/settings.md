@@ -17,6 +17,9 @@ This page lists every setting, its default and range, and what it changes. Open 
 | Wind | On | On or off | Headwinds slow you and tailwinds help, crosswinds make the best shelter diagonal, and your trainer feels the headwind. See [Riding](riding.md#wind-and-echelons). |
 | Mini-map and climb preview | On | On or off | A small route map with riders on it, and a card for the next climb. Also in ☰ Menu. See [Riding](riding.md#mini-map-and-climb-preview). |
 | Pro teams on the road | On | On or off | Computer-ridden teams riding the stage at different paces. See [Riding together](riding-together.md#pro-teams). |
+| AI coach | Off | On or off | Coach Marty's tips and debriefs. Needs an account. Saved to your account, not just this browser. See [AI coach and AI rivals](ai-coach-and-rivals.md). |
+| AI rivals | Off | On or off | Rivals write fresh lines and remember your rides together. Needs an account. |
+| Speak their lines aloud | Off | On or off | Uses your browser's voice for the coach and rivals. |
 | Race commentary | On | On or off | A commentator calls the action in races. Needs sound on. See [Group rides, races and the commentator](events-and-commentary.md#the-race-commentator). |
 | Ride together | On | On or off | Show you to other signed-in riders on the same stage, and them to you. See [Riding together](riding-together.md). |
 
@@ -25,6 +28,8 @@ Your kit colours (☰ Menu → 🎨 My kit, see [My kit](my-kit.md)) are saved w
 Changing **FTP** in Settings adds an entry to your FTP history when you're signed in. See [Zones and FTP](zones-and-ftp.md).
 
 Changing **Trainer difficulty** takes effect straight away, on the next grade update.
+
+**Remembered devices** lists the trainer and heart rate strap this browser remembers, with a **Forget** button for each. See [Connecting devices](connecting-devices.md#remembered-devices-you-only-join-once). It isn't part of your synced settings: it stays on this browser.
 
 **Auto-steer into the draft** is on by default: with no steering for about 3 seconds and a rider within 12 m ahead, you ease onto their line. See [Riding](riding.md#steering).
 

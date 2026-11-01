@@ -1,13 +1,13 @@
 import './style.css';
-import { initMonitoring, setMonitoringContext, setMonitoringUser } from './monitoring';
+import { initMonitoring, setMonitoringContext, setMonitoringUser, startMonitoring } from './monitoring';
 
 initMonitoring(); // first, so it catches errors while the app starts
-import { bluetoothAvailable, connectTrainer, type Trainer, type TrainerReading } from './ble/trainer';
-import { connectHeartRate, type HeartRateMonitor } from './ble/heartRate';
+import { bluetoothAvailable, type Trainer, type TrainerReading } from './ble/trainer';
+import { initDevices } from './devicesUi';
+import { RideQueue } from './rideQueue'; // rides saved on this device while offline // ☰ Menu trainer and heart rate entries, remembered devices
 import { currentStage, elevationAt, gradeAt, headingAt, setStage } from './course';
 import type { Stage } from './stages';
 import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
-import { parseGpx } from './routes/gpx';
 import { stepSpeed, DEFAULT_PARAMS } from './physics';
 import { drawProfile } from './profile';
 import { World, type CameraMode } from './world/world';
@@ -18,19 +18,21 @@ import { Drivetrain, gearCadence, gearGradeOffset, VIRTUAL_GEARS, VIRTUAL_REF } 
 import { drawWorkout } from './workouts/graph';
 import { RAMP_TEST_ID, zoneColor, type Workout } from './workouts/model';
 import { WorkoutPlayer } from './workouts/player';
-import { initWorkoutUi } from './workouts/ui';
 import { HR_ZONES, POWER_ZONES, zoneBars } from './zones';
 import { account, onAccountChange, restoreSession } from './cloud/account';
 import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, stageGhost, stageLeaderboard, syncOnSignIn, type Activity, type LeaderboardRow } from './cloud/sync';
 import { RideRecorder } from './cloud/recorder';
-import { initAccountUi } from './cloud/ui';
-import { initHome } from './home';
-import { initPrivacyUi } from './privacyUi';
+import { initAccountUi } from './cloud/accountBar';
+import { lazy, loadOnClick, markFirstFrame, onLazyError, prefetchWhenIdle, use } from './lazy';
+import { emailAuth, initHome } from './home';
+import { initPrivacyUi, prefetchPrivacy } from './privacyUi';
+// The hub: the screen before you ride (src/hub). Sections load on demand; this is the small part.
+import { initHub } from './hub/hub';
+import { askToLeave } from './hub/leave';
 import { leaderboardEligible, leaderboardNote, type RideFlags } from './rideIntegrity';
 import { Presence } from './cloud/presence';
 import { initRidersUi } from './ridersUi';
 import { Ghost, raceTime } from './ghost';
-import { initLeaderboardUi } from './leaderboardUi';
 import { Sound } from './sound';
 import { Peloton } from './peloton';
 import { draftFrom, DRAFT_MAX_GAP, DRAFT_SWEET_SPOT, type Draft } from './draft';
@@ -39,29 +41,27 @@ import { draftShift, wind } from './world/wind';
 import { initWindUi } from './windUi';
 import { MiniMap } from './miniMap';
 import { initClimbUi } from './climbUi';
-import { complete, nextSession, planById, type Session } from './plans';
-import { initPlansUi } from './plansUi';
-import { initOnboarding, onboarded } from './onboarding';
+import { complete, nextSession, planById, sessions as planSessions, type Session } from './plans';
+import { onboarded } from './onboardingState';
 import { workoutById } from './workouts/library';
 import type { OtherRider } from './world/others';
 import { Steering } from './steering';
-import { initAtmosphereUi } from './atmosphereUi';
 import { kitString, onLookChange, playerLook, setPlayerKit, setTourJersey } from './kit';
-import { initKitUi } from './kitUi';
 import { Garage, rewardText } from './garage/garage';
-import { initGarageUi } from './garage/garageUi';
-import { attachShare, shareDataFromRide, shareRideFromActivity, runShare } from './garage/shareUi';
+import { attachShare, shareRide } from './garage/shareButton';
 import { levelTitle } from './garage/progression';
 import { RideOns } from './cloud/rideOns';
 import { initRideOnsUi } from './rideOnsUi';
+// AI coach and AI rivals (src/ai/): tips, debriefs and rivals with personalities and memory.
+// Loaded on demand (aiLazy and friends below), so only types are imported here.
+import type { AiRide } from './ai/aiRide';
+import type { AiHostBase } from './ai/create';
+import type { RideSummaryInput } from './ai/summary';
 // Racing and the Hell of the West tour (race.ts, raceUi.ts, tour.ts, tourUi.ts).
-import { LiveRace, raceSetup, type ResultRow } from './race';
-import { initRaceUi, resultsNode } from './raceUi';
-import { initTourUi } from './tourUi';
+import { LiveRace, raceSetup, type PanelData, type ResultRow } from './race';
 // Scheduled group rides and races, and the race commentator (schedule.ts, eventSession.ts, eventsUi.ts, commentary.ts, cloud/events.ts).
-import { ClipPlayer, Commentator, RaceCommentary } from './commentary';
+import type { RaceCommentary } from './commentary';
 import { DropWatcher, EVENT_REF_WKG, eventOver, mergeEventResults, secondsSinceStart, type ActiveEvent, type RealResult } from './eventSession';
-import { eventResultsNode, initEventBar, initEventsUi } from './eventsUi';
 import { eventResults, serverNow, submitEventResult, syncServerClock, type EventRow } from './cloud/events';
 import { countdownLabel, eventStageKey, joinState } from './schedule';
 import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChange, priorTotals, recordStage, refWkg, simulateStage, tourComplete, tourJersey, tourStageNumber } from './tour';
@@ -76,7 +76,6 @@ let settings = loadSettings();
 // ---------------------------------------------------------------- state ----
 
 let trainer: Trainer | null = null;
-let hrm: HeartRateMonitor | null = null;
 let demo = false;
 let demoPower = 150;
 
@@ -93,11 +92,22 @@ const sound = new Sound(settings.sound);
 const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
 let race: LiveRace | null = null; // the race being ridden, if any
-const raceUi = initRaceUi();
+onLazyError((msg) => toast(msg, 5000));
+// Racing screens (the 3-2-1, live panel and result tables) and the commentator are only
+// needed once a race starts, so they load then (and in a spare moment after the first frame).
+const raceUiModule = lazy(() => import('./raceUi').then((m) => ({ m, ui: m.initRaceUi() })));
+const raceUi = {
+  /** The 3-2-1 text, or null to hide it. Nothing to hide until the screens have loaded. */
+  countdown(text: string | null) { const r = raceUiModule.peek(); if (r) r.ui.countdown(text); else if (text) raceUiModule.prefetch(); },
+  panel(d: PanelData | null, imperial: boolean) { const r = raceUiModule.peek(); if (r) r.ui.panel(d, imperial); else if (d) raceUiModule.prefetch(); },
+};
 // The race commentator: voice lines for race events, quieter ride sounds while it speaks.
-const clipPlayer = new ClipPlayer();
-clipPlayer.onDuck = (on) => sound.duck(on);
-const commentator = new Commentator(clipPlayer, () => performance.now() / 1000);
+const commentary = lazy(() => import('./commentary').then((m) => {
+  const clipPlayer = new m.ClipPlayer();
+  clipPlayer.onDuck = (on) => sound.duck(on);
+  const commentator = new m.Commentator(clipPlayer, () => performance.now() / 1000);
+  return { m, clipPlayer, commentator };
+}));
 let raceCommentary: RaceCommentary | null = null;
 let clipsPreloaded = false;
 /** The scheduled event you have joined (a race or a group ride), if any. */
@@ -107,6 +117,18 @@ let lastCrossShift = 0; // crosswind echelon: metres right of a rider's line the
 let draftSaving = 0; // fraction of air drag saved, eased
 let roadRiders: OtherRider[] = []; // live riders and pro teams on the road now (for ride-ons)
 const rideWorkout = { started: null as string | null, completed: null as string | null };
+// The AI coach and rival for this ride (src/ai/aiRide.ts). Not in the entry chunk: `ai` stays null
+// until the controller has loaded (a rider who opted in, a rival chosen, the Rivals dialog or the
+// AI switches opened), and every hook below is `ai?.…`, so until then they do nothing.
+let ai: AiRide | null = null;
+const aiLazy = lazy(() => import('./ai/create').then((m) => (ai = m.createAi(aiHost()))));
+const aiApiLazy = lazy(() => import('./cloud/aiApi')); // the small API client: consent, rival records
+const rivalsUi = lazy(() => import('./ai/rivalsUi').then((m) => m.initRivalsUi(rivalsDeps())));
+const aiConsentUi = lazy(() => import('./ai/consentUi')); // the sign-in prompt and switches in Settings
+/** Loads the AI in the background for a rider who has opted in (called when a ride starts). */
+function ensureAi() {
+  if (settings.aiCoach || settings.aiRivals) aiLazy.prefetch();
+}
 
 // ------------------------------------------------------------- devices ----
 
@@ -118,55 +140,22 @@ function onReading(r: TrainerReading) {
   live.lastReadingAt = now;
 }
 
-async function toggleTrainer() {
-  if (trainer) {
-    trainer.disconnect();
-    return;
-  }
-  try {
-    setStatus('Searching…', 'pending');
-    trainer = await connectTrainer({
-      onReading,
-      onDisconnect: () => {
-        trainer = null;
-        setStatus('Trainer disconnected', 'off');
-        $('btn-trainer').textContent = 'Connect trainer';
-        toast('Trainer disconnected');
-      },
-    });
-    if (demo) setDemo(false);
-    lastSentGrade = NaN;
-    $('btn-trainer').textContent = 'Disconnect';
+// Connecting, remembering and reconnecting the trainer and heart-rate strap live in devicesUi.ts
+// (and ble/remembered.ts). main.ts only hears about changes and keeps the ride state in step.
+const devices = initDevices({
+  toast: (m, ms) => toast(m, ms),
+  setStatus: (text, state) => setStatus(text, state),
+  onReading,
+  onHeartRate: (bpm) => { live.heartRate = bpm; live.lastHrAt = performance.now(); },
+  trainerChanged: (t) => {
+    trainer = t;
+    lastSentGrade = NaN; // a (re)connected trainer is sent the grade (or ERG watts) again at the next tick
     lastSentWatts = NaN;
-    setStatus(
-      `${trainer.name} · ${trainer.canControl ? 'resistance follows the road' : 'power only (no resistance control)'}`,
-      'on',
-    );
-    toast(`Connected to ${trainer.name}`);
-  } catch (err) {
-    trainer = null;
-    setStatus('No trainer connected', 'off');
-    if ((err as DOMException)?.name !== 'NotFoundError') toast(`Couldn't connect: ${(err as Error).message}`);
-  }
-}
-
-async function toggleHeartRate() {
-  if (hrm) {
-    hrm.disconnect();
-    return;
-  }
-  try {
-    hrm = await connectHeartRate(
-      (bpm) => { live.heartRate = bpm; live.lastHrAt = performance.now(); },
-      () => { hrm = null; live.heartRate = 0; $('btn-hr').textContent = '❤️ Heart rate strap'; toast('Heart rate strap disconnected'); },
-    );
-    $('btn-hr').textContent = '❤️ Heart rate ✓';
-    toast(`Connected to ${hrm.name}`);
-  } catch (err) {
-    hrm = null;
-    if ((err as DOMException)?.name !== 'NotFoundError') toast(`Couldn't connect: ${(err as Error).message}`);
-  }
-}
+    if (t && demo) setDemo(false);
+    if (!t) { live.power = 0; live.cadence = 0; } // the ride carries on; power falls to zero until it is back
+  },
+  hrChanged: (h) => { if (!h) live.heartRate = 0; },
+});
 
 /** Wind into your face (head, m/s; negative is a tail wind) and across the road (cross, towards your right) at a distance on this stage. */
 function roadWind(distance: number) {
@@ -351,7 +340,26 @@ const urlWind = (() => {
   return Number.isFinite(ms) ? { ms, angle: Number.isFinite(angle) ? angle : 90 } : undefined;
 })();
 
+// ---- The hub (src/hub): while it is open nothing rides; the world just circles your rider, behind the blur. ----
+let lastHubDraw = 0;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const phoneWidth = matchMedia('(max-width: 760px)');
+function hubFrame(now: number) {
+  lastFrame = now; // so the first ride frame after the hub doesn't see a long gap
+  const every = reducedMotion.matches || phoneWidth.matches ? 1000 : 33; // slow and cheap where it can't be seen well
+  if (now - lastHubDraw < every) return;
+  const dt = Math.min(1, (now - lastHubDraw) / 1000);
+  lastHubDraw = now;
+  world.update({ distance: ride.distance, speedMs: 0, crankAngle: drivetrain.crankAngle, rock: 0 }, dt);
+}
+
 function frame(now: number) {
+  if (hub.isOpen()) {
+    hubFrame(now);
+    noteFirstFrame(); // the hub is usually the first screen: sign-in and prefetching hang off its first frame too
+    requestAnimationFrame(frame);
+    return;
+  }
   // rAF timestamps can precede the load-time clock reading, so clamp at 0.
   const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000)) * TIME_SCALE;
   lastFrame = now;
@@ -389,6 +397,19 @@ function frame(now: number) {
     peloton.update(dt);
     liveRiders.push(...peloton.riders());
   }
+  // ---- AI coach and rival (src/ai/): tips as you ride, and a rival on the road ----
+  if (ai) {
+    const ahead = liveRiders.reduce((m, r) => (r.distance > ride.distance && r.distance - ride.distance < m ? r.distance - ride.distance : m), Infinity);
+    const target = player && !player.done && !player.paused ? player.targetWatts() : null;
+    const rival = ai.frame({
+      dt, movingTime: ride.movingTime, distance: ride.distance, watts: live.power, cadence: live.cadence, hr: currentHr(),
+      gradePct: gradeAt(ride.distance) * 100, finish: currentStage().finish, finishS: ride.finishTime, finished: ride.finished,
+      targetW: target, workoutS: player ? player.elapsed : null, gapAheadM: Number.isFinite(ahead) ? ahead : null,
+      drafting: !!draft && draft.saving > 0.01, riding: !ride.finished && !race?.holding && !eventHolding(),
+    });
+    if (rival) liveRiders.push(rival);
+  }
+  // ---- end of AI ----
   roadRiders = liveRiders;
   steering.update(dt, { autoSteer: settings.autoSteer, distance: ride.distance, riders: liveRiders, lateralOf: lateralOf, shift: crossShift });
   world.setLane(steering.target);
@@ -448,6 +469,7 @@ function frame(now: number) {
   if (g) others.push(g);
   world.setOthers(others);
   world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: drivetrain.crankAngle, rock: drivetrain.rock }, dt);
+  noteFirstFrame();
   if (settings.miniMap && !ride.finished) {
     miniMap.update(now, { distance: ride.distance, riders: others, lines: race ? race.course.lines.filter((l) => l.kind !== 'finish').map((l) => ({ kind: l.kind, d: l.d })) : [] });
   }
@@ -461,7 +483,7 @@ function frame(now: number) {
     updateHud(grade);
     miniMap.setVisible(settings.miniMap && !ride.finished);
     windUi.update(ride.distance, settings.units === 'imperial');
-    climbUi.update(ride.distance, settings.miniMap, !ride.finished, settings.units === 'imperial');
+    climbUi.update(ride.distance, settings.miniMap, !ride.finished && $('finish').hidden, settings.units === 'imperial'); // not over the finish card or ride summary
     placeBelowHud();
     raceUi.countdown(race?.countText ?? null);
     const panelData = race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null;
@@ -476,26 +498,6 @@ function frame(now: number) {
     profileCanvas.classList.toggle('jumpable', canJump());
   }
   requestAnimationFrame(frame);
-
-// Installable app: register the service worker (production builds only).
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
-}
-
-// "Install app" button where the browser offers it (Chrome, Edge, Android).
-let installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  installPrompt = e as Event & { prompt: () => Promise<void> };
-  $('btn-install').hidden = false;
-});
-$('btn-install').addEventListener('click', async () => {
-  if (!installPrompt) return;
-  await installPrompt.prompt().catch(() => {});
-  installPrompt = null;
-  $('btn-install').hidden = true;
-});
-window.addEventListener('appinstalled', () => { $('btn-install').hidden = true; toast('American Flyers is installed. Open it from your home screen or apps.'); });
 }
 
 /** 0..1: crowds line the hairpins of the climbs and the last few hundred metres. */
@@ -545,6 +547,7 @@ function setMenu(open: boolean) {
 }
 menuBtn.addEventListener('click', (e) => { e.stopPropagation(); setMenu(menu.hidden); });
 menu.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('button')) setMenu(false); });
+$('btn-menu-hub').addEventListener('click', () => { void goToHub(); }); // ☰ Menu → 🏠 Hub
 document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !(e.target as HTMLElement).closest('.menu-wrap')) setMenu(false); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) setMenu(false); });
 
@@ -652,6 +655,7 @@ new ResizeObserver(() => {
 
 function startWorkout(w: Workout) {
   player = new WorkoutPlayer(w, settings.ftp);
+  ai?.workoutStarted();
   beeps.step = undefined;
   workoutStats = new RideStats(zoneRefs);
   rideWorkout.started = w.name;
@@ -716,9 +720,11 @@ function finishWorkout() {
   rideWorkout.completed = w.name;
   planDone({ workout: w.id });
   const zones = zoneSummary(workoutStats);
+  const coach = aiDebrief(aiDebriefInput(workoutStats, w.name, 'workout', null)); // the AI coach's debrief card
   stopWorkout();
-  showSummary('💪', `${w.name}: complete!`, items, actions, zones);
-  saveRide();
+  showSummary('💪', `${w.name}: complete!`, items, actions, [...(coach ? [coach.node] : []), ...zones]);
+  const rideId = recorder.id;
+  saveRide().then((saved) => coach?.rideSaved(saved ? rideId : null));
 }
 
 interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
@@ -743,8 +749,16 @@ function showSummary(flag: string, title: string, items: [string, string][], act
     if (a.primary) b.className = 'primary';
     b.addEventListener('click', () => { $('finish').hidden = true; a.onClick(); });
     return b;
-  }));
+  }), backToHubButton());
   $('finish').hidden = false;
+}
+
+/** The summary card's "Back to the hub" (the ride is over, so no questions asked). */
+function backToHubButton() {
+  const b = document.createElement('button');
+  b.textContent = '🏠 Back to the hub';
+  b.addEventListener('click', () => { $('finish').hidden = true; void goToHub({ ask: false }); });
+  return b;
 }
 
 /** Heart-rate and power zone breakdowns for a ride summary. */
@@ -812,10 +826,10 @@ let lastSavedSeconds = 0;
  * Saves the current ride to the rider's account (the same ride is updated
  * on later saves). Updates the note on the summary card if it's showing.
  */
-async function saveRide(opts: { quiet?: boolean } = {}) {
+async function saveRide(opts: { quiet?: boolean } = {}): Promise<boolean> {
   const note = $('finish-note');
   const showNote = !opts.quiet && !$('finish').hidden;
-  if (stats.seconds < MIN_RIDE_S) return;
+  if (stats.seconds < MIN_RIDE_S) return false;
   if (!account()) {
     if (showNote) {
       note.replaceChildren('Sign in to save this ride to your profile. ');
@@ -829,13 +843,14 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
       });
       note.append(b);
     }
-    return;
+    return false;
   }
   if (showNote) note.textContent = 'Saving to your rides…';
   try {
     await saveActivity(buildActivity());
     lastSavedSeconds = stats.seconds;
     accountUi.invalidate();
+    hubNotify('ride');
     if (showNote) note.textContent = '✓ Saved to your rides';
     // Credits and levels come from the server's count of your saved rides.
     garage.afterRide().then((r) => {
@@ -844,10 +859,65 @@ async function saveRide(opts: { quiet?: boolean } = {}) {
       if (text && showNote) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
       if (r.levelAfter > r.levelBefore) toast(`⭐ Level ${r.levelAfter}!`, 5000);
     }).catch(() => { /* credits are a bonus */ });
+    return true;
   } catch (e) {
-    if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
+    // No connection (or the server didn't answer): keep it on this device and upload it later (src/rideQueue.ts).
+    const me = account()?.id;
+    const activity = buildActivity();
+    const alreadyQueued = rideQueue.list().some((r) => r.activity.id === activity.id);
+    const kept = me ? rideQueue.add(me, activity) : 'failed';
+    if (kept !== 'failed') {
+      lastSavedSeconds = stats.seconds; // queued: the 5-minute autosave needn't retry it (a later save replaces the copy)
+      const msg = kept === 'trimmed'
+        ? '📶 Couldn’t reach the server. Saved on this device (the summary; the second-by-second detail didn’t fit). It uploads when you’re back online.'
+        : '📶 Couldn’t reach the server. Saved on this device: it uploads as soon as you’re back online.';
+      if (showNote) note.textContent = msg;
+      else if (!opts.quiet || !alreadyQueued) toast(msg, 6000); // quiet saves (back to the hub, autosave) say so once per ride
+      hubNotify('ride');
+    } else if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
     else if (!opts.quiet) toast(`Couldn’t save your ride: ${(e as Error).message}`);
+    return false;
   }
+}
+
+// --------------------------------------------------- rides saved offline ----
+// Rides that couldn't be saved wait on this device (src/rideQueue.ts) and upload when
+// the connection comes back, when the rider signs in, when the tab is shown again, and
+// every two minutes while any are waiting.
+const rideQueue = new RideQueue(
+  (() => { try { return localStorage; } catch { return null; } })(),
+  saveActivity,
+  () => navigator.onLine !== false,
+);
+
+async function uploadQueuedRides() {
+  const me = account()?.id;
+  if (!me || !rideQueue.count(me)) return;
+  const r = await rideQueue.flush(me);
+  if (r.uploaded.length) {
+    accountUi.invalidate();
+    hubNotify('ride');
+    garage.refresh(); // credits and levels for the uploaded rides
+    toast(r.uploaded.length === 1 ? `✓ Uploaded your ride “${r.uploaded[0].title}” (saved while offline).` : `✓ Uploaded ${r.uploaded.length} rides saved while offline.`, 5000);
+  }
+  for (const a of r.givenUp) toast(`Couldn’t upload “${a.title}” (${new Date(a.started_at).toLocaleDateString()}) after several tries, so it was removed from this device.`, 8000);
+}
+window.addEventListener('online', () => { void uploadQueuedRides(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void uploadQueuedRides(); });
+setInterval(() => { if (navigator.onLine !== false) void uploadQueuedRides(); }, 2 * 60 * 1000);
+
+/** The numbers the AI coach is told after a ride (the controller turns them into the payload, src/ai/summary.ts). `st` is the stats to describe: the whole ride, or just the workout. */
+function aiDebriefInput(st: RideStats, title: string, mode: RideSummaryInput['mode'], race: { place: number; of: number } | null): RideSummaryInput {
+  const plan = settings.plan ? planById(settings.plan.id) : undefined;
+  const c = ai?.workoutCompliance();
+  return {
+    title, mode, durationS: st.seconds, distanceM: ride.distance - ride.startDistance, climbedM: ride.climbed,
+    avgW: st.avgPower, npW: st.np, powerZoneS: st.powerZones, hrZoneS: st.hrZones, avgHr: st.avgHr, maxHr: st.maxHr, avgCadence: st.avgCadence,
+    tss: st.seconds ? st.tss(settings.ftp) : 0,
+    workout: mode === 'workout' && c ? { name: title, onTargetS: c.onTargetS, totalS: c.totalS } : null,
+    race,
+    plan: plan && settings.plan ? { name: plan.name, done: settings.plan.done.length, total: planSessions(plan).length } : null,
+  };
 }
 
 // Save long rides every few minutes, so a closed tab doesn't lose them.
@@ -869,7 +939,8 @@ async function savePendingRide() {
   }
 }
 
-const workoutUi = initWorkoutUi({ ftp: () => settings.ftp, ride: startWorkout, toast });
+// The workout library and creator (and the .zwo/.erg/.mrc import) load when the dialog is first opened.
+const workoutUi = lazy(() => import('./workouts/ui').then((m) => m.initWorkoutUi({ ftp: () => settings.ftp, ride: startWorkout, toast })));
 
 // ------------------------------------------------------------------- UI ----
 
@@ -899,6 +970,7 @@ function endRide() {
   if (stats.seconds < MIN_RIDE_S) return resetRide();
   const imperial = settings.units === 'imperial';
   const km = (ride.distance - ride.startDistance) / 1000;
+  const coach = aiDebrief(aiDebriefInput(stats, currentStage().name, player ? 'workout' : 'ride', null)); // the AI coach's debrief card
   showSummary('🚴', 'Ride summary', [
     ['Time', formatTime(stats.seconds)],
     ['Distance', imperial ? `${(km / KM_PER_MI).toFixed(2)} mi` : `${km.toFixed(2)} km`],
@@ -909,11 +981,15 @@ function endRide() {
   ], [
     { label: 'Keep riding', onClick: () => {} },
     { label: 'Start a new ride', primary: true, onClick: resetRide },
-  ], zoneSummary(stats));
-  saveRide();
+  ], [...(coach ? [coach.node] : []), ...zoneSummary(stats)]);
+  const rideId = recorder.id;
+  if (ride.movingTime >= 180) ai?.rideEnded({ distance: ride.distance, finish: null, finishS: null, movingTime: ride.movingTime, lengthKm: null }, (n) => $('finish-extra').prepend(n));
+  saveRide().then((saved) => coach?.rideSaved(saved ? rideId : null));
 }
 
 function resetRide() {
+  ai?.newRide();
+  ensureAi();
   if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) saveRide({ quiet: true });
   recorder = new RideRecorder();
   rideFlags.usedDemo = false;
@@ -923,7 +999,7 @@ function resetRide() {
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
   if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); } // starting afresh ends a race
   raceCommentary = null;
-  clipPlayer.stop();
+  commentary.peek()?.clipPlayer.stop();
   endEvent(); // ...and leaves a scheduled event
   drivetrain.reset();
   powerSamples.length = 0;
@@ -963,6 +1039,12 @@ function chooseStage(stage: Stage) {
   loadMyGhost();
   $('stage-name').textContent = stage.name;
   toast(`${stage.name}: ${stage.tagline}`, 5000);
+  hubNotify('stage');
+}
+
+/** Tells the hub (if it is open) that the app moved under it: a new stage, a saved ride, a plan change. */
+function hubNotify(kind: 'stage' | 'ride' | 'plan') {
+  document.dispatchEvent(new CustomEvent('af:hub-refresh', { detail: kind }));
 }
 
 function openStages() {
@@ -975,7 +1057,7 @@ function openStages() {
   const tourCard = document.createElement('button');
   tourCard.className = 'stage-card tour-card';
   tourCard.innerHTML = '<strong>🏆 Hell of the West tour</strong><span class="stage-tagline">Race the three stages of American Flyers in order against the pro teams: Morgul-Bismark, the Tour of the Moon, then Echo Lake. Yellow, green and polka-dot jerseys.</span>';
-  tourCard.addEventListener('click', () => { dialog.close(); tourUi.open(); });
+  tourCard.addEventListener('click', () => { dialog.close(); openTour(); });
   list.append(tourCard);
   for (const stage of stages) {
     if (stage.uploaded && !list.querySelector('.stage-section')) {
@@ -1072,14 +1154,14 @@ function finishRace(r: LiveRace) {
     if (worn.length) window.setTimeout(() => toast(`You lead the tour: ${worn.map((j) => JERSEY_NAMES[j].toLowerCase()).join(' and ')}!`, 6000), 1200);
     const next = TOUR_STAGE_IDS[tourN];
     if (next && tour && !tourComplete(tour)) actions.push({ label: `Next: stage ${tourN + 1}`, primary: true, onClick: () => beginRace(stageById(next), tourN + 1) });
-    else actions.push({ label: 'Tour standings', primary: true, onClick: () => tourUi.open() });
+    else actions.push({ label: 'Tour standings', primary: true, onClick: openTour });
   } else {
     actions.push({ label: 'Race again', primary: true, onClick: () => beginRace(stage, tourN) });
   }
   return { rows, me, place, tour: tour && tourN ? tour : null, actions };
 }
 
-const tourUi = initTourUi({
+const tourUi = lazy(() => import('./tourUi').then((m) => m.initTourUi({
   race: (n) => beginRace(stageById(TOUR_STAGE_IDS[n - 1]), n),
   simulate: (n) => {
     const tour = getTour();
@@ -1091,8 +1173,9 @@ const tourUi = initTourUi({
     toast(`Stage ${n} simulated: you finished ${ordinal(you)} of ${rows.length}.`, 5000);
   },
   imperial: () => settings.units === 'imperial',
-});
-$('btn-tour').addEventListener('click', () => tourUi.open());
+})));
+function openTour() { use(tourUi, (u) => u.open(), $('btn-tour')); }
+$('btn-tour').addEventListener('click', openTour);
 // Progress is saved with the settings, so it follows the account.
 loadTour(settings.tour);
 onTourChange((p) => {
@@ -1113,18 +1196,26 @@ updateTourJersey();
 // clock). Joining puts you on the start line of the event's stage, in a presence room of
 // its own, with a 3-2-1 that starts at the same moment for everyone.
 
-const eventBar = initEventBar(() => {
-  const was = eventState?.ev;
-  resetRide();
-  if (was) toast(`You left ${was.title}.`);
-});
-
-initEventsUi({
-  join: (row) => { joinEvent(row); },
-  stageName: (id) => stageById(id).name,
-  openSignIn: (why) => accountUi.openSignIn(why),
-  currentEventId: () => eventState?.ev.id ?? null,
-});
+const eventsUi = lazy(() => import('./eventsUi').then((m) => {
+  const bar = m.initEventBar(() => {
+    const was = eventState?.ev;
+    resetRide();
+    if (was) toast(`You left ${was.title}.`);
+  });
+  m.initEventsUi({
+    join: (row) => { joinEvent(row); },
+    stageName: (id) => stageById(id).name,
+    openSignIn: (why) => accountUi.openSignIn(why),
+    currentEventId: () => eventState?.ev.id ?? null,
+  });
+  return { m, bar };
+}));
+loadOnClick($('btn-events'), eventsUi); // the dialog wires its own button once loaded
+// The lobby strip: only ever shown while an event is joined, which the events dialog does, so it has loaded by then.
+const eventBar = {
+  show: (title: string, status: string) => eventsUi.peek()?.bar.show(title, status),
+  hide: () => eventsUi.peek()?.bar.hide(),
+};
 
 function eventHolding() {
   return !!eventState && eventState.ev.kind === 'group_ride' && secondsSinceStart(eventState.ev, serverNow()) < 0;
@@ -1133,10 +1224,16 @@ function eventHolding() {
 /** Wires a new race to the beeps and the commentator (single races, tour stages and events). */
 function attachRace(r: LiveRace) {
   r.onBeep = (last) => sound.beep(last);
-  commentator.reset();
-  raceCommentary = new RaceCommentary(commentator);
-  r.onEvent = (text, kind) => raceCommentary?.event(text, kind);
-  if (!clipsPreloaded && settings.commentary && sound.enabled) { clipsPreloaded = true; ClipPlayer.preload(); }
+  raceUiModule.prefetch();
+  raceCommentary = null;
+  // The commentator is normally loaded already (prefetched after the first frame); if not, it joins in a moment.
+  use(commentary, ({ m, commentator }) => {
+    if (race !== r) return; // the race ended or changed while it loaded
+    commentator.reset();
+    raceCommentary = new m.RaceCommentary(commentator);
+    r.onEvent = (text, kind) => raceCommentary?.event(text, kind);
+    if (!clipsPreloaded && settings.commentary && sound.enabled) { clipsPreloaded = true; m.ClipPlayer.preload(); }
+  });
 }
 
 async function joinEvent(row: EventRow) {
@@ -1210,6 +1307,9 @@ function updateEvent() {
 
 /** The race commentator: feeds it this frame's race picture. Called with the live panel's numbers. */
 function updateCommentary(panel: ReturnType<LiveRace['panel']> | null) {
+  const c = commentary.peek();
+  if (!c) return;
+  const { commentator } = c;
   commentator.enabled = settings.commentary && sound.enabled;
   if (!race || !raceCommentary) return;
   if (race.phase === 'countdown' && race.untilGo > 5 && race.untilGo <= 30) raceCommentary.lobby();
@@ -1239,7 +1339,7 @@ function updateCommentary(panel: ReturnType<LiveRace['panel']> | null) {
 function eventFinishPanel(ev: ActiveEvent, rows: ResultRow[], myTime: number, avgPower: number, demoUsed: boolean): Node {
   const box = document.createElement('div');
   const bots = rows.map((r) => ({ name: r.name, time: r.time, team: r.team, you: r.you }));
-  const draw = (real: RealResult[]) => box.replaceChildren(eventResultsNode(mergeEventResults(bots, real, myTime), real.filter((r) => !r.is_me).length + 1));
+  const draw = (real: RealResult[]) => { const m = eventsUi.peek()?.m; if (m) box.replaceChildren(m.eventResultsNode(mergeEventResults(bots, real, myTime), real.filter((r) => !r.is_me).length + 1)); };
   draw([]);
   const eligible = !demoUsed && TIME_SCALE === 1 && avgPower > 0;
   const note = document.createElement('p');
@@ -1295,18 +1395,21 @@ function showFinish() {
   let title = `${currentStage().name}: finished!`;
   let shareHeadline: string | undefined;
   const shareBadges: string[] = [];
+  let aiRace: { place: number; of: number } | null = null;
   if (racing) {
     racing.update(0.001, ride.distance, ride.speed); // make sure the line is recorded for this frame
     const r = finishRace(racing);
     ride.racePlace = r.place;
     ride.raceSize = r.rows.length;
+    aiRace = { place: r.place, of: r.rows.length };
     shareHeadline = `${ordinal(r.place)} of ${r.rows.length}`;
     if (r.tour) shareBadges.push(...myJerseys(r.tour).map((j) => `👕 ${JERSEY_NAMES[j]}`));
     items.splice(0, 1, ['Place', `${ordinal(r.place)} of ${r.rows.length}`], ['Race time', raceTime(r.me.time)]);
     items.splice(2, 0, ['Points', `${r.me.sprint} sprint · ${r.me.kom} mountain`]);
     items.length = Math.min(items.length, 6);
     title = `${currentStage().name}: ${ordinal(r.place)}`;
-    extra = [resultsNode(r.rows, r.tour), ...extra];
+    const results = raceUiModule.peek()?.m.resultsNode(r.rows, r.tour); // loaded when the race began
+    if (results) extra = [results, ...extra];
     actions = r.actions;
     raceCommentary?.finished(r.place);
     if (eventState?.ev.kind === 'race') extra = [eventFinishPanel(eventState.ev, r.rows, r.me.time, avgPower, eventState.demoUsed), ...extra];
@@ -1315,15 +1418,20 @@ function showFinish() {
     raceUi.panel(null, false);
     endEvent(); // the lobby and presence go back to the normal road
   }
+  const coach = aiDebrief(aiDebriefInput(stats, currentStage().name, aiRace ? 'race' : 'ride', aiRace)); // the AI coach's debrief card
+  if (coach) extra = [coach.node, ...extra];
   showSummary('🏁', title, items, actions, extra);
   $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
+  const rideId = recorder.id;
+  const rideLen = currentStage().finish;
+  ai?.rideEnded({ distance: ride.distance, finish: rideLen, finishS: ride.finishTime || null, movingTime: ride.movingTime, lengthKm: rideLen ? Math.round(rideLen / 100) / 10 : null }, (n) => $('finish-extra').prepend(n));
   const offBoard = leaderboardNote(rideFlags);
   if (offBoard) $('finish-extra').prepend(Object.assign(document.createElement('p'), { className: 'finish-ghost off-board', textContent: `ℹ️ ${offBoard}` }));
   // 📤 Share: a picture of the ride (route, numbers, place, your colours).
   const finishStage = currentStage();
   const finishFrom = ride.startDistance;
   const finishTo = ride.distance;
-  attachShare($('finish-actions'), () => shareDataFromRide({
+  attachShare($('finish-actions'), () => ({
     stage: finishStage, fromM: finishFrom, toM: finishTo, title: finishStage.name.replace('Hell of the West · ', ''),
     subtitle: `${racing ? 'Race · ' : ''}${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`,
     timeS: ride.movingTime, avgPower, climbedM: ride.climbed, distanceM: finishTo - finishFrom,
@@ -1341,7 +1449,7 @@ function showFinish() {
       textContent: vsGhost < 0 ? `🏆 ${raceTime(-vsGhost)} faster than ${who}` : `${raceTime(vsGhost)} behind ${who}`,
     }));
   }
-  saveRide().then(() => showRank());
+  saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); showRank(); });
 }
 
 /** After a whole-stage ride is saved: where it puts you on the leaderboard. */
@@ -1383,7 +1491,7 @@ function stageProgress() {
   return parts.join(' · ');
 }
 
-function openSettings() {
+async function openSettings() {
   const dialog = $<HTMLDialogElement>('settings');
   const form = dialog.querySelector('form')!;
   for (const [k, v] of Object.entries(settings)) {
@@ -1392,7 +1500,11 @@ function openSettings() {
     else if (input) input.value = String(v);
   }
   $('difficulty-out').textContent = `${settings.difficulty}%`;
-  dialog.showModal();
+  // The AI switches stay off until the small consent module is here (signed-out riders can't opt in);
+  // if it can't load (a toast says so) the rest of Settings still opens.
+  for (const n of ['aiCoach', 'aiRivals']) (form.elements.namedItem(n) as HTMLInputElement).disabled = true;
+  await use(aiConsentUi, (ui) => ui.syncAiSettingsForm(form, !!account(), () => accountUi.openSignIn('Sign in to turn on the AI coach and rivals.')), $('btn-settings'));
+  if (!dialog.open) dialog.showModal();
 }
 
 $<HTMLDialogElement>('settings').addEventListener('close', () => {
@@ -1404,6 +1516,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     return Number.isFinite(v) && v > 0 ? v : fallback;
   };
   const oldFtp = settings.ftp;
+  const prevAi = { coach: settings.aiCoach, rivals: settings.aiRivals };
   settings = {
     ...settings,
     riderKg: num('riderKg', settings.riderKg),
@@ -1420,9 +1533,14 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     wind: data.get('wind') === 'on',
     miniMap: data.get('miniMap') === 'on',
     commentary: data.get('commentary') === 'on',
+    aiCoach: data.get('aiCoach') === 'on',
+    aiRivals: data.get('aiRivals') === 'on',
+    coachVoice: data.get('coachVoice') === 'on',
   };
   saveSettings(settings);
   pushSettings(settings);
+  const nextAi = { coach: settings.aiCoach, rivals: settings.aiRivals };
+  if (nextAi.coach !== prevAi.coach || nextAi.rivals !== prevAi.rivals) void use(aiLazy, (a) => a.applyConsent(nextAi, prevAi)); // the database holds the real opt-in
   if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
   world.setMarkers(markerConfig());
   lastSentGrade = NaN;
@@ -1451,8 +1569,7 @@ $('btn-minimap').addEventListener('click', () => {
 });
 updateMapMenu();
 
-$('btn-trainer').addEventListener('click', toggleTrainer);
-$('btn-hr').addEventListener('click', toggleHeartRate);
+// (the trainer and heart rate buttons are wired in devicesUi.ts)
 $('btn-demo').addEventListener('click', () => setDemo(!demo));
 profileCanvas.addEventListener('click', (e) => { if (canJump()) jumpTo(profileDistanceAt(e.clientX)); });
 profileCanvas.addEventListener('pointermove', (e) => {
@@ -1489,6 +1606,7 @@ $<HTMLInputElement>('route-upload').addEventListener('change', async (e) => {
   let last: Stage | null = null;
   for (const file of Array.from(input.files ?? [])) {
     try {
+      const { parseGpx } = await import('./routes/gpx');
       const { stage, saved } = addRoute(parseGpx(file.name, await file.text()));
       if (!saved) toast('Route too large to save in this browser; it’s rideable until you reload.', 6000);
       last = stage;
@@ -1501,7 +1619,7 @@ $<HTMLInputElement>('route-upload').addEventListener('change', async (e) => {
   if (last) chooseStage(last);
   else openStages();
 });
-$('btn-workouts').addEventListener('click', () => workoutUi.openLibrary());
+$('btn-workouts').addEventListener('click', () => use(workoutUi, (u) => u.openLibrary(), $('btn-workouts')));
 $('btn-data').addEventListener('click', () =>
   openDataBlocks($<HTMLDialogElement>('data-blocks'), settings.dataFields, (ids) => {
     settings = { ...settings, dataFields: ids };
@@ -1520,6 +1638,7 @@ $('stage-name').textContent = currentStage().name;
 $<HTMLInputElement>('demo-power').addEventListener('input', (e) => setDemoPower(Number((e.target as HTMLInputElement).value)));
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('dialog')) return;
+  if (hub.isOpen()) return; // the hub has its own keys (Tab, arrows on the section tabs, Enter, Escape)
   if (e.key === 'c' || e.key === 'C') cycleCamera();
   if (e.key === 'm' || e.key === 'M') setSound(!settings.sound);
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
@@ -1547,7 +1666,7 @@ for (const [id, dir] of [['steer-left', -1], ['steer-right', 1]] as const) {
 }
 
 // ☰ Menu → Time & weather.
-const atmosphereUi = initAtmosphereUi({
+const atmosphereUi = lazy(() => import('./atmosphereUi').then((m) => m.initAtmosphereUi({
   current: () => ({ timeOfDay: settings.timeOfDay, weather: settings.weather }),
   choose: (patch) => {
     settings = { ...settings, ...patch };
@@ -1555,12 +1674,12 @@ const atmosphereUi = initAtmosphereUi({
     pushSettings(settings);
     world.setAtmosphere(settings.timeOfDay, settings.weather);
   },
-});
-$('btn-weather').addEventListener('click', () => atmosphereUi.open());
+})));
+$('btn-weather').addEventListener('click', () => use(atmosphereUi, (u) => u.open(), $('btn-weather')));
 
 let bluetoothNote = () => {};
 if (!bluetoothAvailable()) {
-  for (const id of ['btn-trainer', 'btn-hr']) {
+  for (const id of ['btn-trainer', 'btn-menu-trainer', 'btn-hr']) {
     const b = $<HTMLButtonElement>(id);
     b.disabled = true;
     b.title = 'Web Bluetooth is not available in this browser';
@@ -1569,6 +1688,7 @@ if (!bluetoothAvailable()) {
   bluetoothNote = () => toast('This browser can’t use Bluetooth. Open in Chrome or Edge to connect your trainer. Demo ride works anywhere.', 7000);
 } else {
   setStatus('No trainer connected', 'off');
+  devices.start(); // reconnect remembered devices without the chooser where the browser allows it
 }
 
 // --------------------------------------------------------------- account ----
@@ -1585,7 +1705,7 @@ const accountUi = initAccountUi({
   settings: () => settings,
   toast,
   // 📤 Share on a ride in your profile.
-  shareRide: (a) => runShare(shareDataFromRide(shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined)), toast),
+  shareRide: (a) => { import('./garage/shareUi').then((m) => shareRide(m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined), toast)); },
   context: () => ({
     stage: currentStage().name,
     workout: player?.workout.name ?? null,
@@ -1596,6 +1716,80 @@ const accountUi = initAccountUi({
   }),
 });
 onSyncError((msg) => toast(msg, 6000));
+
+// ---- AI coach and rivals (src/ai/): the host the controller is given when it loads ----
+const stageLines = () => {
+  const st = currentStage();
+  if (race) return race.course.lines;
+  return [...(st.race?.sprints ?? []).map((l) => ({ kind: 'sprint' as const, d: l.d, name: l.name })), ...(st.race?.summits ?? []).map((l) => ({ kind: 'summit' as const, d: l.d, name: l.name }))];
+};
+const patchAiSettings = (p: Partial<Pick<Settings, 'aiCoach' | 'aiRivals'>>) => { settings = { ...settings, ...p }; saveSettings(settings); pushSettings(settings); };
+function aiHost(): AiHostBase {
+  return {
+    settings: () => settings,
+    signedIn: () => !!account(),
+    toast,
+    stage: currentStage,
+    stageLines,
+    briefKey: () => `${currentStage().id}:${race ? 'r' : ''}`,
+    stageName: () => currentStage().name,
+    rideMode: () => (player ? 'workout' : race ? 'race' : 'ride'),
+    workoutBrief: () => {
+      if (!player) return null;
+      return {
+        name: player.workout.name, minutes: Math.round(player.duration / 60),
+        steps: player.steps.slice(0, 40).map((st) => ({ atS: Math.round(st.at), durS: Math.round(st.duration), label: st.label, pctFtp: st.free ? null : Math.round(((st.start + st.end) / 2) * 100) / 100 })),
+      };
+    },
+    gradeAt,
+    headwindAt: (d) => roadWind(d).head,
+    countsForRecord: () => leaderboardEligible(rideFlags),
+    loadSession: (id, kind) => {
+      if (kind === 'workout') { const w = workoutById(id); if (w) startWorkout(w); }
+      else chooseStage(stageById(id));
+    },
+    patchSettings: patchAiSettings,
+    openSettings,
+    openSignIn: (reason) => accountUi.openSignIn(reason),
+  };
+}
+function rivalsDeps() {
+  return {
+    signedIn: () => !!account(),
+    rivalsOn: () => settings.aiRivals,
+    active: () => ai?.rival ?? null,
+    start: (id: string) => { void use(aiLazy, (a) => a.startRival(id)); },
+    stop: () => ai?.stopRival(),
+    openSettings,
+    openSignIn: () => accountUi.openSignIn('Sign in to turn on AI rivals.'),
+    records: () => aiApiLazy.get().then((m) => m.myRivals(), () => []),
+    forget: (id?: string) => aiApiLazy.get().then((m) => m.forgetRival(id), () => false),
+  };
+}
+// ☰ Menu → Rivals: the dialog loads on first open (it is prefetched when idle); the controller starts loading with it.
+$('btn-rivals').addEventListener('click', () => {
+  aiLazy.prefetch();
+  void use(rivalsUi, (ui) => ui.open(), $('btn-rivals'));
+});
+/** After sign-in the database has the last word on the AI opt-in. Read it without loading the controller; that loads only if the rider has opted in. */
+function syncAiConsent() {
+  aiApiLazy.get().then((m) => m.loadConsent()).then((c) => {
+    if (c) patchAiSettings({ aiCoach: c.coach, aiRivals: c.rivals });
+    ensureAi();
+  }).catch(() => {});
+}
+/**
+ * The AI coach's card for a ride summary. With the controller loaded this is its card; otherwise (it is also the
+ * "turn on the AI coach" invitation, so it matters even when the AI is off) a placeholder fills in once the module arrives.
+ */
+function aiDebrief(input: RideSummaryInput): { node: Node; rideSaved(activityId: string | null): void } | null {
+  if (ai) return ai.debriefRide(input);
+  if (input.durationS < 180) return null; // (the same minimum as DEBRIEF_MIN_S in ai/aiRide.ts)
+  const slot = Object.assign(document.createElement('div'), { style: 'display: contents' });
+  const card = aiLazy.get().then((a) => { const c = a.debriefRide(input); if (c) slot.append(c.node); return c; }, () => null);
+  return { node: slot, rideSaved: (id) => { void card.then((c) => c?.rideSaved(id)); } };
+}
+// ---- end of AI ----
 
 // ------------------------------------------------------ riding together ----
 
@@ -1622,6 +1816,7 @@ function setPlan(plan: Settings['plan']) {
   settings = { ...settings, plan };
   saveSettings(settings);
   pushSettings(settings);
+  hubNotify('plan');
 }
 
 /** Ticks off the next matching session of the plan being followed. */
@@ -1647,13 +1842,14 @@ function rideSession(session: Session) {
   }
 }
 
-const plansUi = initPlansUi({ progress: () => settings.plan, setProgress: setPlan, ride: rideSession, toast });
-$('btn-plans').addEventListener('click', () => { $<HTMLDialogElement>('workouts').close(); plansUi.open(); });
-$('btn-menu-plans').addEventListener('click', () => plansUi.open());
+const plansUi = lazy(() => import('./plansUi').then((m) => m.initPlansUi({ progress: () => settings.plan, setProgress: setPlan, ride: rideSession, toast })));
+const openPlans = (from?: Element | null) => use(plansUi, (u) => u.open(), from);
+$('btn-plans').addEventListener('click', () => { $<HTMLDialogElement>('workouts').close(); openPlans($('btn-plans')); });
+$('btn-menu-plans').addEventListener('click', () => openPlans($('btn-menu-plans')));
 
 // ---------------------------------------------------------- first ride ----
 
-const onboarding = initOnboarding({
+const onboarding = lazy(() => import('./onboarding').then((m) => m.initOnboarding({
   settings: () => settings,
   save: (patch) => {
     const oldFtp = settings.ftp;
@@ -1663,15 +1859,16 @@ const onboarding = initOnboarding({
     if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch(() => {});
     world.setMarkers(markerConfig());
   },
-  connectTrainer: async () => { if (!trainer) await toggleTrainer(); return !!trainer; },
-  connectHeartRate: async () => { if (!hrm) await toggleHeartRate(); return !!hrm; },
+  connectTrainer: () => devices.connectTrainer(),
+  connectHeartRate: () => devices.connectHeartRate(),
   bluetooth: bluetoothAvailable(),
   startDemo: () => { if (!demo) setDemo(true); },
   rampTest: () => { const w = workoutById(RAMP_TEST_ID); if (w) startWorkout(w); },
   rideStage: (id) => rideSession({ title: '', note: '', stage: id }),
-  openPlans: () => plansUi.open(),
-});
-$('btn-setup-guide').addEventListener('click', () => { $<HTMLDialogElement>('settings').close(); onboarding.open(); });
+  openPlans: () => { openPlans(); },
+})));
+const openOnboarding = (from?: Element | null) => use(onboarding, (u) => u.open(), from);
+$('btn-setup-guide').addEventListener('click', () => { $<HTMLDialogElement>('settings').close(); openOnboarding($('btn-setup-guide')); });
 
 // ---------------------------------------------------- ghosts & leaderboards ----
 
@@ -1716,13 +1913,14 @@ async function raceGhost(row: LeaderboardRow) {
   }
 }
 
-initLeaderboardUi({
+const leaderboardUi = lazy(() => import('./leaderboardUi').then((m) => m.initLeaderboardUi({
   stage: currentStage,
   race: raceGhost,
   clearGhost: () => { ghost = null; ghostSeq++; },
   ghostName: () => (ghost ? (ghost.isMe ? `your best (${raceTime(ghost.finishS)})` : `${ghost.name} (${raceTime(ghost.finishS)})`) : null),
   openSignIn: (why) => accountUi.openSignIn(why),
-});
+})));
+loadOnClick($('btn-leaderboard'), leaderboardUi); // the dialog wires its own button once loaded
 
 peloton.reset(ride.distance);
 
@@ -1735,7 +1933,7 @@ const rideOnsUi = initRideOnsUi({
   showEmote: (id, emoji) => world.showEmote(id, emoji),
   toast,
 });
-const kitUi = initKitUi({
+const kitUi = lazy(() => import('./kitUi').then((m) => m.initKitUi({
   current: () => settings.kit,
   save: (kit) => {
     settings = { ...settings, kit };
@@ -1744,18 +1942,18 @@ const kitUi = initKitUi({
     setPlayerKit(kit);
     toast(kit ? 'Kit saved. You’re riding in your colours.' : 'Back in the American Flyers stars and stripes.');
   },
-});
-$('btn-menu-kit').addEventListener('click', () => kitUi.open());
+})));
+$('btn-menu-kit').addEventListener('click', () => use(kitUi, (u) => u.open(), $('btn-menu-kit')));
 // 🚲 Garage & store (src/garage): bikes, wheels and clothes, bought with credits earned from riding.
-const garageUi = initGarageUi({
+const garageUi = lazy(() => import('./garage/garageUi').then((m) => m.initGarageUi({
   garage,
   ctx: () => ({ riderKg: settings.riderKg, bikeKg: settings.bikeKg, ftp: settings.ftp }),
   imperial: () => settings.units === 'imperial',
   night: () => world.nightAmount,
   openSignIn: (why) => accountUi.openSignIn(why),
   toast,
-});
-$('btn-menu-garage').addEventListener('click', () => garageUi.open());
+})));
+$('btn-menu-garage').addEventListener('click', () => use(garageUi, (u) => u.open(), $('btn-menu-garage')));
 
 initRidersUi({
   presence,
@@ -1799,32 +1997,146 @@ onAccountChange(async (a) => {
       updateMapMenu();
       applyHudPosition(settings.hudPosition);
       world.setAtmosphere(settings.timeOfDay, settings.weather);
+      hubNotify('plan'); // the account's plan, FTP and units reach the hub
       // A returning rider on a new device: they've done the setup before.
       try { localStorage.setItem('americanflyers.onboarded', '1'); } catch { /* fine */ }
       const ob = $<HTMLDialogElement>('onboarding');
       if (ob.open) ob.close();
     }
     await savePendingRide();
+    await uploadQueuedRides(); // rides saved on this device while offline
     garage.refresh(); // a ride saved just now may have earned credits
     accountUi.checkAdmin(); // the session is settled now
     loadMyGhost();
+    syncAiConsent(); // the AI coach and rivals follow what the account agreed to (the database has the last word)
     toast(`Signed in as ${a.name}`);
   } catch (e) {
     toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
   }
 });
-// The Bluetooth note and the first-ride guide wait until the rider leaves the home page.
+// The hub (src/hub): sign-in leads here, and so does opening the app as a signed-in rider. Ride starts from here.
+// The Bluetooth note and the first-ride guide wait until the rider first leaves it for the ride.
 initPrivacyUi(); // the Privacy dialog; any element with data-privacy opens it
+let enteredApp = false;
+function leaveHub() {
+  hub.close();
+  ensureAi();
+  if (enteredApp) return;
+  enteredApp = true;
+  // A short wait lets a signed-in rider's settings arrive first (they skip it).
+  if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) void use(onboarding, (o) => o.open()); }, 1500);
+  else bluetoothNote();
+}
+
+/** Ride: what the hub chose, as a fresh ride (a workout goes on top of its stage). */
+function startFromHub(c: { stageId: string; workoutId: string | null }) {
+  leaveHub();
+  const stage = stageById(c.stageId);
+  if (player) stopWorkout();
+  if (stage !== currentStage()) chooseStage(stage); // (this also starts the ride afresh)
+  const w = c.workoutId ? workoutById(c.workoutId) : undefined;
+  if (w) startWorkout(w);
+}
+
+/**
+ * ☰ Menu → 🏠 Hub, the brand button, and the finish card's "Back to the hub". A ride under way
+ * (a minute or more, or a race or group ride) asks first: keep riding, or save it and go.
+ */
+async function goToHub(opts: { ask?: boolean } = {}) {
+  if (hub.isOpen()) return;
+  const underWay = $('finish').hidden && (stats.seconds >= MIN_RIDE_S || !!race || !!eventState);
+  if (opts.ask !== false && underWay) {
+    const also = [race ? (eventState ? 'your race' : 'the race') : eventState ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
+    if (!(await askToLeave({ signedIn: !!account(), time: formatTime(stats.seconds), also }))) return;
+  }
+  if (player) stopWorkout();
+  resetRide(); // quietly saves a ride worth keeping, and leaves a race or group ride
+  hub.open();
+}
+
+const hub = initHub({
+  settings: () => settings,
+  garage,
+  currentStageId: () => currentStage().id,
+  onVisibility: (open) => {
+    world.setOrbit(open);
+    // The "Reconnect <trainer>" banner sits in the hub's Ride panel while it's open, and floats over the ride otherwise.
+    const banner = document.getElementById('device-banner');
+    if (banner) {
+      banner.classList.toggle('in-hub', open);
+      if (open) document.getElementById('hub-devices')?.append(banner);
+      else document.body.append(banner);
+    }
+    if (open) {
+      world.setOthers([]);
+      sound.update(0.1, { speedMs: 0, pedalling: false, crowd: 0, cassetteRevs: 0 }); // quiet while you choose
+    } else {
+      lastFrame = performance.now();
+    }
+  },
+  start: startFromHub,
+  race: (stage) => { leaveHub(); beginRace(stage, tourStageNumber(stage.id)); },
+  joinEvent: async (row) => {
+    await joinEvent(row); // checks the account and the join window, and shows why if it can't
+    if (eventState) leaveHub();
+  },
+  startPlan: (id) => {
+    const plan = planById(id);
+    if (!plan) return;
+    setPlan({ id, started: new Date().toISOString().slice(0, 10), done: [] });
+    toast(`${plan.name} plan started. First up: ${plan.weeks[0][0].title}.`);
+  },
+  openProfile: (tab, rideId) => { void use(accountUi.dialogs, (u) => u.openProfile(tab, rideId)); },
+  openSignIn: (why) => accountUi.openSignIn(why),
+  openGarage: (tab) => { void use(garageUi, (g) => g.open(tab)); },
+  dialogs: {
+    workouts: () => { void use(workoutUi, (w) => w.openLibrary()); },
+    newWorkout: () => { void use(workoutUi, (w) => w.newWorkout()); },
+    plans: () => { void use(plansUi, (p) => p.open()); },
+    tour: () => { void use(tourUi, (t) => t.open()); },
+    events: () => $('btn-events').click(),
+    settings: openSettings,
+    stages: openStages,
+    kit: () => { void use(kitUi, (k) => k.open()); },
+    account: () => $('btn-account').click(),
+  },
+  night: () => world.nightAmount,
+  toast,
+});
 initHome({
   onRiderDetails: saveRiderDetails,
   defaults: () => settings,
-  onEnterApp: () => {
-    // A short wait lets a signed-in rider's settings arrive first (they skip it).
-    if (!onboarded()) window.setTimeout(() => { if (!onboarded() && !document.querySelector('dialog[open]')) onboarding.open(); }, 1500);
-    else bluetoothNote();
-  },
+  openHub: () => hub.open(),
+  requestHub: () => { void goToHub(); },
+  onShowHome: () => hub.close(),
 });
-restoreSession();
+
+// Everything that can wait for the first frame (src/lazy.ts): signing in (which loads the
+// Neon SDK), error reporting (the Sentry SDK), the hero videos, and fetching the dialogs a
+// rider is likely to open next, one at a time in spare moments.
+let firstFrameDrawn = false;
+let afterFirstFrameDone = false;
+/** Called every frame (ride or hub); the first one schedules afterFirstFrame just after it's on screen. */
+function noteFirstFrame() {
+  if (!firstFrameDrawn) { firstFrameDrawn = true; requestAnimationFrame(() => window.setTimeout(afterFirstFrame, 0)); }
+}
+function afterFirstFrame() {
+  if (afterFirstFrameDone) return;
+  afterFirstFrameDone = true;
+  markFirstFrame();
+  restoreSession().then((a) => hub.sessionSettled(a)); // the hub turns into a guest hub if the hint was wrong
+  startMonitoring();
+  prefetchPrivacy();
+  ensureAi(); // a rider who opted in gets the coach and rivals ready for the ride
+  prefetchWhenIdle([
+    // First visit: the guide, and the email form on the home page.
+    ...(onboarded() ? [] : [onboarding, emailAuth]),
+    workoutUi, accountUi.dialogs, garageUi, leaderboardUi, plansUi, eventsUi, tourUi, kitUi, atmosphereUi, raceUiModule, commentary, rivalsUi, aiConsentUi,
+    ...(onboarded() ? [emailAuth] : []),
+  ]);
+}
+// A tab opened in the background never gets an animation frame: don't leave sign-in waiting on one.
+window.setTimeout(afterFirstFrame, 6000);
 
 requestAnimationFrame(frame);
 

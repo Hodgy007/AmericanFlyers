@@ -305,6 +305,29 @@ New nullable `activities` columns: `race_place smallint`, `race_size smallint`, 
 
 `ride_presence()` accepts a kit string with up to eight `;key=value` parts after the three colours (same signature).
 
+## AI coach and rivals
+
+Tables, all with row-level security and **no policies and no grants** (only the functions below touch them):
+
+| Table | Columns | Notes |
+| --- | --- | --- |
+| `ai_consent` | `user_id` (pk), `coach`, `rivals`, `updated_at` | The rider's opt-in. Both off by default. |
+| `ai_usage` | `user_id`, `day` (UTC), `kind`, `count`; pk `(user_id, day, kind)` | Daily counters. `kind` is one of `coach_debrief`, `coach_plan`, `coach_tip`, `rival_pre`, `rival_post`. |
+| `rival_memory` | `user_id`, `rival_id`, `wins`, `losses`, `rides`, `last_ride`, `notes` (json, at most 8 strings of 140 characters); pk `(user_id, rival_id)` | Wins and losses are the rider's. At most 12 rivals per rider. |
+| `coach_notes` | `user_id`, `activity_id` (references `activities`, on delete cascade), `created_at`, `debrief` (json, at most 6,000 bytes); pk `(user_id, activity_id)` | A debrief kept with its ride. |
+
+Public functions (granted to `authenticated`, not to `anonymous`); each is a wrapper over an internal `<name>_for(me text, ...)` that is granted to nobody:
+
+| Function | What it does |
+| --- | --- |
+| `my_ai_consent()`, `set_ai_consent(p_coach, p_rivals)` | Read and save the opt-in; return `{coach, rivals}`. |
+| `ai_claim(p_kind, p_rival default null)` | The gate used by `api/ai.ts`. Not signed in raises `42501`. Returns `{ok:false, reason:'no_consent' \| 'banned' \| 'quota', limit?}` or `{ok:true, name, ftp, weight_kg, last4w, rivals, used, limit}`. Counts the use atomically. Limits per UTC day: 10 / 6 / 30 / 10 / 10 (debrief, plan, tip, rival_pre, rival_post); admins 100000. `name` is the first name made only of letters, or `Rider` (never from an email). |
+| `rival_record(p_rival, p_won, p_note default null)` | Adds a ride to the rival's memory (needs the rivals opt-in). Keeps the last 8 notes. |
+| `my_rivals()`, `forget_rival(p_rival default null)` | List the rider's rival records; forget one, or all when null. |
+| `save_coach_debrief(p_activity, p_debrief)`, `my_coach_debrief(p_activity)` | Keep and read a debrief for one of the rider's own rides. |
+
+`delete_my_account()` and `my_data_extras()` already cover these tables (they loop over every public table with a text `user_id`).
+
 ## Changing the schema
 
 When you change a table or function, update this page and `db/schema.sql` in the same change. See [Contributing](../developer-guide/contributing.md#keep-the-schema-in-sync).

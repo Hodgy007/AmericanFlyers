@@ -1,9 +1,8 @@
 // First-ride setup: three quick steps the first time someone rides. About
 // you (weight, FTP, max heart rate), your trainer, then your first ride.
 
+import { markDone } from './onboardingState';
 import type { Settings } from './settings';
-
-const DONE_KEY = 'americanflyers.onboarded';
 
 interface Options {
   settings: () => Settings;
@@ -15,15 +14,6 @@ interface Options {
   rampTest: () => void;
   rideStage: (id: string) => void;
   openPlans: () => void;
-}
-
-/** True once the guide has been done or skipped, or for anyone who has ridden here before (has saved settings). */
-export function onboarded() {
-  try { return localStorage.getItem(DONE_KEY) === '1' || localStorage.getItem('americanflyers.settings') !== null; } catch { return true; }
-}
-
-function markDone() {
-  try { localStorage.setItem(DONE_KEY, '1'); } catch { /* shows again next time */ }
 }
 
 export function initOnboarding(o: Options) {
@@ -85,11 +75,11 @@ export function initOnboarding(o: Options) {
   trainerBtn.addEventListener('click', async () => {
     if (await o.connectTrainer()) {
       trainerBtn.textContent = '✓ Trainer connected';
-      status.textContent = 'Great! Your trainer will follow the road, or hold the target power in workouts.';
+      status.textContent = 'Great! Your trainer will follow the road, or hold the target power in workouts. It’s remembered on this browser, so next time it reconnects (or is one tap away in the ☰ Menu).';
     }
   });
   hrBtn.addEventListener('click', async () => {
-    if (await o.connectHeartRate()) hrBtn.textContent = '✓ Heart rate connected';
+    if (await o.connectHeartRate()) { hrBtn.textContent = '✓ Heart rate connected'; if (!trainerBtn.textContent!.startsWith('✓')) status.textContent = 'Heart rate strap connected and remembered on this browser.'; }
   });
 
   dialog.querySelectorAll<HTMLButtonElement>('[data-ob-next]').forEach((b) => b.addEventListener('click', () => {

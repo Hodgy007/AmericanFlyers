@@ -4,7 +4,8 @@ Browser-based 3D indoor cycling app (Vite + TypeScript + Three.js) that connects
 
 ## Working preferences
 
-- **Use the Haiku model for repository activities.** Delegate git and GitHub housekeeping — staging, committing, pushing, branching, rebasing, opening/merging pull requests, checking CI or deploy status — to a subagent with `model: haiku`. Keep design, coding and debugging on the main model.
+- **Plan with Opus, write code with Sonnet.** The main session (Opus) plans, reviews, integrates and tests; hand code-writing to subagents with `model: sonnet`, each with a written brief. Small fixes found while integrating can stay on the main model.
+- **Use the Haiku model for repository activities.** Delegate git and GitHub housekeeping — staging, committing, pushing, branching, rebasing, opening/merging pull requests, checking CI or deploy status — to a subagent with `model: haiku`. Keep design, review and debugging on the main session.
 
 ## Commands
 
