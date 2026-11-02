@@ -27,7 +27,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
   - *Your routes*: upload a `.gpx` file (from Strava, Komoot, RideWithGPS, Garmin…) in the stage picker to practise it. The road follows its bends and its smoothed elevation profile (gradients capped at 25 %), with scenery scaled to the route: farmland for flat routes, forests, rock and snow at their real altitudes for mountain ones. Routes are saved in the browser.
 
   Stages with a finish line count down the distance, show the next hairpin, and end at a checkered line under the arch with your time, average power and speed.
-- **3D world (Three.js).** A winding road through low-poly hills, forests, fields and distant mountains, with sunlight, shadows, haze and clouds. The terrain is generated on the fly as you ride, so the road never ends.
+- **3D world (Three.js).** A winding road through low-poly hills, forests, fields and distant mountains, with sunlight, shadows, height haze, scattering sky and drifting clouds, a colour grade that follows the light and weather, and a Graphics setting (Auto, Low to Ultra) that suits each device. The terrain is generated on the fly as you ride, so the road never ends.
 - **3D rider.** A rigged rider model (generated with Higgsfield) posed on the bike every frame: legs follow the pedals at your real cadence, hands on the hoods, head up. The wheels turn at your virtual speed.
 - **Roadside landmarks:** a start/finish arch, red barn, farmhouse, windmill, retro diner and water tower, generated with Higgsfield (image → 3D) and placed along the route. See `public/models/README.md` to add or swap models.
 - **Three camera views:** chase, side-on and the rider's own view. Switch with the 🎥 button or the **C** key.
@@ -143,7 +143,10 @@ src/
   world/terrain.ts   Hills and forests built in tiles around the rider
   world/road.ts      Road surface, marker posts and distance signs
   world/rider.ts     3D bike and rider with pedalling animation
-  world/sky.ts       Sky dome (stars, moon), distant mountains, clouds
+  world/sky.ts       Sky dome (scattering, sun, clouds, stars, moon), hazed distant mountains
+  world/fog.ts       Height fog and cloud shadows shared by every material
+  world/quality.ts   Graphics tiers, Auto's device pick (adapt.ts: the frame-time controller)
+  world/graphics.ts  Applies a tier; draws the frame (post.ts: lazy bloom, grade, AO, AA)
   world/atmosphere.ts  Time of day and weather: sky, sun, fog, exposure, headlight, wet road
   world/rain.ts      Rain streaks that follow the camera
   steering.ts        Lane steering and auto-steer

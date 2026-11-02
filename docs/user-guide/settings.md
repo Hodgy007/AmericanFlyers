@@ -10,6 +10,7 @@ This page lists every setting, its default and range, and what it changes. Open 
 | Bike weight (kg) | 8 | 5 to 30, step 0.5 | Added to rider weight in the speed model. |
 | FTP (watts) | 200 | 50 to 600, step 1 | Sets the power zones, workout targets, TSS and the FTP history. A ramp test can also set it. |
 | Max heart rate (bpm) | 185 | 120 to 230, step 1 | Sets the heart-rate zones. The dialog suggests your highest heart rate in a hard effort, with 220 minus your age as a rough guide. |
+| Graphics | Auto | Auto, Low, Medium, High or Ultra | How much work the 3D view does: sky and haze, light and colour, shadows, reflections and sharpness. Kept **on this device only** (not synced to your account), because a phone and a TV need different answers. See [Graphics](#graphics). |
 | Units | Metric | Metric or Imperial | Changes displayed distances, speeds and heights: metric shows km, km/h and m; imperial shows mi, mph and ft. |
 | Trainer difficulty (%) | 50 | 0 to 100, step 5 | How much of the road's grade the trainer simulates. 100% feels like the real hill. 0% means no grade resistance. |
 | Virtual shifting | Off | On or off | Choose your own gear with − / + (see [Sound and virtual shifting](sound-and-shifting.md)). |
@@ -34,6 +35,19 @@ Changing **Trainer difficulty** takes effect straight away, on the next grade up
 **Auto-steer into the draft** is on by default: with no steering for about 3 seconds and a rider within 12 m ahead, you ease onto their line. See [Riding](riding.md#steering).
 
 Time of day and weather live in **☰ Menu → 🌤 Time & weather**, not in this dialog, but they're saved with your settings. See [Riding](riding.md#time-of-day-and-weather).
+
+## Graphics
+
+**Graphics** picks how detailed the 3D view is. The default, **Auto**, chooses for your device when the app opens (software renderers, phones and small tablets start on Low or Medium, ordinary computers on High) and then watches how smoothly it runs: if frames come slowly it first makes the picture a little less sharp (down to 70%), then drops a tier, and if the device is very slow it turns shadows off. If it has plenty of room to spare for a while it climbs back up, never past the tier it first picked. The line under the setting says what Auto picked and whether it has stepped down since.
+
+| Tier | What you get |
+| --- | --- |
+| Low | The sky, haze and cloud improvements, lighter shadows (1,024-pixel shadow map), sharpness capped at 1× the screen's pixels. No post-processing, so nothing extra is downloaded. |
+| Medium | Adds glow on bright things (the sun, the Tron bike, night lights), colour grading for the time of day and weather, smoothed edges, a 2,048-pixel shadow map. |
+| High | Adds soft contact shadows where things touch the road, reflections of the sky on helmets, frames and wheels, softer shadows, and the shadows of clouds drifting over the land. |
+| Ultra | Adds fuller-resolution glow, higher-quality contact shadows, a bigger and sharper shadow map. |
+
+Choosing a tier yourself turns off the automatic tier changes; the sharpness still eases off by itself if frames run slow. Changing it takes effect when you press **Save**.
 
 ## Data blocks
 

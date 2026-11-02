@@ -225,6 +225,8 @@ The first visit downloads only what draws the first frame: the entry chunk (`mai
 | Race screens and the commentator | `raceUi.ts`, `commentary.ts` | When a race starts. |
 | Email sign-up form on the home page | `cloud/emailAuth.ts` | First tap of *Sign up with email*. |
 | GPX parser | `routes/gpx.ts` | When a file is chosen. |
+| Post-processing (`post`, `vendor-three-post`: bloom, colour grade, ambient occlusion, anti-aliasing, sky reflections) | `world/graphics.ts` | When the graphics tier is Medium or up (Auto on a computer, or chosen in Settings). Low never downloads it. Until it arrives the frame is drawn directly; if it fails to load the frame stays direct. |
+| Frame-time controller (`adapt`) | `world/graphics.ts` | Just after the world is built; until then quality doesn't adapt. |
 | Landmark models (`public/models/*.glb`) | `world/landmarks.ts` | When a landmark that uses the file comes within range. |
 | Hero videos | `home.ts` | After the first frame. |
 | AI coach and rival controller | `ai/create.ts` (builds `AiRide` from `ai/aiRide.ts`, with `cloud/aiApi.ts` and the rest of `src/ai/`) | When the rider has opted in (`settings.aiCoach` or `aiRivals`) at the first frame, the start of a ride or after sign-in, when a rival is chosen, when the Rivals dialog opens, when the AI switches in Settings are saved, or when a ride summary needs the coach's card (that card is also the invitation to turn the coach on). Until it arrives `ai` in `main.ts` is `null` and every hook (`ai?.…`, the frame hook, the debrief) does nothing; the summary gets a placeholder that fills in. |

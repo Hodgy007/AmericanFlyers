@@ -122,7 +122,13 @@ This page lists every file and folder in the repository, with a one-line summary
 | `world/road.ts` | Road chunks, distance markers, hairpin plaques, and the finish line. |
 | `world/landmarks.ts` | Loads the landmark models and places them along the road. |
 | `world/rider.ts` | The bike and rider: a built-in fallback, and the rig that poses the rigged rider (shared model, cloned per rider; frame colours and ghost look). |
-| `world/sky.ts` | The sky dome (with stars and moon), the mountain ring, and the clouds, all tinted at runtime by the atmosphere. |
+| `world/sky.ts` | The sky dome (scattering, sun, noise clouds, stars, moon) and the hazed mountain ring, all tinted at runtime by the atmosphere. |
+| `world/quality.ts` | Graphics tiers and what each switches on, the per-device saved choice, and Auto's pick from device signals. Pure. |
+| `world/adapt.ts` | The frame-time controller (render scale, then tier, then shadows; and back up with hysteresis). Pure, lazy. |
+| `world/graphics.ts` | Applies a tier to the renderer, shadows and sky, loads the post chunk, draws the frame, exposes `window.__afGraphics`. |
+| `world/post.ts` | The post-processing pipeline (AO, bloom, colour grade, tone mapping, anti-aliasing) and the sky reflections. Lazy: Medium and up only. |
+| `world/grade.ts` | Colour grade and bloom numbers for a look. Pure. |
+| `world/fog.ts` | Height fog, in-scattering and cloud shadows, as shader-chunk overrides shared by every material. |
 | `world/atmosphere.ts` | Time of day and weather: keyframed looks, sun and moon, ambient light, fog, exposure, front light, wet road. |
 | `world/rain.ts` | Rain: GPU-animated streaks in a box that follows the camera. |
 | `world/noise.ts` | Deterministic noise (value noise and fractal noise), a seeded random generator, and `smoothstep`. |
