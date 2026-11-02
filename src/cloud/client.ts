@@ -11,8 +11,11 @@
 
 import type { createClient } from '@neon/neon-js';
 
-const AUTH_URL =
-  import.meta.env.VITE_NEON_AUTH_URL ?? 'https://ep-winter-voice-za03vb20.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth';
+// Auth is served from our own origin (/api/auth, proxied to Neon Auth by vercel.json in
+// production and by vite.config.ts locally), so the session cookie is first-party.
+// Calling Neon's own domain directly made it a third-party cookie, which Safari (ITP)
+// blocks: riders signed in with Google but the app never saw the session.
+const AUTH_URL = import.meta.env.VITE_NEON_AUTH_URL ?? `${typeof location === 'undefined' ? '' : location.origin}/api/auth`;
 const DATA_API_URL =
   import.meta.env.VITE_NEON_DATA_API_URL ?? 'https://ep-winter-voice-za03vb20.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest/v1';
 

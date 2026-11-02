@@ -4,7 +4,7 @@
 // textures are cached after first use. Sign-in and the database are never
 // cached.
 
-const VERSION = 'af-v1';
+const VERSION = 'af-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -24,6 +24,7 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // Neon, fonts: straight to the network
+  if (url.pathname.startsWith('/api/')) return; // sign-in (/api/auth, proxied to Neon) and the AI function: never cached
   if (url.pathname.endsWith('.mp4') || req.headers.has('range')) return; // video streams
 
   if (req.mode === 'navigate') {
