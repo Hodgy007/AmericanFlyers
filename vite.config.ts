@@ -12,8 +12,24 @@ const release = env.VERCEL_GIT_COMMIT_SHA ?? '';
 // stack traces point at the TypeScript, then deleted so they aren't published.
 const uploadMaps = !!env.SENTRY_AUTH_TOKEN;
 
+// Neon Auth is served from our own origin at /api/auth (vercel.json rewrites it in
+// production): the same here for `npm run dev` and `vite preview`, so the session
+// cookie is first-party everywhere (Safari blocks third-party ones).
+const NEON_AUTH = new URL(env.NEON_AUTH_URL ?? 'https://ep-winter-voice-za03vb20.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth');
+const authProxy = {
+  '/api/auth': {
+    target: NEON_AUTH.origin,
+    changeOrigin: true,
+    secure: true,
+    rewrite: (p: string) => p.replace(/^\/api\/auth/, NEON_AUTH.pathname),
+    cookieDomainRewrite: '',
+  },
+};
+
 export default defineConfig({
   base: './',
+  server: { proxy: authProxy },
+  preview: { proxy: authProxy },
   define: {
     __SENTRY_DSN__: JSON.stringify(dsn),
     __RELEASE__: JSON.stringify(release),

@@ -1,5 +1,16 @@
 {
   "functions": {
-    "api/ai.ts": { "maxDuration": 40 }
-  }
+    "api/ai.ts": {
+      "maxDuration": 40
+    },
+    "api/auth-proxy.ts": {
+      "maxDuration": 15
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth-proxy?__path=:path*"
+    }
+  ]
 }
