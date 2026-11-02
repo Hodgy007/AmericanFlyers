@@ -19,5 +19,5 @@ Browser-based 3D indoor cycling app (Vite + TypeScript + Three.js) that connects
 
 ## Backend
 
-- Neon project `americanflyers` (`quiet-morning-27044210`, branch `br-wandering-queen-zaoadzw1`, db `neondb`): Neon Auth (Google, and email and password sign-in) and the Data API, called from the browser via `@neon/neon-js` (`src/cloud/`). Auth is reached through our own origin at `/api/auth` (rewritten to Neon Auth in `vercel.json` and proxied in `vite.config.ts`) so its cookie is first-party for Safari; don't point the client at Neon's auth domain directly.
+- Neon project `americanflyers` (`quiet-morning-27044210`, branch `br-wandering-queen-zaoadzw1`, db `neondb`): Neon Auth (Google, and email and password sign-in) and the Data API, called from the browser via `@neon/neon-js` (`src/cloud/`). Auth is reached through our own origin at `/api/auth` (passed to Neon Auth by the `api/auth-proxy.ts` function in production — a plain rewrite won't do, Neon rejects its `X-Forwarded-Host` — and by `vite.config.ts` locally) so its cookie is first-party for Safari; don't point the client at Neon's auth domain directly.
 - Every table has row-level security; admin-only data goes through security-definer functions that check `public.is_admin()`. Keep `db/schema.sql` in step with any database change.

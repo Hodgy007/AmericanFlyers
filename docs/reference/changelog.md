@@ -8,7 +8,7 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ### Sign-in works in Safari
 
-- Neon Auth is now served from our own origin at `/api/auth` (a Vercel rewrite in `vercel.json`, and the same proxy in `vite.config.ts` for `npm run dev` / `vite preview`), so the session cookie is first-party. Calling Neon's own domain made it a third-party cookie, which Safari (ITP) blocks: riders signed in with Google, Neon created the session, but the app never saw it and stayed on the home page. The service worker no longer touches `/api/` requests. Existing riders sign in once more after this change.
+- Neon Auth is now served from our own origin at `/api/auth` (a small pass-through function, `api/auth-proxy.ts`, in production — a plain Vercel rewrite adds `X-Forwarded-Host`, which Neon rejects — and a proxy in `vite.config.ts` for `npm run dev` / `vite preview`), so the session cookie is first-party. Calling Neon's own domain made it a third-party cookie, which Safari (ITP) blocks: riders signed in with Google, Neon created the session, but the app never saw it and stayed on the home page. The service worker no longer touches `/api/` requests. Existing riders sign in once more after this change.
 
 ### Graphics: Auto starts on Ultra and steps down when it's jerky
 
