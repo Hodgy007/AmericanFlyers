@@ -14,6 +14,7 @@ import './hub.css';
 import { account, onAccountChange, type Account } from '../cloud/account';
 import type { Wallet } from '../garage/progression';
 import { allStages, stageById } from '../routes/library';
+import { canRace, effectiveMode, MODE_LABEL, type RideMode } from '../rideMode';
 import { workoutById } from '../workouts/library';
 import { clearCache, loadCache, loadStageChoice, saveCache, saveStageChoice, type HubCache } from './cache';
 import type { Choice, Summary } from './data';
@@ -32,7 +33,7 @@ interface SectionDef {
 }
 
 const SECTIONS: SectionDef[] = [
-  { id: 'route', icon: '🏁', label: 'Route', title: 'Route', blurb: 'Pick the road. Ride starts it.', load: () => import('./sections/route') },
+  { id: 'route', icon: '🏁', label: 'Route', title: 'Route', blurb: 'Pick a road to ride. Race it if you like.', load: () => import('./sections/route') },
   { id: 'training', icon: '🏋', label: 'Training', title: 'Training', blurb: 'Pick a workout to do on the road.', load: () => import('./sections/training') },
   { id: 'plan', icon: '📅', label: 'Plan', title: 'Training plan', blurb: 'Your next session is always one click away.', load: () => import('./sections/plan') },
   { id: 'achievements', icon: '🏅', label: 'Achievements', title: 'Achievements', blurb: 'Badges you have earned and the ones to go.', load: () => import('./sections/achievements') },
@@ -70,6 +71,9 @@ export function initHub(deps: HubDeps) {
   const validStage = (id: string | null) => (id && allStages().some((s) => s.id === id) ? id : null);
   const fromUrl = validStage(new URLSearchParams(location.search).get('stage'));
   let choice: Choice = { stageId: fromUrl ?? validStage(loadStageChoice()) ?? validStage(deps.currentStageId()) ?? FREE_RIDE_STAGE, workoutId: null };
+
+  // Race is a per-ride wish (it only holds where the route has a finish); Solo and With pro teams are settings.proTeams.
+  let raceWanted = false;
 
   // -------------------------------------------------------------- identity ----
   // The hub only opens for a signed-in rider, or one the last visit left signed in whose session is still being
@@ -143,11 +147,21 @@ export function initHub(deps: HubDeps) {
       live.textContent = '';
       window.setTimeout(() => { live.textContent = msg; }, 40);
     },
+    mode: () => effectiveMode(deps.settings(), raceWanted, canRace(stageById(choice.stageId), choice.workoutId)),
+    setMode(mode: RideMode) {
+      raceWanted = mode === 'race';
+      if (mode !== 'race') deps.setProTeams(mode === 'pro');
+      emit('mode');
+      ctx.announce(`${MODE_LABEL[mode]}.`);
+    },
     go() {
+      const mode = ctx.mode();
+      raceWanted = false; // Race is for one ride; the next visit starts from the stored mode
       saveStageChoice(choice.stageId);
-      deps.start(choice);
+      deps.start(choice, mode);
     },
     goWith(c) {
+      raceWanted = false; // a plan session or Free ride is a ride, not a race
       choice = c;
       emit('choice');
       ctx.go();
@@ -369,6 +383,8 @@ export function initHub(deps: HubDeps) {
       emit('local');
     } else if (kind === 'plan') {
       if (isOpen) { emit('plan'); emit('units'); emit('local'); } // also covers settings that arrived from the account
+    } else if (kind === 'mode') {
+      if (isOpen) emit('mode'); // pro teams were switched in ☰ Menu or Settings
     } else if (kind === 'ride') {
       if (account()) { if (isOpen) void loadSummary(); else status = status === 'ready' ? 'ready' : 'idle'; }
     }

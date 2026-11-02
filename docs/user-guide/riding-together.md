@@ -43,13 +43,13 @@ Ride-ons you haven't seen are kept for a day at most. Banned riders' ride-ons ar
 
 ## Pro teams
 
-Five computer-ridden pro teams ride every stage with you. Each rides two by two in its own kit at a steady pace: 2.0, 2.6, 3.1, 3.6 and 4.2 W/kg, slowing on the climbs and flying down the descents like you do. The front rider's tag shows the team and its pace.
+Choose **With pro teams** in the hub (or switch **Pro teams** on in ☰ Menu or ⚙ Settings) and five computer-ridden pro teams ride the stage with you. They are off by default: the ride mode is **Solo** until you pick them. Each rides two by two in its own kit at a steady pace: 2.0, 2.6, 3.1, 3.6 and 4.2 W/kg, slowing on the climbs and flying down the descents like you do. The front rider's tag shows the team and its pace.
 
 The team names are affectionate near-misses of the real ones (*Plasma | Lease-a-Trike*, *INEPTOS Grenadines*, *Scandal Quick-Slip*, *UAE Team Emigrates* and more). The riders are made up.
 
 Open 👥 to see them under **Pro teams on the road**: how far ahead or behind each one is, its pace in watts for your weight, and its speed. **Join** starts a new ride on the back of the group, rolling at their speed, so you're straight into their draft. Hold their watts (a little less, thanks to the draft) and you'll stay with them.
 
-On a stage with a finish, teams that cross the line start the stage again. Switch them off with **Pro teams on the road** in ⚙ Settings. For a race against them (attacks, breakaways and sprints) see [Racing and the tour](racing-and-the-tour.md).
+On a stage with a finish, teams that cross the line start the stage again. Switch them off again with **Solo** in the hub, **☰ Menu → 🚴 Pro teams** or **Pro teams on the road** in ⚙ Settings; with them off, the draft gauge only shows riders who are really on the road with you, and your rival. Turning them on or off mid-ride doesn't reset the ride. For a race against them (attacks, breakaways and sprints) see [Racing and the tour](racing-and-the-tour.md).
 
 ## Drafting
 

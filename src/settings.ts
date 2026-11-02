@@ -7,7 +7,11 @@ export type Units = 'metric' | 'imperial';
 export type TimeOfDay = 'auto' | 'dawn' | 'day' | 'dusk' | 'night';
 export type Weather = 'auto' | 'clear' | 'cloudy' | 'rain';
 
+/** Bumped when a saved setting needs a one-off fix (see `migrateSettings`). */
+export const SETTINGS_VERSION = 2;
+
 export interface Settings {
+  settingsVersion: number; // which migrations this copy has had; a copy without it predates the ride-mode choice (version 2)
   riderKg: number;
   bikeKg: number;
   ftp: number;
@@ -21,7 +25,7 @@ export interface Settings {
   virtualShifting: boolean; // choose your gear; the trainer's resistance follows it
   plan: PlanProgress | null; // the training plan being followed
   hudPosition: 'left' | 'center' | 'right'; // where the data blocks sit
-  proTeams: boolean; // computer-ridden pro teams on the road
+  proTeams: boolean; // the ride mode "With pro teams": computer-ridden pro teams on the road (off = Solo; Race is chosen per ride, never stored)
   autoSteer: boolean; // ease into the draft of a rider just ahead when you haven't steered
   timeOfDay: TimeOfDay; // 'auto' starts at the stage's usual time and slowly moves on
   weather: Weather; // 'auto' uses the stage's weather, changing now and then
@@ -40,6 +44,7 @@ export interface Settings {
 const KEY = 'americanflyers.settings';
 
 export const DEFAULT_SETTINGS: Settings = {
+  settingsVersion: SETTINGS_VERSION,
   riderKg: 75,
   bikeKg: 8,
   ftp: 200,
@@ -53,7 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   virtualShifting: false,
   plan: null,
   hudPosition: 'center',
-  proTeams: true,
+  proTeams: false, // Solo is the default: routes are rides, not races
   autoSteer: true,
   timeOfDay: 'auto',
   weather: 'auto',
@@ -68,10 +73,27 @@ export const DEFAULT_SETTINGS: Settings = {
   coachVoice: false,
 };
 
+/**
+ * One-off fixes to a saved copy of the settings (this browser's, or the account's), by `settingsVersion`:
+ * - 2: pro teams used to be on for everyone and was rarely a deliberate choice, so every rider moves to Solo once.
+ *   After that their choice is kept. Fields it doesn't change are left out, so it can be spread over defaults or a live copy.
+ */
+export function migrateSettings(saved: Partial<Settings>): Partial<Settings> {
+  const from = typeof saved.settingsVersion === 'number' ? saved.settingsVersion : 1;
+  if (from >= SETTINGS_VERSION) return saved;
+  return { ...saved, proTeams: false, settingsVersion: SETTINGS_VERSION };
+}
+
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<Settings>;
+      const migrated = migrateSettings(saved);
+      const settings = { ...DEFAULT_SETTINGS, ...migrated };
+      if (migrated !== saved) saveSettings(settings); // so the one-off change happens once
+      return settings;
+    }
   } catch {
     // Storage unavailable (private mode etc.): fall back to defaults.
   }

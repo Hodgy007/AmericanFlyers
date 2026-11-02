@@ -3,12 +3,13 @@
 import type { EventRow } from '../cloud/events';
 import type { Garage } from '../garage/garage';
 import type { Wallet } from '../garage/progression';
+import type { RideMode } from '../rideMode';
 import type { Settings } from '../settings';
 import type { Stage } from '../stages';
 import type { Choice, Summary } from './data';
 
 /** What changed, so a section only redraws when it must. */
-export type Topic = 'choice' | 'summary' | 'wallet' | 'account' | 'plan' | 'local' | 'units';
+export type Topic = 'choice' | 'summary' | 'wallet' | 'account' | 'plan' | 'local' | 'units' | 'mode';
 
 export type SectionId = 'route' | 'training' | 'plan' | 'achievements' | 'garage' | 'stats' | 'events';
 
@@ -22,8 +23,10 @@ export interface HubDeps {
   currentStageId(): string;
   /** The hub opened or closed (main turns the world's slow orbit on and off). */
   onVisibility(open: boolean): void;
-  /** Leave the hub and ride this. */
-  start(choice: Choice): void;
+  /** Leave the hub and ride this: solo, with the pro teams, or (on a route with a finish) racing them. */
+  start(choice: Choice, mode: RideMode): void;
+  /** Turns the pro teams on or off (the stored half of the ride mode; saved and synced like any setting). */
+  setProTeams(on: boolean): void;
   /** Leave the hub and race the pro teams over a stage. */
   race(stage: Stage): void;
   /** Join a scheduled event; resolves once you are on the line (the hub closes itself then). */
@@ -66,6 +69,10 @@ export interface HubCtx {
   reloadSummary(): void;
   /** Says something to screen readers. */
   announce(msg: string): void;
+  /** The ride mode that Ride will use: Race only where the chosen route can be raced. */
+  mode(): RideMode;
+  /** Picks the ride mode. Solo and With pro teams are remembered; Race is for the next ride only. */
+  setMode(mode: RideMode): void;
   /** Starts the ride you have chosen. */
   go(): void;
   /** Sets what Ride starts and goes straight there. */

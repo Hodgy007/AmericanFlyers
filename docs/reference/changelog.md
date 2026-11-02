@@ -6,6 +6,14 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Ride modes: routes are rides, not races
+
+- **Solo, With pro teams, Race.** A segmented control above the hub's Ride button, with a line of help. **Solo** (the default for everyone): just you, friends riding the route live and your ghost. **With pro teams**: the computer-ridden teams ride along, as before. **Race**: race the pro teams, only on a route with a finish and no workout (it greys out otherwise); the big button then reads **Race**. Race is for one ride and isn't stored; Solo and With pro teams are `settings.proTeams`, synced to the account.
+- **Migration.** New `settings.settingsVersion` (2) and `migrateSettings()`: a saved copy without it (this browser's, or the account's on sign-in) is moved to Solo once, since pro teams were on for everyone and rarely a deliberate choice. After that the choice is kept. `DEFAULT_SETTINGS.proTeams` is now `false`.
+- **☰ Menu → 🚴 Pro teams: on/off**, in step with the Settings checkbox and the hub. Switching mid-ride doesn't reset the ride: new groups start beyond the drawn road and roll into view (`Peloton.reset(around, offscreen)`); off just stops drawing them. During a race or group ride it reads "Pro teams: racing".
+- **Copy.** The hub's Route subtitle is "Pick a road to ride. Race it if you like."; the card's chip is a smaller, quieter **🏁 Race it** shortcut; the Hell of the West tour card still says it is a race series. Settings explains the pro teams switch as the ride mode.
+- New `src/rideMode.ts`; tests in `tests/unit/rideMode.test.ts` (migration, mode logic) and `tests/e2e/rideMode.spec.ts` (Solo has no teams, With pro teams, the migration, Race starting a race).
+
 ### Sign-in works in Safari
 
 - Neon Auth is now served from our own origin at `/api/auth` (a small pass-through function, `api/auth-proxy.ts`, in production — a plain Vercel rewrite adds `X-Forwarded-Host`, which Neon rejects — and a proxy in `vite.config.ts` for `npm run dev` / `vite preview`), so the session cookie is first-party. Calling Neon's own domain made it a third-party cookie, which Safari (ITP) blocks: riders signed in with Google, Neon created the session, but the app never saw it and stayed on the home page. The service worker no longer touches `/api/` requests. Existing riders sign in once more after this change.

@@ -3,6 +3,7 @@
 // updated in place, so keyboard focus survives the numbers arriving.
 
 import { raceTime } from '../ghost';
+import { canRace, MODE_HELP, MODE_LABEL, RACE_UNAVAILABLE, RIDE_MODES, type RideMode } from '../rideMode';
 import { levelFraction, levelTitle } from '../garage/progression';
 import { drawProfile } from '../profile';
 import { allStages, stageById } from '../routes/library';
@@ -43,15 +44,36 @@ export function mountHeader(ctx: HubCtx) {
   const clear = button('✕ Clear workout', () => ctx.pick({ stageId: ctx.choice().stageId, workoutId: null }), 'hub-clear', { 'aria-label': 'Clear the chosen workout and just ride the route' });
   clear.hidden = true;
   const chart = h('canvas', { class: 'hub-ride-chart', 'aria-hidden': 'true' });
-  const rideBtn = h('button', { type: 'button', class: 'primary hub-ride-btn', id: 'hub-go', 'aria-describedby': 'hub-ride-title' }, h('span', { text: 'Ride' }), h('span', { class: 'hub-ride-arrow', 'aria-hidden': 'true', text: '▶' }));
+  const rideLabel = h('span', { text: 'Ride' });
+  const rideBtn = h('button', { type: 'button', class: 'primary hub-ride-btn', id: 'hub-go', 'aria-describedby': 'hub-ride-title' }, rideLabel, h('span', { class: 'hub-ride-arrow', 'aria-hidden': 'true', text: '▶' }));
   rideBtn.addEventListener('click', () => ctx.go());
   const freeBtn = button('Free ride', () => ctx.goWith({ stageId: FREE_RIDE_STAGE, workoutId: null }), 'hub-free', { title: 'Ride Heartland Rollers, an endless road with no finish line' });
+  // Ride mode: who rides with you. Solo and With pro teams are remembered (a setting); Race is for this ride only.
+  const modeBtns = new Map<RideMode, HTMLButtonElement>();
+  for (const m of RIDE_MODES) {
+    const b = h('button', { type: 'button', class: 'hub-mode-opt', role: 'radio', 'aria-checked': 'false', 'data-mode': m, 'data-fkey': `mode-${m}`, text: m === 'race' ? '🏁 Race' : MODE_LABEL[m] }) as HTMLButtonElement;
+    b.addEventListener('click', () => { if (b.getAttribute('aria-disabled') !== 'true') ctx.setMode(m); });
+    b.addEventListener('keydown', (e) => modeKeys(e, m));
+    modeBtns.set(m, b);
+  }
+  const modeGroup = h('div', { class: 'hub-mode', role: 'radiogroup', 'aria-label': 'Ride mode', 'aria-describedby': 'hub-mode-help' }, ...modeBtns.values());
+  const modeHelp = h('p', { class: 'hub-mode-help', id: 'hub-mode-help' });
+  const modeBox = h('div', { class: 'hub-mode-box' }, modeGroup, modeHelp);
+  function modeKeys(e: KeyboardEvent, m: RideMode) {
+    const fwd = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+    if (!fwd && e.key !== 'ArrowLeft' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const usable = RIDE_MODES.filter((x) => modeBtns.get(x)!.getAttribute('aria-disabled') !== 'true');
+    const next = usable[(usable.indexOf(m) + (fwd ? 1 : -1) + usable.length) % usable.length];
+    ctx.setMode(next);
+    modeBtns.get(next)!.focus();
+  }
   const planRow = h('div', { class: 'hub-plan-row' });
   planRow.hidden = true;
   const quick = h('div', { class: 'hub-ride-quick' }, freeBtn, clear);
   // Remembered Bluetooth devices: main.ts moves the "Reconnect …" banner (src/devicesUi.ts) in here while the hub is open, so you connect, then ride.
   const devicesSlot = h('div', { class: 'hub-devices', id: 'hub-devices' });
-  rideBox.replaceChildren(ridePanelEyebrow, h('div', { class: 'hub-ride-head' }, title, meta), chart, devicesSlot, rideBtn, quick, planRow);
+  rideBox.replaceChildren(ridePanelEyebrow, h('div', { class: 'hub-ride-head' }, title, meta), chart, devicesSlot, modeBox, rideBtn, quick, planRow);
 
   // ------------------------------------------------------------------ dock ----
   // On phones the Ride button scrolls away with the header: a bar at the bottom keeps it in reach.
@@ -122,8 +144,30 @@ export function mountHeader(ctx: HubCtx) {
     meta.textContent = m;
     clear.hidden = !workout;
     dockTitle.textContent = t;
-    dockMeta.textContent = m;
+    rideMeta = m;
+    renderMode();
     freeBtn.hidden = c.stageId === FREE_RIDE_STAGE && !c.workoutId;
+  }
+
+  let rideMeta = '';
+  function renderMode() {
+    const c = ctx.choice();
+    const mode = ctx.mode();
+    const raceable = canRace(stageById(c.stageId), c.workoutId);
+    for (const [m, b] of modeBtns) {
+      const on = m === mode;
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+      const off = m === 'race' && !raceable;
+      if (off) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
+      b.title = off ? RACE_UNAVAILABLE : '';
+    }
+    modeHelp.textContent = MODE_HELP[mode];
+    const racing = mode === 'race';
+    rideLabel.textContent = racing ? 'Race' : 'Ride';
+    dockBtn.textContent = racing ? 'Race' : 'Ride';
+    dockMeta.textContent = `${MODE_LABEL[mode]} · ${rideMeta}`;
+    if (racing) rideBtn.setAttribute('aria-label', 'Race the pro teams'); else rideBtn.removeAttribute('aria-label');
   }
 
   function renderPlan() {
@@ -145,6 +189,7 @@ export function mountHeader(ctx: HubCtx) {
   function refresh(topic: Topic | 'all' = 'all') {
     if (topic === 'all' || topic === 'account' || topic === 'wallet' || topic === 'units') renderRider();
     if (topic === 'all' || topic === 'choice' || topic === 'summary' || topic === 'units' || topic === 'local') renderRide();
+    else if (topic === 'mode') renderMode();
     if (topic === 'all' || topic === 'plan' || topic === 'local' || topic === 'choice') renderPlan();
   }
   refresh('all');

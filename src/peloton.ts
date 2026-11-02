@@ -132,17 +132,22 @@ export class Peloton {
     this.reset(around);
   }
 
-  /** New groups spread around the rider, as when a stage is chosen. */
-  reset(around: number) {
+  /**
+   * New groups spread around the rider, as when a stage is chosen. With `offscreen` (the pro teams switched on mid-ride)
+   * every group starts beyond what the world draws, so they roll into view instead of appearing beside you.
+   */
+  reset(around: number, offscreen = false) {
     this.ride = null; // choosing another stage ends a group ride
     const seed = Math.floor(Math.random() * 100000);
     const teams = pick(TEAMS, PACES.length, seed);
-    const offsets = [-140, 70, 260, 620, 1150].sort(() => Math.random() - 0.5);
+    const offsets = (offscreen ? [-420, -800, 1000, 1400, 2000] : [-140, 70, 260, 620, 1150]).sort(() => Math.random() - 0.5);
     const finish = currentStage().finish;
     this.groups = PACES.map((wkg, g) => {
       const size = 4 + ((seed + g) % 3); // 4–6 riders
       const names = pick(FIRST_NAMES, size, seed + g * 17);
-      let d = Math.max(20, around + offsets[g]);
+      let d = around + offsets[g];
+      if (offscreen && d < 20) d = around + 900 + Math.abs(offsets[g]); // too near the start for a group behind: put it well ahead instead
+      d = Math.max(20, d);
       if (finish !== null) d = Math.min(d, Math.max(20, finish - 300));
       return {
         id: `team-${g}`,

@@ -1,5 +1,6 @@
 // Hub → Route: every stage and climb (and the rider's uploaded GPX routes) as a card with its
-// elevation profile, length, climbing and your best time. Choosing one sets what Ride starts.
+// elevation profile, length, climbing and your best time. Choosing one sets what Ride starts (the ride mode,
+// solo, with pro teams or a race, is chosen beside the Ride button; a card's small Race chip is a shortcut).
 
 import { raceTime } from '../../ghost';
 import { drawProfile } from '../../profile';
@@ -34,7 +35,7 @@ export const mount: SectionMount = (root, ctx) => {
     const meta = h('p', { class: 'hub-meta', id: metaId, text: `${fig.lengthM === null ? 'Endless' : distanceText(fig.lengthM, imp())} · ${climbText(fig.climbM, imp())} climbing${fig.lengthM === null ? ' per 20 km' : ''}` });
     const foot = h('div', { class: 'hub-card-foot' });
     if (best) foot.append(h('span', { class: 'hub-chip gold', title: 'Your best whole-stage time', text: `🏆 ${raceTime(best.finishS)}` }));
-    if (stage.finish !== null) foot.append(button('🏁 Race', () => ctx.deps.race(stage), 'hub-mini', { title: `Race the pro teams over ${stage.name}`, 'aria-label': `Race the pro teams over ${stage.name}`, 'data-fkey': `race-${stage.id}` }));
+    if (stage.finish !== null) foot.append(button('🏁 Race it', () => ctx.deps.race(stage), 'hub-mini hub-race', { title: `Skip the ride mode and race the pro teams over ${stage.name} now`, 'aria-label': `Race the pro teams over ${stage.name}`, 'data-fkey': `race-${stage.id}` }));
     const el = h('article', { class: 'hub-card hub-stage' },
       canvas,
       h('div', { class: 'hub-card-body' }, h('h3', {}, pick), meta, h('p', { class: 'hub-desc', text: stage.tagline }), foot),
@@ -80,7 +81,7 @@ export const mount: SectionMount = (root, ctx) => {
   return {
     refresh(topic) {
       if (topic === 'choice') updateSelection();
-      else render();
+      else if (topic !== 'mode') render();
     },
     dispose() {
       for (const c of canvases) forgetCanvas(c);

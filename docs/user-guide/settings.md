@@ -17,7 +17,7 @@ This page lists every setting, its default and range, and what it changes. Open 
 | Race my best ride | On | On or off | On a stage you've finished, a ghost of your fastest ride rides with you. See [Leaderboards and ghosts](leaderboards-and-ghosts.md). |
 | Wind | On | On or off | Headwinds slow you and tailwinds help, crosswinds make the best shelter diagonal, and your trainer feels the headwind. See [Riding](riding.md#wind-and-echelons). |
 | Mini-map and climb preview | On | On or off | A small route map with riders on it, and a card for the next climb. Also in ☰ Menu. See [Riding](riding.md#mini-map-and-climb-preview). |
-| Pro teams on the road | On | On or off | Computer-ridden teams riding the stage at different paces. See [Riding together](riding-together.md#pro-teams). |
+| Pro teams on the road | Off | On or off | The **With pro teams** ride mode (off is **Solo**): computer-ridden teams riding the stage at different paces, not a race. The same switch is beside the Ride button in the [hub](the-hub.md#ride-modes) and in ☰ Menu. Riders who had it on before the ride modes existed were moved to Off once. See [Riding together](riding-together.md#pro-teams). |
 | AI coach | Off | On or off | Coach Marty's tips and debriefs. Needs an account. Saved to your account, not just this browser. See [AI coach and AI rivals](ai-coach-and-rivals.md). |
 | AI rivals | Off | On or off | Rivals write fresh lines and remember your rides together. Needs an account. |
 | Speak their lines aloud | Off | On or off | Uses your browser's voice for the coach and rivals. |

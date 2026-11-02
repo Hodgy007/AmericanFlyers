@@ -4,7 +4,7 @@ This page covers the built-in stages, how finish lines work, how to upload your 
 
 ## Choosing a stage
 
-Click **🏁 Stage** to open the stage picker. Each card shows the stage's profile, name, distance, climbing and a one-line description. The stage you're on is highlighted. Click a card to ride it, or press **🏁 Race this stage** to race the pro teams over it (see [Racing and the tour](racing-and-the-tour.md)). The 🏆 card at the top starts the Hell of the West tour.
+Click **🏁 Stage** to open the stage picker. Each card shows the stage's profile, name, distance, climbing and a one-line description. The stage you're on is highlighted. Click a card to ride it (solo unless you've chosen to ride with the pro teams), or press **🏁 Race this stage** to race the pro teams over it (see [Racing and the tour](racing-and-the-tour.md)). The 🏆 card at the top starts the Hell of the West tour.
 
 Choosing a stage resets the ride. If your current ride is at least a minute long and not yet saved, it's saved first (when you're signed in).
 

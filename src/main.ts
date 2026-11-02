@@ -11,7 +11,8 @@ import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
 import { stepSpeed, DEFAULT_PARAMS } from './physics';
 import { drawProfile } from './profile';
 import { World, type CameraMode } from './world/world';
-import { loadSettings, saveSettings, type Settings } from './settings';
+import { loadSettings, migrateSettings, saveSettings, type Settings } from './settings';
+import { proTeamsOnRoad, type RideMode } from './rideMode';
 import { formatTime, Hud, openDataBlocks } from './hud';
 import { RideStats } from './stats';
 import { Drivetrain, gearCadence, gearGradeOffset, VIRTUAL_GEARS, VIRTUAL_REF } from './drivetrain';
@@ -1028,7 +1029,7 @@ function chooseStage(stage: Stage) {
 }
 
 /** Tells the hub (if it is open) that the app moved under it: a new stage, a saved ride, a plan change. */
-function hubNotify(kind: 'stage' | 'ride' | 'plan') {
+function hubNotify(kind: 'stage' | 'ride' | 'plan' | 'mode') {
   document.dispatchEvent(new CustomEvent('af:hub-refresh', { detail: kind }));
 }
 
@@ -1504,6 +1505,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
   };
   const oldFtp = settings.ftp;
   const prevAi = { coach: settings.aiCoach, rivals: settings.aiRivals };
+  const wasProTeams = settings.proTeams;
   settings = {
     ...settings,
     riderKg: num('riderKg', settings.riderKg),
@@ -1534,6 +1536,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
   lastSentGrade = NaN;
   updateGearPanel();
   updateMapMenu();
+  applyProTeams(settings.proTeams, wasProTeams);
   if (!settings.rideTogether) presence.leave();
   if (!settings.ghost) ghost = null;
   else if (!ghost) loadMyGhost();
@@ -1556,6 +1559,40 @@ $('btn-minimap').addEventListener('click', () => {
   updateMapMenu();
 });
 updateMapMenu();
+
+/**
+ * Pro teams (the "With pro teams" ride mode). Turning them on mid-ride sets the teams rolling from beyond the
+ * edge of the drawn road, so they come into view; turning them off just stops drawing them. The ride isn't reset.
+ */
+function applyProTeams(on: boolean, was: boolean) {
+  if (on === was) return;
+  if (on && !race && !eventState) peloton.reset(ride.distance, !hub.isOpen());
+  updateProTeamsMenu();
+}
+function setProTeams(on: boolean) {
+  const was = settings.proTeams;
+  if (on === was) return;
+  settings = { ...settings, proTeams: on };
+  saveSettings(settings);
+  pushSettings(settings);
+  applyProTeams(on, was);
+}
+/** ☰ Menu → Pro teams on/off mirrors the Settings checkbox and the hub's ride mode. In a race or group ride the field is the pro teams, so it says so. */
+function updateProTeamsMenu() {
+  const btn = $<HTMLButtonElement>('btn-proteams');
+  const fixed = !!race || !!eventState;
+  btn.textContent = fixed ? '🚴 Pro teams: racing' : settings.proTeams ? '🚴 Pro teams: on' : '🚴 Pro teams: off';
+  btn.disabled = fixed;
+  btn.setAttribute('role', 'menuitemcheckbox');
+  btn.setAttribute('aria-checked', String(fixed || settings.proTeams));
+  hubNotify('mode');
+}
+$('btn-proteams').addEventListener('click', () => {
+  setProTeams(!settings.proTeams);
+  toast(settings.proTeams ? 'Pro teams on. They roll into view along the road.' : 'Pro teams off. Just you on the road.', 3000);
+});
+$('btn-menu').addEventListener('click', updateProTeamsMenu); // a race or group ride may have started since
+updateProTeamsMenu();
 
 // (the trainer and heart rate buttons are wired in devicesUi.ts)
 $('btn-demo').addEventListener('click', () => setDemo(!demo));
@@ -1974,8 +2011,11 @@ onAccountChange(async (a) => {
   try {
     const remote = await syncOnSignIn(settings);
     if (remote) {
-      settings = { ...settings, ...remote };
+      const migrated = migrateSettings(remote); // an account saved before the ride-mode choice moves to Solo once, too
+      settings = { ...settings, ...migrated };
       saveSettings(settings);
+      if (migrated !== remote) pushSettings(settings);
+      updateProTeamsMenu();
       setPlayerKit(settings.kit);
       garage.apply(); // the account's loadout
       loadTour(settings.tour);
@@ -2029,13 +2069,15 @@ function abandonRide() {
 }
 
 /** Ride: what the hub chose, as a fresh ride (a workout goes on top of its stage). */
-function startFromHub(c: { stageId: string; workoutId: string | null }) {
+function startFromHub(c: { stageId: string; workoutId: string | null }, mode: RideMode) {
   leaveHub();
   const stage = stageById(c.stageId);
   if (player) stopWorkout();
+  if (mode === 'race' && stage.finish !== null && !c.workoutId) { beginRace(stage, tourStageNumber(stage.id)); return; } // Race: the pro teams on the start line
   if (stage !== currentStage()) chooseStage(stage); // (this also starts the ride afresh)
   const w = c.workoutId ? workoutById(c.workoutId) : undefined;
   if (w) startWorkout(w);
+  if (proTeamsOnRoad(mode)) peloton.reset(0); // fresh teams around the start line
 }
 
 /**
@@ -2075,6 +2117,7 @@ const hub = initHub({
     }
   },
   start: startFromHub,
+  setProTeams,
   race: (stage) => { leaveHub(); beginRace(stage, tourStageNumber(stage.id)); },
   joinEvent: async (row) => {
     await joinEvent(row); // checks the account and the join window, and shows why if it can't

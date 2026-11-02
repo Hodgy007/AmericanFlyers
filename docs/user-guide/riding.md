@@ -24,6 +24,7 @@ The **☰ Menu** holds:
 | **❤️ Heart rate strap** / **Heart rate ✓** | Connects or disconnects a heart-rate strap. |
 | **🎥 Chase view** (or Side view, Rider's view) | Changes the camera. The label shows the current view. Shortcut: **C**. |
 | **🏆 Leaderboard** | The leaderboard for this stage. See [Leaderboards and ghosts](leaderboards-and-ghosts.md). |
+| **🚴 Pro teams: on / off** | Adds or removes the computer-ridden [pro teams](riding-together.md#pro-teams) without resetting your ride: they roll into view from down the road, or simply leave. The same switch as **Pro teams on the road** in Settings and the hub's ride mode. In a race or group ride it reads *Pro teams: racing* and can't be changed. |
 | **📅 Training plans** | See [Training plans](training-plans.md). |
 | **🎨 My kit** | Design your jersey and bike colours. See [My kit](my-kit.md). |
 | **🔊 Sound on** / **🔇 Sound off** | Shortcut: **M**. See [Sound and virtual shifting](sound-and-shifting.md). |
