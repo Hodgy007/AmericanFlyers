@@ -25,6 +25,9 @@ export type CameraMode = 'chase' | 'side' | 'rider';
 const CAMERA_MODES: CameraMode[] = ['chase', 'side', 'rider'];
 const LANE_EASE_S = 0.27; // time constant: the bike settles on a new lane in about 0.8 s
 
+/** A frame that spends longer than this building new scenery is a loading spike (Auto graphics ignores it). */
+const BUILD_SPIKE_MS = 8;
+
 export class World {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -47,6 +50,7 @@ export class World {
   private readonly smoothLook = new THREE.Vector3();
   private firstFrame = true;
   private terrainReady = false;
+  private buildAvg = 0; // ms per frame usually spent building scenery (see update)
   private sceneryTier: Tier | null = null; // the tier the ground and roadside were last set up for (see applyScenery)
   private framesDrawn = 0;
   // The hub (src/hub): a slow orbit round the rider instead of the ride cameras.
@@ -209,11 +213,16 @@ export class World {
   }
 
   update(state: WorldState, dt: number) {
+    // Building new road, landmarks, roadside extras and terrain tiles happens in the frame loop and
+    // costs a frame now and then: time it, and if a frame spent a lot on it, don't let Auto graphics
+    // read the spike as the device struggling (see graphics.ts / adapt.ts).
+    let built = performance.now();
     ensureRoad(state.distance + 3000);
     this.road.update(state.distance);
     const placed = this.landmarks.group.children.length;
     this.landmarks.update(state.distance);
     if (this.landmarks.group.children.length > placed) this.gfx.pause(1000); // a model just arrived: its first draw compiles shaders and uploads textures
+    built = performance.now() - built;
 
     // Steer: ease across the road to where the rider wants to be.
     this.lane += (this.laneTarget - this.lane) * (1 - Math.exp(-dt / LANE_EASE_S));
@@ -232,7 +241,12 @@ export class World {
     this.rider.poseRider();
 
     // Build everything in view on the first frame, then a couple of tiles per frame.
+    const tilesFrom = performance.now();
     this.terrain.update(riderPos.x, riderPos.z, this.terrainReady ? 2 : Infinity);
+    built += performance.now() - tilesFrom;
+    // Only a frame that built much more than usual is a spike: a slow device's steady cost must still count.
+    if (built > BUILD_SPIKE_MS && built > 3 * this.buildAvg) this.gfx.pause(600); // a loading spike, not a verdict on the device
+    this.buildAvg += (Math.min(built, 50) - this.buildAvg) * 0.05;
     this.terrainReady = true;
 
     // Camera.
