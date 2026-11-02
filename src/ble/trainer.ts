@@ -51,13 +51,22 @@ export function bluetoothAvailable(): boolean {
  * Asks the browser for a trainer. With no name: the full chooser (any FTMS or Cycling Power device).
  * With a name (a remembered trainer): a chooser that lists just that device. Needs a user gesture.
  */
-export function requestTrainerDevice(name?: string): Promise<BluetoothDevice> {
-  return navigator.bluetooth.requestDevice(
-    name
-      ? { filters: [{ name }], optionalServices: [FTMS_SERVICE, CPS_SERVICE] }
-      : { filters: [{ services: [FTMS_SERVICE] }, { services: [CPS_SERVICE] }], optionalServices: [FTMS_SERVICE, CPS_SERVICE] },
-  );
+export async function requestTrainerDevice(name?: string): Promise<BluetoothDevice> {
+  if (name) return navigator.bluetooth.requestDevice({ filters: [{ name }], optionalServices: [FTMS_SERVICE, CPS_SERVICE] });
+  const asked = Date.now();
+  try {
+    return await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS_SERVICE] }, { services: [CPS_SERVICE] }] });
+  } catch (err) {
+    // Rejected before a chooser could have been on screen: the browser didn't take this request
+    // (iPhone Web Bluetooth browsers such as Bluefy can refuse the two-filter form that the
+    // heart-rate request doesn't use). Ask again listing every nearby device, the simplest form.
+    if (Date.now() - asked > CHOOSER_SHOWN_MS) throw err;
+    return navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [FTMS_SERVICE, CPS_SERVICE] });
+  }
 }
+
+/** A requestDevice rejection faster than this came back without showing the chooser (ms). */
+export const CHOOSER_SHOWN_MS = 800;
 
 /**
  * Connects to a trainer the browser already knows (picked just now, or allowed earlier), finds its

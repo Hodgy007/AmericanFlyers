@@ -20,6 +20,8 @@ interface MockOptions {
   legacyWrite?: boolean;
   /** Writes to the FTMS control point fail (e.g. another app holds control). */
   controlFails?: boolean;
+  /** requestDevice refuses more than one filter at once, without showing a chooser (suspected Bluefy behaviour). */
+  rejectMultiFilter?: boolean;
 }
 
 async function setup(page: Page, o: MockOptions) {
@@ -105,6 +107,8 @@ async function setup(page: Page, o: MockOptions) {
     const bluetooth: any = {
       async requestDevice(options: any) {
         log.requests.push(JSON.parse(JSON.stringify(options)));
+        if (opts.rejectMultiFilter && (options.filters?.length ?? 0) > 1) throw new DOMException('No Services found in device.', 'NotFoundError');
+        if (options.acceptAllDevices) return devices['trainer-1']; // the rider picks the trainer from the full list
         const f = options.filters?.[0] ?? {};
         const byName = Object.values(devices).find((d: any) => d.name === f.name);
         if (byName) return byName;
@@ -310,4 +314,15 @@ test('a control point that refuses writes still leaves the trainer connected for
   await expect(page.locator('#trainer-status')).toContainText('KICKR Test · power only');
   await page.evaluate(() => (window as any).__bt.pedalWhileConnected(210, 90));
   await expect(page.locator('#hud')).toContainText(/Power[1-9]\d*W/);
+});
+
+test('a browser that refuses the two-filter trainer request falls back to listing every device', async ({ page }) => {
+  await setup(page, { getDevices: false, rejectMultiFilter: true });
+  await page.goto('/');
+  await ride(page);
+  await press(page, '#btn-menu-trainer');
+  await expect(page.locator('#trainer-status')).toContainText('KICKR Test');
+  const requests = (await bt(page)).requests;
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toEqual({ acceptAllDevices: true, optionalServices: [0x1826, 0x1818] });
 });
