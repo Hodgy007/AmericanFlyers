@@ -9,7 +9,7 @@ import { Sky, HORIZON_COLOR } from './sky';
 import { Atmosphere } from './atmosphere';
 import { installFog } from './fog';
 import { Graphics, probeSignals, wantsMsaa } from './graphics';
-import { isChoice } from './quality';
+import { TIER_SPECS, isChoice, type Tier } from './quality';
 import { DEFAULT_LANE, LANE_MAX, LANE_MIN } from '../steering';
 import type { TimeOfDay, Weather } from '../settings';
 import { Terrain } from './terrain';
@@ -24,6 +24,9 @@ export interface WorldState {
 export type CameraMode = 'chase' | 'side' | 'rider';
 const CAMERA_MODES: CameraMode[] = ['chase', 'side', 'rider'];
 const LANE_EASE_S = 0.27; // time constant: the bike settles on a new lane in about 0.8 s
+
+/** A frame that spends longer than this building new scenery is a loading spike (Auto graphics ignores it). */
+const BUILD_SPIKE_MS = 8;
 
 export class World {
   private readonly renderer: THREE.WebGLRenderer;
@@ -47,6 +50,9 @@ export class World {
   private readonly smoothLook = new THREE.Vector3();
   private firstFrame = true;
   private terrainReady = false;
+  private buildAvg = 0; // ms per frame usually spent building scenery (see update)
+  private sceneryTier: Tier | null = null; // the tier the ground and roadside were last set up for (see applyScenery)
+  private framesDrawn = 0;
   // The hub (src/hub): a slow orbit round the rider instead of the ride cameras.
   private orbiting = false;
   private orbitAngle = 2.3;
@@ -82,9 +88,29 @@ export class World {
     // Graphics tier (Low to Ultra, Auto by default): shadows, post-processing, sky detail, render scale. See graphics.ts.
     this.gfx = new Graphics({ renderer: this.renderer, scene: this.scene, camera: this.camera, sun: this.sun, sky: this.sky }, signals);
     this.gfx.attach(this.atmosphere);
+    this.applyScenery();
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  /**
+   * Terrain textures, the road's wet look, painted words, guardrails and crowds follow the graphics
+   * tier (TIER_SPECS[tier].scenery). Checked each frame, so Auto stepping a tier up or down is picked
+   * up without touching graphics.ts. The terrain textures wait until a frame has been drawn.
+   */
+  private applyScenery() {
+    const tier = this.gfx.currentTier;
+    if (tier === this.sceneryTier) return;
+    this.sceneryTier = tier;
+    const spec = TIER_SPECS[tier];
+    this.road.setTier(spec.scenery, spec.ibl);
+    if (this.framesDrawn > 0) this.terrain.setScenery(spec.scenery);
+  }
+
+  /** The rider's first name, painted on the road on the big climbs ("ALLEZ SAM"). */
+  setRiderName(name: string | null | undefined) {
+    this.road.setRiderName(name);
   }
 
   get cameraMode() { return this.mode; }
@@ -121,6 +147,10 @@ export class World {
   setGraphics(c: string) { if (isChoice(c)) this.gfx.setChoice(c); }
   /** A line for Settings saying what Auto picked. */
   graphicsNote() { return this.gfx.describe(); }
+  /** The Auto entry's label in Settings: "Auto (now: High)". */
+  graphicsAutoLabel() { return this.gfx.autoLabel(); }
+  /** Where "Graphics lowered to High for a smoother ride" goes when Auto changes the tier. */
+  onGraphicsNote(fn: (msg: string) => void) { this.gfx.onNote(fn); }
 
   /** The hub's backdrop: the camera circles your rider slowly (and the rider is shown, whatever the ride camera). */
   setOrbit(on: boolean) {
@@ -170,6 +200,7 @@ export class World {
     this.road.setMarkers(markers);
     this.sky.setMountainScale(currentStage().scenery.mountainScale);
     this.atmosphere.restage(currentStage());
+    this.gfx.pause(2000); // the new stage's terrain and shaders are building: not a verdict on the device
     this.jumped();
   }
 
@@ -182,9 +213,16 @@ export class World {
   }
 
   update(state: WorldState, dt: number) {
+    // Building new road, landmarks, roadside extras and terrain tiles happens in the frame loop and
+    // costs a frame now and then: time it, and if a frame spent a lot on it, don't let Auto graphics
+    // read the spike as the device struggling (see graphics.ts / adapt.ts).
+    let built = performance.now();
     ensureRoad(state.distance + 3000);
     this.road.update(state.distance);
+    const placed = this.landmarks.group.children.length;
     this.landmarks.update(state.distance);
+    if (this.landmarks.group.children.length > placed) this.gfx.pause(1000); // a model just arrived: its first draw compiles shaders and uploads textures
+    built = performance.now() - built;
 
     // Steer: ease across the road to where the rider wants to be.
     this.lane += (this.laneTarget - this.lane) * (1 - Math.exp(-dt / LANE_EASE_S));
@@ -203,7 +241,12 @@ export class World {
     this.rider.poseRider();
 
     // Build everything in view on the first frame, then a couple of tiles per frame.
+    const tilesFrom = performance.now();
     this.terrain.update(riderPos.x, riderPos.z, this.terrainReady ? 2 : Infinity);
+    built += performance.now() - tilesFrom;
+    // Only a frame that built much more than usual is a spike: a slow device's steady cost must still count.
+    if (built > BUILD_SPIKE_MS && built > 3 * this.buildAvg) this.gfx.pause(600); // a loading spike, not a verdict on the device
+    this.buildAvg += (Math.min(built, 50) - this.buildAvg) * 0.05;
     this.terrainReady = true;
 
     // Camera.
@@ -253,6 +296,9 @@ export class World {
 
     updateGlow(performance.now() / 1000, this.atmosphere.nightAmount); // the Tron bike's pulse
     this.sky.update(this.camera, dt);
+    this.road.animate(performance.now() / 1000, riderPos.x, riderPos.y, riderPos.z);
     this.gfx.render(dt);
+    if (++this.framesDrawn === 1) this.terrain.setScenery(TIER_SPECS[this.gfx.currentTier].scenery); // textures: after the first frame
+    this.applyScenery();
   }
 }

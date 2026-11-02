@@ -1,0 +1,148 @@
+import * as THREE from 'three';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { setStage } from '../../src/course';
+import { stageById } from '../../src/stages';
+import { barrierSections } from '../../src/world/barriers';
+import { crowdNear } from '../../src/world/crowdZones';
+import { planCrowd } from '../../src/world/crowds';
+import { paintName, planPaint } from '../../src/world/roadPaint';
+import { bendsOf, isClimb } from '../../src/world/roadside';
+import { SCENERY, layersFor } from '../../src/world/scenery';
+import { TIER_SPECS, TIERS } from '../../src/world/quality';
+import { groundColor } from '../../src/world/terrain';
+
+const alpe = stageById('alpe-dhuez');
+const stelvio = stageById('stelvio');
+
+describe('hairpins', () => {
+  it('finds every numbered hairpin on the climbs, alternating left and right', () => {
+    for (const s of [alpe, stelvio, stageById('hell-of-the-west'), stageById('tourmalet')]) {
+      const bends = bendsOf(s);
+      expect(bends.length).toBe(s.signs.length);
+      bends.forEach((b, i) => {
+        expect(b.end - b.start).toBeGreaterThan(25); // a 35 m arc
+        expect(b.turn).toBe(i % 2 === 0 ? 1 : -1); // buildClimb: first hairpin turns right, then left, then right...
+      });
+    }
+  });
+  it('has none on flat stages', () => {
+    expect(bendsOf(stageById('heartland'))).toEqual([]);
+    expect(isClimb(stageById('heartland'))).toBe(false);
+    expect(isClimb(alpe)).toBe(true);
+  });
+});
+
+describe('painted words', () => {
+  it('cleans a first name for painting', () => {
+    expect(paintName('Sam Hodgson')).toBe('SAM');
+    expect(paintName('  zoë ')).toBe('ZOE');
+    expect(paintName('alexandrina')).toBe('ALEXANDRI');
+    expect(paintName('王')).toBe('');
+    expect(paintName(null)).toBe('');
+  });
+  it('is the same every time, only on climbs, and keeps off the hairpin arcs', () => {
+    expect(planPaint(stageById('route66'), 'SAM')).toEqual([]);
+    expect(planPaint(alpe, 'SAM')).toEqual(planPaint(alpe, 'SAM'));
+    const spots = planPaint(alpe, 'SAM');
+    expect(spots.length).toBeGreaterThan(8);
+    const bends = bendsOf(alpe);
+    for (const sp of spots) {
+      expect(bends.some((b) => sp.d < b.end && sp.d + sp.len > b.start)).toBe(false);
+      expect(sp.d).toBeLessThan(alpe.finish!);
+    }
+    // The last stretch has several per kilometre; far from the finish only the hairpin approaches.
+    expect(spots.filter((s) => s.d > alpe.finish! - 3400).length).toBeGreaterThanOrEqual(6);
+  });
+  it('paints the rider’s name only when there is one', () => {
+    expect(planPaint(alpe, 'SAM').some((s) => s.word === 'name')).toBe(true);
+    expect(planPaint(alpe, '').some((s) => s.word === 'name')).toBe(false);
+  });
+});
+
+describe('guardrails', () => {
+  it('stand on the outside of each hairpin and nowhere on flat stages', () => {
+    const flat = () => 1e6; // ground level with the sky: no drop beside the road
+    expect(barrierSections(stageById('heartland'), 0, 5000, flat)).toEqual([]);
+    const b = bendsOf(alpe)[2]; // the third hairpin turns right: outside is the left
+    const here = barrierSections(alpe, b.start, b.end, flat);
+    expect(here.length).toBeGreaterThan(8);
+    expect(here.every((r) => r.side === -1)).toBe(true);
+    const b1 = bendsOf(alpe)[1]; // turns left: outside is the right
+    expect(barrierSections(alpe, b1.start, b1.end, flat).every((r) => r.side === 1)).toBe(true);
+  });
+  it('also stand where the ground falls away beside the road', () => {
+    const drop = (_x: number, _z: number) => -100; // far below the road everywhere
+    expect(barrierSections(alpe, 3000, 3100, drop).length).toBeGreaterThan(40);
+  });
+});
+
+describe('crowds', () => {
+  beforeAll(() => setStage(alpe));
+  it('line the last few hundred metres and the hairpins, not the empty road', () => {
+    expect(crowdNear(alpe.finish! - 50)).toBeGreaterThan(0.9);
+    expect(crowdNear(alpe.signs[3].d + 10)).toBeCloseTo(0.75, 2);
+    expect(crowdNear(alpe.signs[0].d - 400)).toBe(0);
+    expect(planCrowd(alpe, 100, 200, 1, [], true)).toEqual([]);
+    expect(planCrowd(alpe, alpe.finish! - 300, alpe.finish! - 200, 1, [], true).length).toBeGreaterThan(30);
+  });
+  it('are deterministic, thinner on weaker tiers, and keep clear of roadside signs', () => {
+    const d0 = alpe.finish! - 400;
+    const full = planCrowd(alpe, d0, d0 + 100, 1, [], true);
+    expect(planCrowd(alpe, d0, d0 + 100, 1, [], true)).toEqual(full);
+    expect(planCrowd(alpe, d0, d0 + 100, 0.35, [], false).length).toBeLessThan(full.length * 0.6);
+    expect(planCrowd(alpe, d0, d0 + 100, 0.35, [], false).some((p) => p.flag)).toBe(false);
+    expect(planCrowd(alpe, d0, d0 + 100, 0, [], true)).toEqual([]);
+    const sign = d0 + 50;
+    expect(planCrowd(alpe, d0, d0 + 100, 1, [sign], true).filter((p) => p.lat > 0 && Math.abs(p.d - sign) < 0.5).length).toBe(0);
+  });
+});
+
+describe('ground layers', () => {
+  const w = new Array(7).fill(0);
+  const sum = () => w.reduce((a, b) => a + b, 0);
+  const sample = (stage: typeof alpe, h: number, dist = 40) => {
+    setStage(stage);
+    w.fill(0);
+    groundColor(1234, 567, h, { dist, d: 100 }, new THREE.Color(), w);
+    return [...w];
+  };
+  it('are weights that sum to one on every palette', () => {
+    for (const [stage, h] of [[alpe, 0], [alpe, 600], [alpe, 1400], [alpe, 1900], [stageById('heartland'), 30], [stageById('hotw-tour-of-the-moon'), 200]] as const) {
+      sample(stage, h);
+      expect(sum()).toBeCloseTo(1, 1);
+      for (const v of w) expect(v).toBeGreaterThanOrEqual(0);
+    }
+  });
+  it('follow height: grass low, rock above the rock line, snow above the snow line', () => {
+    expect(sample(alpe, 0)[0] + sample(alpe, 0)[1]).toBeGreaterThan(0.95);
+    expect(sample(alpe, 1500)[3]).toBeGreaterThan(0.5);
+    expect(sample(alpe, 2200)[4]).toBeGreaterThan(0.9);
+  });
+  it('make the verge dirt, and use sandstone and sand in the desert', () => {
+    expect(sample(alpe, 0, 3)[2]).toBeGreaterThan(0.9);
+    const d = sample(stageById('hotw-tour-of-the-moon'), 200);
+    expect(d[5] + d[6] + d[1]).toBeGreaterThan(0.95);
+    expect(d[0] + d[4]).toBe(0);
+  });
+  it('only ask for the layers a stage and tier can show', () => {
+    expect(layersFor(false, false, 3)).toEqual([0, 3]);
+    expect(layersFor(false, true, 3)).toEqual([0, 3, 4]);
+    expect(layersFor(true, false, 3)).toEqual([5, 3]);
+    expect(layersFor(false, false, 7)).not.toContain(5);
+    expect(layersFor(true, false, 7)).not.toContain(0);
+  });
+});
+
+describe('scenery tiers', () => {
+  it('give every tier a spec, with more on the higher ones', () => {
+    for (const t of TIERS) expect(TIER_SPECS[t].scenery).toBe(SCENERY[t]);
+    expect(SCENERY.low.terrainLayers).toBe(3);
+    expect(SCENERY.low.terrainTexSize).toBe(512);
+    expect(SCENERY.low.detailNormals).toBe(false);
+    expect(SCENERY.medium.detailNormals).toBe(false);
+    expect(SCENERY.high.detailNormals).toBe(true);
+    const crowd = TIERS.map((t) => SCENERY[t].crowd);
+    expect([...crowd].sort((a, b) => a - b)).toEqual(crowd);
+    expect(SCENERY.low.crowd).toBeGreaterThan(0); // sparse, not off
+  });
+});

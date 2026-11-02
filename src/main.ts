@@ -38,6 +38,7 @@ import { Peloton } from './peloton';
 import { draftFrom, DRAFT_MAX_GAP, DRAFT_SWEET_SPOT, type Draft } from './draft';
 // Wind, echelons, the mini-map and the climb preview (world/wind.ts, miniMap.ts, climbUi.ts, windUi.ts).
 import { draftShift, wind } from './world/wind';
+import { crowdNear } from './world/crowdZones'; // where crowds line the road (sound and the spectators drawn by the world)
 import { initWindUi } from './windUi';
 import { MiniMap } from './miniMap';
 import { initClimbUi } from './climbUi';
@@ -500,22 +501,6 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 
-/** 0..1: crowds line the hairpins of the climbs and the last few hundred metres. */
-function crowdNear(d: number) {
-  const stage = currentStage();
-  let c = 0;
-  for (const sign of stage.signs) {
-    const k = 1 - Math.abs(d - sign.d - 10) / 110;
-    if (k > c) c = k;
-  }
-  c *= 0.75;
-  if (stage.finish !== null) {
-    const toGo = stage.finish - d;
-    if (toGo < 700 && toGo > -150) c = Math.max(c, toGo > 0 ? 1 - toGo / 700 : 1 + toGo / 150);
-  }
-  return Math.max(0, c);
-}
-
 /** Beeps at 3, 2, 1 seconds before a workout step ends, and a long one as it changes. */
 function intervalBeeps() {
   if (!player) return;
@@ -948,6 +933,7 @@ function toast(msg: string, ms = 3500) {
   clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => el.classList.remove('show'), ms);
 }
+world.onGraphicsNote((m) => toast(m, 4500)); // Auto changed the graphics tier ("Graphics lowered to High for a smoother ride")
 
 const CAMERA_LABELS: Record<CameraMode, string> = { chase: 'Chase view', side: 'Side view', rider: 'Rider’s view' };
 
@@ -1493,6 +1479,7 @@ async function openSettings() {
   $('difficulty-out').textContent = `${settings.difficulty}%`;
   $<HTMLSelectElement>('graphics-choice').value = world.graphicsChoice; // per device, not a synced setting
   $('graphics-note').textContent = world.graphicsNote();
+  ($('graphics-choice') as HTMLSelectElement).options[0].text = world.graphicsAutoLabel(); // "Auto (now: High)"
   // The AI switches stay off until the small consent module is here (signed-out riders can't opt in);
   // if it can't load (a toast says so) the rest of Settings still opens.
   for (const n of ['aiCoach', 'aiRivals']) (form.elements.namedItem(n) as HTMLInputElement).disabled = true;
@@ -1968,6 +1955,7 @@ initRidersUi({
 
 onAccountChange(async (a) => {
   setMonitoringUser(a?.id ?? null);
+  world.setRiderName(a?.name); // painted on the road on the big climbs ("ALLEZ SAM")
   if (!a) {
     abandonRide(); // no account, no ride (the home page replaces the hub in src/home.ts)
     forgetLocalCopies();

@@ -1,42 +1,125 @@
-import { describe, expect, it } from 'vitest';
-import { ADAPT, Adapter } from '../../src/world/adapt';
-import { SCALES, TIER_SPECS, TIERS, isChoice, pickAutoTier, type Signals, type Tier } from '../../src/world/quality';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ADAPT, Adapter, judge } from '../../src/world/adapt';
+import {
+  NOTE_FIRST_MS, NOTE_GAP_MS, NoteGate, RETEST_AFTER_MS, RETEST_SESSIONS, SCALES, TIER_SPECS, TIERS, clearAutoMemory, isChoice, isSoftwareGpu, loadAutoMemory,
+  pickAutoStart, pickAutoTier, saveAutoMemory, settledMemory, tierNote, type AutoMemory, type Signals, type Tier,
+} from '../../src/world/quality';
 import { gradeFor, goldenAmount, makeGrade } from '../../src/world/grade';
 
 const desktop: Signals = { cores: 12, memoryGb: 8, width: 1920, height: 1080, dpr: 1, gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)' };
 
+const SWIFTSHADER = 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)';
+const phone: Signals = { cores: 6, memoryGb: 4, width: 390, height: 844, dpr: 3, touch: true, gpu: 'Apple GPU' };
+
 describe('pickAutoTier', () => {
   it('puts software renderers on Low', () => {
-    expect(pickAutoTier({ ...desktop, gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)' })).toBe('low');
+    expect(pickAutoTier({ ...desktop, gpu: SWIFTSHADER })).toBe('low');
     expect(pickAutoTier({ ...desktop, gpu: 'llvmpipe (LLVM 15.0.7, 256 bits)' })).toBe('low');
+    expect(isSoftwareGpu('Microsoft Basic Render Driver')).toBe(true);
+    expect(isSoftwareGpu('NVIDIA GeForce RTX 3070')).toBe(false);
   });
-  it('puts phones on Low, and a recent flagship phone on Medium', () => {
-    const phone: Signals = { cores: 6, memoryGb: 4, width: 390, height: 844, dpr: 3, touch: true, gpu: 'Apple GPU' };
-    expect(pickAutoTier(phone)).toBe('low');
-    expect(pickAutoTier({ ...phone, cores: 8, memoryGb: 8, gpu: undefined })).toBe('medium');
-    expect(pickAutoTier({ ...phone, gpu: 'Mali-G78' })).toBe('low');
-  });
-  it('puts tablets on Medium', () => {
-    expect(pickAutoTier({ cores: 8, memoryGb: 4, width: 1024, height: 1366, dpr: 2, touch: true })).toBe('medium');
-  });
-  it('puts ordinary desktops on High and strong GPUs on Ultra', () => {
-    expect(pickAutoTier({ cores: 8, memoryGb: 8, width: 1920, height: 1080, dpr: 1, gpu: 'ANGLE (AMD, AMD Radeon RX 580 Direct3D11)' })).toBe('high');
-    expect(pickAutoTier({ cores: 8, memoryGb: 8, width: 1920, height: 1080, dpr: 1 })).toBe('high');
+  it('starts everything else on Ultra: phones, tablets, integrated graphics, weak CPUs, 4K', () => {
     expect(pickAutoTier(desktop)).toBe('ultra');
+    expect(pickAutoTier(phone)).toBe('ultra');
+    expect(pickAutoTier({ ...phone, gpu: 'Mali-G78' })).toBe('ultra');
+    expect(pickAutoTier({ cores: 8, memoryGb: 4, width: 1024, height: 1366, dpr: 2, touch: true })).toBe('ultra');
+    expect(pickAutoTier({ ...desktop, gpu: 'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)' })).toBe('ultra');
+    expect(pickAutoTier({ ...desktop, cores: 2, memoryGb: 2 })).toBe('ultra');
+    expect(pickAutoTier({ cores: 8, memoryGb: 8, width: 3840, height: 2160, dpr: 1 })).toBe('ultra');
+    expect(pickAutoTier({ width: 1280, height: 720, dpr: 1 })).toBe('ultra'); // nothing known: Ultra
   });
-  it('puts integrated graphics on Medium', () => {
-    expect(pickAutoTier({ ...desktop, gpu: 'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)' })).toBe('medium');
+});
+
+const NOW = Date.UTC(2026, 10, 2, 12);
+const DAY = 24 * 3600 * 1000;
+const mem = (over: Partial<AutoMemory> = {}): AutoMemory => ({ tier: 'high', scale: 1, at: NOW - DAY, tested: NOW - DAY, sessions: 0, gpu: desktop.gpu!, ...over });
+
+describe('pickAutoStart', () => {
+  it('starts on Low on a software renderer, whatever is remembered', () => {
+    const s = pickAutoStart({ ...desktop, gpu: SWIFTSHADER }, mem({ tier: 'ultra' }), NOW);
+    expect(s).toMatchObject({ tier: 'low', scaleIdx: 0, remembered: null, retest: false, memory: null });
   });
-  it('caps by CPU and memory', () => {
-    expect(pickAutoTier({ ...desktop, cores: 2 })).toBe('low');
-    expect(pickAutoTier({ ...desktop, cores: 4 })).toBe('medium');
-    expect(pickAutoTier({ ...desktop, memoryGb: 2 })).toBe('low');
-    expect(pickAutoTier({ ...desktop, memoryGb: 4 })).toBe('medium');
+  it('starts on Ultra with nothing remembered, or when the GPU is not the one it was learnt on', () => {
+    expect(pickAutoStart(phone, null, NOW)).toMatchObject({ tier: 'ultra', remembered: null, retest: false });
+    expect(pickAutoStart(desktop, mem({ gpu: 'something else' }), NOW)).toMatchObject({ tier: 'ultra', remembered: null });
   });
-  it('drops a tier for a 4K canvas unless the GPU is strong', () => {
-    const tv: Signals = { cores: 8, memoryGb: 8, width: 3840, height: 2160, dpr: 1, gpu: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics)' };
-    expect(pickAutoTier({ ...tv, gpu: undefined })).toBe('medium');
-    expect(pickAutoTier({ ...tv, gpu: 'NVIDIA GeForce RTX 4080' })).toBe('ultra');
+  it('starts from the remembered tier and scale, and counts the session', () => {
+    const s = pickAutoStart(desktop, mem({ tier: 'medium', scale: 0.85, sessions: 1 }), NOW);
+    expect(s).toMatchObject({ tier: 'medium', scaleIdx: 1, remembered: 'medium', retest: false });
+    expect(s.memory?.sessions).toBe(2);
+    expect(pickAutoStart(desktop, mem(), NOW, false).memory).toBeNull(); // choosing Auto in Settings is not a new session
+  });
+  it('re-tests one tier higher every third session', () => {
+    const s = pickAutoStart(desktop, mem({ tier: 'medium', scale: 0.7, sessions: RETEST_SESSIONS }), NOW);
+    expect(s).toMatchObject({ tier: 'high', scaleIdx: 0, remembered: 'medium', retest: true });
+    expect(s.memory).toMatchObject({ tier: 'medium', sessions: 0, tested: NOW }); // counters start again; the remembered tier stays
+  });
+  it('re-tests after 3 days, never more than one tier up, and never above Ultra', () => {
+    const old = mem({ tier: 'low', tested: NOW - RETEST_AFTER_MS - 1 });
+    expect(pickAutoStart(desktop, old, NOW)).toMatchObject({ tier: 'medium', retest: true });
+    expect(pickAutoStart(desktop, mem({ tested: NOW - RETEST_AFTER_MS + 1000 }), NOW).retest).toBe(false);
+    const top = pickAutoStart(desktop, mem({ tier: 'ultra', sessions: 9, tested: 0 }), NOW);
+    expect(top).toMatchObject({ tier: 'ultra', retest: false });
+  });
+});
+
+describe('the remembered state', () => {
+  const store = new Map<string, string>();
+  beforeEach(() => {
+    store.clear();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('round-trips through localStorage', () => {
+    expect(loadAutoMemory()).toBeNull();
+    const m = settledMemory(null, 'high', 1, desktop.gpu!, NOW);
+    expect(m).toEqual({ tier: 'high', scale: 0.85, at: NOW, tested: NOW, sessions: 0, gpu: desktop.gpu });
+    saveAutoMemory(m);
+    expect(store.has('americanflyers.graphicsAuto')).toBe(true);
+    expect(loadAutoMemory()).toEqual(m);
+    clearAutoMemory();
+    expect(loadAutoMemory()).toBeNull();
+  });
+  it('keeps the re-test counters when it settles again, but not across GPUs', () => {
+    const prev = mem({ tested: NOW - 5 * DAY, sessions: 2 });
+    expect(settledMemory(prev, 'medium', 0, prev.gpu, NOW)).toMatchObject({ tier: 'medium', at: NOW, tested: prev.tested, sessions: 2 });
+    expect(settledMemory(prev, 'medium', 0, 'other gpu', NOW)).toMatchObject({ tested: NOW, sessions: 0 });
+  });
+  it('ignores junk', () => {
+    for (const raw of ['nope', '{}', 'null', '{"tier":"max","scale":1,"at":1,"tested":1,"sessions":0}', '{"tier":"high","scale":0.5,"at":1,"tested":1,"sessions":0}', '{"tier":"high","scale":1,"at":"x","tested":1,"sessions":0}']) {
+      store.set('americanflyers.graphicsAuto', raw);
+      expect(loadAutoMemory()).toBeNull();
+    }
+  });
+  it('survives storage that throws', () => {
+    vi.stubGlobal('localStorage', { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); }, removeItem: () => { throw new Error('blocked'); } });
+    expect(loadAutoMemory()).toBeNull();
+    expect(() => { saveAutoMemory(mem()); clearAutoMemory(); }).not.toThrow();
+  });
+});
+
+describe('tier-change notes', () => {
+  it('says what changed', () => {
+    expect(tierNote('high', 'lowered')).toBe('Graphics lowered to High for a smoother ride');
+    expect(tierNote('ultra', 'raised')).toBe('Graphics raised to Ultra');
+  });
+  it('stays quiet for the first 4 s, then lets one through per 20 s', () => {
+    const g = new NoteGate(1000);
+    expect(g.allow(1000 + NOTE_FIRST_MS - 1)).toBe(false);
+    expect(g.allow(1000 + NOTE_FIRST_MS)).toBe(true);
+    expect(g.allow(1000 + NOTE_FIRST_MS + 5000)).toBe(false);
+    expect(g.allow(1000 + NOTE_FIRST_MS + NOTE_GAP_MS - 1)).toBe(false);
+    expect(g.allow(1000 + NOTE_FIRST_MS + NOTE_GAP_MS)).toBe(true);
+  });
+  it('restart() makes the first moments of a new ride quiet, without forgetting the last note', () => {
+    const g = new NoteGate(0);
+    expect(g.allow(5000)).toBe(true);
+    g.restart(30000);
+    expect(g.allow(31000)).toBe(false); // first 4 s
+    expect(g.allow(34000)).toBe(true); // 29 s after the last note
+    g.restart(40000);
+    expect(g.allow(44500)).toBe(false); // 10.5 s after the last note
   });
 });
 
@@ -91,14 +174,18 @@ describe('Adapter', () => {
     const b = new Adapter('high', 'high', true, 0);
     let t = 5000;
     for (let i = 0; i < 600; i++) {
-      t += i % 50 === 0 ? 120 : 16.7; // a hitch every ~50 frames: the median stays at 60 fps
-      expect(b.push(t, i % 50 === 0 ? 120 : 16.7, 6)).toBeNull();
+      t += i % 200 === 0 ? 120 : 16.7; // a stall every ~3.5 s: the median stays at 60 fps and the window holds at most one
+      expect(b.push(t, i % 200 === 0 ? 120 : 16.7, 6)).toBeNull();
     }
   });
 
   it('drops long gaps (hidden tab) instead of counting them as slow frames', () => {
     const a = new Adapter('high', 'high', true, 0);
-    for (let i = 0; i < 20; i++) expect(a.push(5000 + i * 3000, 3000, 5)).toBeNull();
+    let t = 5000;
+    for (let i = 0; i < 20; i++) {
+      expect(a.push(t += 3000, 3000, 5)).toBeNull();
+      for (let j = 0; j < 5; j++) expect(a.push(t += 16.7, 16.7, 5)).toBeNull();
+    }
   });
 
   it('with a fixed tier only the render scale moves', () => {
@@ -158,6 +245,161 @@ describe('Adapter', () => {
     const a = new Adapter('medium', 'high', true, 0);
     a.reset({ tier: 'medium', scaleIdx: 1, noShadows: false }, 0);
     expect(run(a, 5000, 60000, 16.7, 12)).toBeNull(); // 60 fps but the render call is busy: no headroom
+  });
+});
+
+/** Feeds frames from a pattern function (ms for frame i) starting at `from`; returns the first change. */
+function runPattern(a: Adapter, from: number, to: number, ms: (i: number) => number, workMs = 8) {
+  let t = from;
+  for (let i = 0; t < to; i++) {
+    const f = ms(i);
+    t += f;
+    const ev = a.push(t, f, workMs);
+    if (ev) return { ev, at: t };
+  }
+  return null;
+}
+
+describe('judge (jerkiness)', () => {
+  const steady = (n: number, ms = 16.7) => Array.from({ length: n }, () => ms);
+  it('calls a steady 60 fps smooth', () => {
+    expect(judge(steady(180))).toMatchObject({ jerky: false, severe: false, stalls: 0, hitchShare: 0 });
+  });
+  it('counts a frame over 2.5x the median, or over 50 ms, as a hitch', () => {
+    const f = steady(100);
+    f[10] = 42; f[20] = 41; // over 2.5 x 16.7 = 41.75? 42 is, 41 is not
+    expect(judge(f).hitchShare).toBeCloseTo(0.01);
+    const slowish = steady(100, 30);
+    slowish[5] = 55; // over 50 ms (and 2.5 x 30 = 75 is not reached)
+    slowish[6] = 74; // over 50 ms
+    expect(judge(slowish).hitchShare).toBeCloseTo(0.02);
+  });
+  it('is jerky when the median is over 22 ms', () => {
+    expect(judge(steady(100, 23))).toMatchObject({ jerky: true, severe: false });
+    expect(judge(steady(100, 21)).jerky).toBe(false);
+  });
+  it('is jerky with more than 8% hitches even at a good median', () => {
+    const f = steady(100);
+    for (let i = 0; i < 9; i++) f[i * 10] = 60;
+    expect(judge(f)).toMatchObject({ jerky: true, severe: false });
+    const g = steady(100);
+    for (let i = 0; i < 8; i++) g[i * 10] = 60;
+    expect(judge(g).jerky).toBe(false); // exactly 8%: not over
+  });
+  it('is jerky with 3 stalls over 100 ms, but not with 2', () => {
+    const f = steady(180);
+    f[10] = 130; f[90] = 130;
+    expect(judge(f).jerky).toBe(false);
+    f[150] = 101;
+    expect(judge(f)).toMatchObject({ jerky: true, stalls: 3, severe: false });
+  });
+  it('is clearly struggling over a 40 ms median or 20% hitches', () => {
+    expect(judge(steady(100, 41)).severe).toBe(true);
+    expect(judge(steady(100, 39)).severe).toBe(false);
+    const f = steady(100);
+    for (let i = 0; i < 21; i++) f[i * 4] = 70;
+    expect(judge(f).severe).toBe(true);
+  });
+});
+
+describe('Adapter: stepping down', () => {
+  it('drops a whole tier at once when clearly struggling, with a short cool-down', () => {
+    const a = new Adapter('ultra', 'ultra', true, 0);
+    const first = run(a, ADAPT.warmupMs, 30000, 50)!; // 20 fps
+    expect(first.ev).toMatchObject({ tier: 'high', scaleIdx: 0, reason: 'slow', fast: true });
+    expect(first.at).toBeLessThan(ADAPT.warmupMs + 4000);
+    const second = run(a, first.at + 1, first.at + 30000, 50)!;
+    expect(second.ev).toMatchObject({ tier: 'medium', scaleIdx: 0, fast: true });
+    expect(second.at - first.at).toBeGreaterThanOrEqual(ADAPT.fastCooldownMs);
+    expect(second.at - first.at).toBeLessThan(ADAPT.cooldownMs + 3000); // quicker than the gentle path
+  });
+  it('drops a whole tier at once on a flood of hitches, and puts the scale back to 1', () => {
+    const a = new Adapter('high', 'high', true, 0, false, 2); // starts at 70% sharpness
+    const ev = runPattern(a, ADAPT.warmupMs, 30000, (i) => (i % 4 === 0 ? 90 : 16.7))!.ev; // 25% hitches, median 16.7
+    expect(ev).toMatchObject({ tier: 'medium', scaleIdx: 0, fast: true });
+  });
+  it('takes the gentle path (scale first) when only jerky, not struggling', () => {
+    const a = new Adapter('high', 'high', true, 0);
+    const first = runPattern(a, ADAPT.warmupMs, 30000, (i) => (i % 8 === 0 ? 70 : 16.7))!; // 12% hitches
+    expect(first.ev).toMatchObject({ tier: 'high', scaleIdx: 1, reason: 'slow' });
+    expect(first.ev.fast).toBeFalsy();
+    const slowish = new Adapter('high', 'high', true, 0);
+    const second = run(slowish, ADAPT.warmupMs, 30000, 30)!; // median 30: slow, under 40
+    expect(second.ev).toMatchObject({ tier: 'high', scaleIdx: 1 });
+    expect(second.ev.fast).toBeFalsy();
+  });
+  it('steps down on three stalls in the window', () => {
+    const a = new Adapter('high', 'high', true, 0);
+    const ev = runPattern(a, ADAPT.warmupMs, 30000, (i) => (i % 55 === 0 && i > 0 ? 130 : 16.7))!.ev; // 3 stalls inside 3 s
+    expect(ev).toMatchObject({ tier: 'high', scaleIdx: 1, reason: 'slow' });
+  });
+  it('a fixed tier only moves the scale even when clearly struggling', () => {
+    const a = new Adapter('ultra', 'ultra', false, 0);
+    expect(run(a, ADAPT.warmupMs, 30000, 80)!.ev).toMatchObject({ tier: 'ultra', scaleIdx: 1 });
+  });
+  it('at Low, struggling falls back to the scale and then shadows', () => {
+    const a = new Adapter('low', 'low', true, 0);
+    expect(run(a, ADAPT.warmupMs, 30000, 80)!.ev).toMatchObject({ tier: 'low', scaleIdx: 1 });
+  });
+  it('does not judge the warm-up, a hold (dialog, load, tab switch) or one long frame', () => {
+    const a = new Adapter('ultra', 'ultra', true, 0);
+    expect(run(a, 0, ADAPT.warmupMs - 50, 80)).toBeNull();
+    a.hold(ADAPT.warmupMs + 5000, 1000);
+    expect(run(a, ADAPT.warmupMs + 5000, ADAPT.warmupMs + 5990, 80)).toBeNull(); // inside the hold
+    const b = new Adapter('ultra', 'ultra', true, 0);
+    let t = 5000;
+    for (let i = 0; i < 10; i++) { expect(b.push(t += 700, 700, 5)).toBeNull(); b.push(t += 16.7, 16.7, 5); } // lone gaps over 400 ms: not samples
+  });
+  it('never climbs above the starting tier, even when it started below Ultra', () => {
+    const a = new Adapter('medium', 'medium', true, 0);
+    expect(run(a, ADAPT.warmupMs, 120000, 8, 1)).toBeNull();
+  });
+  it('after a whole-tier drop it waits before trying to go back up, and backs off if that was a mistake', () => {
+    const a = new Adapter('ultra', 'ultra', true, 0);
+    const down = run(a, ADAPT.warmupMs, 30000, 50)!;
+    expect(down.ev.tier).toBe('high');
+    expect(run(a, down.at + 1, down.at + ADAPT.minRaiseGapMs - 2000, 8, 1)).toBeNull();
+    const up = run(a, down.at + ADAPT.minRaiseGapMs, down.at + 120000, 8, 1)!;
+    expect(up.ev).toMatchObject({ tier: 'ultra', reason: 'headroom' });
+    const undone = run(a, up.at + 1, up.at + 40000, 50)!;
+    expect(undone.ev.tier).toBe('high');
+    expect(run(a, undone.at + 1, undone.at + ADAPT.backoffMs[0] - 2000, 8, 1)).toBeNull(); // the back-off grew
+  });
+  it('treats three frames in a row over 400 ms as clearly struggling, but not a lone stall or the warm-up', () => {
+    const a = new Adapter('ultra', 'ultra', true, 0);
+    for (let i = 0; i < 3; i++) expect(a.push(1000 + i * 900, 900, 5)).toBeNull(); // shaders compiling in the warm-up
+    let t = ADAPT.warmupMs + 1000;
+    expect(a.push(t += 900, 900, 5)).toBeNull(); // one stall
+    for (let i = 0; i < 30; i++) expect(a.push(t += 16.7, 16.7, 5)).toBeNull(); // then fine
+    expect(a.push(t += 900, 900, 5)).toBeNull();
+    expect(a.push(t += 900, 900, 5)).toBeNull();
+    expect(a.push(t += 900, 900, 5)).toMatchObject({ tier: 'high', scaleIdx: 0, reason: 'slow', fast: true });
+  });
+  it('starts at a remembered render scale', () => {
+    const a = new Adapter('high', 'high', true, 0, false, 1);
+    expect(a.state).toEqual({ tier: 'high', scaleIdx: 1, noShadows: false });
+  });
+});
+
+describe('Adapter: settling', () => {
+  it('reports its state once after 30 s of riding without a change, not before', () => {
+    const a = new Adapter('high', 'high', true, 0);
+    expect(run(a, 0, ADAPT.warmupMs + 29000, 16.7, 6)).toBeNull();
+    expect(a.takeSettled()).toBeNull();
+    run(a, ADAPT.warmupMs + 29000, ADAPT.warmupMs + 31500, 16.7, 6);
+    expect(a.takeSettled()).toEqual({ tier: 'high', scaleIdx: 0, noShadows: false });
+    expect(a.takeSettled()).toBeNull(); // once
+  });
+  it('counts riding time only: holds do not count, and a change starts it again', () => {
+    const a = new Adapter('ultra', 'ultra', true, 0);
+    const down = run(a, ADAPT.warmupMs, 30000, 50)!;
+    expect(a.takeSettled()).toBeNull();
+    let t = down.at + 1;
+    a.settleMs = 5000;
+    for (let i = 0; i < 20; i++) { a.hold(t, 1000); t += 500; } // a dialog open: nothing measured
+    expect(a.takeSettled()).toBeNull();
+    run(a, t + 1000, t + 9000, 16.7, 5);
+    expect(a.takeSettled()).toMatchObject({ tier: 'high' });
   });
 });
 

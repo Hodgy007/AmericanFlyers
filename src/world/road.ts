@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { currentStage, gradeAt, roadPoint } from '../course';
+import type { RoadExtras } from './roadExtras'; // asphalt detail, wet look, painted words, guardrails, crowds: a lazily loaded chunk
+import { ROAD_HALF_WIDTH } from './roadside';
+import type { SceneryTier } from './scenery';
 
 const CHUNK = 100; // metres of road per mesh
 const STEP = 2;
-export const ROAD_HALF_WIDTH = 4.6;
+export { ROAD_HALF_WIDTH };
 const TEXTURE_REPEAT_M = ROAD_HALF_WIDTH * 2; // square texels: one texture length = road width
 const BEHIND = 150;
 const AHEAD = 1600;
@@ -90,6 +93,9 @@ function postGeometry() {
 
 interface Chunk {
   group: THREE.Group;
+  origin: { x: number; z: number };
+  /** The roadside extras added to the group (painted words, guardrails, crowds); null until they're loaded. */
+  extra: { dispose(): void } | null;
   dispose(): void;
 }
 
@@ -97,6 +103,15 @@ export class Road {
   readonly group = new THREE.Group();
   private readonly chunks = new Map<number, Chunk>();
   private readonly material: THREE.MeshStandardMaterial;
+  private readonly map: THREE.Texture;
+  private readonly maxAniso: number;
+  // Round 6 extras (roadExtras.ts) load after the first frame; the road is drawn without them until then.
+  private extras: RoadExtras | null = null;
+  private extrasModule: Promise<typeof import('./roadExtras')> | null = null;
+  private spec: SceneryTier | null = null;
+  private ibl = false;
+  private wet = 0;
+  private riderName = '';
   private readonly postGeo = postGeometry();
   private readonly postMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
   private readonly signPostMat = new THREE.MeshStandardMaterial({ color: '#8a8f99', roughness: 0.5, metalness: 0.4 });
@@ -111,8 +126,10 @@ export class Road {
   });
 
   constructor(renderer: THREE.WebGLRenderer, private markers: MarkerConfig) {
+    this.map = roadTexture(renderer);
+    this.maxAniso = renderer.capabilities.getMaxAnisotropy();
     this.material = new THREE.MeshStandardMaterial({
-      map: roadTexture(renderer),
+      map: this.map,
       roughness: 0.92,
       polygonOffset: true,
       polygonOffsetFactor: -2,
@@ -120,19 +137,66 @@ export class Road {
     });
   }
 
-  /** Rain: 0 dry … 1 soaked. The road darkens and turns glossy. */
+  /** Rain: 0 dry … 1 soaked. The road darkens and turns glossy; once the extras are here it also grows puddles (roadSurface.ts). */
   setWet(wet: number) {
-    this.material.roughness = 0.92 - 0.52 * wet;
-    this.material.color.setScalar(1 - 0.32 * wet);
+    this.wet = wet;
+    this.material.roughness = 0.92 - 0.45 * wet;
+    this.material.color.setScalar(1 - 0.3 * wet);
+    this.extras?.setWet(wet);
   }
 
-  setMarkers(markers: MarkerConfig) {
-    this.markers = markers;
+  /** The graphics tier's scenery switches. The first call loads the extras; later ones refit the roadside objects if they changed. */
+  setTier(spec: SceneryTier, ibl: boolean) {
+    this.spec = spec;
+    this.ibl = ibl;
+    if (this.extras) { this.applyExtras(this.extras); return; }
+    this.extrasModule ??= import('./roadExtras');
+    void this.extrasModule.then((m) => {
+      this.extras ??= new m.RoadExtras(this.material, this.map, this.maxAniso);
+      this.applyExtras(this.extras);
+    }).catch(() => { /* chunk failed to load (offline): the plain road */ });
+  }
+
+  private applyExtras(x: RoadExtras) {
+    if (!this.spec) return;
+    x.setWet(this.wet);
+    x.setRiderName(this.riderName);
+    x.setTier(this.spec, this.ibl);
+    this.refreshExtras();
+  }
+
+  /** The rider's first name, painted on the road on the climbs ("ALLEZ SAM"). Letters only; empty means no name. */
+  setRiderName(raw: string | null | undefined) {
+    const name = raw ?? '';
+    if (name === this.riderName) return;
+    this.riderName = name;
+    if (this.extras && this.extras.setRiderName(name)) this.refreshExtras();
+  }
+
+  /** Called every frame: spectators near the rider cheer as they pass. */
+  animate(timeS: number, x: number, y: number, z: number) {
+    this.extras?.animate(timeS, x, y, z);
+  }
+
+  /** Puts every loaded chunk's roadside objects back: after the extras arrive, or when the tier, name or stage changes them. */
+  private refreshExtras() {
+    for (const [k, c] of this.chunks) {
+      c.extra?.dispose();
+      c.extra = this.extras?.addTo(c.group, k * CHUNK, c.origin) ?? null;
+    }
+  }
+
+  private clearChunks() {
     for (const [k, c] of this.chunks) {
       this.group.remove(c.group);
       c.dispose();
       this.chunks.delete(k);
     }
+  }
+
+  setMarkers(markers: MarkerConfig) {
+    this.markers = markers;
+    this.clearChunks();
   }
 
   update(distance: number) {
@@ -223,7 +287,13 @@ export class Road {
       if (s.d >= d0 && s.d < d0 + CHUNK) place(this.buildSign(s.label, disposables, s.style, currentStage().hairpinWord), s.d, ROAD_HALF_WIDTH + 2);
     }
 
-    return { group, dispose: () => disposables.forEach((d) => d.dispose()) };
+    const chunk: Chunk = {
+      group,
+      origin: { x: origin.x, z: origin.z },
+      extra: this.extras?.addTo(group, d0, origin) ?? null,
+      dispose: () => { chunk.extra?.dispose(); disposables.forEach((d) => d.dispose()); },
+    };
+    return chunk;
   }
 
   private buildSign(label: string, disposables: { dispose(): void }[], style: 'distance' | 'hairpin', word = 'Virage') {

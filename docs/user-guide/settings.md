@@ -38,16 +38,18 @@ Time of day and weather live in **☰ Menu → 🌤 Time & weather**, not in thi
 
 ## Graphics
 
-**Graphics** picks how detailed the 3D view is. The default, **Auto**, chooses for your device when the app opens (software renderers, phones and small tablets start on Low or Medium, ordinary computers on High) and then watches how smoothly it runs: if frames come slowly it first makes the picture a little less sharp (down to 70%), then drops a tier, and if the device is very slow it turns shadows off. If it has plenty of room to spare for a while it climbs back up, never past the tier it first picked. The line under the setting says what Auto picked and whether it has stepped down since.
+**Graphics** picks how detailed the 3D view is. The default, **Auto**, starts every device on **Ultra** (the exception is a browser that draws the 3D view in software, which starts on Low because it can't run Ultra at all) and then watches for **jerky** riding, not only slow riding: a low frame rate, a lot of hitches (single frames that take much longer than the rest), or a few real stalls. When it's clearly struggling it drops a whole tier at once, within a few seconds; when it's only a little jerky it first makes the picture a bit less sharp (down to 70%), then drops a tier, and if the device is very slow it turns shadows off. Each time it changes the tier you get a short note ("Graphics lowered to High for a smoother ride"), at most one every 20 seconds. If it has room to spare for a while it climbs back up, never past the tier it started the visit on.
+
+Auto **remembers what worked on this device**. After about 30 seconds of steady riding it keeps the tier it settled on and starts there next time instead of on Ultra. Every few visits, or after three days, it starts one tier higher than it remembered to check whether the device copes better now (a phone that struggled when it was busy may be fine later); that never goes more than one tier up. The Auto entry reads **Auto (now: High)** while it is on, and the line under the setting says where Auto started, why, and whether it has stepped down since.
 
 | Tier | What you get |
 | --- | --- |
-| Low | The sky, haze and cloud improvements, lighter shadows (1,024-pixel shadow map), sharpness capped at 1× the screen's pixels. No post-processing, so nothing extra is downloaded. |
-| Medium | Adds glow on bright things (the sun, the Tron bike, night lights), colour grading for the time of day and weather, smoothed edges, a 2,048-pixel shadow map. |
-| High | Adds soft contact shadows where things touch the road, reflections of the sky on helmets, frames and wheels, softer shadows, and the shadows of clouds drifting over the land. |
+| Low | The sky, haze and cloud improvements, lighter shadows (1,024-pixel shadow map), sharpness capped at 1× the screen's pixels. No post-processing, so nothing extra is downloaded. The ground has grass, rock and snow (or sandstone and rock in the desert) textures at a lower resolution, and the climbs get painted words, guardrails and a thinner crowd. |
+| Medium | Adds glow on bright things (the sun, the Tron bike, night lights), colour grading for the time of day and weather, smoothed edges, a 2,048-pixel shadow map. The ground gets all its textures (grass, dry grass, dirt, rock, snow, sandstone, sand), the road gets a grainy asphalt surface, and the crowds are thicker and wave flags. |
+| High | Adds soft contact shadows where things touch the road, reflections of the sky on helmets, frames and wheels, softer shadows, and the shadows of clouds drifting over the land. The ground and cliffs gain fine bumps, wet-road puddles reflect the sky, and spectators cast shadows. |
 | Ultra | Adds fuller-resolution glow, higher-quality contact shadows, a bigger and sharper shadow map. |
 
-Choosing a tier yourself turns off the automatic tier changes; the sharpness still eases off by itself if frames run slow. Changing it takes effect when you press **Save**.
+Choosing a tier yourself turns off the automatic tier changes (and the notes); the sharpness still eases off by itself if frames run slow. Changing it takes effect when you press **Save**.
 
 ## Data blocks
 

@@ -26,8 +26,8 @@ Everything that costs GPU time hangs off one setting, **Graphics**: Auto, Low, M
 
 | File | What it holds |
 | --- | --- |
-| [`quality.ts`](../../src/world/quality.ts) | The tiers and `TIER_SPECS` (what each switches on), the render scales, the saved choice, and `pickAutoTier(signals)`. Pure. |
-| [`adapt.ts`](../../src/world/adapt.ts) | `Adapter`, the frame-time controller. Pure; its own small chunk, loaded just after the first frame. |
+| [`quality.ts`](../../src/world/quality.ts) | The tiers and `TIER_SPECS` (what each switches on), the render scales, the saved choice, where Auto starts (`pickAutoStart`), its per-device memory and the note throttle. Pure. |
+| [`adapt.ts`](../../src/world/adapt.ts) | `Adapter` and `judge()`, the frame-time controller (jerkiness, fast and gentle step-downs, settling). Pure; its own small chunk, loaded just after the first frame. |
 | [`graphics.ts`](../../src/world/graphics.ts) | `Graphics`: reads the device, applies a tier to the renderer, sun shadow, sky and atmosphere, loads the post chunk, draws the frame, feeds the controller, and exposes `window.__afGraphics`. |
 | [`grade.ts`](../../src/world/grade.ts) | `gradeFor()`: colour grade and bloom numbers for a look. Pure. |
 | [`post.ts`](../../src/world/post.ts) | The lazy chunk: `EffectComposer` pipeline and `SkyEnvironment` (reflections). Only Medium and up download it. |
@@ -40,22 +40,24 @@ Everything that costs GPU time hangs off one setting, **Graphics**: Auto, Low, M
 | High | ≤ 2 | 2,048 (2) | + GTAO at half size, SMAA instead of FXAA | half-size chain | yes | yes (128 px cube) | yes | 5 |
 | Ultra | ≤ 2 | 4,096 (1.6), 76 m box | as High | full-size chain | 0.75 size, 16 samples | yes (256 px cube) | yes | 5 |
 
-**Auto: the starting tier** (`pickAutoTier`, from `Signals`):
+**Auto: the starting tier** (`pickAutoStart`, in `quality.ts`):
 
-- Software renderers (the WebGL renderer string contains SwiftShader, llvmpipe, lavapipe, software…) → **Low**, with shadows off.
-- Phones (touch screen, short side under 700 px) and mobile GPU strings (Mali, Adreno, PowerVR, Apple GPU…) → **Low**; a phone with 8+ cores and 6+ GB → Medium. Tablets (touch, bigger screen) and integrated Intel/old AMD/NVIDIA GPUs → **Medium**.
-- Other desktops → **High**; a strong GPU (RTX 20-series 60/70/80 and 30/40/50, RX 5700 and up, Apple M Pro/Max/Ultra, Arc A5xx and up, GTX 1060 and up) with 8+ cores and 8+ GB → **Ultra**.
-- Then caps: 2 cores or less, or 2 GB or less → Low; 4 cores or less, or 4 GB or less → at most Medium; a canvas over 8 million physical pixels (4K) without a strong GPU → one tier lower.
+- Software renderers (the WebGL renderer string contains SwiftShader, llvmpipe, lavapipe, software…) → **Low**, with shadows off. This is the only use of the device signals (`pickAutoTier(signals)` is now just that test); cores, memory, GPU string and screen size are still read for logging but no longer cap the start, and phones are not capped up front.
+- Otherwise the **remembered** state, else **Ultra**. The memory is `localStorage` `americanflyers.graphicsAuto`: `{ tier, scale, at, tested, sessions, gpu }`, per device and never synced. It is written (`Graphics.remember`) once the controller has gone 30 s of measured riding (holds and the hub don't count) without a change (`Adapter.takeSettled()`), and again whenever it settles on something new; never for a software renderer or with shadows off. A different GPU string ignores it.
+- **Re-test:** each Auto visit adds 1 to `sessions` at load. When `sessions` reaches 3, or `tested` is 3 days old, the visit starts **one tier above** the remembered one (never above Ultra, scale back to 1), sets `tested` to now and `sessions` to 0, and leaves the remembered tier in storage. If that tier holds for 30 s it becomes the new memory; if the controller steps down, the lower tier is saved as before. The visit's starting tier is also its ceiling, so Auto never climbs above it. Choosing Auto in Settings re-reads the memory without counting a visit.
 
-**Auto: adapting** (`Adapter.push(now, frameMs, workMs)`, one call per drawn frame):
+**Auto: adapting** (`Adapter.push(now, frameMs, workMs)`, one call per drawn frame; the thresholds are in `ADAPT`):
 
-- Frame times are not judged during a 4 s warm-up, after a change (6 s cool-down), after a resize, in the hub orbit (its frames are throttled on purpose) or in a hidden tab; gaps over 400 ms are dropped.
-- **Slow:** median frame over the last 3 s above 22 ms → one step down: render scale 1 → 0.85 → 0.7, then the next tier down (scale back to 1), then shadows off.
-- **Headroom:** over 10 s, median frame under 11 ms, or under 19 ms with a median render-call time under 4.5 ms (a 60 Hz display can't show frames shorter than 16.7 ms, so CPU time in the render call stands in for spare time) → one step up, in the reverse order, never above the Auto pick, and not within 30 s of a step down. A step up that is undone within 45 s makes the next attempt wait 1, 2, 5 and then 10 minutes.
-- A **fixed tier** only moves the render scale (same rules), never the tier.
-- `?adapt=off` freezes the controller (for measuring a tier as it is).
+- Frame times are not judged during a 4 s warm-up (the same again when the hub closes), after a change (6 s cool-down, 3 s after a whole-tier drop), after a resize, in the hub orbit (its frames are throttled on purpose), with a dialog open (`Graphics` holds the controller each frame while a `<dialog>` is open, then 1 s more), for 1.5 s after the tab becomes visible again, for 1 s after a landmark model is placed, 2 s after a stage change, and 600 ms after a frame that spent much longer than usual building scenery (`World.update` times `ensureRoad`, the road and its extras, landmarks and new terrain tiles; a frame counts as a spike when that took over 8 ms and over 3× its running average, so a slow device's steady cost is still judged) (`Graphics.pause()`, called from `World`; a shader compile, upload or tile build isn't the device's fault). A frame over 400 ms is a stall, not a sample, and clears the window; but 3 in a row (under 2.5 fps) count as clearly struggling.
+- **Jerky** (`judge()` over the last 3 s, at least 20 frames): median frame over 22 ms, or more than 8% **hitches** (a frame over 2.5× the median, or over 50 ms), or 3 or more frames over 100 ms.
+- **Clearly struggling:** median over 40 ms, or more than 20% hitches → drop a **whole tier at once** (scale back to 1; event `fast: true`), with a 3 s cool-down. At Low, or with a fixed tier, this falls back to the gentle path.
+- **Merely jerky:** one gentle step: render scale 1 → 0.85 → 0.7, then the next tier down (scale back to 1), then shadows off.
+- **Headroom:** over 10 s, median frame under 11 ms, or under 19 ms with a median render-call time under 4.5 ms (a 60 Hz display can't show frames shorter than 16.7 ms, so CPU time in the render call stands in for spare time) → one step up, in the reverse order, never above the visit's starting tier, and not within 30 s of a step down. A step up that is undone within 45 s makes the next attempt wait 1, 2, 5 and then 10 minutes (the whole-tier drops use the same back-off).
+- **Notes:** when Auto changes the **tier** (not the scale or shadows) `Graphics` calls the notifier set by `World.onGraphicsNote` (main.ts passes `toast`): "Graphics lowered to High for a smoother ride" or "Graphics raised to Ultra". `NoteGate` allows one per 20 s and none in the first 4 s of riding (so a second change inside 20 s is silent; Settings still shows the state). Settings reads `World.graphicsAutoLabel()` ("Auto (now: High)") and `graphicsNote()`.
+- A **fixed tier** only moves the render scale (same rules), never the tier, and shows no notes.
+- Dev URL parameters: `?adapt=off` freezes the controller; `?softgpu=off` makes a software renderer pass for a real GPU (so Auto starts on Ultra, as on a real device); `?jank=60` burns 60 ms in every frame and `?jank=120/8` 120 ms in every 8th (a slow or a hitchy device); `?settle=3000` shortens the 30 s settle time. The e2e tests in `tests/e2e/autoGraphics.spec.ts` use them.
 
-`window.__afGraphics` returns `{ tier, choice, autoTier, scale, pixelRatio, fps, post, shadows, gpu, change }` for tests and screenshots.
+`window.__afGraphics` returns `{ tier, choice, autoTier, scale, pixelRatio, fps, post, shadows, gpu, change, remembered, retest }` (`autoTier` is where Auto started this visit; `remembered` the tier read from the memory) for tests and screenshots.
 
 **The post chain** (Medium and up) in `post.ts`: `RenderPass` → `GTAOPass` (High and up; it sees the world through a copy of the camera whose far plane is 280 m, because the depth buffer is too coarse for far hills, and the shadow map is not redrawn for its normals pass) → `UnrealBloomPass` → grade `ShaderPass` → `OutputPass` (ACES and sRGB) → `FXAAPass` or `SMAAPass`. Everything before the `OutputPass` is linear HDR, so bloom (threshold about 1.15 by day, 0.95 at night) catches only the sun disc, the Tron neon, headlight pools and glints. The addons are put in their own `vendor-three-post` chunk in `vite.config.ts`, so Low devices never download them. Until the chunk arrives the frame is drawn directly; if it fails to load (offline) the frame stays direct.
 
@@ -89,17 +91,53 @@ Chase and side views ease toward their targets. The rider's view copies the posi
 - A **checkered line** is painted across the road at the finish distance.
 - Hairpin plaques are placed at the distances the stage defines in its `signs` list. Each shows the local word (**Virage** or **Tornante**) and the number.
 
+### Asphalt and the wet road
+
+[`roadSurface.ts`](../../src/world/roadSurface.ts) (in the lazily loaded `roadExtras` chunk) adds to the road's material:
+
+- **Asphalt normal map** (Medium and up; `public/textures/asphalt-n.jpg`, CC0) tiled into a canvas laid out like the colour map, with the painted lines and the gravel shoulders left flat so the lines stay crisp. A **roughness map is derived** from it (rougher where the grain is bumpier, shinier in the wheel tracks, paint smoother than stone).
+- **Wet road.** `Road.setWet()` (from the atmosphere, 0 to 1) darkens the road and lowers its roughness as before; the road shader also grows **puddles**: a noise mask over the road (about 3 m patches, more and bigger as the rain builds) where the surface goes nearly mirror-smooth, flat and darker. On High and Ultra a puddle reflects the sky through the environment map (`scene.environment`, the same PMREM that lights the bikes); on Low and Medium, which have none, a fresnel term adds the horizon colour instead.
+
+### Painted words, guardrails and crowds
+
+All three apply per 100 m chunk (`Road.buildChunk()` asks `RoadExtras.addTo()`), are built from the stage and the distance only (the same every ride), and wait for the `roadExtras` chunk, which `Road.setTier()` imports after the first frame. They apply on stages with numbered hairpins and a finish (`isClimb()`: the six mountain climbs, and an uploaded route that has hairpins); crowds also on any stage with a finish.
+
+- **Painted words** ([`roadPaint.ts`](../../src/world/roadPaint.ts)). `planPaint(stage, name)` picks about 9 spots over the last 3.4 km (one every 380 m: arrows, GO GO GO, stars, VAS!, ALLEZ), "ALLEZ <NAME>" three times (190, 1,350 and 2,800 m from the finish) when the rider has a name, and a word on the straight before roughly a third of the hairpins; never on the arc of a bend. A word is a strip draped along the road (1 m rows, 6.3 m of the 9.2 m width, 4 to 6 m long, so it reads from a rider's eye height) from one atlas canvas (1,024 px a row, 512 on Low) with a little wear. `World.setRiderName()` (from `main.ts`, on sign-in) passes the account name; `paintName()` keeps the first name's letters only, upper case, at most nine, so an empty result means no name.
+- **Guardrails** ([`barriers.ts`](../../src/world/barriers.ts)). `bendsOf(stage)` (in [`roadside.ts`](../../src/world/roadside.ts)) finds each hairpin from the stage's signs (where the heading turns faster than 0.04 rad/m); a rail goes along the outside of each (a right turn has its outside on the left) with 9 m of lead-in and out, and on any stretch where the ground 13 m from the centreline is more than 4 m below the road. One instanced 3 m section (a W-beam, a post and a reflector, 1 m outside the gravel shoulder), pitched to the grade.
+- **Crowds** ([`crowds.ts`](../../src/world/crowds.ts)). `crowdNear(d)` in [`crowdZones.ts`](../../src/world/crowdZones.ts) (moved out of `main.ts`, where the sound still reads it) says how thick the crowd is: round each hairpin sign and the last 700 m of a finish. `planCrowd()` fills slots every 1.7 m on both sides, two rows deep, in clumps, thinned by the tier's `crowd` share. Spectators are low-poly (about 70 triangles) and instanced, shirt colour per instance and skin tone from a hash of their position; about one in seven waves a flag where the tier allows. The cheering is in the vertex shader: they jump, wave their arms and ripple their flags more as the rider comes within 70 m (`Road.animate()` passes the rider's position and the clock each frame), and sway a little otherwise. Their shadows are on from High; they are not animated in the shadow pass.
+
+| Tier | Terrain layers (size) | Normals | Triplanar rock | Anisotropy | Road normal | Crowd share | Flags | Crowd shadows | Guardrails and paint |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low | 3 (512) | no | no | 2 | no | 0.35 | no | no | yes |
+| Medium | 7 (1K) | no | yes | 4 | yes | 0.7 | yes | no | yes |
+| High | 7 (1K) | yes | yes | 8 | yes | 1 | yes | yes | yes |
+| Ultra | 7 (1K) | yes | yes | 16 | yes | 1 | yes | yes | yes |
+
+
 ## Terrain
 
 [`src/world/terrain.ts`](../../src/world/terrain.ts) builds the ground in **200 m square tiles**, on a 4 m grid. Tiles whose center is within **1,150 m** of the rider are kept.
 
 - **Height** is a function of world position only, so neighboring tiles always line up.
 - **Near the road** (within about 260 m), the ground follows the road's own elevation, blending out to the stage's "wild" terrain. Where two stretches of road are close together (stacked hairpins), the height blends between them.
-- **Color** depends on height and slope: grass, fields (where the stage allows), rock above the rock line, and snow above the snow line. Steep ground darkens, and cliffs turn to rock.
+- **Color** depends on height and slope: grass, fields (where the stage allows), rock above the rock line, and snow above the snow line. Steep ground darkens, and cliffs turn to rock. The tiles are smooth-shaded.
 - **Desert palette.** A stage whose scenery has `palette: 'desert'` (the Tour of the Moon) colours the ground in thin bands of red, orange and tan sandstone with sand and sage patches, turns cliffs dark red, and plants sparse junipers (70 candidate points per tile) instead of forest. Its wild terrain is stepped into mesas by `terrace()` in `stages.ts`.
 - **Trees** are scattered at 260 candidate points per tile. Forests are dense where the forest noise is high. Trees are removed within 12 m of the road and near landmarks, and above the tree line.
+- **Standing things on the ground.** `groundSampler(minX, maxX, minZ, maxZ)` returns a height lookup for a box, for things placed beside the road (guardrails use it to find drops).
 
 The first frame builds every tile in range at once. After that, at most two tiles are built per frame.
+
+### Texture splatting
+
+Each vertex also carries **seven layer weights** (`aWa`, `aWb`, one byte each): grass, dry grass, dirt, rock, snow, sandstone, sand. `groundColor()` fills them from the same logic as the colour, so a stage still looks like itself: grass with dry grass in the bright patches and wherever the stage has fields; the verge (within 6 to 9 m of the road) is dirt; rock and snow take over by height and the stage's `rockLine` and `snowLine`; the desert is sandstone under a skin of sand, with sage patches as dry ground.
+
+The splatting itself is [`src/world/ground.ts`](../../src/world/ground.ts), a lazily loaded chunk (`Terrain.setScenery()` imports it after the first frame; until then, and if it fails to load, the plain vertex colours show). It patches the terrain's `MeshStandardMaterial` (`onBeforeCompile`):
+
+- **The vertex colour stays.** Each layer's texture is divided by its own average colour, greyed a little and scaled by a per-layer contrast, and the blend multiplies the vertex colour. The photographs add grain, never a different hue, so the palettes survive.
+- **Textures** come from one `DataArrayTexture` (7 layers, mipmapped, anisotropic) for the colour and one for the detail normals (512 px). Ground layers are projected from above at 4 to 6 m per repeat. A large-scale noise tint (90 m and 26 m) hides the tiling from a distance, and the grain fades out beyond about 160 to 600 m.
+- **Rock is triplanar**, and any pixel steeper than about 40° turns to rock (judged per pixel from the smooth normal), so cliffs never stretch. With normals (High and up) rock's normal map is blended triplanar (whiteout) and the other layers' normals are projected from above and fade out beyond 60 to 260 m.
+- **Lazy and per stage.** One JPEG per layer in `public/textures/terrain/` (`grass.jpg`, `grass-n.jpg` …), fetched and decoded a layer at a time, then uploaded once. Only the layers a stage can show are fetched (`layersFor()`: no sandstone on the Alpe, no snow where the snow line is out of reach, no grass in the desert). Sources and licences are in [`public/textures/README.md`](../../public/textures/README.md); all are CC0 (Poly Haven).
+- **Per tier** (`TIER_SPECS[tier].scenery`, see [`scenery.ts`](../../src/world/scenery.ts)): Low fetches **three layers** (grass, rock and snow, or sandstone and rock in the desert; dry grass and dirt fold into grass, sand into sandstone), shrinks them to 512 px while decoding, has no normals and projects rock along one horizontal axis instead of three. Medium has all seven layers at 1K with triplanar rock. High and Ultra add the detail normals. Anisotropy is capped at 2, 4, 8 and 16.
 
 ## Rider and bike
 
