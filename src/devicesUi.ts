@@ -15,7 +15,7 @@ import {
   loadRemembered, menuLabel, rememberDevice, waitForAdvertisement,
   type DeviceKind, type LinkState, type RememberedDevices,
 } from './ble/remembered';
-import { bluetoothAvailable, openTrainer, requestTrainerDevice, type Trainer, type TrainerReading } from './ble/trainer';
+import { CHOOSER_SHOWN_MS, bluetoothAvailable, openTrainer, requestTrainerDevice, type Trainer, type TrainerReading } from './ble/trainer';
 
 export interface DevicesDeps {
   toast(msg: string, ms?: number): void;
@@ -97,12 +97,15 @@ class Link<T extends Connectable> {
     const before = this.state;
     this.setState('connecting');
     let device: BluetoothDevice;
+    const asked = Date.now();
     try {
       device = await this.spec.request(name);
     } catch (err) {
       this.picking = false;
       this.setState(before === 'connected' ? 'connected' : 'idle');
-      const cancelled = (err as DOMException)?.name === 'NotFoundError';
+      // NotFoundError is how the rider closing the chooser looks, so it stays quiet; but one that
+      // comes back at once never showed a chooser (Bluetooth off, or the browser refused): say why.
+      const cancelled = (err as DOMException)?.name === 'NotFoundError' && Date.now() - asked > CHOOSER_SHOWN_MS;
       if (cancelled && name) this.ui.toast(`Didn’t find ${name}. Wake it by pedalling, or use the connect button to pick another.`, 6000);
       else if (!cancelled) this.ui.toast(`Couldn’t connect: ${(err as Error).message}`);
       return false;
@@ -194,6 +197,9 @@ class Link<T extends Connectable> {
   get reconnecting() { return this.reconnector.active; }
 }
 
+/** How long a connected strap may stay silent before the rider is told. */
+const HR_SILENT_MS = 10000;
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function initDevices(deps: DevicesDeps) {
@@ -225,13 +231,27 @@ export function initDevices(deps: DevicesDeps) {
     { ...shared, remember: (name, id) => remember('trainer', name, id) },
   );
 
+  let hrSeenAt = 0; // when the strap last sent a real bpm
+  let hrSilentTimer: number | undefined;
   const hr = new Link<HeartRateMonitor>(
     {
       kind: 'hr',
       noun: 'heart rate strap',
       request: requestHeartRateDevice,
-      open: (device, onDrop) => openHeartRate(device, deps.onHeartRate, onDrop),
-      changed: (h) => deps.hrChanged(h),
+      open: (device, onDrop) => openHeartRate(device, (bpm) => { if (bpm > 0) hrSeenAt = performance.now(); deps.onHeartRate(bpm); }, onDrop),
+      changed: (h) => {
+        deps.hrChanged(h);
+        // A strap can connect and still send nothing (not worn, dry contacts, or another app holds it).
+        // Say so instead of leaving the rider looking at a dash.
+        window.clearTimeout(hrSilentTimer);
+        if (!h) return;
+        const since = performance.now();
+        hrSilentTimer = window.setTimeout(() => {
+          if (hr.current === h && hrSeenAt < since) {
+            deps.toast(`Connected to ${h.name}, but no heart rate yet. Wear the strap with damp contacts, and close other apps using it.`, 8000);
+          }
+        }, HR_SILENT_MS);
+      },
       describe: () => {},
     },
     { ...shared, remember: (name, id) => remember('hr', name, id) },
