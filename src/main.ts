@@ -1491,6 +1491,8 @@ async function openSettings() {
     else if (input) input.value = String(v);
   }
   $('difficulty-out').textContent = `${settings.difficulty}%`;
+  $<HTMLSelectElement>('graphics-choice').value = world.graphicsChoice; // per device, not a synced setting
+  $('graphics-note').textContent = world.graphicsNote();
   // The AI switches stay off until the small consent module is here (signed-out riders can't opt in);
   // if it can't load (a toast says so) the rest of Settings still opens.
   for (const n of ['aiCoach', 'aiRivals']) (form.elements.namedItem(n) as HTMLInputElement).disabled = true;
@@ -1528,6 +1530,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     aiRivals: data.get('aiRivals') === 'on',
     coachVoice: data.get('coachVoice') === 'on',
   };
+  world.setGraphics(String(data.get('graphics')));
   saveSettings(settings);
   pushSettings(settings);
   const nextAi = { coach: settings.aiCoach, rivals: settings.aiRivals };

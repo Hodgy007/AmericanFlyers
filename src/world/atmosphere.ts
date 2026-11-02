@@ -3,6 +3,8 @@ import type { Stage } from '../stages';
 import type { TimeOfDay, Weather } from '../settings';
 import { Rain } from './rain';
 import { HORIZON_COLOR, SUN_COLOR, SUN_DIRECTION, ZENITH_COLOR, type Sky } from './sky';
+import { setFog } from './fog';
+import { goldenAmount, gradeFor, makeGrade } from './grade';
 
 // Time of day and weather. One object owns everything that changes with the
 // light: sky colours, the sun (or moon), the ambient light, fog, exposure,
@@ -36,7 +38,6 @@ interface Look {
   hemiGround: THREE.Color;
   hemiIntensity: number;
   exposure: number;
-  fogNear: number;
   fogFar: number;
   night: number; // 0..1: stars and moon showing
   glow: number; // haze round the sun
@@ -47,21 +48,22 @@ interface Look {
   mountain: THREE.Color; // multiplied over the far mountains
   wet: number; // 0..1: road and ground wetness
   rain: number; // 0..1: how hard it's raining
+  overcast: number; // 0..1: how grey the sky is
 }
 
 function makeLook(): Look {
   return {
     zenith: new THREE.Color(), horizon: new THREE.Color(), sunColor: new THREE.Color(), sunIntensity: 0,
     sunDir: new THREE.Vector3(0, 1, 0), hemiSky: new THREE.Color(), hemiGround: new THREE.Color(), hemiIntensity: 0,
-    exposure: 1, fogNear: 100, fogFar: 1000, night: 0, glow: 1, headlight: 0, cloudCover: 0,
-    cloudColor: new THREE.Color(), cloudGlow: new THREE.Color(), mountain: new THREE.Color(), wet: 0, rain: 0,
+    exposure: 1, fogFar: 1000, night: 0, glow: 1, headlight: 0, cloudCover: 0,
+    cloudColor: new THREE.Color(), cloudGlow: new THREE.Color(), mountain: new THREE.Color(), wet: 0, rain: 0, overcast: 0,
   };
 }
 
 interface Keyframe {
   zenith: string; horizon: string; sun: string; sunIntensity: number;
   hemiSky: string; hemiGround: string; hemiIntensity: number;
-  exposure: number; fogNear: number; fogFar: number;
+  exposure: number; fogFar: number;
   night: number; glow: number; headlight: number;
   cloud: string; cloudGlow: string; mountain: string;
 }
@@ -70,25 +72,25 @@ const KEYS: Record<'night' | 'dawn' | 'day' | 'dusk', Keyframe> = {
   night: {
     zenith: '#050a1e', horizon: '#10203f', sun: '#9db4ff', sunIntensity: 0.55,
     hemiSky: '#2a3c78', hemiGround: '#0e1428', hemiIntensity: 0.75,
-    exposure: 1.2, fogNear: 90, fogFar: 900, night: 1, glow: 0, headlight: 1,
+    exposure: 1.2, fogFar: 900, night: 1, glow: 0, headlight: 1,
     cloud: '#2a3558', cloudGlow: '#0c1226', mountain: '#0d1630',
   },
   dawn: {
     zenith: '#46659e', horizon: '#f4b992', sun: '#ffb577', sunIntensity: 2.1,
     hemiSky: '#b9c4e6', hemiGround: '#5a5650', hemiIntensity: 1.05,
-    exposure: 1.05, fogNear: 150, fogFar: 1000, night: 0, glow: 1.7, headlight: 0,
+    exposure: 1.05, fogFar: 1000, night: 0, glow: 1.7, headlight: 0,
     cloud: '#ffd9c4', cloudGlow: '#d89c88', mountain: '#f0c8c0',
   },
   day: {
     zenith: '#2f6db5', horizon: '#cfe0ee', sun: '#fff4e0', sunIntensity: 2.6,
     hemiSky: '#cfe3ff', hemiGround: '#4d5a3a', hemiIntensity: 1.1,
-    exposure: 1.05, fogNear: 180, fogFar: 1150, night: 0, glow: 1, headlight: 0,
+    exposure: 1.05, fogFar: 1150, night: 0, glow: 1, headlight: 0,
     cloud: '#ffffff', cloudGlow: '#c4d2e2', mountain: '#ffffff',
   },
   dusk: {
     zenith: '#34457f', horizon: '#ff9d63', sun: '#ff8f4f', sunIntensity: 1.9,
     hemiSky: '#9aa0d8', hemiGround: '#4a3f3b', hemiIntensity: 0.85,
-    exposure: 1.08, fogNear: 140, fogFar: 1000, night: 0.15, glow: 2.1, headlight: 0.25,
+    exposure: 1.08, fogFar: 1000, night: 0.15, glow: 2.1, headlight: 0.25,
     cloud: '#ffb48c', cloudGlow: '#a05468', mountain: '#caa0a8',
   },
 };
@@ -149,7 +151,6 @@ function setFromKeys(out: Look, a: Keyframe, b: Keyframe, t: number) {
   out.sunIntensity = m(a.sunIntensity, b.sunIntensity);
   out.hemiIntensity = m(a.hemiIntensity, b.hemiIntensity);
   out.exposure = m(a.exposure, b.exposure);
-  out.fogNear = m(a.fogNear, b.fogNear);
   out.fogFar = m(a.fogFar, b.fogFar);
   out.night = m(a.night, b.night);
   out.glow = m(a.glow, b.glow);
@@ -169,6 +170,7 @@ function lookAtHour(hour: number, out: Look) {
   out.cloudCover = 0;
   out.wet = 0;
   out.rain = 0;
+  out.overcast = 0;
 }
 
 /** Greys, dims and thickens a look for the weather, in place. */
@@ -190,22 +192,22 @@ function weatherLook(out: Look, c: Climate) {
   out.hemiIntensity *= 1 + 0.2 * o + 0.9 * o * out.night; // a night under cloud is lit by the glow of the sky, not pitch black
   out.exposure *= 1 - 0.04 * o;
   out.fogFar *= w.fog;
-  out.fogNear *= 0.45 + 0.55 * w.fog;
   // Stars are hidden by cloud; the moon too.
   out.night *= 1 - 0.85 * o;
   out.cloudCover = w.cover;
   out.wet = w.wet;
   out.rain = w.rain;
+  out.overcast = o;
 }
 
 function copyLook(dst: Look, src: Look) {
   dst.zenith.copy(src.zenith); dst.horizon.copy(src.horizon); dst.sunColor.copy(src.sunColor);
   dst.sunIntensity = src.sunIntensity; dst.sunDir.copy(src.sunDir);
   dst.hemiSky.copy(src.hemiSky); dst.hemiGround.copy(src.hemiGround); dst.hemiIntensity = src.hemiIntensity;
-  dst.exposure = src.exposure; dst.fogNear = src.fogNear; dst.fogFar = src.fogFar;
+  dst.exposure = src.exposure; dst.fogFar = src.fogFar;
   dst.night = src.night; dst.glow = src.glow; dst.headlight = src.headlight; dst.cloudCover = src.cloudCover;
   dst.cloudColor.copy(src.cloudColor); dst.cloudGlow.copy(src.cloudGlow); dst.mountain.copy(src.mountain);
-  dst.wet = src.wet; dst.rain = src.rain;
+  dst.wet = src.wet; dst.rain = src.rain; dst.overcast = src.overcast;
 }
 
 /** Moves `cur` a fraction `k` of the way to `tgt`. */
@@ -218,7 +220,6 @@ function easeLook(cur: Look, tgt: Look, k: number) {
   cur.sunIntensity = m(cur.sunIntensity, tgt.sunIntensity);
   cur.hemiIntensity = m(cur.hemiIntensity, tgt.hemiIntensity);
   cur.exposure = m(cur.exposure, tgt.exposure);
-  cur.fogNear = m(cur.fogNear, tgt.fogNear);
   cur.fogFar = m(cur.fogFar, tgt.fogFar);
   cur.night = m(cur.night, tgt.night);
   cur.glow = m(cur.glow, tgt.glow);
@@ -226,6 +227,7 @@ function easeLook(cur: Look, tgt: Look, k: number) {
   cur.cloudCover = m(cur.cloudCover, tgt.cloudCover);
   cur.wet = m(cur.wet, tgt.wet);
   cur.rain = m(cur.rain, tgt.rain);
+  cur.overcast = m(cur.overcast, tgt.overcast);
 }
 
 export interface AtmosphereParts {
@@ -244,6 +246,13 @@ export class Atmosphere {
   private readonly rain = new Rain();
   private readonly headlight = new THREE.SpotLight('#fff1d6', 0, 70, 0.8, 1, 1.1);
   private readonly rainTint = new THREE.Color();
+  /** Colour grade and bloom for the current look (read by the post-processing pass). */
+  readonly grade = makeGrade();
+  /** Changes when the sky has changed enough to re-light the reflections (graphics.ts). */
+  skyKey = 0;
+  /** Set by the graphics tier: cloud shadows on the ground, and how much of the hemisphere light to keep when the sky lights things instead. */
+  cloudShadows = false;
+  hemiScale = 1;
   /** Direction the shadow-casting light shines from (the sun, or the moon at night). */
   readonly lightDir = new THREE.Vector3(0.45, 0.62, -0.64).normalize();
 
@@ -348,15 +357,24 @@ export class Atmosphere {
     HORIZON_COLOR.copy(l.horizon);
     SUN_COLOR.copy(l.sunColor);
     SUN_DIRECTION.copy(l.sunDir);
-    if (scene.fog instanceof THREE.Fog) {
-      scene.fog.color.copy(l.horizon);
-      scene.fog.near = l.fogNear;
-      scene.fog.far = l.fogFar;
-    }
-    sky.setSkyLook(l.glow, l.night);
-    sky.setMountainTint(l.mountain);
-    sky.setClouds(l.cloudColor, l.cloudGlow);
+    if (scene.fog instanceof THREE.Fog) scene.fog.color.copy(l.horizon); // (the fog itself is the height fog in fog.ts)
+    const sunY = l.sunDir.y;
+    const gold = goldenAmount(sunY, l.overcast);
+    const band = 0.35 * gold; // the warm band along the horizon at low sun
     sky.setCloudCover(l.cloudCover);
+    sky.setSkyLook(l.glow, l.night, l.overcast, band);
+    sky.setClouds(l.cloudColor, l.cloudGlow);
+    // Exponential height fog: about 1.5 optical depths over the old fog distance (after a 70 m clear start), thicker at dawn and dusk, thinning above the valley floor.
+    const density = (1.45 / l.fogFar) * (1 + 0.5 * gold);
+    sky.setMountainTint(l.mountain, density * 3600);
+    const up = THREE.MathUtils.smoothstep(sunY, -0.06, 0.06);
+    const shade = this.cloudShadows ? 0.6 * (1 - 0.6 * l.overcast) * THREE.MathUtils.smoothstep(sunY, 0.05, 0.25) : 0;
+    setFog(density, 1 / 110, riderPos.y - 28, l.fogFar, l.sunDir, 0.12 * l.glow * up, l.sunColor, band,
+      sky.cloudThreshold, sky.drift.x, sky.drift.y, shade);
+    // Grade by how dark it is (the sun's height, so night under cloud still grades as night).
+    const dark = 1 - THREE.MathUtils.smoothstep(sunY, -0.1, 0.12);
+    gradeFor({ night: dark, overcast: l.overcast, wet: l.wet, sunY }, this.grade);
+    this.skyKey = ((Math.round(sunY * 24) * 37 + Math.round(l.cloudCover * 8)) * 37 + Math.round(l.night * 8)) * 37 + Math.round(l.overcast * 8);
 
     // The main light: the sun, handing over to the moon as night comes in.
     const moonness = THREE.MathUtils.smoothstep(l.night, 0.35, 0.8);
@@ -367,7 +385,7 @@ export class Atmosphere {
     sun.intensity = l.sunIntensity;
     hemi.color.copy(l.hemiSky);
     hemi.groundColor.copy(l.hemiGround);
-    hemi.intensity = l.hemiIntensity;
+    hemi.intensity = l.hemiIntensity * (this.hemiScale + (1 - this.hemiScale) * dark); // (after dark the sky is too dim to light things: keep the hemisphere)
     renderer.toneMappingExposure = l.exposure;
 
     // The rider's front light: a soft pool on the road ahead, only once it's dim.

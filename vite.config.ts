@@ -27,6 +27,8 @@ export default defineConfig({
         // own that browsers (and the service worker) keep across deploys.
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
+          // The post-processing addons load with src/world/post.ts, only on Medium and up: not in the eager three chunk.
+          if (/node_modules\/three\/examples\/jsm\/(postprocessing|shaders)\//.test(id)) return 'vendor-three-post';
           if (/node_modules\/three\//.test(id)) return 'vendor-three';
           if (/node_modules\/@sentry/.test(id)) return 'vendor-sentry';
           if (/node_modules\/(@neon|better-auth|@better-auth|better-call|nanostores|zod|@better-fetch|jose|@supabase|@neondatabase)/.test(id)) return 'vendor-neon';

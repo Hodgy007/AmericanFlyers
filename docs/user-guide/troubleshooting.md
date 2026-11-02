@@ -123,7 +123,7 @@ If you cancel the picker, nothing happens. That's expected.
 
 ## The scene is slow or stuttery
 
-The 3D view needs a reasonably capable graphics card. Close other tabs and apps that use the GPU, and try a smaller browser window. The data and trainer control keep working even when the picture slows down.
+The 3D view needs a reasonably capable graphics card. Open ⚙ Settings → **Graphics** and choose **Low** (or leave it on Auto, which steps down by itself when frames run slow). Close other tabs and apps that use the GPU, and try a smaller browser window. The data and trainer control keep working even when the picture slows down.
 
 ## Still stuck?
 

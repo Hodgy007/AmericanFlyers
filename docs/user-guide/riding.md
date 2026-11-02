@@ -49,6 +49,7 @@ Why steer? To line up on someone's wheel for the draft (see [Riding together](ri
 - **Auto** time starts at the stage's usual time (Route 66 and Hell of the West start at dusk, the others in daylight) and moves on as you ride, about an hour of light every two minutes, so a long ride can run from dusk into night and on to dawn.
 - **Auto** weather uses the stage's own (the Tourmalet is cloudy, the rest clear) and now and then changes.
 - **Night** has a moon and stars and a soft light from your front light on the road ahead. **Rain** brings streaks, thicker mist, a darker, glossier road and a gentle rain sound (with sound on).
+- The sky has real depth: haze that thickens towards the horizon and warms towards the sun, drifting clouds lit from the sun's side, and a colour grade that follows the light and weather (⚙ Settings → **Graphics** sets how much of this your device draws). On High and Ultra the clouds also cast shadows that slide over the land.
 
 ## Wind and echelons
 

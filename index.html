@@ -349,6 +349,16 @@
           <input name="difficulty" type="range" min="0" max="100" step="5" />
           <span class="hint">How much of the road grade the trainer simulates. 100% feels like the real hill.</span>
         </label>
+        <label>Graphics
+          <select name="graphics" id="graphics-choice">
+            <option value="auto">Auto</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="ultra">Ultra</option>
+          </select>
+          <span class="hint" id="graphics-note"></span>
+        </label>
         <div class="dev-box">
           <strong>Remembered devices</strong>
           <span class="hint">This browser remembers the trainer and heart rate strap you last connected, so next time they reconnect without searching. Forgetting one only removes it from this browser.</span>

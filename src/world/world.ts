@@ -7,6 +7,9 @@ import type { BikeStyle } from '../garage/style';
 import { Road, type MarkerConfig } from './road';
 import { Sky, HORIZON_COLOR } from './sky';
 import { Atmosphere } from './atmosphere';
+import { installFog } from './fog';
+import { Graphics, probeSignals, wantsMsaa } from './graphics';
+import { isChoice } from './quality';
 import { DEFAULT_LANE, LANE_MAX, LANE_MIN } from '../steering';
 import type { TimeOfDay, Weather } from '../settings';
 import { Terrain } from './terrain';
@@ -35,6 +38,7 @@ export class World {
   private readonly others = new OtherRiders();
   private readonly hemi = new THREE.HemisphereLight('#cfe3ff', '#4d5a3a', 1.1);
   private atmosphere!: Atmosphere;
+  private readonly gfx: Graphics;
   private lane = DEFAULT_LANE; // where the bike is across the road, eased
   private laneTarget = DEFAULT_LANE;
   private mode: CameraMode = 'chase';
@@ -48,19 +52,19 @@ export class World {
   private orbitAngle = 2.3;
 
   constructor(canvas: HTMLCanvasElement, markers: MarkerConfig) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const signals = probeSignals(); // what the device is, for the graphics tier
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: wantsMsaa(signals), powerPreference: 'high-performance' });
+    installFog(); // the height fog and cloud shadows are shader chunks: in place before any material compiles
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
 
-    this.scene.fog = new THREE.Fog(HORIZON_COLOR, 180, 1150);
+    this.scene.fog = new THREE.Fog(HORIZON_COLOR, 180, 1150); // only switches fog on and carries its colour: see fog.ts
     this.scene.add(this.hemi);
 
     // Sun with a tight shadow box that follows the rider.
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
     const s = this.sun.shadow.camera;
     s.left = -30; s.right = 30; s.top = 30; s.bottom = -30; s.near = 1; s.far = 400;
     this.sun.shadow.bias = -0.0004;
@@ -75,6 +79,9 @@ export class World {
       setWet: (w) => { this.road.setWet(w); this.terrain.setWet(w); },
     });
     this.atmosphere.restage(currentStage());
+    // Graphics tier (Low to Ultra, Auto by default): shadows, post-processing, sky detail, render scale. See graphics.ts.
+    this.gfx = new Graphics({ renderer: this.renderer, scene: this.scene, camera: this.camera, sun: this.sun, sky: this.sky }, signals);
+    this.gfx.attach(this.atmosphere);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -109,10 +116,17 @@ export class World {
   /** 0..1: how dark it is (the Tron bike glows more at night). */
   get nightAmount() { return this.atmosphere.nightAmount; }
 
+  /** Graphics quality (Settings): Auto or a fixed tier, remembered on this device. */
+  get graphicsChoice() { return this.gfx.currentChoice; }
+  setGraphics(c: string) { if (isChoice(c)) this.gfx.setChoice(c); }
+  /** A line for Settings saying what Auto picked. */
+  graphicsNote() { return this.gfx.describe(); }
+
   /** The hub's backdrop: the camera circles your rider slowly (and the rider is shown, whatever the ride camera). */
   setOrbit(on: boolean) {
     if (this.orbiting === on) return;
     this.orbiting = on;
+    this.gfx.setOrbiting(on);
     this.rider.setPersonVisible(on ? true : this.mode !== 'rider');
     this.firstFrame = true;
   }
@@ -162,7 +176,7 @@ export class World {
   private resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.renderer.setSize(w, h, false);
+    this.gfx.resize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -233,13 +247,12 @@ export class World {
     this.camera.lookAt(this.smoothLook);
     this.others.update(state.distance, dt, this.camera, this.lane);
 
-    // Keep the shadow box centred on the rider.
-    this.sun.target.position.copy(riderPos);
     this.atmosphere.update(dt, state.speedMs > 0.3, riderPos, forward, this.camera);
-    this.sun.position.copy(riderPos).addScaledVector(this.atmosphere.lightDir, 200);
+    // Keep the shadow box centred on the rider (snapped to the shadow map's texels).
+    this.gfx.fitShadow(riderPos, this.atmosphere.lightDir);
 
     updateGlow(performance.now() / 1000, this.atmosphere.nightAmount); // the Tron bike's pulse
     this.sky.update(this.camera, dt);
-    this.renderer.render(this.scene, this.camera);
+    this.gfx.render(dt);
   }
 }

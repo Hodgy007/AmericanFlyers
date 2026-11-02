@@ -44,12 +44,16 @@ export function groundGlow(): THREE.Mesh {
   return m;
 }
 
+let glowGain = 1;
+/** With post-processing the pools of glow add up in linear HDR light, which reads hotter: Graphics turns them down there. */
+export function setGlowGain(g: number) { glowGain = g; }
+
 /** Pulses every Tron bike's glow; brighter at night. Call once a frame with the clock in seconds and the night amount 0..1. */
 export function updateGlow(timeS: number, night: number) {
   const pulse = 0.88 + 0.12 * Math.sin(timeS * 2.4);
   neonMat.emissiveIntensity = (1.0 + 1.3 * night) * pulse;
-  haloMat.opacity = (0.06 + 0.24 * night) * pulse;
-  if (groundMat) groundMat.opacity = (0.4 + 0.5 * night) * pulse;
+  haloMat.opacity = (0.06 + 0.24 * night) * pulse * glowGain;
+  if (groundMat) groundMat.opacity = (0.4 + 0.5 * night) * pulse * glowGain;
 }
 
 // ------------------------------------------------------------ wheels ----
