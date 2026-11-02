@@ -935,6 +935,14 @@ function toast(msg: string, ms = 3500) {
 }
 world.onGraphicsNote((m) => toast(m, 4500)); // Auto changed the graphics tier ("Graphics lowered to High for a smoother ride")
 
+/** Settings → Graphics: "Auto (now: High)" and the note under it. */
+function refreshGraphicsLabel() {
+  $('graphics-note').textContent = world.graphicsNote();
+  ($('graphics-choice') as HTMLSelectElement).options[0].text = world.graphicsAutoLabel();
+}
+// Auto can still change tier just as Settings opens: keep the label in step while it's open.
+setInterval(() => { if ($<HTMLDialogElement>('settings').open) refreshGraphicsLabel(); }, 500);
+
 const CAMERA_LABELS: Record<CameraMode, string> = { chase: 'Chase view', side: 'Side view', rider: 'Rider’s view' };
 
 function cycleCamera() {
@@ -1478,8 +1486,7 @@ async function openSettings() {
   }
   $('difficulty-out').textContent = `${settings.difficulty}%`;
   $<HTMLSelectElement>('graphics-choice').value = world.graphicsChoice; // per device, not a synced setting
-  $('graphics-note').textContent = world.graphicsNote();
-  ($('graphics-choice') as HTMLSelectElement).options[0].text = world.graphicsAutoLabel(); // "Auto (now: High)"
+  refreshGraphicsLabel();
   // The AI switches stay off until the small consent module is here (signed-out riders can't opt in);
   // if it can't load (a toast says so) the rest of Settings still opens.
   for (const n of ['aiCoach', 'aiRivals']) (form.elements.namedItem(n) as HTMLInputElement).disabled = true;
