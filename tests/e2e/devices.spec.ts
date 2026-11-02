@@ -16,6 +16,10 @@ interface MockOptions {
   getDevices: boolean;
   /** localStorage 'americanflyers.devices' to start with. */
   remembered?: unknown;
+  /** Only the older writeValue() (no writeValueWithResponse), as in Bluefy on iPhone. */
+  legacyWrite?: boolean;
+  /** Writes to the FTMS control point fail (e.g. another app holds control). */
+  controlFails?: boolean;
 }
 
 async function setup(page: Page, o: MockOptions) {
@@ -42,7 +46,12 @@ async function setup(page: Page, o: MockOptions) {
       const c: any = new EventTarget();
       c.value = null;
       c.startNotifications = async () => c;
-      c.writeValueWithResponse = async (buf: ArrayBuffer) => { onWrite?.([...new Uint8Array(buf)]); };
+      const write = async (buf: ArrayBuffer) => {
+        if (opts.controlFails && onWrite) throw new DOMException('GATT operation failed for unknown reason.', 'NotSupportedError');
+        onWrite?.([...new Uint8Array(buf)]);
+      };
+      if (opts.legacyWrite) c.writeValue = write;
+      else { c.writeValueWithResponse = write; c.writeValue = write; }
       c.emit = (bytes: number[]) => { c.value = new DataView(new Uint8Array(bytes).buffer); c.dispatchEvent(new Event('characteristicvaluechanged')); };
       return c;
     }
@@ -282,4 +291,23 @@ test('forget removes a device from the menu and from Settings', async ({ page })
   await press(page, '[data-forget="hr"]');
   expect(await stored(page)).toEqual({});
   await expect(box).toContainText('Heart rate: none remembered');
+});
+
+test('Bluefy-style browser without writeValueWithResponse: the trainer connects and takes resistance control', async ({ page }) => {
+  await setup(page, { getDevices: false, legacyWrite: true });
+  await page.goto('/');
+  await ride(page);
+  await press(page, '#btn-menu-trainer');
+  await expect(page.locator('#trainer-status')).toContainText('KICKR Test · resistance follows the road');
+  expect((await bt(page)).writes[0]).toEqual([0x00]); // request control went out through writeValue()
+});
+
+test('a control point that refuses writes still leaves the trainer connected for power', async ({ page }) => {
+  await setup(page, { getDevices: false, controlFails: true });
+  await page.goto('/');
+  await ride(page);
+  await press(page, '#btn-menu-trainer');
+  await expect(page.locator('#trainer-status')).toContainText('KICKR Test · power only');
+  await page.evaluate(() => (window as any).__bt.pedalWhileConnected(210, 90));
+  await expect(page.locator('#hud')).toContainText(/Power[1-9]\d*W/);
 });

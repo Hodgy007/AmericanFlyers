@@ -100,9 +100,15 @@ async function connectFtms(
   const control = new ControlPoint(await service.getCharacteristic(FTMS_CONTROL_POINT).catch(() => null));
   let canControl = false;
   if (control.available) {
-    await control.start();
-    canControl = await control.send(new Uint8Array([OP_REQUEST_CONTROL]));
-    if (canControl) await control.send(new Uint8Array([OP_START_RESUME]));
+    // Taking control is a bonus: if the control point won't play (another app holds control, or the
+    // browser can't write to it), keep the connection for power and cadence rather than failing it.
+    try {
+      await control.start();
+      canControl = await control.send(new Uint8Array([OP_REQUEST_CONTROL]));
+      if (canControl) await control.send(new Uint8Array([OP_START_RESUME]));
+    } catch {
+      canControl = false;
+    }
   }
 
   return {
@@ -176,7 +182,10 @@ class ControlPoint {
         this.pending = resolve;
         setTimeout(() => { if (this.pending === resolve) { this.pending = null; resolve(false); } }, 3000);
       });
-      await this.char.writeValueWithResponse(payload);
+      // Bluefy and other iPhone Web Bluetooth browsers only have the older writeValue(), which also
+      // writes with a response. Chrome has both.
+      if (typeof this.char.writeValueWithResponse === 'function') await this.char.writeValueWithResponse(payload);
+      else await this.char.writeValue(payload);
       return response;
     };
     const result = this.queue.then(run, run);
