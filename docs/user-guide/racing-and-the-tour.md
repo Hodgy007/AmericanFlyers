@@ -1,6 +1,6 @@
 # Racing and the Hell of the West tour
 
-This page covers racing the pro teams over a stage, the live race panel, the classifications and the three-stage **Hell of the West tour** from the film *American Flyers*.
+This page covers racing the pro teams over a stage, the live race panel, the classifications and the three-stage **Hell of the West tour**.
 
 ## Racing a stage
 
@@ -45,7 +45,7 @@ Your ride still counts for your own records: it is saved to your account, and a 
 
 ## The Hell of the West tour
 
-Open **☰ Menu → 🏆 Hell of the West tour** (or the tour card at the top of the stage picker) and press **Start the tour**. You race the three stages of the film in order against the same riders:
+Open **☰ Menu → 🏆 Hell of the West tour** (or the tour card at the top of the stage picker) and press **Start the tour**. You race the three stages in order against the same riders:
 
 | Stage | Where | Distance |
 | --- | --- | --- |
