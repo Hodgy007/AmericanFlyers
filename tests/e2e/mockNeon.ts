@@ -66,14 +66,14 @@ export async function mockNeon(page: Page, opts: { signedIn?: boolean } = {}) {
   const now = Date.now();
   const startsAt = (hours: number) => new Date(now + hours * 3600000).toISOString();
 
-  await page.route(/neonauth|apirest/, (route) => {
+  await page.route(/neonauth|\/api\/auth\/|apirest/, (route) => {
     const req = route.request();
     const CORS: Record<string, string> = cors(req.headers()['origin']);
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { ...CORS, 'access-control-allow-headers': req.headers()['access-control-request-headers'] ?? '*' } });
     const json = (body: unknown, status = 200) => route.fulfill({ status, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const path = new URL(req.url()).pathname;
 
-    if (/neonauth/.test(req.url())) {
+    if (/neonauth|\/api\/auth\//.test(req.url())) {
       if (/\/get-session$/.test(path) && signedIn) {
         // The Data API wants a JWT: Neon Auth hands it over in this header. This one is unsigned and only has to look right.
         const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');

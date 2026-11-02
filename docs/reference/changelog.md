@@ -14,6 +14,10 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Copy.** The hub's Route subtitle is "Pick a road to ride. Race it if you like."; the card's chip is a smaller, quieter **🏁 Race it** shortcut; the Hell of the West tour card still says it is a race series. Settings explains the pro teams switch as the ride mode.
 - New `src/rideMode.ts`; tests in `tests/unit/rideMode.test.ts` (migration, mode logic) and `tests/e2e/rideMode.spec.ts` (Solo has no teams, With pro teams, the migration, Race starting a race).
 
+### Sign-in works in Safari
+
+- Neon Auth is now served from our own origin at `/api/auth` (a small pass-through function, `api/auth-proxy.ts`, in production — a plain Vercel rewrite adds `X-Forwarded-Host`, which Neon rejects — and a proxy in `vite.config.ts` for `npm run dev` / `vite preview`), so the session cookie is first-party. Calling Neon's own domain made it a third-party cookie, which Safari (ITP) blocks: riders signed in with Google, Neon created the session, but the app never saw it and stayed on the home page. The service worker no longer touches `/api/` requests. Existing riders sign in once more after this change.
+
 ### Graphics: Auto starts on Ultra and steps down when it's jerky
 
 - **Auto starts on Ultra on every device**, phones included. Only a software renderer (SwiftShader, llvmpipe… and the e2e browser) still starts on Low. The device signals (cores, memory, GPU, screen) are kept for logging and that exception only.

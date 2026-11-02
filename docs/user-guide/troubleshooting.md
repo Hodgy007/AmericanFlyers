@@ -65,6 +65,8 @@ If you cancel the picker, nothing happens. That's expected.
 
 ## Sign-in problems
 
+- **Signed in with Google, but stuck on the home page (Safari, iPhone, iPad):** fixed — sign-in now runs through the app's own address, which Safari allows. If it still happens, reload the page and sign in again. ("This email is already registered" when trying email sign-up just means the address already has an account from Google: use **Continue with Google**.)
+
 **Symptom:** *Sign-in didn't finish:* followed by a message, after you return from Google.
 
 **Fix:** Try again. Check the message in the toast. If the same error keeps happening, the site may not be set up for sign-in. See [Authentication setup](../admin-guide/authentication-setup.md).

@@ -45,7 +45,7 @@ const DEBRIEF = {
 const RIVAL_LINES = Object.fromEntries(['start', 'you_pass', 'they_attack', 'they_drop_you', 'you_drop_them', 'last_km', 'they_win', 'you_win'].map((t) => [t, [`Mock ${t} line one`, `Mock ${t} line two`]]));
 
 async function mock(page: Page, f: Fixture) {
-  await page.route(/neonauth/, (route) => {
+  await page.route(/neonauth|\/api\/auth\//, (route) => {
     const req = route.request();
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
     const body = { session: { id: 's1', token: 'plain-session-token', userId: 'u1', expiresAt: '2099-01-01T00:00:00Z' }, user: { id: 'u1', name: 'Alex Rider', email: 'alex@example.invalid', emailVerified: true, image: null } };
@@ -96,7 +96,7 @@ async function ride(page: Page) {
 async function setup(page: Page, f: Partial<Fixture> = {}, query = ''): Promise<Fixture> {
   const fx: Fixture = { consent: { coach: false, rivals: false }, rivals: [], aiCalls: [], rpcCalls: [], ...f };
   await mock(page, fx);
-  if (process.env.E2E_DEBUG) page.on('request', (r) => { if (/neonauth|apirest|api\/ai/.test(r.url())) console.log(new Date().toISOString().slice(11, 19), r.method(), r.url().replace(/^.*\/(auth|rest\/v1)/, '$1').slice(0, 90)); });
+  if (process.env.E2E_DEBUG) page.on('request', (r) => { if (/neonauth|api\/auth|apirest|api\/ai/.test(r.url())) console.log(new Date().toISOString().slice(11, 19), r.method(), r.url().replace(/^.*\/(auth|rest\/v1)/, '$1').slice(0, 90)); });
   await page.addInitScript(() => {
     localStorage.setItem('americanflyers.signedIn', '1');
     localStorage.setItem('americanflyers.onboarded', '1');
