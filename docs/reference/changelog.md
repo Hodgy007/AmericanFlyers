@@ -15,6 +15,9 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Haze.** The linear fog is replaced by exponential height fog (denser in valleys, thinner up high) whose colour warms towards the sun and matches the sky's horizon, installed once as shader-chunk overrides so terrain, road, trees, riders and landmarks all get it (`world/fog.ts`). Thicker at dawn, dusk and in rain.
 - **Cost.** The entry chunk grew by about 5 kB gzip (the tier choice, the fog and the sky shader) and `vendor-three` by about 2 kB (the reflection prefilter). The frame-time controller is a 1 kB chunk loaded just after the first frame. The post chunk is 49 kB gzip of three addons plus 2 kB of ours, fetched on Medium and up only. Drawn in headless Chromium's software renderer at 800 × 500, a frame costs about 1.0× on Low, 1.2× on Medium, 1.8× on High and 2.3× on Ultra (a relative guide only; real GPUs differ).
 - **Tests.** `tests/unit/quality.test.ts` covers tier selection, the controller (warm-up, hysteresis, cool-down, back-off, fixed tiers) and the grade per look.
+### A third home hero
+
+- **The home page hero now rotates through three heroes** in a fixed order: the pit bull chase (`dog`), the cyclist glancing back at the pit bull (`look`, new: `public/images/hero-look*.jpg` and `hero-look*.mp4`), then the original rider (`rider`), crossfading every 10 seconds. Each visit starts on the next hero in that order (the last start is kept in `americanflyers.hero`; an unknown value starts on the pit bull chase). A hero's still and clip are only fetched about 5 seconds before it is shown, and a slide is reused on later laps. `?hero=look` pins the new one, like `?hero=dog` and `?hero=rider`. Reduced motion and data saver still get the still image only, cycling through the three per visit.
 
 ### An account is required: no more guest riding
 

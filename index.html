@@ -14,22 +14,24 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" /></noscript>
     <script>
-      // The home page hero rotates between the pit bull chase and the original
-      // rider (src/home.ts crossfades them), starting on the other one each
-      // visit. ?hero=dog or ?hero=rider pins one.
+      // The home page hero rotates between three heroes (src/home.ts crossfades them) in a
+      // fixed order, dog -> look -> rider -> dog, starting on the next one each visit.
+      // ?hero=dog, ?hero=look or ?hero=rider pins one.
       (function () {
+        var order = ['dog', 'look', 'rider'];
         var asked = new URLSearchParams(location.search).get('hero');
         var hero;
-        if (asked === 'rider' || asked === 'dog') hero = asked;
+        if (order.indexOf(asked) >= 0) hero = asked;
         else {
           try {
-            hero = localStorage.getItem('americanflyers.hero') === 'dog' ? 'rider' : 'dog';
+            // An unknown (or missing) stored value gives -1, so the visit starts on 'dog'.
+            hero = order[(order.indexOf(localStorage.getItem('americanflyers.hero')) + 1) % order.length];
             localStorage.setItem('americanflyers.hero', hero);
           } catch (e) { hero = 'dog'; }
           document.documentElement.dataset.heroRotate = '1';
         }
         document.documentElement.dataset.hero = hero;
-        var base = hero === 'dog' ? '/images/hero-dog' : '/images/hero';
+        var base = hero === 'dog' ? '/images/hero-dog' : hero === 'look' ? '/images/hero-look' : '/images/hero';
         [[base + '.jpg', '(min-width: 769px)'], [base + '-768.jpg', '(max-width: 768px)']].forEach(function (p) {
           var l = document.createElement('link');
           l.rel = 'preload'; l.as = 'image'; l.href = p[0]; l.media = p[1];
@@ -60,7 +62,7 @@
         <div class="home-copy">
           <p class="home-eyebrow"><span class="stripe"></span>Free indoor cycling</p>
           <h1 id="home-title">Welcome to the free <span>American Flyers</span> Training Program</h1>
-          <p class="home-lead">Take on the Hell of the West, the final stage from the film, then Alpe d'Huez, Mont Ventoux and more in 3D on your Wahoo or any smart trainer. Ride with friends, race your best ride's ghost, and follow a training plan, right in your browser.</p>
+          <p class="home-lead">Take on the Hell of the West, a brutal Rocky Mountain climb from Idaho Springs to Echo Lake, then Alpe d'Huez, Mont Ventoux and more in 3D on your Wahoo or any smart trainer. Ride with friends, race your best ride's ghost, and follow a training plan, right in your browser.</p>
           <div class="home-cta">
             <p class="home-cta-title">Sign in to ride</p>
             <div class="home-signin">
@@ -73,7 +75,7 @@
           </div>
         </div>
         <ul class="home-features">
-          <li><strong>🏔 Hell of the West</strong><span>The film's final stage, Idaho Springs to Echo Lake, plus Alpe d'Huez, the Stelvio, Ventoux, the Tourmalet and the Zoncolan</span></li>
+          <li><strong>🏔 Hell of the West</strong><span>Climb from Idaho Springs to Echo Lake in the Colorado Rockies, plus Alpe d'Huez, the Stelvio, Ventoux, the Tourmalet and the Zoncolan</span></li>
           <li><strong>👥 Ride together</strong><span>Everyone on your stage rides on the same road. Invite a friend with a link</span></li>
           <li><strong>🏆 Leaderboards &amp; ghosts</strong><span>Weekly and all-time times on every climb. Race your best, or the leader's ghost</span></li>
           <li><strong>📅 Workouts &amp; plans</strong><span>ERG workouts, virtual shifting, and plans from first ride to a higher FTP</span></li>

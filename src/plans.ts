@@ -106,7 +106,7 @@ export const PLANS: Plan[] = [
     id: 'hell-of-the-west',
     name: 'Hell of the West',
     level: 'All levels · 4 weeks · 3–4 rides a week',
-    description: 'Train like the film: long tempo, climbing and race efforts, building to the final stage from Idaho Springs to Echo Lake.',
+    description: 'Long tempo, climbing and race efforts, building to the Hell of the West’s final stage from Idaho Springs to Echo Lake.',
     weeks: [
       [
         s('Ramp FTP Test', 'Know your numbers before the race.', { workout: W.ramp }),

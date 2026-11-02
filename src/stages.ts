@@ -412,7 +412,7 @@ const stelvio = buildClimb({
 const hellOfTheWestClimb = buildClimb({
   id: 'hell-of-the-west', // keep this id: leaderboards and plans use it
   name: 'Hell of the West · Stage 3: Echo Lake',
-  tagline: 'The final stage from American Flyers: 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake, 3,235 m.',
+  tagline: 'The Hell of the West’s final stage: 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake, 3,235 m.',
   kmGrades: [3.0, 3.2, 3.6, 3.8, 3.4, 3.0, 3.8, 4.0, 3.6, 3.4, 3.9, 5.2, 5.8, 6.2, 6.0, 5.8, 6.4, 6.0, 5.6, 5.9, 1.2],
   length: 20800,
   gain: 942,
@@ -694,7 +694,7 @@ const lapFarm = FARM_LANDMARKS.map((k) => ({ ...k, every: MB_LAP / Math.round(MB
 const morgulBismark: Stage = {
   id: 'hotw-morgul-bismark',
   name: 'Hell of the West · Stage 1: Morgul-Bismark',
-  tagline: 'The first race in the film: two 21 km laps of the Boulder circuit, finishing up The Wall (18%) each time.',
+  tagline: 'Two 21 km laps of the Boulder circuit, finishing up The Wall (18%) each time.',
   finish: MB_FINISH,
   lapLength: MB_LAP,
   elevationAt: mbElevation,

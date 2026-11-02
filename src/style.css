@@ -630,7 +630,13 @@ dialog h3 { font-family: var(--font-display); font-weight: 700; font-size: 18px;
 .home-bg { background: url('/images/hero.jpg') 70% center / cover no-repeat; }
 /* Before home.ts runs, the still follows the hero index.html picked; after, each slide names its own. */
 :root[data-hero='dog'] .home-bg, .home .home-bg.hero-dog { background-image: url('/images/hero-dog.jpg'); }
+:root[data-hero='look'] .home-bg, .home .home-bg.hero-look { background-image: url('/images/hero-look.jpg'); }
 .home .home-bg.hero-rider { background-image: url('/images/hero.jpg'); }
+/* The dog runs at about a third of this frame: slide the picture right so the sign-in card doesn't cover it. */
+@media (min-width: 769px) {
+  :root[data-hero='look'] .home-bg, .home .home-bg.hero-look { background-position: 0% center; }
+  .home-slide[data-hero='look'] .home-video { object-position: 0% center; }
+}
 .home-video { opacity: 0; transition: opacity 0.6s ease; }
 .home-video.ready { opacity: 1; }
 .home-scrim {
@@ -673,6 +679,10 @@ body.at-home .toast { bottom: 24px; }
 @media (max-width: 768px) {
   .home-bg { background-image: url('/images/hero-768.jpg'); background-position: 72% top; background-size: auto 62vh; background-color: #080d1e; }
   :root[data-hero='dog'] .home-bg, .home .home-bg.hero-dog { background-image: url('/images/hero-dog-768.jpg'); }
+  :root[data-hero='look'] .home-bg, .home .home-bg.hero-look { background-image: url('/images/hero-look-768.jpg'); }
+  /* Phones: frame the head-turn hero so both the dog (left) and the rider fit. */
+  :root[data-hero='look'] .home-bg, .home .home-bg.hero-look { background-position: 58% top; }
+  .home-slide[data-hero='look'] .home-video { object-position: 58% center; }
   .home .home-bg.hero-rider { background-image: url('/images/hero-768.jpg'); }
   .home-video { height: 62vh; object-position: 72% center; }
   .home-scrim { background: linear-gradient(180deg, rgba(6, 10, 26, 0.35) 0%, rgba(6, 10, 26, 0.15) 30%, rgba(6, 10, 26, 0.85) 52%, #080d1e 64%); }
