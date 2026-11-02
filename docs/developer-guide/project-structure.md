@@ -25,7 +25,9 @@ This page lists every file and folder in the repository, with a one-line summary
 | `public/models/*.glb` | 3D models: landmarks (barn, farmhouse, windmill, diner, water tower, gas station, silos, covered bridge, start/finish gantry) and the rigged rider (`rider.glb`). |
 | `public/models/README.md` | What each landmark model is and where it's placed. |
 | `public/textures/asphalt.jpg` | Road surface texture. |
-| `public/textures/grass.jpg` | Grass detail texture, multiplied over the land colors. |
+| `public/textures/asphalt-n.jpg` | The road's asphalt normal map (CC0, Poly Haven). |
+| `public/textures/terrain/*.jpg` | The seven terrain layers (grass, dry, dirt, rock, snow, sandstone, sand) and their `-n` normal maps (CC0, Poly Haven), fetched lazily by `world/ground.ts`. |
+| `public/textures/README.md` | Where each texture comes from, its licence and how it was processed. |
 | `public/images/hero*.jpg`, `hero*.mp4` | The home page hero (still and looping video, with smaller phone versions). |
 | `public/images/hero-dog*.jpg`, `hero-dog*.mp4` | The second hero: a pit bull chasing the rider. |
 | `public/images/hero-look*.jpg`, `hero-look*.mp4` | The third hero: the cyclist glancing back at the pit bull. The home page rotates through the three heroes in the order dog, look, rider (`heroRotator()` in `src/home.ts`; `?hero=dog`, `?hero=look` or `?hero=rider` pins one). |
@@ -118,8 +120,17 @@ This page lists every file and folder in the repository, with a one-line summary
 | `workouts/ui.ts` | The workout library and the workout creator dialogs. |
 | `world/world.ts` | The Three.js renderer, lights, cameras, and the per-frame scene update. |
 | `world/others.ts` | Other riders and ghosts on the road: models, name tags, lanes, smoothing and passing. |
-| `world/terrain.ts` | Ground tiles, height and color, and the scattered trees. |
+| `world/terrain.ts` | Ground tiles, height, color and the seven ground-layer weights, and the scattered trees. |
+| `world/ground.ts` | Terrain texture splatting: the layer texture arrays, the shader patch (triplanar rock, macro tint, detail normals). Lazy. |
+| `world/scenery.ts` | What each graphics tier switches on for terrain textures, the wet road, paint, guardrails and crowds (`TIER_SPECS[tier].scenery`), and the ground layer ids. Pure. |
 | `world/road.ts` | Road chunks, distance markers, hairpin plaques, and the finish line. |
+| `world/roadExtras.ts` | The lazy chunk that fits out each road chunk: asphalt detail and wet look, painted words, guardrails, crowds. |
+| `world/roadSurface.ts` | The road's asphalt normal map, derived roughness and rain puddles. |
+| `world/roadPaint.ts` | Words painted on the climbs: where (`planPaint`), the lettering atlas and the strip geometry. |
+| `world/barriers.ts` | Guardrails on hairpins and steep drops. |
+| `world/crowds.ts` | Instanced spectators (placement, geometry, the cheering shader). |
+| `world/crowdZones.ts` | `crowdNear(d)`: how thick crowds are at a distance (shared by the sound and the spectators). Pure. |
+| `world/roadside.ts` | Hairpin detection from a stage's signs, `isClimb`, hashes. Pure. |
 | `world/landmarks.ts` | Loads the landmark models and places them along the road. |
 | `world/rider.ts` | The bike and rider: a built-in fallback, and the rig that poses the rigged rider (shared model, cloned per rider; frame colours and ghost look). |
 | `world/sky.ts` | The sky dome (scattering, sun, noise clouds, stars, moon) and the hazed mountain ring, all tinted at runtime by the atmosphere. |

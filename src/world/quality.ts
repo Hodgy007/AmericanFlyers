@@ -3,6 +3,9 @@
 // when frames run slow. Pure logic, no WebGL: the Graphics class (graphics.ts)
 // applies the result, and tests/unit/quality.test.ts covers the decisions.
 
+import type { SceneryTier } from './scenery';
+import { SCENERY } from './scenery';
+
 export type Tier = 'low' | 'medium' | 'high' | 'ultra';
 export type GraphicsChoice = Tier | 'auto';
 export const TIERS: readonly Tier[] = ['low', 'medium', 'high', 'ultra'];
@@ -20,13 +23,14 @@ export interface TierSpec {
   ibl: boolean; // sky reflections (a PMREM environment from the sky)
   cloudShadows: boolean;
   skyQuality: 0 | 1 | 2; // cloud octaves: 3 / 4 / 5
+  scenery: SceneryTier; // terrain textures, wet road, road paint, guardrails and crowds (scenery.ts)
 }
 
 export const TIER_SPECS: Record<Tier, TierSpec> = {
-  low: { maxPixelRatio: 1, shadowSize: 1024, shadowRadius: 1, shadowBox: 30, post: false, bloom: 0, aa: 'none', ao: 0, ibl: false, cloudShadows: false, skyQuality: 0 },
-  medium: { maxPixelRatio: 1.5, shadowSize: 2048, shadowRadius: 1, shadowBox: 30, post: true, bloom: 0.5, aa: 'fxaa', ao: 0, ibl: false, cloudShadows: false, skyQuality: 1 },
-  high: { maxPixelRatio: 2, shadowSize: 2048, shadowRadius: 2, shadowBox: 30, post: true, bloom: 1, aa: 'smaa', ao: 0.5, ibl: true, cloudShadows: true, skyQuality: 2 },
-  ultra: { maxPixelRatio: 2, shadowSize: 4096, shadowRadius: 1.6, shadowBox: 38, post: true, bloom: 2, aa: 'smaa', ao: 0.75, ibl: true, cloudShadows: true, skyQuality: 2 },
+  low: { maxPixelRatio: 1, shadowSize: 1024, shadowRadius: 1, shadowBox: 30, post: false, bloom: 0, aa: 'none', ao: 0, ibl: false, cloudShadows: false, skyQuality: 0, scenery: SCENERY.low },
+  medium: { maxPixelRatio: 1.5, shadowSize: 2048, shadowRadius: 1, shadowBox: 30, post: true, bloom: 0.5, aa: 'fxaa', ao: 0, ibl: false, cloudShadows: false, skyQuality: 1, scenery: SCENERY.medium },
+  high: { maxPixelRatio: 2, shadowSize: 2048, shadowRadius: 2, shadowBox: 30, post: true, bloom: 1, aa: 'smaa', ao: 0.5, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.high },
+  ultra: { maxPixelRatio: 2, shadowSize: 4096, shadowRadius: 1.6, shadowBox: 38, post: true, bloom: 2, aa: 'smaa', ao: 0.75, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.ultra },
 };
 
 /** Render scales the controller steps through (fractions of the pixel ratio the tier allows). */

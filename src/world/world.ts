@@ -9,7 +9,7 @@ import { Sky, HORIZON_COLOR } from './sky';
 import { Atmosphere } from './atmosphere';
 import { installFog } from './fog';
 import { Graphics, probeSignals, wantsMsaa } from './graphics';
-import { isChoice } from './quality';
+import { TIER_SPECS, isChoice, type Tier } from './quality';
 import { DEFAULT_LANE, LANE_MAX, LANE_MIN } from '../steering';
 import type { TimeOfDay, Weather } from '../settings';
 import { Terrain } from './terrain';
@@ -47,6 +47,8 @@ export class World {
   private readonly smoothLook = new THREE.Vector3();
   private firstFrame = true;
   private terrainReady = false;
+  private sceneryTier: Tier | null = null; // the tier the ground and roadside were last set up for (see applyScenery)
+  private framesDrawn = 0;
   // The hub (src/hub): a slow orbit round the rider instead of the ride cameras.
   private orbiting = false;
   private orbitAngle = 2.3;
@@ -82,9 +84,29 @@ export class World {
     // Graphics tier (Low to Ultra, Auto by default): shadows, post-processing, sky detail, render scale. See graphics.ts.
     this.gfx = new Graphics({ renderer: this.renderer, scene: this.scene, camera: this.camera, sun: this.sun, sky: this.sky }, signals);
     this.gfx.attach(this.atmosphere);
+    this.applyScenery();
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  /**
+   * Terrain textures, the road's wet look, painted words, guardrails and crowds follow the graphics
+   * tier (TIER_SPECS[tier].scenery). Checked each frame, so Auto stepping a tier up or down is picked
+   * up without touching graphics.ts. The terrain textures wait until a frame has been drawn.
+   */
+  private applyScenery() {
+    const tier = this.gfx.currentTier;
+    if (tier === this.sceneryTier) return;
+    this.sceneryTier = tier;
+    const spec = TIER_SPECS[tier];
+    this.road.setTier(spec.scenery, spec.ibl);
+    if (this.framesDrawn > 0) this.terrain.setScenery(spec.scenery);
+  }
+
+  /** The rider's first name, painted on the road on the big climbs ("ALLEZ SAM"). */
+  setRiderName(name: string | null | undefined) {
+    this.road.setRiderName(name);
   }
 
   get cameraMode() { return this.mode; }
@@ -253,6 +275,9 @@ export class World {
 
     updateGlow(performance.now() / 1000, this.atmosphere.nightAmount); // the Tron bike's pulse
     this.sky.update(this.camera, dt);
+    this.road.animate(performance.now() / 1000, riderPos.x, riderPos.y, riderPos.z);
     this.gfx.render(dt);
+    if (++this.framesDrawn === 1) this.terrain.setScenery(TIER_SPECS[this.gfx.currentTier].scenery); // textures: after the first frame
+    this.applyScenery();
   }
 }
