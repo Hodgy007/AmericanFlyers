@@ -46,8 +46,13 @@ test('Auto steps down when frames are jerky, says so, and remembers what worked'
   // Settings names what Auto is running now and explains it.
   await press(page, '#btn-settings');
   await expect(page.locator('#settings[open]')).toBeVisible();
+  // The label follows Auto while Settings is open: wait until it names the current tier (read both together).
+  const cap = (t: string) => t[0].toUpperCase() + t.slice(1);
+  await expect.poll(async () => {
+    const t = (await gfx(page)).tier;
+    return (await page.locator('#graphics-choice option[value=auto]').textContent()) === `Auto (now: ${cap(t)})`;
+  }, { timeout: 15_000 }).toBe(true);
   const now = (await gfx(page)).tier;
-  await expect(page.locator('#graphics-choice option[value=auto]')).toHaveText(`Auto (now: ${now[0].toUpperCase()}${now.slice(1)})`);
   await expect(page.locator('#graphics-note')).toContainText('Auto starts on Ultra');
   await expect(page.locator('#graphics-note')).toContainText(`lowered to ${now[0].toUpperCase()}${now.slice(1)}`);
   await press(page, '#settings button[value=cancel]');
