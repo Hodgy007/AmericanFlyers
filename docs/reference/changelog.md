@@ -6,6 +6,11 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### A Bluefy link for iPhone and iPad riders
+
+- Signed-in riders on an iPhone or iPad whose browser has no Web Bluetooth (Safari, Chrome and Edge there are all WebKit) see a small card in the hub's Ride panel with Bluefy's icon, a **Get Bluefy on the App Store** link and a **Copy link** button (the site's address, to paste into Bluefy). It never shows signed out, on other platforms, or inside Bluefy (where `navigator.bluetooth` exists). iPadOS 13+ is detected by its Mac user agent plus touch points.
+- New `src/bluefy.ts` (detection and the card), mounted from `src/hub/header.ts`; styles in `src/hub/hub.css`; icon at `public/images/bluefy-icon.png`. Tests: `tests/unit/bluefy.test.ts` and `tests/e2e/bluefy.spec.ts`.
+
 ### Ride modes: routes are rides, not races
 
 - **Solo, With pro teams, Race.** A segmented control above the hub's Ride button, with a line of help. **Solo** (the default for everyone): just you, friends riding the route live and your ghost. **With pro teams**: the computer-ridden teams ride along, as before. **Race**: race the pro teams, only on a route with a finish and no workout (it greys out otherwise); the big button then reads **Race**. Race is for one ride and isn't stored; Solo and With pro teams are `settings.proTeams`, synced to the account.

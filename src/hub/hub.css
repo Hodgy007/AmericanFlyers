@@ -112,6 +112,18 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-mode-opt[data-mode='race'][aria-checked='true'] { background: linear-gradient(180deg, var(--red-hi), #b51b2b); border-color: rgba(255, 120, 132, 0.5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 3px 10px rgba(214, 40, 57, 0.3); }
 .hub-mode-opt[aria-disabled='true'] { opacity: 0.4; cursor: not-allowed; }
 .hub-mode-help { margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.35; color: #c3cbdc; min-height: 35px; }
+/* iPhone / iPad without Web Bluetooth: a link to the Bluefy browser */
+.bluefy-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: rgba(5, 9, 22, 0.55); border: 1px solid var(--line); }
+.bluefy-card[hidden] { display: none; }
+.bluefy-icon { flex: none; width: 48px; height: 48px; border-radius: 22%; }
+.bluefy-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bluefy-title { font-size: 15px; line-height: 1.2; }
+.bluefy-text { margin: 0; font-size: 13px; line-height: 1.35; color: #c3cbdc; }
+.bluefy-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.bluefy-actions a, .bluefy-actions button { padding: 7px 14px; font-size: 14px; text-decoration: none; text-align: center; }
+.bluefy-link { color: var(--text); border-radius: 999px; font-weight: 600; background: linear-gradient(180deg, var(--red-hi), #b51b2b); border: 1px solid rgba(255, 120, 132, 0.45); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 14px rgba(214, 40, 57, 0.35); }
+.bluefy-link:hover { background: linear-gradient(180deg, #f6505f, #c4202f); }
+.bluefy-link:focus-visible { outline: none; box-shadow: var(--ring); }
 .hub-plan-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
 .hub-plan-row[hidden] { display: none; }
 .hub-plan-text { display: flex; flex-direction: column; min-width: 0; }
