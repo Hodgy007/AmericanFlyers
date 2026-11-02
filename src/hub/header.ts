@@ -2,6 +2,9 @@
 // start, the big button, Free ride, and the plan's next session). The elements are made once and
 // updated in place, so keyboard focus survives the numbers arriving.
 
+import { account, onAccountChange } from '../cloud/account';
+import { bluetoothAvailable } from '../ble/trainer';
+import { browserEnv, mountBluefyCard } from '../bluefy';
 import { raceTime } from '../ghost';
 import { canRace, MODE_HELP, MODE_LABEL, RACE_UNAVAILABLE, RIDE_MODES, type RideMode } from '../rideMode';
 import { levelFraction, levelTitle } from '../garage/progression';
@@ -73,7 +76,15 @@ export function mountHeader(ctx: HubCtx) {
   const quick = h('div', { class: 'hub-ride-quick' }, freeBtn, clear);
   // Remembered Bluetooth devices: main.ts moves the "Reconnect …" banner (src/devicesUi.ts) in here while the hub is open, so you connect, then ride.
   const devicesSlot = h('div', { class: 'hub-devices', id: 'hub-devices' });
-  rideBox.replaceChildren(ridePanelEyebrow, h('div', { class: 'hub-ride-head' }, title, meta), chart, devicesSlot, modeBox, rideBtn, quick, planRow);
+  // iPhone and iPad riders without Web Bluetooth: a link to the Bluefy browser (hidden everywhere else).
+  const bluefySlot = h('aside', { class: 'bluefy-card', id: 'hub-bluefy', 'aria-label': 'Bluetooth on iPhone and iPad' });
+  mountBluefyCard(bluefySlot, browserEnv({
+    signedIn: () => !!account(),
+    hasBluetooth: bluetoothAvailable,
+    onChange: (fn) => onAccountChange(fn),
+    toast: (m, ms) => ctx.deps.toast(m, ms),
+  }));
+  rideBox.replaceChildren(ridePanelEyebrow, h('div', { class: 'hub-ride-head' }, title, meta), chart, devicesSlot, bluefySlot, modeBox, rideBtn, quick, planRow);
 
   // ------------------------------------------------------------------ dock ----
   // On phones the Ride button scrolls away with the header: a bar at the bottom keeps it in reach.

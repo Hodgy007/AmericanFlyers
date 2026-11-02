@@ -5,7 +5,7 @@ This page covers what you need, how to open the app, and how to take your first 
 ## What you need
 
 - **A computer or Android phone with Chrome or Edge** for a trainer connection. Chrome or Edge on Windows, macOS, ChromeOS or Android all work.
-- **An iPhone or iPad?** Safari doesn't support Web Bluetooth, so use the free **Bluefy** browser instead.
+- **An iPhone or iPad?** Safari doesn't support Web Bluetooth, so use the free **Bluefy** browser instead (signed-in iPhone and iPad riders see a download link in the hub).
 - **Firefox and Safari** can't connect to a trainer, but the demo ride still works.
 - **Bluetooth turned on** on the device running the app.
 - **A smart trainer.** Wahoo KICKR, KICKR CORE and KICKR SNAP work on current firmware, and most other trainers that support the standard FTMS profile work too. A trainer that only shares power (the Cycling Power profile) still works, in read-only mode.
