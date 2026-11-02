@@ -74,3 +74,9 @@ How the start is shared:
 ## Testing
 
 `npm run build` type-checks everything. The engine can be run headless: bundle `raceSim.ts` and `peloton.ts` (for `makeRoster`) with esbuild and step a `RaceSim` to the end; the races take 75 to 105 simulated minutes at a 2.7 W/kg reference. In the browser, `?timescale=8` runs the clock faster (see [URL parameters](../reference/keyboard-and-url-params.md)).
+
+## Ride modes
+
+`src/rideMode.ts` holds the pure logic: `RideMode` is `'solo' | 'pro' | 'race'`. Solo and With pro teams are the stored `settings.proTeams` (`storedMode`); Race is a per-ride wish kept in the hub (`raceWanted` in `hub/hub.ts`), never stored, and `effectiveMode` only honours it where `canRace` holds (a finish and no workout). `HubDeps.start(choice, mode)` takes the mode: `startFromHub` in `main.ts` calls `beginRace` for `'race'`, or resets the peloton for `'pro'`. `HubDeps.setProTeams` and the ☰ Menu button (`#btn-proteams`) share `setProTeams` / `applyProTeams` in `main.ts`; turning the teams on mid-ride calls `peloton.reset(distance, true)` so the groups start beyond the drawn road and roll into view.
+
+`settings.settingsVersion` (`SETTINGS_VERSION`, now 2) flags one-off fixes in `migrateSettings` (`settings.ts`). A saved copy with no version, from this browser or from the account (applied in the sign-in sync in `main.ts`), gets `proTeams: false` once; after that the rider's choice is kept.

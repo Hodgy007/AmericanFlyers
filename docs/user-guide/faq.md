@@ -88,4 +88,4 @@ It's a Rocky Mountain climb from Idaho Springs to Echo Lake on the road to Mount
 
 ## How do I race the pro teams?
 
-Press **🏁 Race this stage** on a stage card, or start the Hell of the West tour from **☰ Menu → 🏆**. See [Racing and the tour](racing-and-the-tour.md).
+In the hub pick a route with a finish, choose **Race** above the Ride button and press **Race**. You can also press **🏁 Race this stage** in the stage picker, or start the Hell of the West tour from **☰ Menu → 🏆**. See [Racing and the tour](racing-and-the-tour.md).

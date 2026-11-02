@@ -16,10 +16,27 @@ Behind the hub the live 3D world turns slowly round your rider, blurred. On phon
 
 - **You.** Your name, your level and its title, an XP bar towards the next level, and your credits (see [Garage, credits and challenges](garage-and-credits.md)). Your totals (distance, climbing, rides) sit underneath.
 - **Up next.** What the big red **Ride** button will start, with the route's elevation profile or the workout's blocks. Press it, or press **Enter** (it has the keyboard focus when the hub opens).
+- **Ride mode.** A three-way choice above the button: **Solo**, **With pro teams** or **Race**, with a line underneath saying what it means. See [Ride modes](#ride-modes).
 - **Free ride.** Starts Heartland Rollers, the endless road, with no workout.
 - **Your plan.** If you follow a [training plan](training-plans.md), its next session shows here with **Ride it**.
 
 On a phone, a small bar at the bottom keeps **Ride** in reach once the header has scrolled away.
+
+## Ride modes
+
+A route is a road to ride, not a race. Above the **Ride** button you choose who rides with you:
+
+| Mode | What it means |
+| --- | --- |
+| **Solo** (the default) | Just you on the road, plus friends riding the same route live (if **Ride together** is on) and your ghost if you have one. Nothing computer-ridden. |
+| **With pro teams** | The five computer-ridden [pro teams](riding-together.md#pro-teams) ride along at their own paces, with name tags and the draft gauge. Still not a race. |
+| **Race** | Only on a route with a finish line and no workout. You roll up to the line with the pro teams for a 3-2-1 and race to the finish. The big button then says **Race**. See [Racing and the tour](racing-and-the-tour.md). |
+
+**Solo** and **With pro teams** are remembered: they are the **Pro teams on the road** switch in ⚙ Settings, which is saved to your account and follows you to other devices. **Race** is for the next ride only; the hub goes back to your remembered mode after it. If you pick a workout, or a route with no finish (Heartland Rollers), **Race** greys out and the hub rides in your remembered mode.
+
+Everyone starts on Solo. If you used the app before the ride modes existed, your pro teams setting is reset to Solo once, so you may need to pick **With pro teams** again if you want them. The choice sticks from then on.
+
+You can also change it while you ride: **☰ Menu → 🚴 Pro teams** switches them on and off without resetting the ride (see [Riding](riding.md)).
 
 ## Choosing what to ride
 
@@ -36,7 +53,7 @@ On a computer the sections are tabs (use the **←** and **→** keys on the tab
 
 | Section | What it shows | What it opens |
 | --- | --- | --- |
-| **🏁 Route** | Every stage and climb, plus your uploaded GPX routes, each with its elevation profile, length, climbing and your best time. **🏁 Race** starts a race against the pro teams. | The Hell of the West tour, the stage picker (to delete uploaded routes) and the GPX upload. |
+| **🏁 Route** | Every stage and climb, plus your uploaded GPX routes, each with its elevation profile, length, climbing and your best time. The small **🏁 Race it** chip on a route with a finish is a shortcut that starts a race against the pro teams straight away, whatever ride mode is chosen. | The Hell of the West tour, the stage picker (to delete uploaded routes) and the GPX upload. |
 | **🏋 Training** | The Ramp FTP test first, then your own workouts, then the built-in ones, with their block charts. | **＋ Create a workout** and the workout library. |
 | **📅 Plan** | The plan you follow: progress, a dot for each session, the next session with **Ride it**, and what comes after. Without a plan, the three plans with **Start this plan**. | The full plan. |
 | **🏅 Achievements** | The badges you've earned and the next few to go, with progress. | The profile's Achievements tab. |

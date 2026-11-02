@@ -4,7 +4,7 @@ This page covers racing the pro teams over a stage, the live race panel, the cla
 
 ## Racing a stage
 
-Any stage with a finish line can be raced. Open **🏁 Stage** and press **🏁 Race this stage** on its card. (Free riding is unchanged: choosing a stage by clicking its card still gives you the steady pro teams.)
+Any stage with a finish line can be raced, but a route is only a race if you choose that. Pick the route in the [hub](the-hub.md#ride-modes), choose **Race** above the Ride button (it greys out on routes with no finish and under a workout) and press **Race**. Or press the small **🏁 Race it** chip on a route card, or **🏁 Race this stage** in the **🏁 Stage** picker. Just clicking a route and pressing **Ride** is a free ride: **Solo** by default, or with the steady pro teams if you chose **With pro teams**.
 
 1. You roll up to the line with the whole field: 12 pro teams of three riders, 36 riders in all, lined up just behind you.
 2. A **3, 2, 1** countdown beeps and the race starts at **GO!**. You can't move until then.
