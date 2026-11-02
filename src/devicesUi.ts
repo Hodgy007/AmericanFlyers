@@ -194,6 +194,9 @@ class Link<T extends Connectable> {
   get reconnecting() { return this.reconnector.active; }
 }
 
+/** How long a connected strap may stay silent before the rider is told. */
+const HR_SILENT_MS = 10000;
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function initDevices(deps: DevicesDeps) {
@@ -225,13 +228,27 @@ export function initDevices(deps: DevicesDeps) {
     { ...shared, remember: (name, id) => remember('trainer', name, id) },
   );
 
+  let hrSeenAt = 0; // when the strap last sent a real bpm
+  let hrSilentTimer: number | undefined;
   const hr = new Link<HeartRateMonitor>(
     {
       kind: 'hr',
       noun: 'heart rate strap',
       request: requestHeartRateDevice,
-      open: (device, onDrop) => openHeartRate(device, deps.onHeartRate, onDrop),
-      changed: (h) => deps.hrChanged(h),
+      open: (device, onDrop) => openHeartRate(device, (bpm) => { if (bpm > 0) hrSeenAt = performance.now(); deps.onHeartRate(bpm); }, onDrop),
+      changed: (h) => {
+        deps.hrChanged(h);
+        // A strap can connect and still send nothing (not worn, dry contacts, or another app holds it).
+        // Say so instead of leaving the rider looking at a dash.
+        window.clearTimeout(hrSilentTimer);
+        if (!h) return;
+        const since = performance.now();
+        hrSilentTimer = window.setTimeout(() => {
+          if (hr.current === h && hrSeenAt < since) {
+            deps.toast(`Connected to ${h.name}, but no heart rate yet. Wear the strap with damp contacts, and close other apps using it.`, 8000);
+          }
+        }, HR_SILENT_MS);
+      },
       describe: () => {},
     },
     { ...shared, remember: (name, id) => remember('hr', name, id) },

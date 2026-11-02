@@ -30,7 +30,13 @@ export async function openHeartRate(
   try {
     const server = await device.gatt!.connect();
     const char = await (await server.getPrimaryService(HR_SERVICE)).getCharacteristic(HR_MEASUREMENT);
-    char.addEventListener('characteristicvaluechanged', () => onBpm(parseHeartRate(char.value!)));
+    // Read the value from the event's target, not the `char` captured here: iOS Web Bluetooth
+    // browsers (Bluefy) can deliver the update on a different object than the one we subscribed with.
+    char.addEventListener('characteristicvaluechanged', (e) => {
+      const view = asDataView((e.target as BluetoothRemoteGATTCharacteristic | null)?.value ?? char.value);
+      if (!view || view.byteLength < 2) return;
+      try { onBpm(parseHeartRate(view)); } catch { /* a short or malformed packet: wait for the next one */ }
+    });
     await char.startNotifications();
     drop.arm();
     return { name: device.name ?? 'Heart rate', disconnect: () => device.gatt?.disconnect() };
@@ -51,4 +57,12 @@ export async function connectHeartRate(
 export function parseHeartRate(view: DataView): number {
   const flags = view.getUint8(0);
   return flags & 0x01 ? view.getUint16(1, true) : view.getUint8(1);
+}
+
+/** The notification value as a DataView, whatever shape the browser handed over (DataView, typed array or ArrayBuffer). */
+function asDataView(v: unknown): DataView | null {
+  if (v instanceof DataView) return v;
+  if (ArrayBuffer.isView(v)) return new DataView(v.buffer, v.byteOffset, v.byteLength);
+  if (v instanceof ArrayBuffer) return new DataView(v);
+  return null;
 }
