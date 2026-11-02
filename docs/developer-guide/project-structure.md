@@ -27,7 +27,8 @@ This page lists every file and folder in the repository, with a one-line summary
 | `public/textures/asphalt.jpg` | Road surface texture. |
 | `public/textures/grass.jpg` | Grass detail texture, multiplied over the land colors. |
 | `public/images/hero*.jpg`, `hero*.mp4` | The home page hero (still and looping video, with smaller phone versions). |
-| `public/images/hero-dog*.jpg`, `hero-dog*.mp4` | The second hero: a pit bull chasing the rider. The home page rotates between the two heroes (`heroRotator()` in `src/home.ts`; `?hero=dog` or `?hero=rider` pins one). |
+| `public/images/hero-dog*.jpg`, `hero-dog*.mp4` | The second hero: a pit bull chasing the rider. |
+| `public/images/hero-look*.jpg`, `hero-look*.mp4` | The third hero: the cyclist glancing back at the pit bull. The home page rotates through the three heroes in the order dog, look, rider (`heroRotator()` in `src/home.ts`; `?hero=dog`, `?hero=look` or `?hero=rider` pins one). |
 | `public/icons/` | App icons (192, 512, maskable 512, Apple touch icon, favicon). |
 | `public/audio/commentary/*.mp3` | The race commentator's 39 voice lines (generated with Higgsfield; `CLIPS` in `src/commentary.ts` says what each one says). |
 | `public/manifest.webmanifest` | Makes the app installable: name, icons, full-screen display, colours. |
@@ -39,7 +40,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | --- | --- |
 | `main.ts` | Entry point. Owns the ride state, runs the frame loop, controls the trainer, handles the top bar, ☰ menu and dialogs, saves rides, and wires up sign-in, riding together, ghosts, plans, sound, virtual shifting and drafting. |
 | `lazy.ts` | Lazy loading helpers: `lazy()`, `use()`, `loadOnClick()`, `prefetchWhenIdle()`, `firstFrame`. See [Architecture](architecture.md#lazy-loading). |
-| `home.ts` | The home page: hero (one of two, picked per visit), Google and email sign-up. It is the only way in without an account and leads to the hub (`openHub`); `hint()` remembers a signed-in rider, and `sessionSettled()` shows the page again if that hint was stale. |
+| `home.ts` | The home page: hero (one of three, picked per visit), Google and email sign-up. It is the only way in without an account and leads to the hub (`openHub`); `hint()` remembers a signed-in rider, and `sessionSettled()` shows the page again if that hint was stale. |
 | `hub/hub.ts` | The hub controller: opens and closes it, tabs (a single column on phones), loads each section on first use, keeps the choice (what Ride starts), the cached wallet and ride summary, and keyboard behaviour. In the main bundle. |
 | `hub/header.ts` | The hub's header: rider card (level, XP, credits) and the Ride panel (the choice, Ride, Free ride, the plan's next session, and the phone dock). |
 | `hub/data.ts` | The hub's pure logic, with no DOM: weekly totals, best times, plan summary, next events, the Ride choice rules, and the `Summary` that is cached. |

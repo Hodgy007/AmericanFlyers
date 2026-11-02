@@ -6,6 +6,10 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### A third home hero
+
+- **The home page hero now rotates through three heroes** in a fixed order: the pit bull chase (`dog`), the cyclist glancing back at the pit bull (`look`, new: `public/images/hero-look*.jpg` and `hero-look*.mp4`), then the original rider (`rider`), crossfading every 10 seconds. Each visit starts on the next hero in that order (the last start is kept in `americanflyers.hero`; an unknown value starts on the pit bull chase). A hero's still and clip are only fetched about 5 seconds before it is shown, and a slide is reused on later laps. `?hero=look` pins the new one, like `?hero=dog` and `?hero=rider`. Reduced motion and data saver still get the still image only, cycling through the three per visit.
+
 ### An account is required: no more guest riding
 
 - **The home page is the only way in without an account.** *Ride without an account* is gone, and so is everything else that left the home page for the hub or the ride with no account (the Escape key, the brand button for a guest). Sign in with Google, or sign up with email; it's free. The home page copy now reads *Free: no subscription, no card. A free account saves your rides, plans and progress.*

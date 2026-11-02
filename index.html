@@ -14,22 +14,24 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" /></noscript>
     <script>
-      // The home page hero rotates between the pit bull chase and the original
-      // rider (src/home.ts crossfades them), starting on the other one each
-      // visit. ?hero=dog or ?hero=rider pins one.
+      // The home page hero rotates between three heroes (src/home.ts crossfades them) in a
+      // fixed order, dog -> look -> rider -> dog, starting on the next one each visit.
+      // ?hero=dog, ?hero=look or ?hero=rider pins one.
       (function () {
+        var order = ['dog', 'look', 'rider'];
         var asked = new URLSearchParams(location.search).get('hero');
         var hero;
-        if (asked === 'rider' || asked === 'dog') hero = asked;
+        if (order.indexOf(asked) >= 0) hero = asked;
         else {
           try {
-            hero = localStorage.getItem('americanflyers.hero') === 'dog' ? 'rider' : 'dog';
+            // An unknown (or missing) stored value gives -1, so the visit starts on 'dog'.
+            hero = order[(order.indexOf(localStorage.getItem('americanflyers.hero')) + 1) % order.length];
             localStorage.setItem('americanflyers.hero', hero);
           } catch (e) { hero = 'dog'; }
           document.documentElement.dataset.heroRotate = '1';
         }
         document.documentElement.dataset.hero = hero;
-        var base = hero === 'dog' ? '/images/hero-dog' : '/images/hero';
+        var base = hero === 'dog' ? '/images/hero-dog' : hero === 'look' ? '/images/hero-look' : '/images/hero';
         [[base + '.jpg', '(min-width: 769px)'], [base + '-768.jpg', '(max-width: 768px)']].forEach(function (p) {
           var l = document.createElement('link');
           l.rel = 'preload'; l.as = 'image'; l.href = p[0]; l.media = p[1];
