@@ -26,8 +26,8 @@ Everything that costs GPU time hangs off one setting, **Graphics**: Auto, Low, M
 
 | File | What it holds |
 | --- | --- |
-| [`quality.ts`](../../src/world/quality.ts) | The tiers and `TIER_SPECS` (what each switches on), the render scales, the saved choice, and `pickAutoTier(signals)`. Pure. |
-| [`adapt.ts`](../../src/world/adapt.ts) | `Adapter`, the frame-time controller. Pure; its own small chunk, loaded just after the first frame. |
+| [`quality.ts`](../../src/world/quality.ts) | The tiers and `TIER_SPECS` (what each switches on), the render scales, the saved choice, where Auto starts (`pickAutoStart`), its per-device memory and the note throttle. Pure. |
+| [`adapt.ts`](../../src/world/adapt.ts) | `Adapter` and `judge()`, the frame-time controller (jerkiness, fast and gentle step-downs, settling). Pure; its own small chunk, loaded just after the first frame. |
 | [`graphics.ts`](../../src/world/graphics.ts) | `Graphics`: reads the device, applies a tier to the renderer, sun shadow, sky and atmosphere, loads the post chunk, draws the frame, feeds the controller, and exposes `window.__afGraphics`. |
 | [`grade.ts`](../../src/world/grade.ts) | `gradeFor()`: colour grade and bloom numbers for a look. Pure. |
 | [`post.ts`](../../src/world/post.ts) | The lazy chunk: `EffectComposer` pipeline and `SkyEnvironment` (reflections). Only Medium and up download it. |
@@ -40,22 +40,24 @@ Everything that costs GPU time hangs off one setting, **Graphics**: Auto, Low, M
 | High | ≤ 2 | 2,048 (2) | + GTAO at half size, SMAA instead of FXAA | half-size chain | yes | yes (128 px cube) | yes | 5 |
 | Ultra | ≤ 2 | 4,096 (1.6), 76 m box | as High | full-size chain | 0.75 size, 16 samples | yes (256 px cube) | yes | 5 |
 
-**Auto: the starting tier** (`pickAutoTier`, from `Signals`):
+**Auto: the starting tier** (`pickAutoStart`, in `quality.ts`):
 
-- Software renderers (the WebGL renderer string contains SwiftShader, llvmpipe, lavapipe, software…) → **Low**, with shadows off.
-- Phones (touch screen, short side under 700 px) and mobile GPU strings (Mali, Adreno, PowerVR, Apple GPU…) → **Low**; a phone with 8+ cores and 6+ GB → Medium. Tablets (touch, bigger screen) and integrated Intel/old AMD/NVIDIA GPUs → **Medium**.
-- Other desktops → **High**; a strong GPU (RTX 20-series 60/70/80 and 30/40/50, RX 5700 and up, Apple M Pro/Max/Ultra, Arc A5xx and up, GTX 1060 and up) with 8+ cores and 8+ GB → **Ultra**.
-- Then caps: 2 cores or less, or 2 GB or less → Low; 4 cores or less, or 4 GB or less → at most Medium; a canvas over 8 million physical pixels (4K) without a strong GPU → one tier lower.
+- Software renderers (the WebGL renderer string contains SwiftShader, llvmpipe, lavapipe, software…) → **Low**, with shadows off. This is the only use of the device signals (`pickAutoTier(signals)` is now just that test); cores, memory, GPU string and screen size are still read for logging but no longer cap the start, and phones are not capped up front.
+- Otherwise the **remembered** state, else **Ultra**. The memory is `localStorage` `americanflyers.graphicsAuto`: `{ tier, scale, at, tested, sessions, gpu }`, per device and never synced. It is written (`Graphics.remember`) once the controller has gone 30 s of measured riding (holds and the hub don't count) without a change (`Adapter.takeSettled()`), and again whenever it settles on something new; never for a software renderer or with shadows off. A different GPU string ignores it.
+- **Re-test:** each Auto visit adds 1 to `sessions` at load. When `sessions` reaches 3, or `tested` is 3 days old, the visit starts **one tier above** the remembered one (never above Ultra, scale back to 1), sets `tested` to now and `sessions` to 0, and leaves the remembered tier in storage. If that tier holds for 30 s it becomes the new memory; if the controller steps down, the lower tier is saved as before. The visit's starting tier is also its ceiling, so Auto never climbs above it. Choosing Auto in Settings re-reads the memory without counting a visit.
 
-**Auto: adapting** (`Adapter.push(now, frameMs, workMs)`, one call per drawn frame):
+**Auto: adapting** (`Adapter.push(now, frameMs, workMs)`, one call per drawn frame; the thresholds are in `ADAPT`):
 
-- Frame times are not judged during a 4 s warm-up, after a change (6 s cool-down), after a resize, in the hub orbit (its frames are throttled on purpose) or in a hidden tab; gaps over 400 ms are dropped.
-- **Slow:** median frame over the last 3 s above 22 ms → one step down: render scale 1 → 0.85 → 0.7, then the next tier down (scale back to 1), then shadows off.
-- **Headroom:** over 10 s, median frame under 11 ms, or under 19 ms with a median render-call time under 4.5 ms (a 60 Hz display can't show frames shorter than 16.7 ms, so CPU time in the render call stands in for spare time) → one step up, in the reverse order, never above the Auto pick, and not within 30 s of a step down. A step up that is undone within 45 s makes the next attempt wait 1, 2, 5 and then 10 minutes.
-- A **fixed tier** only moves the render scale (same rules), never the tier.
-- `?adapt=off` freezes the controller (for measuring a tier as it is).
+- Frame times are not judged during a 4 s warm-up (the same again when the hub closes), after a change (6 s cool-down, 3 s after a whole-tier drop), after a resize, in the hub orbit (its frames are throttled on purpose), with a dialog open (`Graphics` holds the controller each frame while a `<dialog>` is open, then 1 s more), for 1.5 s after the tab becomes visible again, for 1 s after a landmark model is placed and 2 s after a stage change (`Graphics.pause()`, called from `World`; a shader compile or upload isn't the device's fault). A frame over 400 ms is a stall, not a sample, and clears the window; but 3 in a row (under 2.5 fps) count as clearly struggling.
+- **Jerky** (`judge()` over the last 3 s, at least 20 frames): median frame over 22 ms, or more than 8% **hitches** (a frame over 2.5× the median, or over 50 ms), or 3 or more frames over 100 ms.
+- **Clearly struggling:** median over 40 ms, or more than 20% hitches → drop a **whole tier at once** (scale back to 1; event `fast: true`), with a 3 s cool-down. At Low, or with a fixed tier, this falls back to the gentle path.
+- **Merely jerky:** one gentle step: render scale 1 → 0.85 → 0.7, then the next tier down (scale back to 1), then shadows off.
+- **Headroom:** over 10 s, median frame under 11 ms, or under 19 ms with a median render-call time under 4.5 ms (a 60 Hz display can't show frames shorter than 16.7 ms, so CPU time in the render call stands in for spare time) → one step up, in the reverse order, never above the visit's starting tier, and not within 30 s of a step down. A step up that is undone within 45 s makes the next attempt wait 1, 2, 5 and then 10 minutes (the whole-tier drops use the same back-off).
+- **Notes:** when Auto changes the **tier** (not the scale or shadows) `Graphics` calls the notifier set by `World.onGraphicsNote` (main.ts passes `toast`): "Graphics lowered to High for a smoother ride" or "Graphics raised to Ultra". `NoteGate` allows one per 20 s and none in the first 4 s of riding (so a second change inside 20 s is silent; Settings still shows the state). Settings reads `World.graphicsAutoLabel()` ("Auto (now: High)") and `graphicsNote()`.
+- A **fixed tier** only moves the render scale (same rules), never the tier, and shows no notes.
+- Dev URL parameters: `?adapt=off` freezes the controller; `?softgpu=off` makes a software renderer pass for a real GPU (so Auto starts on Ultra, as on a real device); `?jank=60` burns 60 ms in every frame and `?jank=120/8` 120 ms in every 8th (a slow or a hitchy device); `?settle=3000` shortens the 30 s settle time. The e2e tests in `tests/e2e/autoGraphics.spec.ts` use them.
 
-`window.__afGraphics` returns `{ tier, choice, autoTier, scale, pixelRatio, fps, post, shadows, gpu, change }` for tests and screenshots.
+`window.__afGraphics` returns `{ tier, choice, autoTier, scale, pixelRatio, fps, post, shadows, gpu, change, remembered, retest }` (`autoTier` is where Auto started this visit; `remembered` the tier read from the memory) for tests and screenshots.
 
 **The post chain** (Medium and up) in `post.ts`: `RenderPass` → `GTAOPass` (High and up; it sees the world through a copy of the camera whose far plane is 280 m, because the depth buffer is too coarse for far hills, and the shadow map is not redrawn for its normals pass) → `UnrealBloomPass` → grade `ShaderPass` → `OutputPass` (ACES and sRGB) → `FXAAPass` or `SMAAPass`. Everything before the `OutputPass` is linear HDR, so bloom (threshold about 1.15 by day, 0.95 at night) catches only the sun disc, the Tron neon, headlight pools and glints. The addons are put in their own `vendor-three-post` chunk in `vite.config.ts`, so Low devices never download them. Until the chunk arrives the frame is drawn directly; if it fails to load (offline) the frame stays direct.
 

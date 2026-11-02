@@ -38,7 +38,9 @@ Time of day and weather live in **☰ Menu → 🌤 Time & weather**, not in thi
 
 ## Graphics
 
-**Graphics** picks how detailed the 3D view is. The default, **Auto**, chooses for your device when the app opens (software renderers, phones and small tablets start on Low or Medium, ordinary computers on High) and then watches how smoothly it runs: if frames come slowly it first makes the picture a little less sharp (down to 70%), then drops a tier, and if the device is very slow it turns shadows off. If it has plenty of room to spare for a while it climbs back up, never past the tier it first picked. The line under the setting says what Auto picked and whether it has stepped down since.
+**Graphics** picks how detailed the 3D view is. The default, **Auto**, starts every device on **Ultra** (the exception is a browser that draws the 3D view in software, which starts on Low because it can't run Ultra at all) and then watches for **jerky** riding, not only slow riding: a low frame rate, a lot of hitches (single frames that take much longer than the rest), or a few real stalls. When it's clearly struggling it drops a whole tier at once, within a few seconds; when it's only a little jerky it first makes the picture a bit less sharp (down to 70%), then drops a tier, and if the device is very slow it turns shadows off. Each time it changes the tier you get a short note ("Graphics lowered to High for a smoother ride"), at most one every 20 seconds. If it has room to spare for a while it climbs back up, never past the tier it started the visit on.
+
+Auto **remembers what worked on this device**. After about 30 seconds of steady riding it keeps the tier it settled on and starts there next time instead of on Ultra. Every few visits, or after three days, it starts one tier higher than it remembered to check whether the device copes better now (a phone that struggled when it was busy may be fine later); that never goes more than one tier up. The Auto entry reads **Auto (now: High)** while it is on, and the line under the setting says where Auto started, why, and whether it has stepped down since.
 
 | Tier | What you get |
 | --- | --- |
@@ -47,7 +49,7 @@ Time of day and weather live in **☰ Menu → 🌤 Time & weather**, not in thi
 | High | Adds soft contact shadows where things touch the road, reflections of the sky on helmets, frames and wheels, softer shadows, and the shadows of clouds drifting over the land. |
 | Ultra | Adds fuller-resolution glow, higher-quality contact shadows, a bigger and sharper shadow map. |
 
-Choosing a tier yourself turns off the automatic tier changes; the sharpness still eases off by itself if frames run slow. Changing it takes effect when you press **Save**.
+Choosing a tier yourself turns off the automatic tier changes (and the notes); the sharpness still eases off by itself if frames run slow. Changing it takes effect when you press **Save**.
 
 ## Data blocks
 

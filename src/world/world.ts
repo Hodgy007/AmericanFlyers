@@ -121,6 +121,10 @@ export class World {
   setGraphics(c: string) { if (isChoice(c)) this.gfx.setChoice(c); }
   /** A line for Settings saying what Auto picked. */
   graphicsNote() { return this.gfx.describe(); }
+  /** The Auto entry's label in Settings: "Auto (now: High)". */
+  graphicsAutoLabel() { return this.gfx.autoLabel(); }
+  /** Where "Graphics lowered to High for a smoother ride" goes when Auto changes the tier. */
+  onGraphicsNote(fn: (msg: string) => void) { this.gfx.onNote(fn); }
 
   /** The hub's backdrop: the camera circles your rider slowly (and the rider is shown, whatever the ride camera). */
   setOrbit(on: boolean) {
@@ -170,6 +174,7 @@ export class World {
     this.road.setMarkers(markers);
     this.sky.setMountainScale(currentStage().scenery.mountainScale);
     this.atmosphere.restage(currentStage());
+    this.gfx.pause(2000); // the new stage's terrain and shaders are building: not a verdict on the device
     this.jumped();
   }
 
@@ -184,7 +189,9 @@ export class World {
   update(state: WorldState, dt: number) {
     ensureRoad(state.distance + 3000);
     this.road.update(state.distance);
+    const placed = this.landmarks.group.children.length;
     this.landmarks.update(state.distance);
+    if (this.landmarks.group.children.length > placed) this.gfx.pause(1000); // a model just arrived: its first draw compiles shaders and uploads textures
 
     // Steer: ease across the road to where the rider wants to be.
     this.lane += (this.laneTarget - this.lane) * (1 - Math.exp(-dt / LANE_EASE_S));

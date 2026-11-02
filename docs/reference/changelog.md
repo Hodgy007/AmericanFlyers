@@ -6,6 +6,15 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Graphics: Auto starts on Ultra and steps down when it's jerky
+
+- **Auto starts on Ultra on every device**, phones included. Only a software renderer (SwiftShader, llvmpipe… and the e2e browser) still starts on Low. The device signals (cores, memory, GPU, screen) are kept for logging and that exception only.
+- **Auto remembers what worked on this device** (`americanflyers.graphicsAuto`: tier, render scale, timestamps, GPU; per device, not synced). After 30 s of steady riding it keeps the tier and scale it settled on and starts there next time. Every third visit, or after 3 days, it starts one tier above the remembered one to re-test (never more than one up, never above Ultra).
+- **It watches for jerky, not just slow.** Over the last 3 s it judges the median frame time, the share of hitches (frames over 2.5× the median or over 50 ms) and stalls over 100 ms: jerky is a median over 22 ms, over 8% hitches, or 3 stalls. Warm-up, tab switches, the hub, open dialogs and loading spikes (a landmark model arriving, a stage change) aren't judged. Three frames in a row over 400 ms count as clearly struggling.
+- **Fast and gentle step-downs.** Clearly struggling (median over 40 ms, or over 20% hitches) drops a whole tier at once with a 3 s cool-down; a merely jerky ride takes the old gentle path (render scale 1 → 0.85 → 0.7, then a tier). Stepping back up needs sustained headroom, never goes above the visit's starting tier and keeps the back-off.
+- **Auto tells you.** A toast when it changes the tier ("Graphics lowered to High for a smoother ride" / "Graphics raised to Ultra"), at most one per 20 s and none in the first 4 s. Settings → Graphics reads "Auto (now: High)" with a line saying where Auto started and why. Fixed tiers behave as before.
+- **Dev parameters:** `?softgpu=off`, `?jank=60` (or `?jank=120/8`), `?settle=3000`. New `tests/e2e/autoGraphics.spec.ts`; `tests/unit/quality.test.ts` covers the start tier, re-test, memory round trip, hitch detection, fast and gentle step-downs, settling and the note throttle.
+
 ### Graphics: light, colour, a real sky and haze, and a quality setting per device
 
 - **Graphics setting** (⚙ Settings → Graphics): Auto, Low, Medium, High or Ultra, kept on this device only (`americanflyers.graphics`, not synced). Auto picks a starting tier from the device (software renderers, phones, tablets, integrated and discrete GPUs, cores, memory, screen size), then watches frame times: slow frames lower the render scale (1 → 0.85 → 0.7), then the tier, then shadows; a long calm stretch raises it again, never above the first pick, with cool-downs and growing back-off so it doesn't flap. A fixed tier only moves the render scale. The setting shows what Auto picked. `?graphics=` overrides for a visit, `?adapt=off` freezes adaptation, and `window.__afGraphics` reports the tier, scale and fps. New `world/quality.ts`, `adapt.ts`, `graphics.ts`.

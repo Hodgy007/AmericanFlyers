@@ -59,43 +59,131 @@ export function saveChoice(c: GraphicsChoice) {
 // ------------------------------------------------------------------- auto ----
 
 export interface Signals {
-  cores?: number; // navigator.hardwareConcurrency
-  memoryGb?: number; // navigator.deviceMemory (capped at 8 by browsers)
+  cores?: number; // navigator.hardwareConcurrency (logged only)
+  memoryGb?: number; // navigator.deviceMemory (logged only)
   width: number; // CSS px
   height: number;
   dpr: number;
   gpu?: string; // WEBGL_debug_renderer_info's renderer string
-  touch?: boolean; // a touch screen as the main pointer: phone, tablet, some TVs
+  touch?: boolean; // a touch screen as the main pointer (logged only)
 }
 
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|lavapipe|software|basic render/i;
-const MOBILE_GPU = /mali|adreno|powervr|apple gpu|tegra|immortalis|xclipse/i;
-const WEAK_PC_GPU = /intel.*(hd graphics|uhd|iris)|radeon (r[2-7]|hd|vega [3-8]\b)|geforce (gt |9|8)|virgl/i;
-const STRONG_GPU = /rtx ?(20[6-8]|[345]0\d\d)|rx ?(5[67]00|[679]\d00)|apple m\d (pro|max|ultra)|arc ?[ab][5-9]\d{2}|gtx 1[06][6-8]0/i;
 
 /** True for software rasterisers (headless test browsers, GPU-less VMs). */
 export const isSoftwareGpu = (gpu?: string) => !!gpu && SOFTWARE.test(gpu);
 
-/** Picks a starting tier from cheap signals; the adaptive controller does the rest. */
+/**
+ * Where Auto starts when nothing is remembered: Ultra on every device, because the controller
+ * (adapt.ts) steps down by itself the moment frames get jerky. The one exception is a software
+ * renderer, which cannot run Ultra at all (it is what the headless test browser uses): Low.
+ * The other device signals (cores, memory, screen) no longer cap the start; they are only logged.
+ */
 export function pickAutoTier(s: Signals): Tier {
-  if (isSoftwareGpu(s.gpu)) return 'low';
+  return isSoftwareGpu(s.gpu) ? 'low' : 'ultra';
+}
+
+// ---------------------------------------------------------- auto's memory ----
+
+const AUTO_KEY = 'americanflyers.graphicsAuto';
+
+/** Starting a session this many times on a remembered tier, or this long after the last test, tries one tier higher. */
+export const RETEST_SESSIONS = 3;
+export const RETEST_AFTER_MS = 3 * 24 * 3600 * 1000;
+
+/** What Auto settled on for this device (kept per device, never synced). */
+export interface AutoMemory {
+  tier: Tier;
+  scale: number; // a value from SCALES
+  at: number; // ms since epoch: when this was last saved (after ~30 s of stable riding)
+  tested: number; // ms since epoch: when a tier higher than this was last tried (or when it was first remembered)
+  sessions: number; // Auto sessions started since `tested`
+  gpu: string; // the GPU it was learnt on: a different GPU (a laptop switching cards) starts afresh
+}
+
+/** Reads the memory, or null when there is none or it is not valid. */
+export function loadAutoMemory(): AutoMemory | null {
+  try {
+    const raw = localStorage.getItem(AUTO_KEY);
+    if (!raw) return null;
+    const m = JSON.parse(raw) as Partial<AutoMemory> | null;
+    if (!m || typeof m !== 'object') return null;
+    if (!TIERS.includes(m.tier as Tier) || !SCALES.includes(m.scale as number)) return null;
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const at = num(m.at), tested = num(m.tested), sessions = num(m.sessions);
+    if (at === null || tested === null || sessions === null || sessions < 0) return null;
+    return { tier: m.tier as Tier, scale: m.scale as number, at, tested, sessions: Math.floor(sessions), gpu: typeof m.gpu === 'string' ? m.gpu : '' };
+  } catch { return null; }
+}
+
+export function saveAutoMemory(m: AutoMemory) {
+  try { localStorage.setItem(AUTO_KEY, JSON.stringify(m)); } catch { /* not remembered */ }
+}
+
+export function clearAutoMemory() {
+  try { localStorage.removeItem(AUTO_KEY); } catch { /* nothing to clear */ }
+}
+
+export interface AutoStart {
+  tier: Tier; // where this session starts (and its ceiling: Auto never climbs above it)
+  scaleIdx: number; // index into SCALES to start at (a remembered scale applies only to the remembered tier)
+  remembered: Tier | null; // the tier read from the memory, if one was used
+  retest: boolean; // started one tier above the remembered one to re-test it
+  memory: AutoMemory | null; // what to store at the start of the session (counters moved on), if anything
+}
+
+/**
+ * Where Auto starts this session: the software exception (Low), else the remembered tier and scale,
+ * else Ultra. Every RETEST_SESSIONS-th session, or when the last test is RETEST_AFTER_MS old, it
+ * starts one tier above the remembered one (never more than one, never above Ultra) to see whether
+ * the device copes now. `countSession` is false when Auto is chosen from Settings rather than at load.
+ */
+export function pickAutoStart(s: Signals, memory: AutoMemory | null, now: number, countSession = true): AutoStart {
+  if (isSoftwareGpu(s.gpu)) return { tier: 'low', scaleIdx: 0, remembered: null, retest: false, memory: null };
   const gpu = s.gpu ?? '';
-  const short = Math.min(s.width, s.height);
-  const phone = !!s.touch && short < 700;
-  const tablet = !!s.touch && !phone;
-  let level: number; // 0 low … 3 ultra
-  if (MOBILE_GPU.test(gpu) || phone) level = 0;
-  else if (tablet) level = 1;
-  else if (WEAK_PC_GPU.test(gpu)) level = 1;
-  else if (STRONG_GPU.test(gpu) && (s.cores ?? 8) >= 8 && (s.memoryGb ?? 8) >= 8) level = 3;
-  else level = 2;
-  if (phone && level === 0 && (s.cores ?? 8) >= 8 && (s.memoryGb ?? 4) >= 6) level = 1; // a recent flagship
-  // Weak CPU or little memory cap it; a huge canvas (4K) costs a tier unless the GPU is strong.
-  if (s.cores !== undefined && s.cores <= 2) level = 0;
-  else if (s.cores !== undefined && s.cores <= 4) level = Math.min(level, 1);
-  if (s.memoryGb !== undefined && s.memoryGb <= 2) level = 0;
-  else if (s.memoryGb !== undefined && s.memoryGb <= 4) level = Math.min(level, 1);
-  const pixels = s.width * s.height * s.dpr * s.dpr;
-  if (pixels > 8e6 && !STRONG_GPU.test(gpu)) level = Math.max(0, level - 1);
-  return TIERS[level];
+  if (!memory || memory.gpu !== gpu) return { tier: 'ultra', scaleIdx: 0, remembered: null, retest: false, memory: null };
+  const idx = TIERS.indexOf(memory.tier);
+  const due = memory.sessions >= RETEST_SESSIONS || now - memory.tested >= RETEST_AFTER_MS;
+  const retest = due && idx < TIERS.length - 1;
+  if (retest) {
+    // One tier up, from full sharpness; the counters start again.
+    return { tier: TIERS[idx + 1], scaleIdx: 0, remembered: memory.tier, retest: true, memory: { ...memory, tested: now, sessions: 0 } };
+  }
+  return {
+    tier: memory.tier, scaleIdx: Math.max(0, SCALES.indexOf(memory.scale)), remembered: memory.tier, retest: false,
+    memory: countSession ? { ...memory, sessions: memory.sessions + 1 } : null,
+  };
+}
+
+/** The memory to store once the controller has been stable: keeps the test counters of the one before. */
+export function settledMemory(prev: AutoMemory | null, tier: Tier, scaleIdx: number, gpu: string, now: number): AutoMemory {
+  return {
+    tier, scale: SCALES[scaleIdx], at: now, gpu,
+    tested: prev && prev.gpu === gpu ? prev.tested : now,
+    sessions: prev && prev.gpu === gpu ? prev.sessions : 0,
+  };
+}
+
+// ----------------------------------------------------------------- toasts ----
+
+export const NOTE_FIRST_MS = 4000; // no note this soon after the session starts
+export const NOTE_GAP_MS = 20000; // at most one note per this long
+
+/** Lets a tier-change note through at most once per NOTE_GAP_MS, and not in the first NOTE_FIRST_MS. */
+export class NoteGate {
+  private last = -Infinity;
+  constructor(private startedAt: number) {}
+  /** Riding starts (again): the first NOTE_FIRST_MS of it are quiet. The gap since the last note still counts. */
+  restart(now: number) { this.startedAt = now; }
+  allow(now: number): boolean {
+    if (now - this.startedAt < NOTE_FIRST_MS || now - this.last < NOTE_GAP_MS) return false;
+    this.last = now;
+    return true;
+  }
+}
+
+/** The line shown when Auto changes the tier. */
+export function tierNote(tier: Tier, direction: 'lowered' | 'raised'): string {
+  const name = tier[0].toUpperCase() + tier.slice(1);
+  return direction === 'lowered' ? `Graphics lowered to ${name} for a smoother ride` : `Graphics raised to ${name}`;
 }
