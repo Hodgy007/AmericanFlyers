@@ -44,9 +44,9 @@ Auto **remembers what worked on this device**. After about 30 seconds of steady 
 
 | Tier | What you get |
 | --- | --- |
-| Low | The sky, haze and cloud improvements, lighter shadows (1,024-pixel shadow map), sharpness capped at 1× the screen's pixels. No post-processing, so nothing extra is downloaded. |
-| Medium | Adds glow on bright things (the sun, the Tron bike, night lights), colour grading for the time of day and weather, smoothed edges, a 2,048-pixel shadow map. |
-| High | Adds soft contact shadows where things touch the road, reflections of the sky on helmets, frames and wheels, softer shadows, and the shadows of clouds drifting over the land. |
+| Low | The sky, haze and cloud improvements, lighter shadows (1,024-pixel shadow map), sharpness capped at 1× the screen's pixels. No post-processing, so nothing extra is downloaded. The ground has grass, rock and snow (or sandstone and rock in the desert) textures at a lower resolution, and the climbs get painted words, guardrails and a thinner crowd. |
+| Medium | Adds glow on bright things (the sun, the Tron bike, night lights), colour grading for the time of day and weather, smoothed edges, a 2,048-pixel shadow map. The ground gets all its textures (grass, dry grass, dirt, rock, snow, sandstone, sand), the road gets a grainy asphalt surface, and the crowds are thicker and wave flags. |
+| High | Adds soft contact shadows where things touch the road, reflections of the sky on helmets, frames and wheels, softer shadows, and the shadows of clouds drifting over the land. The ground and cliffs gain fine bumps, wet-road puddles reflect the sky, and spectators cast shadows. |
 | Ultra | Adds fuller-resolution glow, higher-quality contact shadows, a bigger and sharper shadow map. |
 
 Choosing a tier yourself turns off the automatic tier changes (and the notes); the sharpness still eases off by itself if frames run slow. Changing it takes effect when you press **Save**.

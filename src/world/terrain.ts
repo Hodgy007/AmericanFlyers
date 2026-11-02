@@ -3,6 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { currentStage, elevationAt, ROAD_ORIGIN, ROAD_STEP, roadX, roadZ } from '../course';
 import { nearLandmark } from './landmarks';
 import { fbm, rng, smoothstep } from './noise';
+import type { GroundTextures } from './ground'; // the splatting shader and textures are their own chunk (ground.ts), loaded after the first frame
+import { LAYER, LAYER_COUNT, type SceneryTier } from './scenery';
 
 // Terrain is built in square tiles around the rider. Every vertex height is a
 // pure function of its world position (plus the road), so neighbouring tiles
@@ -13,9 +15,8 @@ const SEG = 50; // 4 m grid
 const RANGE = 1150; // build tiles whose centre is within this distance
 const ROAD_INFLUENCE = 260; // beyond this the road no longer shapes the land
 const COARSE = 5; // coarse nearest-road search stride, in samples (10 m)
-const GRASS_TILE_M = 7; // grass texture repeats every 7 m
 
-interface Near {
+export interface Near {
   dist: number; // metres from the road centreline
   d: number; // course distance of the closest road point
   /** Closest point on a different stretch of road (e.g. the next hairpin straight up). */
@@ -109,6 +110,16 @@ function refine(best: number, bestD2: number, x: number, z: number): Near {
   return { dist: Math.sqrt(dist2), d };
 }
 
+/**
+ * A height lookup for a box of the world (a road chunk and its roadside), for
+ * things stood beside the road: spectators, guardrails. One scan of the road
+ * serves every call.
+ */
+export function groundSampler(minX: number, maxX: number, minZ: number, maxZ: number): (x: number, z: number) => number {
+  const cands = candidatesFor(minX, maxX, minZ, maxZ);
+  return (x, z) => heightAt(x, z, nearestRoad(cands, x, z));
+}
+
 // ------------------------------------------------------------ colour ----
 
 const COL = {
@@ -129,32 +140,63 @@ const COL = {
 };
 const tmp = new THREE.Color();
 
+/**
+ * What the ground is made of at a point: seven layer weights summing to 1 (see
+ * ground.ts: grass, dry grass, dirt, rock, snow, sandstone, sand). It follows
+ * the same logic as the colours, so the textures follow each stage's palette.
+ */
+export type Weights = number[];
+
 /** Banded red sandstone, sandy flats and the odd patch of sage. */
-function desertColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color) {
+function desertColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color, w: Weights) {
   const band = h * 0.11 + fbm(x / 160, z / 160, 2) * 0.7; // layers a few metres thick, wobbling a little
   const f = band - Math.floor(band);
   const k = Math.floor(band) & 3;
   const layer = [COL.strataA, COL.strataB, COL.strataC, COL.strataD][k];
   const next = [COL.strataB, COL.strataC, COL.strataD, COL.strataA][k];
   out.copy(layer).lerp(next, smoothstep(0.7, 1, f));
-  out.lerp(COL.sand, 0.12 + 0.12 * fbm(x / 90 + 3, z / 90, 2)); // wind-blown sand over the rock
+  const sand = 0.12 + 0.12 * fbm(x / 90 + 3, z / 90, 2);
+  out.lerp(COL.sand, sand); // wind-blown sand over the rock
   const sage = fbm(x / 120 - 20, z / 120 + 11, 3);
-  if (sage > 0.2) out.lerp(COL.sage, smoothstep(0.2, 0.5, sage) * 0.4);
-  if (near && near.dist < 9) out.lerp(COL.verge, 1 - smoothstep(6, 9, near.dist));
+  const sageK = sage > 0.2 ? smoothstep(0.2, 0.5, sage) * 0.4 : 0;
+  if (sageK) out.lerp(COL.sage, sageK);
+  const verge = near && near.dist < 9 ? 1 - smoothstep(6, 9, near.dist) : 0;
+  if (verge) out.lerp(COL.verge, verge);
+  // Sandstone under a skin of sand, sage patches as dry ground, the verge as dirt.
+  const sandW = Math.min(0.5, sand * 1.4);
+  w[LAYER.sand] = sandW * (1 - verge);
+  w[LAYER.dry] = sageK * (1 - verge);
+  w[LAYER.sandstone] = (1 - sandW - sageK) * (1 - verge);
+  w[LAYER.dirt] = verge;
 }
 
-function groundColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color) {
+export function groundColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color, w: Weights) {
   const sc = currentStage().scenery;
-  if (sc.palette === 'desert') return desertColor(x, z, h, near, out);
-  out.copy(COL.grassA).lerp(COL.grassB, fbm(x / 140, z / 140, 3) * 0.5 + 0.5);
+  if (sc.palette === 'desert') return desertColor(x, z, h, near, out, w);
+  const t = fbm(x / 140, z / 140, 3) * 0.5 + 0.5;
+  out.copy(COL.grassA).lerp(COL.grassB, t);
   const fields = fbm(x / 380 + 9, z / 380, 2);
-  if (sc.fields && fields > 0.28) out.lerp(COL.field, smoothstep(0.28, 0.4, fields) * 0.8);
+  const fieldK = sc.fields && fields > 0.28 ? smoothstep(0.28, 0.4, fields) * 0.8 : 0;
+  if (fieldK) out.lerp(COL.field, fieldK);
   const band = Math.max(14, (sc.snowLine - sc.rockLine) * 0.4);
   const rockLine = sc.rockLine + fbm(x / 60, z / 60, 2) * band;
-  if (h > rockLine) out.lerp(COL.rock, smoothstep(rockLine, rockLine + band, h));
+  const rockT = h > rockLine ? smoothstep(rockLine, rockLine + band, h) : 0;
+  if (rockT) out.lerp(COL.rock, rockT);
   const snowLine = sc.snowLine + fbm(x / 90 + 5, z / 90, 2) * band;
-  if (h > snowLine) out.lerp(COL.snow, smoothstep(snowLine, snowLine + band * 0.6, h));
-  if (near && near.dist < 9) out.lerp(COL.verge, 1 - smoothstep(6, 9, near.dist));
+  const snowT = h > snowLine ? smoothstep(snowLine, snowLine + band * 0.6, h) : 0;
+  if (snowT) out.lerp(COL.snow, snowT);
+  const verge = near && near.dist < 9 ? 1 - smoothstep(6, 9, near.dist) : 0;
+  if (verge) out.lerp(COL.verge, verge);
+  // Grass, with dry grass in the brighter patches and wherever the fields are; the verge is dirt; then rock and snow take over by height.
+  const dry = Math.max(fieldK, 0.5 * smoothstep(0.62, 1, t));
+  const base = (1 - rockT) * (1 - snowT) * (1 - verge);
+  w[LAYER.grass] = base * (1 - dry);
+  w[LAYER.dry] = base * dry;
+  w[LAYER.dirt] = verge * (1 - rockT) * (1 - snowT);
+  w[LAYER.rock] = rockT * (1 - snowT) * (1 - verge * 0.5);
+  w[LAYER.snow] = snowT;
+  const sum = w[0] + w[1] + w[2] + w[3] + w[4];
+  if (sum > 0) for (let i = 0; i < 5; i++) w[i] /= sum;
 }
 
 /** Darkens steep grass and turns cliffs to rock, using the tile's own height grid. */
@@ -226,19 +268,37 @@ interface Tile {
 export class Terrain {
   readonly group = new THREE.Group();
   private readonly tiles = new Map<string, Tile>();
-  private readonly groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
+  private readonly groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+  private textures: GroundTextures | null = null;
+  private groundModule: Promise<typeof import('./ground')> | null = null;
+  private spec: SceneryTier | null = null;
 
-  constructor(renderer: THREE.WebGLRenderer) {
-    // Grass detail, multiplied over the land colours. Stored as plain data (not sRGB)
-    // so its ~0.92 average only darkens the colours slightly.
-    new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/grass.jpg`, (tex) => {
-      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      tex.colorSpace = THREE.NoColorSpace;
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      this.groundMat.map = tex;
-      this.groundMat.needsUpdate = true;
-    });
+  constructor(private readonly renderer: THREE.WebGLRenderer) {}
+
+  /**
+   * The tier's scenery switches: which texture layers, normals and filtering the ground uses.
+   * The first call (after the first frame) loads the splatting shader and textures (ground.ts);
+   * until they are here the plain vertex colours show.
+   */
+  setScenery(spec: SceneryTier) {
+    this.spec = spec;
+    this.groundModule ??= import('./ground');
+    void this.groundModule.then((m) => {
+      if (!this.textures) {
+        this.textures = new m.GroundTextures(this.renderer.capabilities.getMaxAnisotropy());
+        m.patchGroundMaterial(this.groundMat, this.textures);
+        this.groundMat.needsUpdate = true;
+      }
+      this.requestTextures();
+    }).catch(() => { /* chunk failed to load (offline): vertex colours */ });
   }
+
+  private requestTextures() {
+    if (!this.spec || !this.textures) return;
+    const sc = currentStage().scenery;
+    this.textures.request(this.spec, sc.palette === 'desert', sc.snowLine < 2500);
+  }
+
   private readonly treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
   private readonly conifer = makeConifer();
   private readonly broadleaf = makeBroadleaf();
@@ -253,6 +313,7 @@ export class Terrain {
 
   /** Drops every tile (after a stage change). */
   clear() {
+    this.requestTextures(); // the next stage may need other layers
     for (const tile of this.tiles.values()) {
       this.group.remove(tile.group);
       tile.dispose();
@@ -299,20 +360,24 @@ export class Terrain {
     const geo = new THREE.PlaneGeometry(TILE, TILE, SEG, SEG).rotateX(-Math.PI / 2);
     const pos = geo.attributes.position as THREE.BufferAttribute;
     const colors = new Float32Array(pos.count * 3);
-    const uvs = new Float32Array(pos.count * 2);
+    const wa = new Uint8Array(pos.count * 4); // aWa: grass, dry grass, dirt, rock; aWb: snow, sandstone, sand (0..255)
+    const wb = new Uint8Array(pos.count * 4);
+    const w: Weights = new Array(LAYER_COUNT).fill(0);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i) + cx;
       const z = pos.getZ(i) + cz;
       const near = nearestRoad(cands, x, z);
       const h = heightAt(x, z, near);
       pos.setY(i, h);
-      groundColor(x, z, h, near, tmp);
+      w.fill(0);
+      groundColor(x, z, h, near, tmp, w);
       colors.set([tmp.r, tmp.g, tmp.b], i * 3);
-      uvs.set([x / GRASS_TILE_M, z / GRASS_TILE_M], i * 2); // world-space, so tiles line up
+      for (let k = 0; k < LAYER_COUNT; k++) (k < 4 ? wa : wb)[i * 4 + (k & 3)] = Math.round(w[k] * 255);
     }
     shadeSlopes(pos, colors);
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.setAttribute('aWa', new THREE.BufferAttribute(wa, 4, true));
+    geo.setAttribute('aWb', new THREE.BufferAttribute(wb, 4, true));
     geo.computeVertexNormals();
     const ground = new THREE.Mesh(geo, this.groundMat);
     ground.receiveShadow = true;
