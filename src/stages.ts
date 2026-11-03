@@ -366,8 +366,8 @@ function buildClimb(spec: ClimbSpec): Stage {
   };
 }
 
-// From Le Bourg-d'Oisans (723 m) to the top (1841 m). Per-kilometre gradients
-// from swi-cycling.com; hairpin positions approximated.
+// From Le Bourg-d'Oisans (723 m) to the top (1841 m). The road is the real one;
+// per-kilometre gradients from swi-cycling.com. Its 21 hairpins are found in the road.
 const alpe = buildClimb({
   id: 'alpe-dhuez',
   route: alpeRoute,
@@ -404,9 +404,8 @@ const alpe = buildClimb({
 });
 
 // From Prato allo Stelvio (~915 m) to the pass (2758 m): 24.5 km, 1843 m,
-// 7.5% average, max ~9.5% (mycols.app, climbfinder.com). No per-kilometre
-// source was found, so the shape is approximated: an easier valley start past
-// Gomagoi and Trafoi, then a steady 8–9% up the 48 numbered hairpins, which
+// 7.5% average (mycols.app, climbfinder.com). The road is the real one: an
+// easier valley start past Gomagoi and Trafoi, then the 48 hairpins, which
 // bunch into the famous wall below the summit.
 const stelvio = buildClimb({
   id: 'stelvio',
@@ -444,8 +443,8 @@ const stelvio = buildClimb({
 // Colorado 103 from Idaho Springs (2,293 m) up Chicago Creek to the sprint at
 // Echo Lake (3,235 m), below Mount Evans (fast-rewind.com filming notes).
 // 20.8 km, 942 m: about 3.5% for the first 11 km, 5.8% for the next 9, then
-// the short flat at the lake (pjammcycling.com, summitbiking.org). The
-// switchbacks sit in the steeper upper half.
+// the short flat at the lake (pjammcycling.com, summitbiking.org); the real
+// road's profile and its two wide switchbacks, in the steeper upper half.
 const hellOfTheWestClimb = buildClimb({
   id: 'hell-of-the-west', // keep this id: leaderboards and plans use it
   route: echoLakeRoute,
@@ -482,9 +481,8 @@ const hellOfTheWest: Stage = {
 
 // Mont Ventoux from Bédoin (300 m) to the summit (1,910 m): 21.4 km, 1,610 m,
 // 7.5%. Gentle vineyards to Saint-Estève, then 9–10% through the forest to
-// Chalet Reynard, then the bare white limestone to the top. Per-kilometre
-// figures approximated from published profiles (climbbybike.com,
-// cyclingcols.com). The white scree is the ground's scree layer (`screeLine`).
+// Chalet Reynard, then the bare white limestone to the top. The road and its
+// profile are the real ones. The white scree is the ground's scree layer (`screeLine`).
 const ventoux = buildClimb({
   id: 'ventoux',
   route: ventouxRoute,
@@ -522,7 +520,7 @@ const ventoux = buildClimb({
 
 // Col du Tourmalet from Luz-Saint-Sauveur (711 m) to the col (2,115 m):
 // 19 km, 1,404 m, 7.4%; steadier below Barèges, then 8.5–10% through the
-// hairpins of Super-Barèges. Shape approximated from published profiles.
+// hairpins of Super-Barèges. The road and its profile are the real ones.
 const tourmalet = buildClimb({
   id: 'tourmalet',
   route: tourmaletRoute,
@@ -559,8 +557,8 @@ const tourmalet = buildClimb({
 });
 
 // Monte Zoncolan from Ovaro (525 m) to the top (1,735 m): 10.1 km, 1,210 m,
-// 11.9%, with long stretches at 13–15% and ramps over 20%. Per-kilometre
-// figures approximated from published profiles (salite.ch, climbbybike.com).
+// 11.9%, with long stretches at 13–15% and ramps over 20%. The road and its
+// profile are the real ones (the steepest ramps flattened to 22%).
 const zoncolan = buildClimb({
   id: 'zoncolan',
   route: zoncolanRoute,
@@ -614,9 +612,9 @@ export function fitPlane(pts: [number, number, number][]) {
 //
 // American Flyers (1985) has three stages: the Morgul-Bismark circuit near
 // Boulder, the "Tour of the Moon" through Colorado National Monument, and the
-// final climb to Echo Lake (the existing Hell of the West stage). Stages 1 and
-// 2 are shaped from published figures; the road's bends and rolls between the
-// landmarks are approximated.
+// final climb to Echo Lake (the existing Hell of the West stage). Stage 1's
+// loop and stage 2's road are the real ones (see routes/real/); stage 1's
+// elevation is shaped from published figures.
 
 /** Monotone cubic interpolation (Fritsch–Carlson) through (x, y) knots: no overshoot, no flat spots. */
 function pchip(knots: [number, number][]) {
