@@ -120,7 +120,8 @@ This page lists every file and folder in the repository, with a one-line summary
 | `workouts/ui.ts` | The workout library and the workout creator dialogs. |
 | `world/world.ts` | The Three.js renderer, lights, cameras, and the per-frame scene update. |
 | `world/others.ts` | Other riders and ghosts on the road: models, name tags, lanes, smoothing and passing. |
-| `world/terrain.ts` | Ground tiles, height, color and the seven ground-layer weights, and the scattered trees. |
+| `world/terrain.ts` | Ground tiles, height, color and the seven ground-layer weights, and where the trees are scattered and which level of detail each tile draws. |
+| `world/trees.ts` | Tree species (geometry in two levels of detail, one swaying material), the species mix, habitat and tree-line rules. |
 | `world/ground.ts` | Terrain texture splatting: the layer texture arrays, the shader patch (triplanar rock, macro tint, detail normals). Lazy. |
 | `world/scenery.ts` | What each graphics tier switches on for terrain textures, the wet road, paint, guardrails and crowds (`TIER_SPECS[tier].scenery`), and the ground layer ids. Pure. |
 | `world/road.ts` | Road chunks, distance markers, hairpin plaques, and the finish line. |

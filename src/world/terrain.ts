@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { currentStage, elevationAt, ROAD_ORIGIN, ROAD_STEP, roadX, roadZ } from '../course';
 import { nearLandmark } from './landmarks';
 import { fbm, rng, smoothstep } from './noise';
+import { TREE_SPECIES, TreeKit, chooseLod, defaultMix, loneTreeShare, pickSpecies, standRoll, treeLineRule, treeScale, treeTint, type TreeLod, type TreeSpecies } from './trees';
 import type { GroundTextures } from './ground'; // the splatting shader and textures are their own chunk (ground.ts), loaded after the first frame
 import { LAYER, LAYER_COUNT, type SceneryTier } from './scenery';
 
@@ -221,47 +221,15 @@ function shadeSlopes(pos: THREE.BufferAttribute, colors: Float32Array) {
   }
 }
 
-// ------------------------------------------------------------- trees ----
-
-function painted(geo: THREE.BufferGeometry, color: string): THREE.BufferGeometry {
-  const g = geo.index ? geo.toNonIndexed() : geo;
-  const c = new THREE.Color(color);
-  const arr = new Float32Array(g.attributes.position.count * 3);
-  for (let i = 0; i < arr.length; i += 3) { arr[i] = c.r; arr[i + 1] = c.g; arr[i + 2] = c.b; }
-  g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-  g.deleteAttribute('uv');
-  return g;
-}
-
-function makeConifer() {
-  return mergeGeometries([
-    painted(new THREE.CylinderGeometry(0.22, 0.32, 2.4, 6).translate(0, 1.2, 0), '#5a3d2b'),
-    painted(new THREE.ConeGeometry(2.5, 5, 7).translate(0, 4.4, 0), '#2e6b3a'),
-    painted(new THREE.ConeGeometry(1.8, 4, 7).translate(0, 7.1, 0), '#367a42'),
-  ])!;
-}
-
-function makeBroadleaf() {
-  return mergeGeometries([
-    painted(new THREE.CylinderGeometry(0.28, 0.38, 3, 6).translate(0, 1.5, 0), '#5f4330'),
-    painted(new THREE.IcosahedronGeometry(2.7, 0).scale(1, 0.85, 1).translate(0, 5, 0), '#4f9645'),
-    painted(new THREE.IcosahedronGeometry(1.8, 0).translate(1.1, 6.1, 0.7), '#5aa64c'),
-  ])!;
-}
-
-/** A juniper: a squat, dark grey-green tree with a short trunk, for the red-rock desert. */
-function makeJuniper() {
-  return mergeGeometries([
-    painted(new THREE.CylinderGeometry(0.16, 0.26, 1.6, 5).translate(0, 0.8, 0), '#6b4a32'),
-    painted(new THREE.IcosahedronGeometry(1.6, 0).scale(1, 0.9, 1).translate(0, 2.3, 0), '#55704a'),
-    painted(new THREE.IcosahedronGeometry(1.1, 0).translate(0.9, 1.9, 0.5), '#617c52'),
-  ])!;
-}
-
 // ------------------------------------------------------------- tiles ----
 
 interface Tile {
   group: THREE.Group;
+  cx: number;
+  cz: number;
+  /** The tile's tree meshes and the geometry (near or far) they are drawn with now. */
+  trees: { mesh: THREE.InstancedMesh; species: TreeSpecies }[];
+  lod: TreeLod;
   dispose(): void;
 }
 
@@ -282,6 +250,7 @@ export class Terrain {
    */
   setScenery(spec: SceneryTier) {
     this.spec = spec;
+    this.nearTrees = spec.nearTrees;
     this.groundModule ??= import('./ground');
     void this.groundModule.then((m) => {
       if (!this.textures) {
@@ -299,16 +268,14 @@ export class Terrain {
     this.textures.request(this.spec, sc.palette === 'desert', sc.snowLine < 2500);
   }
 
-  private readonly treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
-  private readonly conifer = makeConifer();
-  private readonly broadleaf = makeBroadleaf();
-  private readonly juniper = makeJuniper();
+  private readonly kit = new TreeKit();
+  private nearTrees = false; // the tier draws the detailed trees on tiles near the rider (set with the scenery tier)
 
   /** Rain: 0 dry … 1 soaked. The ground and trees darken a little and lose their matt look. */
   setWet(wet: number) {
     this.groundMat.roughness = 0.95 - 0.2 * wet;
     this.groundMat.color.setScalar(1 - 0.24 * wet);
-    this.treeMat.color.setScalar(1 - 0.16 * wet);
+    this.kit.setWet(wet);
   }
 
   /** Drops every tile (after a stage change). */
@@ -343,12 +310,24 @@ export class Terrain {
       budget--;
     }
     for (const [key, tile] of this.tiles) {
-      const [ix, iz] = key.split(',').map(Number);
-      if (Math.hypot((ix + 0.5) * TILE - x, (iz + 0.5) * TILE - z) > RANGE + TILE) {
+      const d = Math.hypot(tile.cx - x, tile.cz - z);
+      if (d > RANGE + TILE) {
         this.group.remove(tile.group);
         tile.dispose();
         this.tiles.delete(key);
+        continue;
       }
+      const lod = chooseLod(tile.lod, d, this.nearTrees);
+      if (lod !== tile.lod) this.setTileLod(tile, lod);
+    }
+  }
+
+  /** Swaps a tile's trees between the detailed and the cheap geometry; the instances stay as they are. Only near trees cast and take shadows (the shadow box is 60 m wide). */
+  private setTileLod(tile: Tile, lod: TreeLod) {
+    tile.lod = lod;
+    for (const { mesh, species } of tile.trees) {
+      mesh.geometry = this.kit.geometry(species, lod);
+      mesh.castShadow = mesh.receiveShadow = lod === 'near';
     }
   }
 
@@ -386,14 +365,16 @@ export class Terrain {
     group.position.set(cx, 0, cz);
     group.add(ground);
 
-    // Scatter trees: dense in forest patches, the odd lone tree elsewhere.
+    // Scatter trees: dense in forest patches, the odd lone tree elsewhere. The stage's species mix
+    // decides what grows; height decides which species fit (trees.ts), and shrubs take over at the tree line.
     const rand = rng(Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663));
-    const conifers: THREE.Matrix4[] = [];
-    const broadleaves: THREE.Matrix4[] = [];
+    const sc = currentStage().scenery;
+    const desert = sc.palette === 'desert';
+    const mix = sc.trees ?? defaultMix(sc.coniferBias, desert);
+    const lone = loneTreeShare(sc.forestCover);
+    const spots = new Map<TreeSpecies, THREE.Matrix4[]>();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
-    const desert = currentStage().scenery.palette === 'desert';
-    const junipers: THREE.Matrix4[] = [];
     for (let n = 0; n < (desert ? 70 : 260); n++) {
       const lx = (rand() - 0.5) * TILE;
       const lz = (rand() - 0.5) * TILE;
@@ -401,40 +382,53 @@ export class Terrain {
       const z = lz + cz;
       const forest = fbm(x / 240 - 13, z / 240 + 5, 3);
       const keep = rand();
-      if (desert ? forest < 0.0 && keep > 0.08 : forest < 0.05 - currentStage().scenery.forestCover && keep > 0.06) continue;
+      if (desert ? forest < 0.0 && keep > 0.08 : forest < 0.05 - sc.forestCover && keep > lone) continue;
       const near = nearestRoad(cands, x, z);
       if (near && (near.dist < 12 || nearLandmark(x, z, near.d))) continue;
       const h = heightAt(x, z, near);
-      const sc = currentStage().scenery;
-      if (h > sc.treeLine + forest * 40) continue; // tree line
-      const s = 0.75 + rand() * 0.7;
+      const rule = treeLineRule(h, sc.treeLine, forest, rand()); // the tree line
+      if (!rule) continue;
+      const species = rule === 'shrub' ? 'shrub' : pickSpecies(mix, h, standRoll(x, z, rand(), rand()));
+      const s = treeScale(species, rand());
       q.setFromAxisAngle(up, rand() * Math.PI * 2);
       const m = new THREE.Matrix4().compose(new THREE.Vector3(lx, h - 0.3, lz), q, new THREE.Vector3(s, s * (0.85 + rand() * 0.35), s));
-      (desert ? junipers : rand() < sc.coniferBias || forest > 0.3 ? conifers : broadleaves).push(m);
+      const list = spots.get(species);
+      if (list) list.push(m);
+      else spots.set(species, [m]);
     }
-    const meshes = [this.instanced(this.conifer, conifers, rand), this.instanced(this.broadleaf, broadleaves, rand), this.instanced(this.juniper, junipers, rand)];
-    for (const m of meshes) if (m) group.add(m);
+    const trees: Tile['trees'] = [];
+    for (const species of TREE_SPECIES) {
+      const mesh = this.instanced(species, spots.get(species), rand);
+      if (!mesh) continue;
+      trees.push({ mesh, species });
+      group.add(mesh);
+    }
 
     return {
       group,
+      cx,
+      cz,
+      trees,
+      lod: 'far',
       dispose: () => {
         geo.dispose();
-        for (const m of meshes) m?.dispose();
+        for (const t of trees) t.mesh.dispose();
       },
     };
   }
 
-  private instanced(geo: THREE.BufferGeometry, mats: THREE.Matrix4[], rand: () => number) {
-    if (!mats.length) return null;
-    const mesh = new THREE.InstancedMesh(geo, this.treeMat, mats.length);
+  /** A tile's trees of one species as one InstancedMesh, drawn with the far geometry until the tile is near the rider. */
+  private instanced(species: TreeSpecies, mats: THREE.Matrix4[] | undefined, rand: () => number) {
+    if (!mats?.length) return null;
+    const mesh = new THREE.InstancedMesh(this.kit.geometry(species, 'far'), this.kit.material, mats.length);
+    mesh.customDepthMaterial = this.kit.depthMaterial;
     const c = new THREE.Color();
     mats.forEach((m, i) => {
       mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, c.setScalar(0.8 + rand() * 0.35));
+      mesh.setColorAt(i, treeTint(rand(), rand(), rand(), c));
     });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
     mesh.computeBoundingSphere();
+    mesh.boundingSphere!.radius += 3; // the detailed geometry swells past the far one a little, and trees sway
     return mesh;
   }
 }

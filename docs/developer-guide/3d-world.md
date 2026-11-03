@@ -106,12 +106,12 @@ All three apply per 100 m chunk (`Road.buildChunk()` asks `RoadExtras.addTo()`),
 - **Guardrails** ([`barriers.ts`](../../src/world/barriers.ts)). `bendsOf(stage)` (in [`roadside.ts`](../../src/world/roadside.ts)) finds each hairpin from the stage's signs (where the heading turns faster than 0.04 rad/m); a rail goes along the outside of each (a right turn has its outside on the left) with 9 m of lead-in and out, and on any stretch where the ground 13 m from the centreline is more than 4 m below the road. One instanced 3 m section (a W-beam, a post and a reflector, 1 m outside the gravel shoulder), pitched to the grade.
 - **Crowds** ([`crowds.ts`](../../src/world/crowds.ts)). `crowdNear(d)` in [`crowdZones.ts`](../../src/world/crowdZones.ts) (moved out of `main.ts`, where the sound still reads it) says how thick the crowd is: round each hairpin sign and the last 700 m of a finish. `planCrowd()` fills slots every 1.7 m on both sides, two rows deep, in clumps, thinned by the tier's `crowd` share. Spectators are low-poly (about 70 triangles) and instanced, shirt colour per instance and skin tone from a hash of their position; about one in seven waves a flag where the tier allows. The cheering is in the vertex shader: they jump, wave their arms and ripple their flags more as the rider comes within 70 m (`Road.animate()` passes the rider's position and the clock each frame), and sway a little otherwise. Their shadows are on from High; they are not animated in the shadow pass.
 
-| Tier | Terrain layers (size) | Normals | Triplanar rock | Anisotropy | Road normal | Crowd share | Flags | Crowd shadows | Guardrails and paint |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low | 3 (512) | no | no | 2 | no | 0.35 | no | no | yes |
-| Medium | 7 (1K) | no | yes | 4 | yes | 0.7 | yes | no | yes |
-| High | 7 (1K) | yes | yes | 8 | yes | 1 | yes | yes | yes |
-| Ultra | 7 (1K) | yes | yes | 16 | yes | 1 | yes | yes | yes |
+| Tier | Terrain layers (size) | Normals | Triplanar rock | Anisotropy | Road normal | Crowd share | Flags | Crowd shadows | Guardrails and paint | Detailed trees |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low | 3 (512) | no | no | 2 | no | 0.35 | no | no | yes | no |
+| Medium | 7 (1K) | no | yes | 4 | yes | 0.7 | yes | no | yes | yes |
+| High | 7 (1K) | yes | yes | 8 | yes | 1 | yes | yes | yes | yes |
+| Ultra | 7 (1K) | yes | yes | 16 | yes | 1 | yes | yes | yes | yes |
 
 
 ## Terrain
@@ -122,10 +122,21 @@ All three apply per 100 m chunk (`Road.buildChunk()` asks `RoadExtras.addTo()`),
 - **Near the road** (within about 260 m), the ground follows the road's own elevation, blending out to the stage's "wild" terrain. Where two stretches of road are close together (stacked hairpins), the height blends between them.
 - **Color** depends on height and slope: grass, fields (where the stage allows), rock above the rock line, and snow above the snow line. Steep ground darkens, and cliffs turn to rock. The tiles are smooth-shaded.
 - **Desert palette.** A stage whose scenery has `palette: 'desert'` (the Tour of the Moon) colours the ground in thin bands of red, orange and tan sandstone with sand and sage patches, turns cliffs dark red, and plants sparse junipers (70 candidate points per tile) instead of forest. Its wild terrain is stepped into mesas by `terrace()` in `stages.ts`.
-- **Trees** are scattered at 260 candidate points per tile. Forests are dense where the forest noise is high. Trees are removed within 12 m of the road and near landmarks, and above the tree line.
+- **Trees** are scattered at 260 candidate points per tile (70 in the desert). Forests are dense where the forest noise is high; elsewhere a lone tree grows at `loneTreeShare(forestCover)` of the points (6%, fewer on open grassland). Trees are removed within 12 m of the road and near landmarks. See [Trees](#trees).
 - **Standing things on the ground.** `groundSampler(minX, maxX, minZ, maxZ)` returns a height lookup for a box, for things placed beside the road (guardrails use it to find drops).
 
 The first frame builds every tile in range at once. After that, at most two tiles are built per frame.
+
+### Trees
+
+[`src/world/trees.ts`](../../src/world/trees.ts) owns the tree geometry, the one material, and the pure rules for what grows where; `terrain.ts` scatters and draws them.
+
+- **Nine species, one style** (faceted low-poly, per-vertex colour darker at the bottom and inside of the crown and lighter at the tips, up-facing faces a little lighter): spruce (several drooping, jagged tiers), pine (ponderosa or lodgepole: tall bare trunk, a clumped crown of flat tufts), larch (lighter conifer), oak (broad crown of several lumps), beech (also stands for maple: rounder and denser), aspen (pale banded trunk, slim light-green crown; summer green, never gold), cottonwood (big riverside broadleaf), juniper (also pinyon: squat, grey-green) and shrub (low clumps; the krummholz at the tree line). The shapes are built in code, with jitter seeded per species, so the trees are the same every ride.
+- **Which species.** `Scenery.trees` is a stage's relative weights (see [Stages and GPX](stages-and-gpx.md)); a stage without one (an uploaded route) gets `defaultMix(coniferBias, desert)`. `pickSpecies()` multiplies each weight by `habitat()` (oaks and cottonwoods fade out with height, beeches and aspens thin before the tree line, larches need some height), and 60% of the trees in a 45 m square share the cell's roll, so stands of one kind form. `treeLineRule()` replaces the old hard cut: shrubs take over over the last 80 m below the tree line and grow up to 25 m above it, then nothing.
+- **Two levels of detail.** Near geometry is 70 to 130 triangles, far is 28 to 44 with the same silhouette and colours. Every tile's trees are one InstancedMesh per species; `Terrain.update()` swaps a tile's meshes between the two geometries (the instance matrices stay) by distance from the rider: near inside 400 m, far beyond 440 m (`chooseLod()`, with hysteresis so a tile on the boundary does not flicker). Only near tiles cast and receive shadows (the shadow box is 60 m wide anyway). **Low always draws the far geometry** (`SceneryTier.nearTrees`); tiles are built with the far geometry and swapped on the frame they are created.
+- **Triangles** in the trees of every tile in range (the rider's view is about a quarter of them), before and after, on the Alpe at km 3: about 889,000 before (all 16,767 trees at 52 to 64 triangles; about 219,000 in the rider's view); after, High is about 695,000 (-22%; about 161,000 in view) and Low about 604,000 (-32%; about 149,000 in view), since only the tiles within 400 m use the detailed geometry.
+- **Variation.** `treeTint()` gives each instance a colour multiplier that shifts brightness, hue (warmer or cooler) and saturation, not only brightness; the vertex colours multiply it.
+- **Wind sway.** The tree material and its shadow twin (`customDepthMaterial`, so the shadows sway too) are patched with `onBeforeCompile` to replace `project_vertex`: each vertex is offset by `afSway()` from [`sway.ts`](../../src/world/sway.ts) for its height above the tree's base (local y times the instance's scale), with the phase taken from the tree's base so a crown moves as one. One material and one depth material serve every tile and both LODs, so nothing recompiles per tile.
 
 ### Texture splatting
 

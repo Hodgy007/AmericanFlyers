@@ -32,7 +32,8 @@ The `scenery` object:
 | `bumpAmp` | Small-scale roughness, in meters. |
 | `rockLine`, `snowLine`, `treeLine` | Heights where rock, snow and the tree line begin. |
 | `coniferBias` | 0 for broadleaf, 1 for conifers. |
-| `forestCover` | Negative for open farmland, higher for more forest. |
+| `forestCover` | Negative for open farmland, higher for more forest. Below -0.2 the lone trees thin out too (Morgul-Bismark, at -0.45, is open grassland with the odd clump). |
+| `trees` | Optional `{ species: weight }` (`spruce`, `pine`, `larch`, `oak`, `beech`, `aspen`, `cottonwood`, `juniper`, `shrub`); the weights are relative. Left out, the mix comes from `coniferBias`, which is what an uploaded route gets. Height still decides what fits (`habitat()` in `trees.ts`), and shrubs take over at the tree line. |
 | `fields` | Whether farmland patches appear. |
 | `mountainScale` | Height of the distant mountain ring. |
 
@@ -68,7 +69,7 @@ How it works:
 
 - **Alpe d'Huez.** The per-kilometer gradients come from swi-cycling.com. The base is 723 m, and the 1,118 m gain puts the summit at 1,841 m.
 - **Stelvio Pass.** No per-kilometer source was found, so the shape is an approximation: an easier valley start, then 8 to 9%, with the hairpins bunched toward the top. The base is 915 m and the gain is 1,843 m, so the summit is at 2,758 m.
-- **Hell of the West** (`hell-of-the-west`). The final stage of the film *American Flyers* was filmed on Colorado 103 from Idaho Springs to Echo Lake (fast-rewind.com filming notes). 20.8 km and 942 m from 2,293 m to 3,235 m (pjammcycling.com), averaging about 3.5% for the first 11 km and 5.8% for the next 9 (summitbiking.org), then the short flat at the lake. Five switchbacks in the upper half (*Switchback*); scenery is all conifer forest, with Colorado's treeline (≈3,500 m) above the finish and snow on the surrounding 4,000 m peaks.
+- **Hell of the West** (`hell-of-the-west`). The final stage of the film *American Flyers* was filmed on Colorado 103 from Idaho Springs to Echo Lake (fast-rewind.com filming notes). 20.8 km and 942 m from 2,293 m to 3,235 m (pjammcycling.com), averaging about 3.5% for the first 11 km and 5.8% for the next 9 (summitbiking.org), then the short flat at the lake. Five switchbacks in the upper half (*Switchback*); scenery is conifer forest (lodgepole pine, spruce and a little aspen), with Colorado's treeline (≈3,500 m) above the finish and snow on the surrounding 4,000 m peaks.
 - **Hell of the West tour stages.** Stages 1 and 2 are not built by `buildClimb()`; `stages.ts` defines them directly, from a monotone cubic interpolation (`pchip`) through published knots plus small rolling waves.
   - **Morgul-Bismark** (`hotw-morgul-bismark`): a closed loop made of straights and quarter-circle corners (`MB_SEGS`), 21.1 km (13.1 miles; wikipedia.org *Morgul-Bismark*, coloradohometownweekly.com 2011-05-25), ridden twice. Opposite straights carry the same small bend, so the lap closes to within a metre and lap 2 lies on lap 1; elevation is periodic (`d mod lap`), and farm landmarks' spacing divides the lap so the scenery repeats too. The Wall is the last 1.6 km of each lap, building to 18% and easing before the line. `Stage.lapLength` is the lap.
   - **Tour of the Moon** (`hotw-tour-of-the-moon`): Rim Rock Drive, 37 km (23 miles), high point 2,024 m (6,640 ft), about 700 m of climbing for the park loop (nps.gov *Road Biking on Rim Rock Drive*; mtntownmagazine.com *Classic Rides: The Colorado National Monument's Tour of the Moon* for the order of climbs). Switchbacks are a heading wiggle over the first 6 km. The scenery is `palette: 'desert'`.
