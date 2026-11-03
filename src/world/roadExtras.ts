@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { roadPoint } from '../course';
 import { currentStage } from '../course';
-import { barrierSections, buildBarriers, railGeometry } from './barriers';
+import { barrierKind, barrierSections, buildBarriers, railGeometry, stoneGeometry } from './barriers';
 import { buildCrowd, crowdMaterial, crowdUniforms, planCrowd, spectatorGeometry } from './crowds';
 import { buildPaint, drawAtlas, paintName, planPaint, type PaintSpot } from './roadPaint';
 import { isClimb } from './roadside';
 import { RoadSurface } from './roadSurface';
+import type { RoadPaintLayout } from './roadStyle';
 import type { SceneryTier } from './scenery';
 import { groundSampler } from './terrain';
 
@@ -25,12 +26,19 @@ export class RoadExtras {
   private paintMat: THREE.MeshStandardMaterial | null = null;
   private readonly railGeo = railGeometry();
   private readonly railMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.5 });
+  private stoneGeo: THREE.BufferGeometry | null = null; // only the alpine passes need these
+  private stoneMat: THREE.MeshStandardMaterial | null = null;
   private readonly crowdGeo = spectatorGeometry(false);
   private readonly flaggerGeo = spectatorGeometry(true);
   private readonly crowdMat = crowdMaterial();
 
   constructor(private readonly roadMaterial: THREE.MeshStandardMaterial, map: THREE.Texture, maxAniso: number) {
     this.surface = new RoadSurface(roadMaterial, map, maxAniso);
+  }
+
+  /** The stage's road style, so the normal and roughness maps keep its painted lines flat. */
+  setRoadLayout(layout: RoadPaintLayout) {
+    this.surface.setLayout(layout);
   }
 
   setTier(spec: SceneryTier, ibl: boolean) {
@@ -85,7 +93,12 @@ export class RoadExtras {
       if (spec.barriers && isClimb(stage)) {
         const a = roadPoint(d0 + CHUNK / 2);
         const ground = groundSampler(a.x - 140, a.x + 140, a.z - 140, a.z + 140);
-        const rails = buildBarriers(barrierSections(stage, d0, d1, ground), this.railGeo, this.railMat, origin);
+        const stone = barrierKind(stage) === 'stone';
+        if (stone && !this.stoneGeo) {
+          this.stoneGeo = stoneGeometry();
+          this.stoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
+        }
+        const rails = buildBarriers(barrierSections(stage, d0, d1, ground), stone ? this.stoneGeo! : this.railGeo, stone ? this.stoneMat! : this.railMat, origin);
         if (rails) objects.push(rails);
       }
       if (spec.crowd > 0 && stage.finish !== null) {

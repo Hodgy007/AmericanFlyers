@@ -85,9 +85,9 @@ Chase and side views ease toward their targets. The rider's view copies the posi
 
 [`src/world/road.ts`](../../src/world/road.ts) builds the road in 100 m chunks:
 
-- The road is 9.2 m wide (4.6 m either side of the centerline), with a shared asphalt texture. Gravel shoulders, edge lines and a dashed center line are painted into the texture.
+- The road is 9.2 m wide (4.6 m either side of the centerline), with a shared asphalt texture. Its paint and surface depend on the stage's **road style** (below): gravel shoulders, edge lines and a dashed centre line on the US highway look.
 - Each chunk covers 100 m, sampled every 2 m. Chunks are built from 150 m behind the rider to 1,600 m ahead, and removed when they fall outside that range.
-- Each chunk has a white-and-red post every 100 m, and a distance sign every `markers.every` meters. On stages with a finish, signs count down to the finish.
+- Each chunk has a white-and-red post every 100 m, and a distance sign every `markers.every` meters. On stages with a finish, signs count down to the finish. The sign is the green US board, except on the French and Italian climbs, where it is a cyclists' milestone (below).
 - A **checkered line** is painted across the road at the finish distance.
 - Hairpin plaques are placed at the distances the stage defines in its `signs` list. Each shows the local word (**Virage** or **Tornante**) and the number.
 
@@ -95,8 +95,26 @@ Chase and side views ease toward their targets. The rider's view copies the posi
 
 [`roadSurface.ts`](../../src/world/roadSurface.ts) (in the lazily loaded `roadExtras` chunk) adds to the road's material:
 
-- **Asphalt normal map** (Medium and up; `public/textures/asphalt-n.jpg`, CC0) tiled into a canvas laid out like the colour map, with the painted lines and the gravel shoulders left flat so the lines stay crisp. A **roughness map is derived** from it (rougher where the grain is bumpier, shinier in the wheel tracks, paint smoother than stone).
+- **Asphalt normal map** (Medium and up; `public/textures/asphalt-n.jpg`, CC0) tiled into a canvas laid out like the colour map, with the painted lines and the gravel shoulders left flat so the lines stay crisp (the layout comes from the stage's road style). A **roughness map is derived** from it (rougher where the grain is bumpier, shinier in the wheel tracks, paint smoother than stone).
 - **Wet road.** `Road.setWet()` (from the atmosphere, 0 to 1) darkens the road and lowers its roughness as before; the road shader also grows **puddles**: a noise mask over the road (about 3 m patches, more and bigger as the rain builds) where the surface goes nearly mirror-smooth, flat and darker. On High and Ultra a puddle reflects the sky through the environment map (`scene.environment`, the same PMREM that lights the bikes); on Low and Medium, which have none, a fresnel term adds the horizon colour instead.
+
+### Road styles
+
+`Scenery.road` (`RoadStyle`, left out = `'us-highway'`) picks the road's look. [`roadStyle.ts`](../../src/world/roadStyle.ts) holds one pure description per style (`roadPaintLayout(style)`: every painted rectangle in texels, the edge bands, the tint, repairs and wear); [`roadMap.ts`](../../src/world/roadMap.ts) draws the colour map from it and `roadSurface.ts` keeps the same rectangles flat in the normal and roughness maps, so the two cannot drift apart. `Road.setMarkers()` (called on a stage change) repaints the map when the style differs and tells `RoadExtras.setRoadLayout()`, which redraws the detail maps. The road stays 9.2 m wide; only paint and surface change.
+
+| Style | Stages | Look |
+| --- | --- | --- |
+| `us-highway` | Heartland, Route 66, Morgul-Bismark, Echo Lake, uploaded GPX | Dashed double yellow centre, white edge lines, gravel shoulders (exactly as before) |
+| `alpine` | Alpe d'Huez, Stelvio, Tourmalet, Ventoux | One white dashed centre line (3 m dash, 10.8 m gap), thin worn white edge lines, no gravel (a dark dirty edge instead), darker asphalt with repair patches and tar seams |
+| `lane` | Monte Zoncolan | No lines; ragged dark edges (a noise width per row, periodic so it tiles) |
+| `park` | Tour of the Moon | Solid double yellow, no edge lines, warm red chip-seal tint, narrow dusty-red shoulders |
+
+A 3 m dash and a 10.8 m gap are 13.8 m, which doesn't fit the 512 px (9.2 m) texture the US styles repeat. The alpine texture is 768 px tall (13.8 m; three times the 256 px asphalt tile, so the photo still tiles) and `v` runs `d / layout.repeatM`. That keeps the dash in the one texture (wet look and flat normals like every other mark, no extra draw calls or geometry), which is why it was chosen over separate dash strips per chunk. The puddle shader scales by the `uRepeat` uniform for the same reason. Low pays nothing extra: it is the same single canvas texture.
+
+### Milestones and parapets
+
+- **Milestones** ([`milestones.ts`](../../src/world/milestones.ts)). `signStyleOf(stage)` gives `'fr'` for `hairpinWord === 'Virage'`, `'it'` for `'Tornante'` and `'us'` otherwise (and for stages without a finish). On a French or Italian climb each countdown sign is a low-poly white post with a yellow (France) or red (Italy) cap and a canvas face, cached per text: "ALPE D'HUEZ / Sommet 7 km / Pente moy. 8.1 %" or "STELVIO / Cima 7 km / Pendenza media 8.1 %". The gradient is the stage's `elevationAt` averaged over the next marker interval (`averageGrade()`). The post is 1.3 times life size so it reads from the chase camera.
+- **Stone parapets.** `Scenery.barrier` is `'rail'` (default) or `'stone'`. With `'stone'` (Stelvio, Tourmalet, Ventoux) `barriers.ts` swaps the W-beam for `stoneGeometry()`: a 3 m section of three courses of jittered grey stones, 0.55 m high and 0.45 m thick, per-stone vertex colour and a flat-shaded material. Same sections, same instancing, same Low cost. Alpe d'Huez and Zoncolan keep rails.
 
 ### Painted words, guardrails and crowds
 
