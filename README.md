@@ -19,10 +19,10 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Stages** (🏁 button):
   - *Heartland Rollers*: endless farmland, free ride.
   - *Route 66 Flats*: 25 km time trial.
-  - *Alpe d'Huez*: 14 km at 8% from Le Bourg-d'Oisans with real per-kilometre gradients (swi-cycling.com) and all 21 numbered hairpins.
-  - *Stelvio Pass*: 24.5 km at 7.5% from Prato allo Stelvio to 2758 m through 48 numbered hairpins. Totals match published figures; the per-kilometre shape is approximated.
-  - *Hell of the West*: a three-stage tour: Stage 1 *Morgul-Bismark* (two laps of the Boulder circuit, up The Wall), Stage 2 *Tour of the Moon* (Rim Rock Drive through Colorado National Monument, red rock scenery) and Stage 3 *Echo Lake*, 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake (3,235 m).
-  - *Mont Ventoux* (21.4 km at 7.5% from Bédoin), *Col du Tourmalet* (19 km at 7.4% from Luz-Saint-Sauveur) and *Monte Zoncolan* (10.1 km at 11.9% from Ovaro). Totals match published figures; the per-kilometre shapes are approximated.
+  - *Alpe d'Huez*: 14 km at 8% from Le Bourg-d'Oisans along its real road, with real per-kilometre gradients (swi-cycling.com) and all 21 numbered hairpins.
+  - *Stelvio Pass*: 24.5 km at 7.5% from Prato allo Stelvio to 2758 m up its real road through 48 numbered hairpins. Length and gain match published figures.
+  - *Hell of the West*: a three-stage tour: Stage 1 *Morgul-Bismark* (two laps of the real Superior circuit, up The Wall), Stage 2 *Tour of the Moon* (Rim Rock Drive through Colorado National Monument, red rock scenery) and Stage 3 *Echo Lake*, 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake (3,235 m).
+  - *Mont Ventoux* (21.4 km at 7.5% from Bédoin), *Col du Tourmalet* (19 km at 7.4% from Luz-Saint-Sauveur) and *Monte Zoncolan* (10.1 km at 11.9% from Ovaro). Real roads (OpenStreetMap, SRTM); length and gain match published figures.
 
   - *Your routes*: upload a `.gpx` file (from Strava, Komoot, RideWithGPS, Garmin…) in the stage picker to practise it. The road follows its bends and its smoothed elevation profile (gradients capped at 25 %), with scenery scaled to the route: farmland for flat routes, forests, rock and snow at their real altitudes for mountain ones. Routes are saved in the browser.
 
@@ -72,6 +72,8 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Vite** to build, **Vercel** to host, **Neon** (Postgres, Neon Auth and the Data API) for accounts and data, and **Sentry** for error reporting. One small Vercel function (`api/ai.ts`) for the optional AI features; otherwise no server code of our own.
 
 See [Architecture](docs/developer-guide/architecture.md#languages-and-technologies) for the full list.
+
+**Map data.** The mountain stages and the Hell of the West follow real roads: road lines © OpenStreetMap contributors ([ODbL](https://www.openstreetmap.org/copyright)), routed with [BRouter](https://brouter.de); elevation: SRTM (NASA, public domain). They are baked in advance by `scripts/bake-routes.mjs` (see [Stages and GPX](docs/developer-guide/stages-and-gpx.md#real-roads)).
 
 ## Browser support
 
@@ -137,7 +139,8 @@ src/
   workouts/          Workout model, built-ins, .zwo/.erg/.mrc import + .zwo export,
                      library (browser storage), player, graph, library + creator UI
   stages.ts          Stage definitions: profiles, bends, scenery, landmarks, signs
-  routes/            GPX parsing, route → stage conversion, saved routes
+  routes/            GPX parsing, route → stage conversion, saved routes; real/ holds the baked
+                     real roads of the built-in stages (scripts/bake-routes.mjs)
   course.ts          The current stage's road: elevation, grade, heading, centreline
   world/world.ts     Three.js renderer, lighting, cameras; places the rider each frame
   world/terrain.ts   Hills and forests built in tiles around the rider

@@ -86,7 +86,7 @@ The row of numbers across the top is made of **data blocks**. The first block is
 The bottom-left corner shows two things:
 
 - **Trainer status**, with a colored dot: connected, searching, reconnecting (a remembered trainer that dropped out; the ride carries on), or not connected.
-- **Stage name and progress.** On a stage with a finish line, this shows the distance to go and the next numbered hairpin, for example *Alpe d'Huez · 8.4 km to go · next: Virage 14 in 230 m*. On Heartland Rollers it shows just the name.
+- **Stage name and progress.** On a stage with a finish line, this shows the distance to go and the next numbered hairpin or named place, for example *Alpe d'Huez · 8.4 km to go · next: Virage 14 in 230 m* or *Mont Ventoux · 7 km to go · next: Chalet Reynard in 800 m*. Roads that don't number their hairpins show only the places. On Heartland Rollers it shows just the name.
 
 ## Panels at the bottom of the screen
 

@@ -7,6 +7,7 @@ import { decodeRoute, ELE_STEP, HEAD_STEP, type RealRoute, type RealRouteData } 
 
 const MAX_GRADE = 0.25;
 const PROFILE_STEP = 1; // metres between elevation samples once rescaled
+const CAP_STEP = 10; // metres between the points the gradient cap works on, and the road's final elevation points
 const RUN_OUT = 60; // metres of near-level road after the finish line (the top of a climb)
 const RUN_OUT_GRADE = 0.01;
 
@@ -108,7 +109,7 @@ export function mapRoute(data: RealRouteData, stageLength: number): RealGeometry
  * the total is kept. Used to keep a road under a maximum gradient (or turn rate) without moving its end.
  */
 export function limitSteps(steps: Float64Array, cap: number, reach = 8): void {
-  for (let pass = 0; pass < 600; pass++) {
+  for (let pass = 0; pass < 2000; pass++) {
     const excess: [number, number][] = [];
     for (let i = 0; i < steps.length; i++) {
       const over = Math.abs(steps[i]) - cap;
@@ -168,20 +169,30 @@ export function elevationFrom(geo: RealGeometry, stageLength: number, scaleTo: S
     }
     prof.set(out);
   }
-  const base = scaleTo.peak !== undefined ? Math.max(...prof) : prof[prof.length - 1];
+  let high = 0;
+  for (let i = 0; i < prof.length; i++) if (prof[i] > high) high = prof[i];
+  const base = scaleTo.peak !== undefined ? high : prof[prof.length - 1];
   const f = base > 0 ? (scaleTo.peak ?? scaleTo.gain ?? base) / base : 1;
-  for (let i = 0; i < prof.length; i++) prof[i] *= f;
   // SRTM's ramps are steeper than any road: flatten what exceeds the cap into the road around it.
-  const steps = new Float64Array(prof.length - 1);
-  for (let i = 0; i < steps.length; i++) steps[i] = prof[i + 1] - prof[i];
-  limitSteps(steps, (scaleTo.maxGrade ?? MAX_GRADE) * PROFILE_STEP, 20);
-  for (let i = 0; i < steps.length; i++) prof[i + 1] = prof[i] + steps[i];
-  const top = prof[prof.length - 1];
+  // That is done on the profile every CAP_STEP metres (a hundredth of the work), and the road is
+  // straight lines between those points.
+  const n = Math.ceil(stageLength / CAP_STEP);
+  const steps = new Float64Array(n);
+  let prev = 0;
+  for (let k = 1; k <= n; k++) {
+    const at = prof[Math.min(prof.length - 1, Math.round((k * CAP_STEP) / PROFILE_STEP))] * f;
+    steps[k - 1] = at - prev;
+    prev = at;
+  }
+  limitSteps(steps, (scaleTo.maxGrade ?? MAX_GRADE) * CAP_STEP, 3);
+  const points = new Float64Array(n + 1);
+  for (let k = 0; k < n; k++) points[k + 1] = points[k] + steps[k];
+  const top = points[n];
   return (d) => {
     if (d <= 0) return 0;
     if (d >= stageLength) return top + Math.min(d - stageLength, RUN_OUT) * RUN_OUT_GRADE;
-    const x = d / PROFILE_STEP;
+    const x = d / CAP_STEP;
     const i = Math.floor(x);
-    return prof[i] + (prof[i + 1] - prof[i]) * (x - i);
+    return points[i] + (points[i + 1] - points[i]) * (x - i);
   };
 }

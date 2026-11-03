@@ -6,6 +6,15 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Real roads and gradients for the built-in stages
+
+- **Real road lines.** Alpe d'Huez, Stelvio, Mont Ventoux, the Tourmalet, Monte Zoncolan, Echo Lake (Hell of the West stage 3) and the Tour of the Moon now follow their real roads, with real elevation, instead of a zig-zag of identical 12 m hairpins. The Morgul-Bismark circuit takes the shape of the real loop around Superior, Colorado (scaled to its 21.1 km lap, closing exactly); its elevation, with The Wall, is unchanged. Every stage keeps its length and published gain, so leaderboards, ghosts, schedules and `stage_limits` are unaffected, and Alpe d'Huez keeps its per-kilometre gradients.
+- **Baked once, small.** `scripts/bake-routes.mjs` fetches each road from BRouter (OpenStreetMap lines, SRTM elevation), cleans it (median-filtered elevation, no bend tighter than an 11 m radius) and writes `src/routes/real/<id>.ts`: int8 steps of heading every 5 m and elevation every 20 m, about 40 KB gzipped for all of them. `routes/realStage.ts` maps the real length onto the stage's, rescales the profile to the published figures and caps the gradient near the published maximum.
+- **Hairpins found, not invented.** They are detected in the real heading: Alpe d'Huez's 21 (hairpin 7, the Dutch Corner, is in Huez village at about 1,400 m) and Stelvio's 48 are numbered; Ventoux, the Tourmalet, Zoncolan and Echo Lake have none numbered, so the HUD no longer announces "next: Virage 1" on Ventoux. `StageSign` gained `numbered` and `name`: the HUD announces places ("next: Chalet Reynard in 800 m"), and crowds and guardrails still gather at every hairpin.
+- **Places moved to where they are.** Chalet Reynard stands at 1,440 m on the real Ventoux; the Tour of the Moon's race points (Cold Shivers, the high point, Black Ridge, the visitor center) and Echo Lake's mountain prime are on the real road; the Flatirons now stand west of Highway 93 on the real loop.
+- **Credit.** "Road lines © OpenStreetMap contributors (ODbL), routed with BRouter; elevation: SRTM (NASA, public domain)" is in the README, the developer guide and under the stage list in the hub's Route section.
+- Tests: `tests/unit/realStage.test.ts` (decoder round trip, length mapping, hairpin detection, gradient capping, each stage's length and gain, the loop's closure).
+
 ### Crowds with local character, the Dutch Corner and roadside camps
 
 - **Culture.** Crowds dress for the country, from the stage's hairpin word: France (tricolour, polka-dot jerseys and flags, Breton and Basque flags), Italy (tricolour, lots of Giro pink), the USA (stars and stripes) and Colorado on the Hell of the West stages (with the state flag). Flags are canvas-drawn in one atlas.
