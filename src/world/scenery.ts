@@ -26,13 +26,15 @@ export interface SceneryTier {
   barriers: boolean;
   /** Words and symbols painted on the road on the big climbs. */
   roadPaint: boolean;
+  /** Ground cover beside the road (grass tufts, wildflowers, stones; groundCover.ts): the share of full density, 0 off. The module is only fetched when this is above 0. */
+  groundCover: 0 | 0.5 | 1;
 }
 
 export const SCENERY: Record<'low' | 'medium' | 'high' | 'ultra', SceneryTier> = {
-  low: { terrainLayers: 3, terrainTexSize: 512, detailNormals: false, roadDetail: false, triplanar: false, anisotropy: 2, crowd: 0.35, crowdFlags: false, crowdShadows: false, barriers: true, roadPaint: true },
-  medium: { terrainLayers: 7, terrainTexSize: 1024, detailNormals: false, roadDetail: true, triplanar: true, anisotropy: 4, crowd: 0.7, crowdFlags: true, crowdShadows: false, barriers: true, roadPaint: true },
-  high: { terrainLayers: 7, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 8, crowd: 1, crowdFlags: true, crowdShadows: true, barriers: true, roadPaint: true },
-  ultra: { terrainLayers: 7, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 16, crowd: 1, crowdFlags: true, crowdShadows: true, barriers: true, roadPaint: true },
+  low: { terrainLayers: 3, terrainTexSize: 512, detailNormals: false, roadDetail: false, triplanar: false, anisotropy: 2, crowd: 0.35, crowdFlags: false, crowdShadows: false, barriers: true, roadPaint: true, groundCover: 0 },
+  medium: { terrainLayers: 7, terrainTexSize: 1024, detailNormals: false, roadDetail: true, triplanar: true, anisotropy: 4, crowd: 0.7, crowdFlags: true, crowdShadows: false, barriers: true, roadPaint: true, groundCover: 0 },
+  high: { terrainLayers: 7, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 8, crowd: 1, crowdFlags: true, crowdShadows: true, barriers: true, roadPaint: true, groundCover: 0.5 },
+  ultra: { terrainLayers: 7, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 16, crowd: 1, crowdFlags: true, crowdShadows: true, barriers: true, roadPaint: true, groundCover: 1 },
 };
 
 // The seven ground layers (terrain.ts gives each point a weight per layer; ground.ts draws them).

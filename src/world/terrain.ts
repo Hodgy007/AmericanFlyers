@@ -199,6 +199,28 @@ export function groundColor(x: number, z: number, h: number, near: Near | null, 
   if (sum > 0) for (let i = 0; i < 5; i++) w[i] /= sum;
 }
 
+/** What a probe found at a point: the ground height and how far the nearest road centreline is. One object, reused by every call. */
+export interface GroundHit { h: number; roadDist: number }
+
+/**
+ * A lookup for things stood on the ground (ground cover): at (x, z) it fills `w` with the
+ * layer weights `groundColor()` gives there and returns the ground height and the distance to
+ * the nearest road. One scan of the road serves every call, as in `groundSampler`.
+ */
+export function groundProbe(minX: number, maxX: number, minZ: number, maxZ: number): (x: number, z: number, w: Weights) => GroundHit {
+  const cands = candidatesFor(minX, maxX, minZ, maxZ);
+  const hit: GroundHit = { h: 0, roadDist: Infinity };
+  const c = new THREE.Color();
+  return (x, z, w) => {
+    const near = nearestRoad(cands, x, z);
+    hit.h = heightAt(x, z, near);
+    hit.roadDist = near ? near.dist : Infinity;
+    w.fill(0);
+    groundColor(x, z, hit.h, near, c, w);
+    return hit;
+  };
+}
+
 /** Darkens steep grass and turns cliffs to rock, using the tile's own height grid. */
 function shadeSlopes(pos: THREE.BufferAttribute, colors: Float32Array) {
   const rock = currentStage().scenery.palette === 'desert' ? COL.desertRock : COL.rock;

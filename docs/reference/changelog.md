@@ -6,6 +6,12 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Ground cover beside the road on High and Ultra
+
+- **Grass tufts, wildflowers, stones and sage.** The verges and fields right beside the road (5.6 to 30 m from the centreline, within 90 m of the rider, thickest at the verge) now carry small instanced plants. They follow the ground: green tufts and a few white, yellow and purple wildflowers on grass, straw tufts on dry grass and fields, sparse tufts and pebbles on the dirt verge, stones and tiny alpine flowers on rock, nothing on snow, and sage bushes and red stones in the Tour of the Moon's desert. Plants sway with the wind (`sway.ts`), shade dark at the base to light at the tips, receive shadows and cast none, and shrink to nothing over the last 15 m of range.
+- **Per tier.** `SceneryTier.groundCover`: Low and Medium none (the chunk isn't downloaded), High half the density, Ultra all of it. The Auto controller disposes the cover when it steps down to Medium and rebuilds it when it climbs back.
+- **Cost.** One lazily loaded chunk (`groundCover`, about 5 kB gzip), four draw calls, about 64,000 triangles at Ultra on Heartland (30,000 on High), cells built nearest first in a few ms of a frame and kept until 114 m away; deterministic from the stage and position. `groundProbe()` in `terrain.ts` gives height and ground layer weights for things stood on the ground. New `tests/unit/groundCover.test.ts`.
+
 ### A Bluefy link for iPhone and iPad riders
 
 - Signed-in riders on an iPhone or iPad whose browser has no Web Bluetooth (Safari, Chrome and Edge there are all WebKit) see a small card in the hub's Ride panel with Bluefy's icon, a **Get Bluefy on the App Store** link and a **Copy link** button (the site's address, to paste into Bluefy). It never shows signed out, on other platforms, or inside Bluefy (where `navigator.bluetooth` exists). iPadOS 13+ is detected by its Mac user agent plus touch points.
