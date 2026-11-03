@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { roadPoint } from '../course';
 import { currentStage } from '../course';
-import { barrierKind, barrierSections, buildBarriers, railGeometry, stoneGeometry } from './barriers';
+import { barrierKind, hasBarriers, barrierSections, buildBarriers, railGeometry, stoneGeometry } from './barriers';
 import { buildCampers, camperGeometries, camperMaterial, planCampers, type CamperGeometries } from './campers';
 import { CULTURES, type CultureId } from './crowdCulture';
 import { buildCrowd, crowdMaterial, crowdUniforms, planCrowd, spectatorGeometry } from './crowds';
@@ -97,12 +97,13 @@ export class RoadExtras {
       }
       const climb = isClimb(stage);
       const camping = climb && spec.crowd > 0;
+      const barriers = spec.barriers && hasBarriers(stage); // climbs, and stages that shape their roadside (canyon rims)
       let ground: ((x: number, z: number) => number) | null = null;
-      if (climb && (spec.barriers || camping)) {
+      if (barriers || camping) {
         const a = roadPoint(d0 + CHUNK / 2);
         ground = groundSampler(a.x - 140, a.x + 140, a.z - 140, a.z + 140);
       }
-      if (spec.barriers && climb && ground) {
+      if (barriers && ground) {
         const stone = barrierKind(stage) === 'stone';
         if (stone && !this.stoneGeo) {
           this.stoneGeo = stoneGeometry();

@@ -257,6 +257,7 @@ export class Atmosphere {
   readonly lightDir = new THREE.Vector3(0.45, 0.62, -0.64).normalize();
 
   private choice = { time: 'auto' as TimeOfDay, weather: 'auto' as Weather };
+  private heightK = 1 / 110; // how fast the fog thins with height, per metre
   private stageTime: Phase = 'day';
   private stageWeather: Climate = 'clear';
   private hour = PHASE_HOUR.day; // the Auto clock
@@ -300,6 +301,7 @@ export class Atmosphere {
 
   /** A new stage: restart the Auto clock and weather from the stage's own, and show them straight away. */
   restage(stage: Stage) {
+    this.heightK = stage.scenery.roadside ? 1 / 500 : 1 / 110; // a stage with canyons beside the road must not fog its depths white
     this.stageTime = stage.timeOfDay ?? 'day';
     this.stageWeather = stage.weather ?? 'clear';
     this.hour = PHASE_HOUR[this.stageTime];
@@ -369,7 +371,7 @@ export class Atmosphere {
     sky.setMountainTint(l.mountain, density * 3600);
     const up = THREE.MathUtils.smoothstep(sunY, -0.06, 0.06);
     const shade = this.cloudShadows ? 0.6 * (1 - 0.6 * l.overcast) * THREE.MathUtils.smoothstep(sunY, 0.05, 0.25) : 0;
-    setFog(density, 1 / 110, riderPos.y - 28, l.fogFar, l.sunDir, 0.12 * l.glow * up, l.sunColor, band,
+    setFog(density, this.heightK, riderPos.y - 28, l.fogFar, l.sunDir, 0.12 * l.glow * up, l.sunColor, band,
       sky.cloudThreshold, sky.drift.x, sky.drift.y, shade);
     // Grade by how dark it is (the sun's height, so night under cloud still grades as night).
     const dark = 1 - THREE.MathUtils.smoothstep(sunY, -0.1, 0.12);

@@ -39,6 +39,7 @@ The `scenery` object:
 | `mountainScale` | Height of the distant mountain ring. |
 | `road` | Optional `RoadStyle`: `'us-highway'` (default), `'alpine'`, `'lane'` or `'park'`. Sets the road's paint and surface (see `world/roadStyle.ts` and the road section of the 3D world guide). Uploaded routes use the default. |
 | `barrier` | Optional `'rail'` (default, W-beam guardrails) or `'stone'` (low dry-stone parapets). |
+| `roadside(d, lateral, plain)` | Optional hook that shapes the ground beside the road (canyons). `d` is the course distance of the nearest road point, `lateral` the signed offset from the centreline (+ right), `plain` the height relative to the road the terrain would give. It returns the height relative to the road, or `null` for no opinion. The terrain then reaches 900 m from the road instead of 260 m. It runs for every vertex near the road, so keep it cheap, and key it off `d` and `lateral` (never world coordinates) so it survives a change of route. A stage with a hook also gets barriers (`hasBarriers()`). See `world/canyon.ts`. |
 
 `course.ts` wraps the current stage: `elevationAt`, `gradeAt` (a central difference over ±2 m), `headingAt`, and a cached centerline built by stepping 2 m along the heading. Changing stage clears that cache.
 

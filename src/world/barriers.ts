@@ -18,9 +18,12 @@ const DROP_MIN = 4; // metres lower than the road there = a drop worth a rail
 /** What stands at the roadside on this stage. */
 export const barrierKind = (stage: Stage): 'rail' | 'stone' => stage.scenery.barrier ?? 'rail';
 
+/** Climbs, and stages with canyons beside the road, get barriers. */
+export const hasBarriers = (stage: Stage) => isClimb(stage) || stage.scenery.roadside !== undefined;
+
 /** Which sections along [d0, d1) get a rail, and on which side (-1 left, +1 right). `ground` is a height lookup (terrain's `groundSampler`). */
 export function barrierSections(stage: Stage, d0: number, d1: number, ground: (x: number, z: number) => number): { d: number; side: -1 | 1 }[] {
-  if (!isClimb(stage)) return [];
+  if (!hasBarriers(stage)) return [];
   const bends = bendsOf(stage);
   const out: { d: number; side: -1 | 1 }[] = [];
   const first = Math.ceil(d0 / SECTION);

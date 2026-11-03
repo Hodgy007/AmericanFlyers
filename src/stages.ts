@@ -4,6 +4,7 @@
 import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
+import { RIM_ROCK_SECTIONS, makeRoadside } from './world/canyon.js';
 
 interface LandmarkBase {
   every: number; // metres between repeats
@@ -47,6 +48,14 @@ export interface Scenery {
   road?: RoadStyle;
   /** What stands at the roadside on hairpins and drops: W-beam guardrails (default) or low dry-stone parapets. */
   barrier?: 'rail' | 'stone';
+  /**
+   * Shapes the ground beside the road (canyons, cuttings). Given a point at course distance `d`
+   * and signed lateral offset from the centreline (+ right), and `plain`, the height relative
+   * to the road the terrain would give there, it returns the height relative to the road, or
+   * null for no opinion. It runs for every terrain vertex within REACH (900 m) of the road, so
+   * keep it cheap, and key it off `d` and `lateral` only.
+   */
+  roadside?(d: number, lateral: number, plain: number): number | null;
 }
 
 /** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
@@ -905,6 +914,8 @@ const tourOfTheMoon: Stage = {
     mountainScale: 1.3, // the Book Cliffs
     palette: 'desert',
     road: 'park',
+    barrier: 'stone',
+    roadside: makeRoadside(RIM_ROCK_SECTIONS), // the rims of Monument Canyon and its neighbours
   },
   landmarks: [startArch, finishArch(TM_FINISH), finishArch(24500)],
   signs: [],

@@ -24,9 +24,9 @@ describe('which stage has which road', () => {
     };
     for (const s of STAGES) expect(roadStyleOf(s), s.id).toBe(want[s.id]);
   });
-  it('uses stone parapets on Stelvio, Tourmalet and Ventoux only', () => {
+  it('uses stone parapets on Stelvio, Tourmalet, Ventoux and the Tour of the Moon only', () => {
     const stone = STAGES.filter((s) => barrierKind(s) === 'stone').map((s) => s.id);
-    expect(stone.sort()).toEqual(['stelvio', 'tourmalet', 'ventoux']);
+    expect(stone.sort()).toEqual(['hotw-tour-of-the-moon', 'stelvio', 'tourmalet', 'ventoux']);
   });
   it('defaults to the US highway for a stage with no road style (an uploaded route)', () => {
     expect(roadStyleOf({ scenery: { ...stageById('heartland').scenery, road: undefined } })).toBe('us-highway');
