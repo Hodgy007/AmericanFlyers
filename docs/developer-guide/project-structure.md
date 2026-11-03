@@ -26,7 +26,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `public/models/README.md` | What each landmark model is and where it's placed. |
 | `public/textures/asphalt.jpg` | Road surface texture. |
 | `public/textures/asphalt-n.jpg` | The road's asphalt normal map (CC0, Poly Haven). |
-| `public/textures/terrain/*.jpg` | The seven terrain layers (grass, dry, dirt, rock, snow, sandstone, sand) and their `-n` normal maps (CC0, Poly Haven), fetched lazily by `world/ground.ts`. |
+| `public/textures/terrain/*.jpg` | The eight terrain layers (grass, dry, dirt, rock, snow, sandstone, sand, scree) and their `-n` normal maps (CC0, Poly Haven), fetched lazily by `world/ground.ts`. |
 | `public/textures/README.md` | Where each texture comes from, its licence and how it was processed. |
 | `public/images/hero*.jpg`, `hero*.mp4` | The home page hero (still and looping video, with smaller phone versions). |
 | `public/images/hero-dog*.jpg`, `hero-dog*.mp4` | The second hero: a pit bull chasing the rider. |
@@ -120,7 +120,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `workouts/ui.ts` | The workout library and the workout creator dialogs. |
 | `world/world.ts` | The Three.js renderer, lights, cameras, and the per-frame scene update. |
 | `world/others.ts` | Other riders and ghosts on the road: models, name tags, lanes, smoothing and passing. |
-| `world/terrain.ts` | Ground tiles, height, color and the seven ground-layer weights, and the scattered trees. |
+| `world/terrain.ts` | Ground tiles, height, color and the eight ground-layer weights, and the scattered trees. |
 | `world/ground.ts` | Terrain texture splatting: the layer texture arrays, the shader patch (triplanar rock, macro tint, detail normals). Lazy. |
 | `world/scenery.ts` | What each graphics tier switches on for terrain textures, the wet road, paint, guardrails and crowds (`TIER_SPECS[tier].scenery`), and the ground layer ids. Pure. |
 | `world/road.ts` | Road chunks, distance markers, hairpin plaques, and the finish line. |

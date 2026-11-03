@@ -23,6 +23,8 @@ export interface Scenery {
   rockLine: number; // heights (same datum as the road) where rock, snow and the tree line start
   snowLine: number;
   treeLine: number;
+  /** Where bare pale limestone scree starts (same datum), above which there are no trees either: Mont Ventoux's summit. Omitted: none. */
+  screeLine?: number;
   coniferBias: number; // 0 = mostly broadleaf, 1 = all conifers
   forestCover: number; // 0 = farmland with woods, higher = more forest
   fields: boolean; // patches of farmland
@@ -449,7 +451,7 @@ const hellOfTheWest: Stage = {
 // 7.5%. Gentle vineyards to Saint-Estève, then 9–10% through the forest to
 // Chalet Reynard, then the bare white limestone to the top. Per-kilometre
 // figures approximated from published profiles (climbbybike.com,
-// cyclingcols.com). The white scree is drawn with the snow shading.
+// cyclingcols.com). The white scree is the ground's scree layer (`screeLine`).
 const ventoux = buildClimb({
   id: 'ventoux',
   name: 'Mont Ventoux',
@@ -468,7 +470,8 @@ const ventoux = buildClimb({
   scenery: {
     bumpAmp: 9,
     rockLine: 1060,
-    snowLine: 1150, // the bald white summit above Chalet Reynard
+    snowLine: 1e9, // it is summer: the white summit is limestone, not snow
+    screeLine: 1150, // the bald white summit above Chalet Reynard (about 1,450 m up the mountain)
     treeLine: 1100,
     coniferBias: 0.7,
     forestCover: 0.35,

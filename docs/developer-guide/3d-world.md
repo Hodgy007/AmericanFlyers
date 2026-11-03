@@ -109,9 +109,9 @@ All three apply per 100 m chunk (`Road.buildChunk()` asks `RoadExtras.addTo()`),
 | Tier | Terrain layers (size) | Normals | Triplanar rock | Anisotropy | Road normal | Crowd share | Flags | Crowd shadows | Guardrails and paint |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Low | 3 (512) | no | no | 2 | no | 0.35 | no | no | yes |
-| Medium | 7 (1K) | no | yes | 4 | yes | 0.7 | yes | no | yes |
-| High | 7 (1K) | yes | yes | 8 | yes | 1 | yes | yes | yes |
-| Ultra | 7 (1K) | yes | yes | 16 | yes | 1 | yes | yes | yes |
+| Medium | 8 (1K) | no | yes | 4 | yes | 0.7 | yes | no | yes |
+| High | 8 (1K) | yes | yes | 8 | yes | 1 | yes | yes | yes |
+| Ultra | 8 (1K) | yes | yes | 16 | yes | 1 | yes | yes | yes |
 
 
 ## Terrain
@@ -120,24 +120,24 @@ All three apply per 100 m chunk (`Road.buildChunk()` asks `RoadExtras.addTo()`),
 
 - **Height** is a function of world position only, so neighboring tiles always line up.
 - **Near the road** (within about 260 m), the ground follows the road's own elevation, blending out to the stage's "wild" terrain. Where two stretches of road are close together (stacked hairpins), the height blends between them.
-- **Color** depends on height and slope: grass, fields (where the stage allows), rock above the rock line, and snow above the snow line. Steep ground darkens, and cliffs turn to rock. The tiles are smooth-shaded.
+- **Color** depends on height and slope: grass, fields (where the stage allows), rock above the rock line, pale limestone scree above a stage's optional `screeLine` (Mont Ventoux's bald summit, which sets `snowLine: 1e9` because it is summer), and snow above the snow line. Steep ground darkens, and cliffs turn to rock (paler among scree). The tiles are smooth-shaded.
 - **Desert palette.** A stage whose scenery has `palette: 'desert'` (the Tour of the Moon) colours the ground in thin bands of red, orange and tan sandstone with sand and sage patches, turns cliffs dark red, and plants sparse junipers (70 candidate points per tile) instead of forest. Its wild terrain is stepped into mesas by `terrace()` in `stages.ts`.
-- **Trees** are scattered at 260 candidate points per tile. Forests are dense where the forest noise is high. Trees are removed within 12 m of the road and near landmarks, and above the tree line.
+- **Trees** are scattered at 260 candidate points per tile. Forests are dense where the forest noise is high. Trees are removed within 12 m of the road and near landmarks, and above the tree line (and the scree line).
 - **Standing things on the ground.** `groundSampler(minX, maxX, minZ, maxZ)` returns a height lookup for a box, for things placed beside the road (guardrails use it to find drops).
 
 The first frame builds every tile in range at once. After that, at most two tiles are built per frame.
 
 ### Texture splatting
 
-Each vertex also carries **seven layer weights** (`aWa`, `aWb`, one byte each): grass, dry grass, dirt, rock, snow, sandstone, sand. `groundColor()` fills them from the same logic as the colour, so a stage still looks like itself: grass with dry grass in the bright patches and wherever the stage has fields; the verge (within 6 to 9 m of the road) is dirt; rock and snow take over by height and the stage's `rockLine` and `snowLine`; the desert is sandstone under a skin of sand, with sage patches as dry ground.
+Each vertex also carries **eight layer weights** (`aWa`, `aWb`, one byte each): grass, dry grass, dirt, rock, snow, sandstone, sand, scree. `groundColor()` fills them from the same logic as the colour, so a stage still looks like itself: grass with dry grass in the bright patches and wherever the stage has fields; the verge (within 6 to 9 m of the road) is dirt; rock, scree and snow take over by height and the stage's `rockLine`, `screeLine` and `snowLine` (scree has a noisy edge like the snow line, its verge stays mostly scree rather than dirt, and the rock fades out under it); the desert is sandstone under a skin of sand, with sage patches as dry ground.
 
 The splatting itself is [`src/world/ground.ts`](../../src/world/ground.ts), a lazily loaded chunk (`Terrain.setScenery()` imports it after the first frame; until then, and if it fails to load, the plain vertex colours show). It patches the terrain's `MeshStandardMaterial` (`onBeforeCompile`):
 
 - **The vertex colour stays.** Each layer's texture is divided by its own average colour, greyed a little and scaled by a per-layer contrast, and the blend multiplies the vertex colour. The photographs add grain, never a different hue, so the palettes survive.
-- **Textures** come from one `DataArrayTexture` (7 layers, mipmapped, anisotropic) for the colour and one for the detail normals (512 px). Ground layers are projected from above at 4 to 6 m per repeat. A large-scale noise tint (90 m and 26 m) hides the tiling from a distance, and the grain fades out beyond about 160 to 600 m.
+- **Textures** come from one `DataArrayTexture` (8 layers, mipmapped, anisotropic) for the colour and one for the detail normals (512 px). Ground layers are projected from above at 4 to 6 m per repeat. A large-scale noise tint (90 m and 26 m) hides the tiling from a distance, and the grain fades out beyond about 160 to 600 m.
 - **Rock is triplanar**, and any pixel steeper than about 40° turns to rock (judged per pixel from the smooth normal), so cliffs never stretch. With normals (High and up) rock's normal map is blended triplanar (whiteout) and the other layers' normals are projected from above and fade out beyond 60 to 260 m.
-- **Lazy and per stage.** One JPEG per layer in `public/textures/terrain/` (`grass.jpg`, `grass-n.jpg` …), fetched and decoded a layer at a time, then uploaded once. Only the layers a stage can show are fetched (`layersFor()`: no sandstone on the Alpe, no snow where the snow line is out of reach, no grass in the desert). Sources and licences are in [`public/textures/README.md`](../../public/textures/README.md); all are CC0 (Poly Haven).
-- **Per tier** (`TIER_SPECS[tier].scenery`, see [`scenery.ts`](../../src/world/scenery.ts)): Low fetches **three layers** (grass, rock and snow, or sandstone and rock in the desert; dry grass and dirt fold into grass, sand into sandstone), shrinks them to 512 px while decoding, has no normals and projects rock along one horizontal axis instead of three. Medium has all seven layers at 1K with triplanar rock. High and Ultra add the detail normals. Anisotropy is capped at 2, 4, 8 and 16.
+- **Lazy and per stage.** One JPEG per layer in `public/textures/terrain/` (`grass.jpg`, `grass-n.jpg` …), fetched and decoded a layer at a time, then uploaded once. Only the layers a stage can show are fetched (`layersFor()`: no sandstone on the Alpe, no snow where the snow line is out of reach, no scree unless the stage has a `screeLine`, no grass in the desert). Sources and licences are in [`public/textures/README.md`](../../public/textures/README.md); all are CC0 (Poly Haven).
+- **Per tier** (`TIER_SPECS[tier].scenery`, see [`scenery.ts`](../../src/world/scenery.ts)): Low fetches **three layers** (grass and rock plus snow or scree, or sandstone and rock in the desert; dry grass and dirt fold into grass, sand into sandstone), shrinks them to 512 px while decoding, has no normals and projects rock along one horizontal axis instead of three. Medium has every layer the stage needs (the array holds eight) at 1K with triplanar rock. High and Ultra add the detail normals. Anisotropy is capped at 2, 4, 8 and 16.
 
 ## Rider and bike
 
