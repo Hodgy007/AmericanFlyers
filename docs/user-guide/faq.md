@@ -60,7 +60,7 @@ Alpe d'Huez uses published per-kilometer gradients from swi-cycling.com. Stelvio
 
 ## Why is there no scenery or a landmark I expected?
 
-Landmarks are 3D models that the site serves from its models folder. A landmark only appears when its model is available. The developer guide explains how models are added: [3D world](../developer-guide/3d-world.md).
+Landmarks are either 3D models that the site serves from its models folder (a landmark only appears when its model is available) or monuments the app builds itself, such as the summit buildings, signs and the Flatirons. The developer guide explains how models are added: [3D world](../developer-guide/3d-world.md).
 
 ## Can I change the units?
 

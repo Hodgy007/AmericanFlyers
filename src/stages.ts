@@ -1,11 +1,11 @@
 // Stage definitions: each stage supplies its own elevation profile, road
 // bends, scenery style, roadside landmarks and signs.
 
+import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
 
-export interface LandmarkKind {
-  file: string;
+interface LandmarkBase {
   every: number; // metres between repeats
   first: number; // distance of the first one
   side: -1 | 0 | 1; // -1 left, 1 right, 0 on the road itself
@@ -15,7 +15,16 @@ export interface LandmarkKind {
   size: number; // target height in metres; width for side-0 kinds
   yaw?: number; // extra turn in radians after facing the road
   clearance: number; // keep trees this far away
+  /** Metres of course either side within which it is placed (default: 250 behind, 1,500 ahead). For huge, distant things. */
+  reach?: number;
 }
+
+/**
+ * A roadside landmark: either a GLB model in public/models/ (`file`) or a monument built in code
+ * (`model`, see world/monuments.ts), never both. `options` gives a monument its words and looks.
+ */
+export type LandmarkKind = LandmarkBase &
+  ({ file: string; model?: never; options?: never } | { model: MonumentId; options?: MonumentOptions; file?: never });
 
 export interface Scenery {
   /** Ground height far from the road. */
@@ -111,6 +120,13 @@ export const FARM_LANDMARKS: LandmarkKind[] = [
 
 const lowlandHills = (x: number, z: number) =>
   6 + fbm(x / 850, z / 850, 4) * 105 + (1 - Math.abs(fbm(x / 320 + 41, z / 320 - 7, 3))) * 28;
+
+/** A code-built landmark standing once at course distance `d` (see world/monuments.ts). `size` is its height in metres. */
+export const monumentAt = (model: MonumentId, d: number, side: -1 | 1, offset: number, size: number, extra: Partial<LandmarkBase> & { options?: MonumentOptions } = {}): LandmarkKind =>
+  ({ model, first: d, every: 1e9, side, offset, size, clearance: 8, ...extra });
+
+/** The summit board at the top of a European climb, just before the finish line, on the right. */
+const colSign = (finish: number, options: MonumentOptions): LandmarkKind => monumentAt('col-sign', finish - 55, 1, 8.5, 2.6, { yaw: -0.35, clearance: 6, options });
 
 export const GANTRY: LandmarkKind = { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 };
 export const startArch: LandmarkKind = { ...GANTRY, every: 1e9 };
@@ -234,8 +250,19 @@ interface ClimbSpec {
   timeOfDay?: Stage['timeOfDay'];
   weather?: Stage['weather'];
   scenery: Omit<Scenery, 'wildHeight'>;
+  /**
+   * Landmarks beyond the start and finish arches. A function is given where the numbered hairpins
+   * sit (found from the stage's own signs), for things that belong at a particular bend.
+   */
+  landmarks?: LandmarkKind[] | ((at: ClimbSites) => LandmarkKind[]);
 }
 
+/** Where things on a climb can be anchored: a numbered hairpin's apex, and which side of the road is the outside of its turn. */
+interface ClimbSites {
+  hairpin(label: string): { d: number; outside: -1 | 1 };
+}
+
+const SIGN_LEAD = 12; // metres before a hairpin that its number sign stands
 const HAIRPIN_R = 12; // metres, centreline radius
 const LEG_ALPHA = 0.12; // straights angle up the mountainside (rad)
 const TURN = Math.PI - 2 * LEG_ALPHA;
@@ -339,6 +366,18 @@ function buildClimb(spec: ClimbSpec): Stage {
     return base + 60 + massif + ridges;
   };
 
+  const signs = pins.map((p, i) => ({ d: p - SIGN_LEAD, label: String(hairpins - i), style: 'hairpin' as const }));
+  const at: ClimbSites = {
+    hairpin: (label) => {
+      const sign = signs.find((s) => s.label === label);
+      if (!sign) throw new Error(`${spec.id} has no hairpin ${label}`);
+      const start = sign.d + SIGN_LEAD;
+      // A right turn (heading rising) has its outside on the left.
+      return { d: start + ARC / 2, outside: headingAt(start + ARC) > headingAt(start) ? -1 : 1 };
+    },
+  };
+  const extra = typeof spec.landmarks === 'function' ? spec.landmarks(at) : spec.landmarks ?? [];
+
   return {
     id: spec.id,
     name: spec.name,
@@ -347,8 +386,8 @@ function buildClimb(spec: ClimbSpec): Stage {
     elevationAt,
     headingAt,
     scenery: { ...spec.scenery, wildHeight },
-    landmarks: [startArch, finishArch(length)],
-    signs: pins.map((p, i) => ({ d: p - 12, label: String(hairpins - i), style: 'hairpin' as const })),
+    landmarks: [startArch, finishArch(length), ...extra],
+    signs,
     hairpinWord: spec.hairpinWord,
     baseAltitude: spec.baseAltitude,
     timeOfDay: spec.timeOfDay,
@@ -385,6 +424,15 @@ const alpe = buildClimb({
     mountainScale: 2.6,
     road: 'alpine',
   },
+  landmarks: (at) => {
+    const seven = at.hairpin('7'); // Huez village: its church stands on the outside of hairpin 7
+    return [
+      monumentAt('alpine-church', seven.d, seven.outside, 30, 26.6, { yaw: seven.outside * -0.3, clearance: 16 }),
+      monumentAt('ski-apartments', 13450, -1, 38, 14, { options: { seed: 1 }, yaw: 0.3, clearance: 30 }),
+      monumentAt('ski-apartments', 13700, 1, 42, 17, { options: { seed: 2 }, yaw: -0.3, clearance: 30 }),
+      colSign(14000, { style: 'fr', lines: ["ALPE D'HUEZ", '1850 m'] }),
+    ];
+  },
 });
 
 // From Prato allo Stelvio (~915 m) to the pass (2758 m): 24.5 km, 1843 m,
@@ -420,6 +468,11 @@ const stelvio = buildClimb({
     road: 'alpine',
     barrier: 'stone',
   },
+  landmarks: [
+    monumentAt('pass-buildings', 24400, 1, 30, 22.5, { options: { style: 'it' }, yaw: -0.25, clearance: 28 }),
+    monumentAt('pass-buildings', 24470, -1, 36, 22.5, { options: { seed: 5 }, yaw: 0.25, clearance: 28 }),
+    colSign(24500, { style: 'it', lines: ['PASSO DELLO STELVIO', '2758 m'] }),
+  ],
 });
 
 // "Hell of the West", the final stage in American Flyers (1985): filmed on
@@ -455,6 +508,7 @@ const hellOfTheWestClimb = buildClimb({
     fields: false,
     mountainScale: 3.2,
   },
+  landmarks: [monumentAt('log-lodge', 20720, 1, 30, 8.1, { yaw: -0.4, clearance: 22 })],
 });
 
 const hellOfTheWest: Stage = {
@@ -499,6 +553,12 @@ const ventoux = buildClimb({
     road: 'alpine',
     barrier: 'stone',
   },
+  landmarks: [
+    monumentAt('chalet', 15600, 1, 24, 10.2, { options: { lines: ['CHALET REYNARD'] }, yaw: -0.4, clearance: 20 }),
+    monumentAt('simpson-memorial', 20100, 1, 8, 2.9, { yaw: -0.5, clearance: 6 }),
+    monumentAt('ventoux-observatory', 21330, -1, 46, 52, { yaw: 0.2, clearance: 34 }),
+    colSign(21400, { style: 'fr', lines: ['MONT VENTOUX', '1910 m'] }),
+  ],
 });
 
 // Col du Tourmalet from Luz-Saint-Sauveur (711 m) to the col (2,115 m):
@@ -533,6 +593,12 @@ const tourmalet = buildClimb({
     road: 'alpine',
     barrier: 'stone',
   },
+  landmarks: [
+    monumentAt('ski-apartments', 15000, -1, 38, 17, { options: { seed: 3 }, yaw: 0.3, clearance: 30 }),
+    monumentAt('ski-apartments', 15180, 1, 44, 17, { options: { seed: 4 }, yaw: -0.3, clearance: 30 }),
+    monumentAt('geant-tourmalet', 18940, 1, 20, 7.4, { yaw: -0.35, clearance: 12 }),
+    colSign(19000, { style: 'fr', lines: ['COL DU TOURMALET', 'ALT. 2115 m'] }),
+  ],
 });
 
 // Monte Zoncolan from Ovaro (525 m) to the top (1,735 m): 10.1 km, 1,210 m,
@@ -565,6 +631,7 @@ const zoncolan = buildClimb({
     mountainScale: 2.8,
     road: 'lane',
   },
+  landmarks: [colSign(10100, { style: 'it', lines: ['MONTE ZONCOLAN', '1750 m'] })],
 });
 
 /** Least-squares plane e = a + b·x + c·z through the points. */
@@ -740,7 +807,12 @@ const morgulBismark: Stage = {
     fields: true,
     mountainScale: 1.7, // the Front Range and the Flatirons to the west
   },
-  landmarks: [startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(11300), finishArch(MB_LAP + 11300), ...lapFarm],
+  landmarks: [
+    startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(11300), finishArch(MB_LAP + 11300), ...lapFarm,
+    // The Flatirons, 2.5 km west of Highway 93 (the west side of the circuit: the right-hand side riding south), once a lap.
+    // Visible from 7 km away along the road, hazy rather than fogged out (monuments.ts).
+    { ...monumentAt('flatirons', MB_START[4] + MB_B / 2, 1, 2500, 500, { clearance: 1 }), every: MB_LAP, reach: 7000 },
+  ],
   signs: [],
   baseAltitude: 1680, // Superior, Colorado: about 5,500 ft
   tourStage: 1,
