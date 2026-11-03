@@ -56,7 +56,7 @@ describe('crowd hotspots', () => {
     expect(hs).toHaveLength(1);
     const sign = alpe.signs.find((s) => s.label === '7')!;
     expect(hs[0].d).toBeGreaterThan(sign.d);
-    expect(hs[0].d).toBeLessThan(sign.d + 60);
+    expect(hs[0].d).toBeLessThan(sign.d + 90); // the real bend at Huez is a long, wide one
     expect(hs[0].culture).toBe('nl');
     for (const s of STAGES.filter((x) => x.id !== 'alpe-dhuez')) expect(hotspotsOf(s), s.id).toEqual([]);
   });

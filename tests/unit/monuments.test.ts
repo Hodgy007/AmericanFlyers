@@ -172,7 +172,7 @@ describe('where the stages put monuments', () => {
 
   it('puts the Ventoux monuments in order: chalet, memorial 1.3 km from the top, observatory at the summit on the left', () => {
     const v = stageById('ventoux');
-    expect(modelsOn('ventoux', 'chalet')[0].first).toBeCloseTo(15600, -1);
+    expect(modelsOn('ventoux', 'chalet')[0].first).toBeCloseTo(15300, -2); // where the real road is at 1,440 m
     const memorial = modelsOn('ventoux', 'simpson-memorial')[0];
     expect(v.finish! - memorial.first).toBeCloseTo(1300, -1);
     expect(memorial.side).toBe(1);

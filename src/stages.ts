@@ -5,6 +5,14 @@ import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
 import { RIM_ROCK_SECTIONS, makeRoadside } from './world/canyon.js';
+import type { RealRouteData } from './routes/realRoute';
+import { detectHairpins, elevationFrom, mapRoute } from './routes/realStage';
+import alpeRoute from './routes/real/alpe-dhuez';
+import stelvioRoute from './routes/real/stelvio';
+import ventouxRoute from './routes/real/ventoux';
+import tourmaletRoute from './routes/real/tourmalet';
+import zoncolanRoute from './routes/real/zoncolan';
+import echoLakeRoute from './routes/real/hell-of-the-west';
 
 interface LandmarkBase {
   every: number; // metres between repeats
@@ -63,8 +71,13 @@ export type RoadStyle = 'us-highway' | 'alpine' | 'lane' | 'park';
 
 export interface StageSign {
   d: number;
+  /** The hairpin's number as signed on the road ("7"); empty for a bend that has no number sign. */
   label: string;
   style: 'hairpin';
+  /** False for a bend the real road does not number (guardrails and crowds still gather there) or a named place. Default true. */
+  numbered?: boolean;
+  /** A place the HUD announces ("Saint-Estève") in place of a hairpin number. */
+  name?: string;
 }
 
 /** Where a race awards points on a stage: intermediate sprints and climbs. */
@@ -234,136 +247,87 @@ const route66: Stage = {
 
 // -------------------------------------------------------- mountain climbs ----
 //
-// A climb is built from published figures: per-kilometre gradients, total
-// gain, and where its numbered hairpins sit. Hairpins are 180° bends of 12 m
-// radius joined by straights that angle up the mountainside; the bends
-// themselves are flatter than the straights, so the straights are steepened to
-// keep each kilometre's average.
+// A climb follows its real road: heading and elevation come from OpenStreetMap and SRTM data baked by
+// scripts/bake-routes.mjs (src/routes/real/), mapped onto the stage's published length and rescaled to
+// its published gain. Its hairpins are found in that heading (routes/realStage.ts) and numbered
+// when the road numbers them (Alpe d'Huez, Stelvio).
 
 interface ClimbSpec {
   id: string;
   name: string;
   tagline: string;
-  kmGrades: number[]; // % per kilometre; the last entry may cover a part-kilometre
+  route: RealRouteData;
   length: number; // metres
   gain: number; // metres
-  hairpins: number;
-  firstHairpin: number; // metres
-  lastHairpin: number; // metres
-  /** >1 bunches the hairpins towards the top (shorter straights higher up). */
-  bunching: number;
-  approachBends: number; // radians of gentle valley bends before the first hairpin
-  finalBend: number; // radians of sweeping bend after the last hairpin
+  /** The steepest gradient as a fraction, near the published maximum (SRTM's ramps are flattened to it). Default 0.25. */
+  maxGrade?: number;
+  /** % per kilometre as published: each kilometre of the real profile is rescaled to it (left out: the real profile's own). */
+  kmGrades?: number[];
+  /** The official number of numbered hairpins. Left out: the road's hairpins are not numbered. */
+  hairpins?: number;
+  /** Named places that get a "next:" announcement (a function is given the sites, to place them by altitude). */
+  places?: { d: number; name: string }[] | ((at: ClimbSites) => { d: number; name: string }[]);
   hairpinWord: string;
   baseAltitude: number;
   timeOfDay?: Stage['timeOfDay'];
   weather?: Stage['weather'];
   scenery: Omit<Scenery, 'wildHeight'>;
   /**
-   * Landmarks beyond the start and finish arches. A function is given where the numbered hairpins
-   * sit (found from the stage's own signs), for things that belong at a particular bend.
+   * Landmarks beyond the start and finish arches. A function is given where things on the road are
+   * (see ClimbSites), for those that belong at a particular bend or altitude.
    */
   landmarks?: LandmarkKind[] | ((at: ClimbSites) => LandmarkKind[]);
 }
 
-/** Where things on a climb can be anchored: a numbered hairpin's apex, and which side of the road is the outside of its turn. */
+/** Where things on a climb can be anchored. */
 interface ClimbSites {
+  /** A numbered hairpin's apex and which side of the road is the outside of its turn. */
   hairpin(label: string): { d: number; outside: -1 | 1 };
+  /** Course distance where the road first reaches this altitude above sea level. */
+  altitude(metres: number): number;
 }
 
 const SIGN_LEAD = 12; // metres before a hairpin that its number sign stands
-const HAIRPIN_R = 12; // metres, centreline radius
-const LEG_ALPHA = 0.12; // straights angle up the mountainside (rad)
-const TURN = Math.PI - 2 * LEG_ALPHA;
-const ARC = HAIRPIN_R * TURN;
-const CLIMB_STEP = 1;
+const CLIMB_STEP = 2; // metres between samples when fitting the land to the road
 
 function buildClimb(spec: ClimbSpec): Stage {
-  const { length, hairpins } = spec;
+  const { length } = spec;
+  const geo = mapRoute(spec.route, length);
+  const { headingAt } = geo;
+  const elevationAt = elevationFrom(geo, length, { gain: spec.gain, maxGrade: spec.maxGrade, climbOnly: true }, spec.kmGrades);
 
-  // Hairpin start positions, with uneven straights that shorten towards the top.
-  const legs = Array.from({ length: hairpins - 1 }, (_, i) => {
-    const jitter = 0.75 + 0.5 * ((((Math.sin((i + 1) * 12.9898) * 43758.5453) % 1) + 1) % 1);
-    return jitter * Math.pow(1 - (i / hairpins) * 0.85, spec.bunching);
-  });
-  const legTotal = spec.lastHairpin - spec.firstHairpin - (hairpins - 1) * ARC;
-  const legSum = legs.reduce((a, b) => a + b, 0);
-  const pins: number[] = [spec.firstHairpin];
-  for (let i = 0; i < hairpins - 1; i++) pins.push(pins[i] + ARC + (legs[i] / legSum) * legTotal);
-
-  /** Zero-ended meander so straights aren't ruler-straight; longer stretches get more waves. */
-  const meander = (d: number, a: number, b: number, amp: number) => {
-    const waves = Math.max(1, Math.round((b - a) / 1500));
-    return amp * Math.sin((2 * Math.PI * waves * (d - a)) / (b - a));
+  const found = detectHairpins(headingAt, length, spec.hairpins);
+  const numbered = spec.hairpins !== undefined;
+  const at: ClimbSites = {
+    hairpin: (label) => {
+      const i = found.findIndex((_, k) => String(found.length - k) === label);
+      if (!numbered || i < 0) throw new Error(`${spec.id} has no hairpin ${label}`);
+      // A right turn (heading rising) has its outside on the left.
+      return { d: found[i].apex, outside: found[i].turn > 0 ? -1 : 1 };
+    },
+    altitude: (metres) => {
+      for (let d = 0; d < length; d += 5) if (spec.baseAltitude + elevationAt(d) >= metres) return d;
+      return length;
+    },
   };
-
-  const headingAt = (d: number): number => {
-    if (d <= 0) return LEG_ALPHA;
-    if (d < pins[0]) return LEG_ALPHA + meander(d, 0, pins[0], Math.max(0.08, spec.approachBends));
-    for (let i = 0; i < hairpins; i++) {
-      const start = i % 2 === 0 ? LEG_ALPHA : Math.PI - LEG_ALPHA;
-      const turn = i % 2 === 0 ? TURN : -TURN;
-      const arcEnd = pins[i] + ARC;
-      if (d < arcEnd) return start + turn * ((d - pins[i]) / ARC);
-      const next = i + 1 < hairpins ? pins[i + 1] : Infinity;
-      if (d < next) {
-        const h = start + turn;
-        if (next === Infinity) {
-          const span = Math.max(1, length - arcEnd);
-          return h + spec.finalBend * smoothstep(arcEnd + span * 0.15, arcEnd + span * 0.7, d) + meander(Math.min(d, length), arcEnd, Math.max(length, arcEnd + 1), 0.05);
-        }
-        return h + meander(d, arcEnd, next, 0.05);
-      }
-    }
-    return LEG_ALPHA;
-  };
-
-  // Raw gradient: interpolated between kilometre midpoints, halved in bends.
-  const inBend = (d: number) => pins.some((p) => d >= p && d < p + ARC);
-  const grades = spec.kmGrades;
-  const kmGrade = (d: number) => {
-    const f = Math.min(Math.max(d / 1000 - 0.5, 0), grades.length - 1);
-    const i = Math.floor(f);
-    const t = f - i;
-    return (grades[i] + (grades[Math.min(i + 1, grades.length - 1)] - grades[i]) * t) / 100;
-  };
-  const n = Math.round(length / CLIMB_STEP);
-  const raw = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const d = (i + 0.5) * CLIMB_STEP;
-    raw[i] = kmGrade(d) * (inBend(d) ? 0.5 : 1);
-  }
-  // Rescale each kilometre to its published average, then the whole climb to the published gain.
-  for (let k = 0; k < grades.length; k++) {
-    const a = Math.floor((k * 1000) / CLIMB_STEP);
-    const b = Math.min(n, Math.floor(((k + 1) * 1000) / CLIMB_STEP));
-    if (b <= a) continue;
-    let sum = 0;
-    for (let i = a; i < b; i++) sum += raw[i];
-    const target = (grades[k] / 100) * (b - a);
-    for (let i = a; i < b; i++) raw[i] *= target / sum;
-  }
-  const elev = new Float64Array(n + 1);
-  for (let i = 0; i < n; i++) elev[i + 1] = elev[i] + raw[i] * CLIMB_STEP;
-  const scale = spec.gain / elev[n];
-  for (let i = 0; i <= n; i++) elev[i] *= scale;
-
-  const elevationAt = (d: number): number => {
-    if (d <= 0) return 0;
-    if (d >= length) return elev[n] + Math.min(d - length, 60) * 0.01; // level run-out at the top
-    const f = d / CLIMB_STEP;
-    const i = Math.floor(f);
-    return elev[i] + (elev[i + 1] - elev[i]) * (f - i);
-  };
+  const signs: StageSign[] = found.map((h, i) => ({
+    d: Math.max(0, h.start - SIGN_LEAD),
+    label: numbered ? String(found.length - i) : '',
+    style: 'hairpin',
+    numbered,
+  }));
+  const places = typeof spec.places === 'function' ? spec.places(at) : spec.places ?? [];
+  for (const p of places) signs.push({ d: p.d, label: '', name: p.name, style: 'hairpin', numbered: false });
+  signs.sort((a, b) => a.d - b.d);
 
   // Fit a plane to the road's rise across the mountainside, so the land far
   // from the road climbs with it instead of the road sitting on a pillar.
   let x = 0, z = 0;
   const pts: [number, number, number][] = [];
-  for (let d = 0; d < length; d += CLIMB_STEP * 2) {
-    const h = headingAt(d + CLIMB_STEP);
-    x += Math.cos(h) * CLIMB_STEP * 2;
-    z += Math.sin(h) * CLIMB_STEP * 2;
+  for (let d = 0; d < length; d += CLIMB_STEP) {
+    const h = headingAt(d + CLIMB_STEP / 2);
+    x += Math.cos(h) * CLIMB_STEP;
+    z += Math.sin(h) * CLIMB_STEP;
     if (d % 50 === 0) pts.push([x, z, elevationAt(d)]);
   }
   const plane = fitPlane(pts);
@@ -375,16 +339,6 @@ function buildClimb(spec: ClimbSpec): Stage {
     return base + 60 + massif + ridges;
   };
 
-  const signs = pins.map((p, i) => ({ d: p - SIGN_LEAD, label: String(hairpins - i), style: 'hairpin' as const }));
-  const at: ClimbSites = {
-    hairpin: (label) => {
-      const sign = signs.find((s) => s.label === label);
-      if (!sign) throw new Error(`${spec.id} has no hairpin ${label}`);
-      const start = sign.d + SIGN_LEAD;
-      // A right turn (heading rising) has its outside on the left.
-      return { d: start + ARC / 2, outside: headingAt(start + ARC) > headingAt(start) ? -1 : 1 };
-    },
-  };
   const extra = typeof spec.landmarks === 'function' ? spec.landmarks(at) : spec.landmarks ?? [];
 
   return {
@@ -408,17 +362,14 @@ function buildClimb(spec: ClimbSpec): Stage {
 // from swi-cycling.com; hairpin positions approximated.
 const alpe = buildClimb({
   id: 'alpe-dhuez',
+  route: alpeRoute,
   name: "Alpe d'Huez",
   tagline: "14 km at 8% from Le Bourg-d'Oisans, up all 21 hairpins. Real gradients.",
   kmGrades: [9.3, 10.2, 8.6, 8.2, 8.6, 8.0, 8.6, 8.9, 7.3, 8.4, 8.8, 8.7, 5.8, 2.4],
   length: 14000,
   gain: 1118,
+  maxGrade: 0.135,
   hairpins: 21,
-  firstHairpin: 1150,
-  lastHairpin: 12100,
-  bunching: 0,
-  approachBends: 0.08,
-  finalBend: 0.6,
   hairpinWord: 'Virage',
   baseAltitude: 723,
   scenery: {
@@ -451,17 +402,14 @@ const alpe = buildClimb({
 // bunch into the famous wall below the summit.
 const stelvio = buildClimb({
   id: 'stelvio',
+  route: stelvioRoute,
   name: 'Stelvio Pass',
   tagline: '24.5 km at 7.5% from Prato to 2758 m, through 48 numbered hairpins.',
   kmGrades: [4.5, 5.0, 5.5, 6.0, 6.0, 6.5, 6.5, 7.0, 7.5, 8.0, 8.0, 8.5, 8.5, 8.0, 8.5, 8.5, 9.0, 8.5, 8.5, 8.0, 8.5, 8.5, 8.0, 8.0, 7.5],
   length: 24500,
   gain: 1843, // 915 m + 1843 m = 2758 m at the pass
+  maxGrade: 0.13,
   hairpins: 48,
-  firstHairpin: 8600,
-  lastHairpin: 24150,
-  bunching: 1.6,
-  approachBends: 0.3,
-  finalBend: 0.2,
   hairpinWord: 'Tornante',
   baseAltitude: 915,
   scenery: {
@@ -492,17 +440,13 @@ const stelvio = buildClimb({
 // switchbacks sit in the steeper upper half.
 const hellOfTheWestClimb = buildClimb({
   id: 'hell-of-the-west', // keep this id: leaderboards and plans use it
+  route: echoLakeRoute,
   name: 'Hell of the West · Stage 3: Echo Lake',
   tagline: 'The Hell of the West’s final stage: 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake, 3,235 m.',
   kmGrades: [3.0, 3.2, 3.6, 3.8, 3.4, 3.0, 3.8, 4.0, 3.6, 3.4, 3.9, 5.2, 5.8, 6.2, 6.0, 5.8, 6.4, 6.0, 5.6, 5.9, 1.2],
   length: 20800,
   gain: 942,
-  hairpins: 5,
-  firstHairpin: 12400,
-  lastHairpin: 18900,
-  bunching: 0.5,
-  approachBends: 0.45,
-  finalBend: 0.5,
+  maxGrade: 0.1,
   hairpinWord: 'Switchback',
   baseAltitude: 2293,
   timeOfDay: 'dusk',
@@ -525,7 +469,7 @@ const hellOfTheWest: Stage = {
   tourStage: 3,
   // Echo Lake is a summit finish. The mountain prime is where the road leaves
   // the creek and starts to climb in earnest (approximate: no published prime).
-  race: { summits: [{ d: 14500, name: 'Chicago Creek prime', cat: 3 }, { d: 20800, name: 'Echo Lake', cat: 1 }], sprints: [{ d: 10400, name: 'Mid-stage sprint' }] },
+  race: { summits: [{ d: 12500, name: 'Chicago Creek prime', cat: 3 }, { d: 20800, name: 'Echo Lake', cat: 1 }], sprints: [{ d: 10400, name: 'Mid-stage sprint' }] },
 };
 
 // Mont Ventoux from Bédoin (300 m) to the summit (1,910 m): 21.4 km, 1,610 m,
@@ -535,17 +479,13 @@ const hellOfTheWest: Stage = {
 // cyclingcols.com). The white scree is the ground's scree layer (`screeLine`).
 const ventoux = buildClimb({
   id: 'ventoux',
+  route: ventouxRoute,
   name: 'Mont Ventoux',
   tagline: '21.4 km at 7.5% from Bédoin: the forest at 9–10%, then the bare white moonscape to 1,910 m.',
   kmGrades: [4.3, 4.8, 3.4, 5.2, 4.4, 7.6, 10.7, 9.4, 9.2, 9.4, 9.7, 9.0, 8.4, 8.9, 9.1, 6.4, 7.4, 7.8, 6.5, 8.1, 9.0, 9.0],
   length: 21400,
   gain: 1610,
-  hairpins: 3,
-  firstHairpin: 5900,
-  lastHairpin: 21000,
-  bunching: 0,
-  approachBends: 0.4,
-  finalBend: 0.4,
+  maxGrade: 0.13,
   hairpinWord: 'Virage',
   baseAltitude: 300,
   scenery: {
@@ -562,8 +502,10 @@ const ventoux = buildClimb({
     road: 'alpine',
     barrier: 'stone',
   },
-  landmarks: [
-    monumentAt('chalet', 15600, 1, 24, 10.2, { options: { lines: ['CHALET REYNARD'] }, yaw: -0.4, clearance: 20 }),
+  // Chalet Reynard is at 1,440 m on the real road; the Simpson memorial stands 1.3 km below the top.
+  places: (at) => [{ d: 5500, name: 'Saint-Estève' }, { d: at.altitude(1440) - 90, name: 'Chalet Reynard' }],
+  landmarks: (at) => [
+    monumentAt('chalet', at.altitude(1440), 1, 24, 10.2, { options: { lines: ['CHALET REYNARD'] }, yaw: -0.4, clearance: 20 }),
     monumentAt('simpson-memorial', 20100, 1, 8, 2.9, { yaw: -0.5, clearance: 6 }),
     monumentAt('ventoux-observatory', 21330, -1, 46, 52, { yaw: 0.2, clearance: 34 }),
     colSign(21400, { style: 'fr', lines: ['MONT VENTOUX', '1910 m'] }),
@@ -575,18 +517,14 @@ const ventoux = buildClimb({
 // hairpins of Super-Barèges. Shape approximated from published profiles.
 const tourmalet = buildClimb({
   id: 'tourmalet',
+  route: tourmaletRoute,
   weather: 'cloudy',
   name: 'Col du Tourmalet',
   tagline: '19 km at 7.4% from Luz-Saint-Sauveur, through Barèges and the hairpins to 2,115 m.',
   kmGrades: [5.2, 6.4, 7.0, 7.2, 7.0, 7.4, 6.2, 6.8, 7.2, 7.6, 7.8, 7.0, 8.6, 8.8, 9.2, 8.4, 9.0, 9.6, 9.8],
   length: 19000,
   gain: 1404,
-  hairpins: 8,
-  firstHairpin: 13300,
-  lastHairpin: 18400,
-  bunching: 0.6,
-  approachBends: 0.35,
-  finalBend: 0.3,
+  maxGrade: 0.12,
   hairpinWord: 'Virage',
   baseAltitude: 711,
   scenery: {
@@ -602,6 +540,8 @@ const tourmalet = buildClimb({
     road: 'alpine',
     barrier: 'stone',
   },
+  // Barèges is at 1,230 m; La Mongie's apartment blocks stand about 4 km below the col.
+  places: (at) => [{ d: at.altitude(1230), name: 'Barèges' }, { d: 14800, name: 'La Mongie' }],
   landmarks: [
     monumentAt('ski-apartments', 15000, -1, 38, 17, { options: { seed: 3 }, yaw: 0.3, clearance: 30 }),
     monumentAt('ski-apartments', 15180, 1, 44, 17, { options: { seed: 4 }, yaw: -0.3, clearance: 30 }),
@@ -615,17 +555,13 @@ const tourmalet = buildClimb({
 // figures approximated from published profiles (salite.ch, climbbybike.com).
 const zoncolan = buildClimb({
   id: 'zoncolan',
+  route: zoncolanRoute,
   name: 'Monte Zoncolan',
   tagline: '10.1 km at 11.9% from Ovaro, with ramps over 20%. The hardest climb in Italy.',
   kmGrades: [6.5, 8.8, 12.4, 14.2, 15.0, 14.5, 13.8, 15.4, 13.6, 8.0, 6.0],
   length: 10100,
   gain: 1210,
-  hairpins: 9,
-  firstHairpin: 4300,
-  lastHairpin: 9500,
-  bunching: 0.8,
-  approachBends: 0.3,
-  finalBend: 0.25,
+  maxGrade: 0.22,
   hairpinWord: 'Tornante',
   baseAltitude: 525,
   scenery: {

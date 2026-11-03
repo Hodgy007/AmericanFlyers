@@ -301,7 +301,7 @@ export class Road {
 
     // The stage's own signs (e.g. numbered hairpins).
     for (const s of currentStage().signs) {
-      if (s.d >= d0 && s.d < d0 + CHUNK) place(this.buildSign(s.label, disposables, s.style, currentStage().hairpinWord), s.d, ROAD_HALF_WIDTH + 2);
+      if (s.numbered !== false && s.d >= d0 && s.d < d0 + CHUNK) place(this.buildSign(s.label, disposables, s.style, currentStage().hairpinWord), s.d, ROAD_HALF_WIDTH + 2);
     }
 
     const chunk: Chunk = {

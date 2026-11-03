@@ -1466,8 +1466,9 @@ function stageProgress() {
   const left = (stage.finish - ride.distance) / 1000;
   const parts = [stage.name, `${(imperial ? left / KM_PER_MI : left).toFixed(1)} ${imperial ? 'mi' : 'km'} to go`];
   if (stage.lapLength) parts.splice(1, 0, `lap ${Math.min(Math.floor(ride.distance / stage.lapLength) + 1, Math.round(stage.finish / stage.lapLength))}/${Math.round(stage.finish / stage.lapLength)}`);
-  const next = stage.signs.find((s) => s.d > ride.distance);
-  if (next?.style === 'hairpin') parts.push(`next: ${stage.hairpinWord ?? 'Hairpin'} ${next.label} in ${Math.round(next.d - ride.distance)} m`);
+  // Announce the next numbered hairpin or named place (bends the road does not number are left out).
+  const next = stage.signs.find((s) => s.d > ride.distance && (s.name || s.numbered !== false));
+  if (next) parts.push(`next: ${next.name ?? `${stage.hairpinWord ?? 'Hairpin'} ${next.label}`} in ${Math.round(next.d - ride.distance)} m`);
   const g = ghostRider();
   if (g && ride.movingTime > 1) {
     const gap = ride.distance - g.distance;

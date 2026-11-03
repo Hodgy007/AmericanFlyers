@@ -16,14 +16,23 @@ const stelvio = stageById('stelvio');
 const ventoux = stageById('ventoux');
 
 describe('hairpins', () => {
-  it('finds every numbered hairpin on the climbs, alternating left and right', () => {
-    for (const s of [alpe, stelvio, stageById('hell-of-the-west'), stageById('tourmalet')]) {
+  it('finds every hairpin of the climbs, in the direction the real road turns', () => {
+    for (const s of [alpe, stelvio]) {
       const bends = bendsOf(s);
-      expect(bends.length).toBe(s.signs.length);
-      bends.forEach((b, i) => {
-        expect(b.end - b.start).toBeGreaterThan(25); // a 35 m arc
-        expect(b.turn).toBe(i % 2 === 0 ? 1 : -1); // buildClimb: first hairpin turns right, then left, then right...
+      const hairpins = s.signs.filter((g) => g.numbered !== false || !g.name);
+      expect(bends.length).toBe(hairpins.length);
+      bends.forEach((b) => {
+        expect(b.end - b.start).toBeGreaterThan(10); // the part of the arc tighter than a 25 m radius
+        const dh = s.headingAt(b.end) - s.headingAt(b.start);
+        expect(b.turn).toBe(dh > 0 ? 1 : -1);
       });
+    }
+  });
+  it('numbers only the hairpins the real road numbers', () => {
+    expect(alpe.signs.every((g) => g.numbered !== false && /^\d+$/.test(g.label))).toBe(true);
+    expect(stelvio.signs).toHaveLength(48);
+    for (const id of ['ventoux', 'tourmalet', 'zoncolan', 'hell-of-the-west']) {
+      for (const g of stageById(id).signs) expect(g.numbered, `${id} at ${g.d}`).toBe(false);
     }
   });
   it('has none on flat stages', () => {
@@ -64,12 +73,13 @@ describe('guardrails', () => {
   it('stand on the outside of each hairpin and nowhere on flat stages', () => {
     const flat = () => 1e6; // ground level with the sky: no drop beside the road
     expect(barrierSections(stageById('heartland'), 0, 5000, flat)).toEqual([]);
-    const b = bendsOf(alpe)[2]; // the third hairpin turns right: outside is the left
-    const here = barrierSections(alpe, b.start, b.end, flat);
-    expect(here.length).toBeGreaterThan(8);
-    expect(here.every((r) => r.side === -1)).toBe(true);
-    const b1 = bendsOf(alpe)[1]; // turns left: outside is the right
-    expect(barrierSections(alpe, b1.start, b1.end, flat).every((r) => r.side === 1)).toBe(true);
+    const bends = bendsOf(alpe);
+    for (const b of [bends[2], bends[3]]) {
+      const here = barrierSections(alpe, b.start, b.end, flat);
+      expect(here.length).toBeGreaterThan(8);
+      // A right turn has its outside on the left (-1), a left turn on the right.
+      expect(here.every((r) => r.side === (b.turn > 0 ? -1 : 1))).toBe(true);
+    }
   });
   it('also stand where the ground falls away beside the road', () => {
     const drop = (_x: number, _z: number) => -100; // far below the road everywhere
@@ -82,8 +92,9 @@ describe('crowds', () => {
   it('line the last few hundred metres and the hairpins, not the empty road', () => {
     expect(crowdNear(alpe.finish! - 50)).toBeGreaterThan(0.9);
     expect(crowdNear(alpe.signs[3].d + 10)).toBeCloseTo(0.75, 2);
-    expect(crowdNear(alpe.signs[0].d - 400)).toBe(0);
-    expect(planCrowd(alpe, 100, 200, 1, [], true)).toEqual([]);
+    const gap = (alpe.signs[13].d + alpe.signs[14].d) / 2; // the longest empty stretch, far from any hairpin
+    expect(crowdNear(gap)).toBe(0);
+    expect(planCrowd(alpe, gap - 50, gap + 50, 1, [], true)).toEqual([]);
     expect(planCrowd(alpe, alpe.finish! - 300, alpe.finish! - 200, 1, [], true).length).toBeGreaterThan(30);
   });
   it('are deterministic, thinner on weaker tiers, and keep clear of roadside signs', () => {
