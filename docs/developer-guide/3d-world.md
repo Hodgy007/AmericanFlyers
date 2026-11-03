@@ -1,6 +1,6 @@
 # 3D world
 
-This page covers the Three.js setup in `src/world/`: the renderer and lights, the cameras, the terrain tiles, the road, the rider rig, the sky, the landmarks, and how to add a model.
+This page covers the Three.js setup in `src/world/`: the renderer and lights, the cameras, the terrain tiles, the road, the rider rig, the sky, the landmarks (GLB models and monuments built in code), and how to add one.
 
 Source: [`src/world/`](../../src/world/).
 
@@ -233,33 +233,63 @@ Also: `world.ts` patches nothing else. A new material needs nothing to get fog; 
 
 ## Landmarks
 
-[`src/world/landmarks.ts`](../../src/world/landmarks.ts) loads the GLB models and places them along the road.
+[`src/world/landmarks.ts`](../../src/world/landmarks.ts) places landmarks along the road. A landmark is either a GLB model loaded from `public/models/`, or a **monument built in code** from primitives (below).
 
 Each stage lists its landmark kinds in `src/stages.ts`. A kind is a `LandmarkKind`:
 
 | Field | Meaning |
 | --- | --- |
-| `file` | The GLB file in `public/models/`. |
-| `every` | Meters between repeats. |
+| `file` or `model` | Exactly one (the type enforces it). `file`: the GLB in `public/models/`. `model`: a `MonumentId` built in code. |
+| `options` | For a monument: its words and looks (`lines`, `style`, `seed`; see below). |
+| `every` | Meters between repeats (`1e9` for a one-off at `first`). |
 | `first` | Distance of the first one. |
 | `side` | `-1` left, `1` right, `0` on the road. |
 | `span` | For `side: 0` only: `across` for an arch, `along` for a bridge the road runs through. |
 | `offset` | Meters from the centerline. |
 | `size` | Target height in meters (or width, for road-spanning kinds). |
-| `yaw` | Extra turn after facing the road. |
+| `yaw` | Extra turn after facing the road. A negative `yaw × side` turns the front towards oncoming riders. |
 | `clearance` | Meters of tree-free space around it. |
+| `reach` | Optional: meters of course either side within which it is placed (default 250 behind, 1,500 ahead). For huge, distant things (the Flatirons use 7,000). |
 
-Models are scaled to `size`, centered, and stood on the ground. Models are placed between 250 m behind and 1,500 m ahead. A model file is fetched the first time a landmark that uses it comes into that range, not all at start-up (the nine files are 7.5 MB, and a stage uses only some of them), so a rider only downloads the models for the stages they ride. A missing file is skipped, and the console logs *Landmark model not found*.
+Models are scaled to `size`, centered, and stood on the ground. Landmarks are placed between 250 m behind and 1,500 m ahead. A model file is fetched the first time a landmark that uses it comes into that range, not all at start-up (the nine files are 7.5 MB, and a stage uses only some of them), so a rider only downloads the models for the stages they ride. A missing file is skipped, and the console logs *Landmark model not found*.
 
-The farm landmarks used on lowland stages and most GPX routes are in `FARM_LANDMARKS` in `src/stages.ts`.
+The farm landmarks used on lowland stages and most GPX routes are in `FARM_LANDMARKS` in `src/stages.ts`. `monumentAt()` writes a one-off monument kind; a climb's `ClimbSpec.landmarks` (a list, or a function given `at.hairpin('7')`, the apex distance and outside of a numbered hairpin found from the stage's own signs) adds landmarks after the start and finish arches.
+
+### Monuments built in code
+
+Landmarks that would otherwise need a generated model are built from primitives in a **lazy chunk**: [`monuments.ts`](../../src/world/monuments.ts) (the registry, signs, memorial and Le Géant), [`monumentBuildings.ts`](../../src/world/monumentBuildings.ts) (the buildings), [`flatirons.ts`](../../src/world/flatirons.ts) and the shared toolkit [`monumentKit.ts`](../../src/world/monumentKit.ts). `landmarks.ts` imports the chunk the first time a monument comes into range (stages without any never download it) and builds each kind once; placements are clones sharing geometry and material.
+
+- **The look.** Low-poly, flat-shaded, vertex-coloured, like the trees. A `Kit` collects boxes, gabled and pyramid roofs, cylinders, tilted bars (`bar()`), rings and tapered slabs, each with its colour baked in and a slight darkening towards its foot, and `build()` merges them into **one mesh with one shared material**. Signs and plaques are a few textured quads (`boardMaterial()`, a cached canvas texture; plain colour without a DOM, as in unit tests). Each monument is under about 6,000 triangles (most under 2,000) in one to three draw calls.
+- **Scale and placement.** A builder works in metres, stands on y = 0 (footings go below it, so a monument on a slope has no gap) and faces +z. `landmarks.ts` scales it so its height is `size` (set to the builder's natural height, which a unit test checks), without re-centring, and turns it to face the road like a model. Small monuments cast and receive shadows; the Flatirons do not (`userData.shadows`).
+- **Where they are.**
+
+| Monument | Where |
+| --- | --- |
+| `ventoux-observatory` | Ventoux summit: pale concrete building and the banded red-and-white mast (about 52 m), left. |
+| `simpson-memorial` | Ventoux, 1.3 km before the summit, right: granite stele, plaque, cairn. |
+| `chalet` | Ventoux at Chalet Reynard (15.6 km); `lines[0]` is the name board. |
+| `alpine-church` | Alpe d'Huez, on the outside of hairpin 7 (found from the stage's signs). |
+| `ski-apartments` | Alpe d'Huez near the finish; La Mongie on the Tourmalet (15 km). 3 to 5 blocks, varied by `seed`. |
+| `geant-tourmalet` | Col du Tourmalet: the dark steel cyclist on a plinth, right. |
+| `pass-buildings` | Stelvio summit: a row of hotels, with Italian flags for `style: 'it'`. |
+| `col-sign` | Summit board before every European finish: `lines` (name, altitude) and `style` `'fr'` (brown) or `'it'` (green). |
+| `log-lodge` | Echo Lake: log lodge with a green roof, `lines[0]` on the porch. |
+| `flatirons` | Morgul-Bismark: see below. |
+| `washington-summit`, `diablo-summit`, `crest-house-ruins`, `summit-sign-us` | Built and tested, not placed yet (for the American stages that come later). |
+
+- **The Flatirons** are 2.5 km west of Highway 93, once a lap, with `reach: 7000` so they are in view along much of the circuit. They stand beyond the terrain tiles, so the model brings its own forested ridge (a coarse vertex-coloured heightfield, `mountainHeight()`) with six or seven red-tan slabs leaning on its face. Height fog would hide anything this far away, so the model uses `farMaterial`: its vertex shader shrinks `vFogRel` (see [Haze and height fog](#haze-and-height-fog)) by 0.22, so the fog treats it as about a quarter of its distance and it is hazy, in the scene's own haze colours, rather than fogged out. In rain, where the fog is shorter, it still disappears.
 
 ### Adding a model
+
+For a GLB:
 
 1. Put the `.glb` file in `public/models/`. Keep it under about 15,000 triangles, as [`public/models/README.md`](../../public/models/README.md) suggests.
 2. Add a `LandmarkKind` for it to the `landmarks` array of the stages where it should appear, or to `FARM_LANDMARKS` if it belongs on every lowland stage. The file name must match exactly.
 3. Load the page and check the model appears at the right place. It appears only once it's referenced by a stage.
 
 `public/models/README.md` says files placed in that folder "appear beside the road". That's only true for files a stage refers to. A GLB in the folder does nothing on its own.
+
+For a monument built in code: write a builder returning a `THREE.Group` (use `Kit`; stand it on y = 0, front towards +z, end with `finish(group, shadows)`), add its id to `MonumentId` in [`monumentTypes.ts`](../../src/world/monumentTypes.ts) and to the registry in `monuments.ts`, and add a kind with `model` (or `monumentAt()`) to the stage. `tests/unit/monuments.test.ts` checks every builder's triangle budget and that a kind's `size` matches the builder's natural height.
 
 ## Performance
 

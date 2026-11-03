@@ -6,6 +6,15 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Procedural landmarks for the climbs and the Boulder circuit
+
+- **Landmarks built in code.** `LandmarkKind` takes `model` (a `MonumentId`) as an alternative to `file` (a union: exactly one), with `options` (`lines`, `style`, `seed`) for words and looks. The builders (`src/world/monuments.ts`, `monumentBuildings.ts`, `flatirons.ts`, toolkit `monumentKit.ts`) make low-poly, flat-shaded, vertex-coloured groups from primitives, one merged mesh each under about 6,000 triangles; `landmarks.ts` imports them as a lazy chunk the first time one is in range, scales them to `size` and places them like models (small ones cast shadows).
+- **Ventoux:** the summit observatory with its red-and-white banded mast, the Tom Simpson memorial 1.3 km from the top, Chalet Reynard. **Alpe d'Huez:** a village church on the outside of hairpin 7 (found from the stage's signs, so it follows the road), ski apartments near the top. **Tourmalet:** La Mongie's apartment blocks at 15 km and Le Géant du Tourmalet at the col. **Stelvio:** the hotels at the pass. **Echo Lake:** a log lodge.
+- **Summit boards.** Every European climb ends with a brown (France) or green (Italy) board on posts: "COL DU TOURMALET / ALT. 2115 m", "PASSO DELLO STELVIO / 2758 m", "MONT VENTOUX / 1910 m", "MONTE ZONCOLAN / 1750 m", "ALPE D'HUEZ / 1850 m".
+- **The Flatirons** stand west of the Morgul-Bismark circuit: six or seven red-tan slabs leaning on a forested ridge, 2.5 km from Highway 93 and visible from up to 7 km along the road (`LandmarkKind.reach`). They use a material that shrinks the distance the height fog sees, so they are hazy rather than fogged out, and cast no shadows.
+- **For later stages** (built and tested, not placed yet): Mount Washington's summit buildings and mast, Mount Diablo's stone summit tower with its beacon, the ruins of the Mount Blue Sky summit house, and a wooden US park sign (`summit-sign-us`, any text).
+- `ClimbSpec.landmarks` (a list, or a function given `at.hairpin(label)`) adds landmarks after the arches. Tests: `tests/unit/monuments.test.ts` (every builder's budget and shape, sizes match the stages, the church is at hairpin 7, the far-fog patch).
+
 ### Mont Ventoux's summit is limestone scree, not snow
 
 - **A scree ground layer.** The terrain gets an eighth splatting layer, `scree` (Poly Haven's CC0 *Gray Rocks*: broken pale stones, `public/textures/terrain/scree.jpg` and `scree-n.jpg`, credited in `public/textures/README.md`). A stage's optional `Scenery.screeLine` (same datum as `rockLine` and `snowLine`) turns the ground above it, over a noisy band like the snow line, to warm pale grey with darker stones; rock still shows on steep slopes, cliffs there are a paler limestone, the road's shoulder stays scree rather than dirt, snow still wins above `snowLine`, and no trees grow above the line.

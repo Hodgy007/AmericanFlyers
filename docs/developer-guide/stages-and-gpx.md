@@ -56,6 +56,7 @@ Hell of the West, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet and 
 | `hairpins`, `firstHairpin`, `lastHairpin` | Count and positions. |
 | `bunching` | Above 1 makes the straights shorter higher up. |
 | `approachBends`, `finalBend` | Gentle bends in radians before the first hairpin, and after the last. |
+| `landmarks` | Extra landmarks after the start and finish arches: a list, or a function given `at.hairpin(label)` (the apex distance and the outside side of a numbered hairpin, found from the signs). See [3D world](3d-world.md#landmarks). |
 | `hairpinWord`, `baseAltitude`, `timeOfDay`, `weather`, `scenery` | As in the stage definition. |
 
 How it works:

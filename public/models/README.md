@@ -15,5 +15,9 @@ Any that are missing are skipped.
 | `silos.glb` | Grain silos | Right, every 3.1 km |
 | `covered-bridge.glb` | Covered bridge the road runs through | Every 6 km, from 4 km |
 
+Not everything is a GLB: the summit buildings, memorials, village church, ski apartments, summit signs
+and the Flatirons are built in code from primitives (see `src/world/monuments.ts`), so no file
+here belongs to them.
+
 Models are scaled automatically (height for buildings, width for the gantry),
 so any units work. Keep each under ~15k triangles for smooth riding.

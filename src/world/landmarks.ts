@@ -105,7 +105,12 @@ export class Landmarks {
       if (kind.model) {
         this.requestMonuments();
         if (!this.monuments) return null; // still loading
-        m = stand(this.monuments.buildMonument(kind.model, kind.options), kind);
+        try {
+          m = stand(this.monuments.buildMonument(kind.model, kind.options), kind);
+        } catch (e) {
+          console.info(`Landmark monument ${kind.model} failed to build (skipped)`, e);
+          m = new THREE.Group(); // an empty stand-in, so it is not rebuilt every frame
+        }
       } else {
         this.request(kind.file);
         const src = this.sources.get(kind.file);

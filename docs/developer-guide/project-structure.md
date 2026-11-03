@@ -131,7 +131,9 @@ This page lists every file and folder in the repository, with a one-line summary
 | `world/crowds.ts` | Instanced spectators (placement, geometry, the cheering shader). |
 | `world/crowdZones.ts` | `crowdNear(d)`: how thick crowds are at a distance (shared by the sound and the spectators). Pure. |
 | `world/roadside.ts` | Hairpin detection from a stage's signs, `isClimb`, hashes. Pure. |
-| `world/landmarks.ts` | Loads the landmark models and places them along the road. |
+| `world/landmarks.ts` | Loads the landmark models, builds the code-made monuments (a lazy chunk) and places them along the road. |
+| `world/monuments.ts`, `monumentBuildings.ts`, `flatirons.ts` | The monuments built from primitives (observatory, memorial, chalet, church, ski apartments, Le Géant, pass hotels, summit signs, lodge, the Flatirons, American summit buildings): one builder per `MonumentId`. |
+| `world/monumentKit.ts`, `monumentTypes.ts` | The toolkit they share (`Kit`, text boards, the far-fog material) and their DOM-free ids and options. |
 | `world/rider.ts` | The bike and rider: a built-in fallback, and the rig that poses the rigged rider (shared model, cloned per rider; frame colours and ghost look). |
 | `world/sky.ts` | The sky dome (scattering, sun, noise clouds, stars, moon) and the hazed mountain ring, all tinted at runtime by the atmosphere. |
 | `world/quality.ts` | Graphics tiers and what each switches on, the per-device saved choice, and Auto's pick from device signals. Pure. |
