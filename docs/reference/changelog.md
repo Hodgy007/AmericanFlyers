@@ -19,6 +19,15 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Milestones.** On the French and Italian climbs the distance signs are cyclists' milestones: a white post with a yellow (France) or red (Italy) top showing the climb, the distance to the summit and the next kilometre's average gradient ("Sommet 7 km / Pente moy. 8.1 %", "Cima 7 km / Pendenza media 8.1 %"). New `src/world/milestones.ts`.
 - **Stone parapets.** `Scenery.barrier: 'stone'` (Stelvio, Tourmalet, Ventoux) replaces the guardrails with low dry-stone parapets in the same places (`stoneGeometry()` in `barriers.ts`). Low costs the same as before.
 
+### Better trees: species per stage, one style, level of detail, wind sway
+
+- **Nine species in one low-poly style** (`src/world/trees.ts`): spruce, pine, larch, oak, beech (and maple), aspen, cottonwood, juniper (and pinyon) and shrub, replacing the three clashing primitives (cones, blobs, junipers). Per-vertex colour is darker at the bottom and inside of the crown and lighter at the tips; each instance also gets its own brightness, hue and saturation.
+- **Species per stage.** New optional `Scenery.trees` (relative weights) on every built-in stage: oaks, cottonwoods and maples on Heartland and Route 66; spruce, larch and beech on the Alpe; spruce, larch and pine on the Stelvio; oak, pine and beech on Ventoux; beech, pine and shrubs on the Tourmalet; beech and spruce on Zoncolan; lodgepole pine, spruce and aspen at Echo Lake; juniper, pinyon and shrubs on the Tour of the Moon. Height decides what fits (oaks low, larches higher), shrubs take over at the tree line, and a route without a mix (an uploaded GPX) derives one from `coniferBias`.
+- **Morgul-Bismark is open grassland** (`forestCover` -0.45, fewer lone trees): cottonwoods, ponderosas and shrubs, scattered, with the odd clump, instead of a dense conifer forest.
+- **Two levels of detail.** Near trees are 70 to 130 triangles, far ones 28 to 44 with the same silhouette; a tile swaps between them (with hysteresis) at 400 m. Low always draws the far geometry. Triangle counts are in the 3D world guide.
+- **Trees sway in the wind** (the shared `sway.ts`): each vertex leans by its height above the base, a crown moves as one, and the shadows sway too. One material for every tile and both levels of detail.
+- Tests: `tests/unit/trees.test.ts` (species weights, habitat, tree line, LOD hysteresis, tint, geometry budgets, stage mixes).
+
 ### A Bluefy link for iPhone and iPad riders
 
 - Signed-in riders on an iPhone or iPad whose browser has no Web Bluetooth (Safari, Chrome and Edge there are all WebKit) see a small card in the hub's Ride panel with Bluefy's icon, a **Get Bluefy on the App Store** link and a **Copy link** button (the site's address, to paste into Bluefy). It never shows signed out, on other platforms, or inside Bluefy (where `navigator.bluetooth` exists). iPadOS 13+ is detected by its Mac user agent plus touch points.

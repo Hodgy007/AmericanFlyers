@@ -26,13 +26,15 @@ export interface SceneryTier {
   barriers: boolean;
   /** Words and symbols painted on the road on the big climbs. */
   roadPaint: boolean;
+  /** Trees on tiles near the rider use the detailed geometry (up to about 150 triangles); off, every tree is the cheap far one (30 to 50). */
+  nearTrees: boolean;
 }
 
 export const SCENERY: Record<'low' | 'medium' | 'high' | 'ultra', SceneryTier> = {
-  low: { terrainLayers: 3, terrainTexSize: 512, detailNormals: false, roadDetail: false, triplanar: false, anisotropy: 2, crowd: 0.35, crowdFlags: false, crowdShadows: false, barriers: true, roadPaint: true },
-  medium: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: false, roadDetail: true, triplanar: true, anisotropy: 4, crowd: 0.7, crowdFlags: true, crowdShadows: false, barriers: true, roadPaint: true },
-  high: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 8, crowd: 1, crowdFlags: true, crowdShadows: true, barriers: true, roadPaint: true },
-  ultra: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 16, crowd: 1, crowdFlags: true, crowdShadows: true, barriers: true, roadPaint: true },
+  low: { terrainLayers: 3, terrainTexSize: 512, detailNormals: false, roadDetail: false, triplanar: false, anisotropy: 2, crowd: 0.35, crowdFlags: false, crowdShadows: false, barriers: true, roadPaint: true, nearTrees: false },
+  medium: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: false, roadDetail: true, triplanar: true, anisotropy: 4, crowd: 0.7, crowdFlags: true, crowdShadows: false, barriers: true, roadPaint: true, nearTrees: true },
+  high: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 8, crowd: 1, crowdFlags: true, crowdShadows: true, barriers: true, roadPaint: true, nearTrees: true },
+  ultra: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 16, crowd: 1, crowdFlags: true, crowdShadows: true, barriers: true, roadPaint: true, nearTrees: true },
 };
 
 // The eight ground layers (terrain.ts gives each point a weight per layer; ground.ts draws them).

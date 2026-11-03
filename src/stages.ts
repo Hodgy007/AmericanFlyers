@@ -2,6 +2,7 @@
 // bends, scenery style, roadside landmarks and signs.
 
 import { fbm, smoothstep } from './world/noise.js';
+import type { TreeMix } from './world/trees.js';
 
 export interface LandmarkKind {
   file: string;
@@ -27,6 +28,8 @@ export interface Scenery {
   screeLine?: number;
   coniferBias: number; // 0 = mostly broadleaf, 1 = all conifers
   forestCover: number; // 0 = farmland with woods, higher = more forest
+  /** Relative weights of the tree species the stage grows (trees.ts). Left out: derived from `coniferBias`, as for an uploaded route. */
+  trees?: TreeMix;
   fields: boolean; // patches of farmland
   mountainScale: number; // height of the distant mountain ring
   /** 'desert': red and orange rock, sparse junipers instead of forest (Colorado's red-rock country). */
@@ -142,6 +145,7 @@ const heartland: Stage = {
     treeLine: 82,
     coniferBias: 0.4,
     forestCover: 0,
+    trees: { oak: 0.4, beech: 0.3, cottonwood: 0.15, shrub: 0.15 },
     fields: true,
     mountainScale: 1,
   },
@@ -187,6 +191,7 @@ const route66: Stage = {
     treeLine: 30,
     coniferBias: 0.15,
     forestCover: -0.15,
+    trees: { oak: 0.3, cottonwood: 0.3, beech: 0.2, shrub: 0.2 },
     fields: true,
     mountainScale: 0.8,
   },
@@ -375,6 +380,7 @@ const alpe = buildClimb({
     treeLine: 760,
     coniferBias: 0.9,
     forestCover: 0.3,
+    trees: { spruce: 0.5, larch: 0.25, beech: 0.25 },
     fields: false,
     mountainScale: 2.6,
     road: 'alpine',
@@ -408,6 +414,7 @@ const stelvio = buildClimb({
     treeLine: 1050,
     coniferBias: 0.95,
     forestCover: 0.35,
+    trees: { spruce: 0.45, larch: 0.3, pine: 0.25 },
     fields: false,
     mountainScale: 3.4,
     road: 'alpine',
@@ -444,6 +451,7 @@ const hellOfTheWestClimb = buildClimb({
     treeLine: 1220, // Colorado's treeline is near 3,500 m, above Echo Lake
     coniferBias: 1,
     forestCover: 0.45,
+    trees: { pine: 0.5, spruce: 0.35, aspen: 0.15 },
     fields: false,
     mountainScale: 3.2,
   },
@@ -485,6 +493,7 @@ const ventoux = buildClimb({
     treeLine: 1100,
     coniferBias: 0.7,
     forestCover: 0.35,
+    trees: { oak: 0.3, pine: 0.4, beech: 0.3 },
     fields: false,
     mountainScale: 1.6,
     road: 'alpine',
@@ -518,6 +527,7 @@ const tourmalet = buildClimb({
     treeLine: 900,
     coniferBias: 0.6,
     forestCover: 0.3,
+    trees: { beech: 0.45, pine: 0.3, shrub: 0.25 },
     fields: false,
     mountainScale: 3.0,
     road: 'alpine',
@@ -550,6 +560,7 @@ const zoncolan = buildClimb({
     treeLine: 1000,
     coniferBias: 0.8,
     forestCover: 0.4,
+    trees: { beech: 0.55, spruce: 0.45 },
     fields: false,
     mountainScale: 2.8,
     road: 'lane',
@@ -724,7 +735,8 @@ const morgulBismark: Stage = {
     snowLine: 1e9,
     treeLine: 400,
     coniferBias: 0.1,
-    forestCover: -0.2,
+    forestCover: -0.45, // open foothills grassland: lone trees and the odd clump (the forest noise only reaches 0.5 in a few patches)
+    trees: { cottonwood: 0.3, pine: 0.35, shrub: 0.35 },
     fields: true,
     mountainScale: 1.7, // the Front Range and the Flatirons to the west
   },
@@ -816,6 +828,7 @@ const tourOfTheMoon: Stage = {
     treeLine: 1e9,
     coniferBias: 1,
     forestCover: -0.3,
+    trees: { juniper: 0.75, shrub: 0.25 },
     fields: false,
     mountainScale: 1.3, // the Book Cliffs
     palette: 'desert',
