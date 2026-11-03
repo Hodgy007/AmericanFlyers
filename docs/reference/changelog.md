@@ -6,6 +6,13 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Crowds with local character, the Dutch Corner and roadside camps
+
+- **Culture.** Crowds dress for the country, from the stage's hairpin word: France (tricolour, polka-dot jerseys and flags, Breton and Basque flags), Italy (tricolour, lots of Giro pink), the USA (stars and stripes) and Colorado on the Hell of the West stages (with the state flag). Flags are canvas-drawn in one atlas.
+- **The Dutch Corner.** Alpe d'Huez's seventh hairpin has a crowd hotspot: three rows deep on both sides, mostly in orange with Dutch and orange flags, and louder (`crowdNear()` goes above 1 there). Hotspots are data (`{ d, radius, density, culture }` in `crowdZones.ts`), so other stages can have one.
+- **Camper vans, tents and parasols** on the big climbs, parked 8 to 14 m back on the uphill verge in the crowd zones, kept off the road, the guardrails and parapets, steep ground and the last 150 m; thinned by tier, shadows from High (new `src/world/campers.ts`). High and Ultra spectators also get caps and bigger flags (`Scenery.crowdDetail`).
+- Tests: `tests/unit/crowdLife.test.ts`.
+
 ### Mont Ventoux's summit is limestone scree, not snow
 
 - **A scree ground layer.** The terrain gets an eighth splatting layer, `scree` (Poly Haven's CC0 *Gray Rocks*: broken pale stones, `public/textures/terrain/scree.jpg` and `scree-n.jpg`, credited in `public/textures/README.md`). A stage's optional `Scenery.screeLine` (same datum as `rockLine` and `snowLine`) turns the ground above it, over a noisy band like the snow line, to warm pale grey with darker stones; rock still shows on steep slopes, cliffs there are a paler limestone, the road's shoulder stays scree rather than dirt, snow still wins above `snowLine`, and no trees grow above the line.
