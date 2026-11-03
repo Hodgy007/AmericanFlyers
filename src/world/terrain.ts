@@ -188,7 +188,7 @@ export type Weights = number[];
 
 /** Banded red sandstone, sandy flats and the odd patch of sage. */
 function desertColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color, w: Weights) {
-  const band = h * 0.11 + fbm(x / 160, z / 160, 2) * 0.7; // layers a few metres thick, wobbling a little
+  const band = h * (currentStage().scenery.roadside ? 0.05 : 0.11) + fbm(x / 160, z / 160, 2) * 0.7; // canyon walls: layers of 20 m, which the 4 m grid can show on a cliff // layers a few metres thick, wobbling a little
   const f = band - Math.floor(band);
   const k = Math.floor(band) & 3;
   const layer = [COL.strataA, COL.strataB, COL.strataC, COL.strataD][k];

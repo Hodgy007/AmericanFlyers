@@ -6,6 +6,13 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Tour of the Moon: canyon rims, cliffs and monoliths
+
+- **Canyons beside the road.** New optional `Scenery.roadside(d, lateral, plain)` hook shapes the ground near the road, keyed off course distance and lateral offset so it survives a change of route. The Tour of the Moon uses it (`src/world/canyon.ts`) for stretches with a canyon on the left, the right, both or neither: a ledge, a sheer stepped cliff of 120 to 220 m, a talus slope and a canyon floor, with rock climbing in ledges on the other side. The terrain reaches 900 m from the road on such a stage. Stone parapets run along the edges (the stage uses `barrier: 'stone'`, and barriers are no longer limited to stages with hairpin signs).
+- **Nothing grows on cliffs.** `roadsideSlope()` keeps trees off slopes steeper than 0.6 and ground cover off slopes steeper than 0.5.
+- **Monoliths** (`src/world/monoliths.ts`): Independence Monument, the Coke Ovens and the Kissing Couple stand on the canyon floors, with smaller ones further on; banded sandstone, flat-shaded, under 5,000 triangles each, shadows on High and Ultra.
+- Tests: `tests/unit/canyon.test.ts`, `tests/unit/monoliths.test.ts`.
+
 ### Mont Ventoux's summit is limestone scree, not snow
 
 - **A scree ground layer.** The terrain gets an eighth splatting layer, `scree` (Poly Haven's CC0 *Gray Rocks*: broken pale stones, `public/textures/terrain/scree.jpg` and `scree-n.jpg`, credited in `public/textures/README.md`). A stage's optional `Scenery.screeLine` (same datum as `rockLine` and `snowLine`) turns the ground above it, over a noisy band like the snow line, to warm pale grey with darker stones; rock still shows on steep slopes, cliffs there are a paler limestone, the road's shoulder stays scree rather than dirt, snow still wins above `snowLine`, and no trees grow above the line.
@@ -17,7 +24,7 @@ The repository has no tags, so each group is named for the pull request that mer
 
 - The road's look is now a property of the stage (`Scenery.road`). **Alpine** (Alpe d'Huez, Stelvio, Tourmalet, Ventoux): a white dashed centre line, thin worn edge lines, no gravel strip, darker patched asphalt. **Lane** (Monte Zoncolan): no markings, ragged dark edges. **Park** (Tour of the Moon): solid double yellow, red chip-seal tint, dusty-red shoulders. Everything else keeps the US highway look. The colour map and the asphalt normal/roughness maps both come from one pure description per style (`src/world/roadStyle.ts`, tested in `tests/unit/roadStyle.test.ts`), and the road repaints when the stage changes. The alpine texture is 768 px long so a 3 m dash and a 10.8 m gap tile.
 - **Milestones.** On the French and Italian climbs the distance signs are cyclists' milestones: a white post with a yellow (France) or red (Italy) top showing the climb, the distance to the summit and the next kilometre's average gradient ("Sommet 7 km / Pente moy. 8.1 %", "Cima 7 km / Pendenza media 8.1 %"). New `src/world/milestones.ts`.
-- **Stone parapets.** `Scenery.barrier: 'stone'` (Stelvio, Tourmalet, Ventoux) replaces the guardrails with low dry-stone parapets in the same places (`stoneGeometry()` in `barriers.ts`). Low costs the same as before.
+- **Stone parapets.** `Scenery.barrier: 'stone'` (Stelvio, Tourmalet, Ventoux, and the Tour of the Moon) replaces the guardrails with low dry-stone parapets in the same places (`stoneGeometry()` in `barriers.ts`). Low costs the same as before.
 
 ### Better trees: species per stage, one style, level of detail, wind sway
 
