@@ -33,7 +33,8 @@ const EARTH_R = 6371000;
 /**
  * lonlats: [lon, lat] waypoints (extra ones force the right road). length: the stage's length in
  * metres (src/stages.ts). start/end: the published altitudes, to sanity-check the route.
- * closed: a circuit, forced to close exactly (heading included). noElevation: shape only.
+ * closed: a circuit, forced to close exactly (heading included). noElevation: shape only. trimToTop: a summit
+ * finish, cut at the highest point (routing to a waypoint just past it adds a short descent).
  */
 const ROUTES = {
   'alpe-dhuez': {
