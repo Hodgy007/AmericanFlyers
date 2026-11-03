@@ -13,6 +13,7 @@ import { TIER_SPECS, isChoice, type Tier } from './quality';
 import { DEFAULT_LANE, LANE_MAX, LANE_MIN } from '../steering';
 import type { TimeOfDay, Weather } from '../settings';
 import { Terrain } from './terrain';
+import { updateSway } from './sway';
 
 export interface WorldState {
   distance: number; // metres along the course
@@ -296,6 +297,7 @@ export class World {
 
     updateGlow(performance.now() / 1000, this.atmosphere.nightAmount); // the Tron bike's pulse
     this.sky.update(this.camera, dt);
+    updateSway(dt); // trees and grass bend with the wind
     this.road.animate(performance.now() / 1000, riderPos.x, riderPos.y, riderPos.z);
     this.gfx.render(dt);
     if (++this.framesDrawn === 1) this.terrain.setScenery(TIER_SPECS[this.gfx.currentTier].scenery); // textures: after the first frame
