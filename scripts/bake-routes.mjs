@@ -34,7 +34,8 @@ const EARTH_R = 6371000;
  * lonlats: [lon, lat] waypoints (extra ones force the right road). length: the stage's length in
  * metres (src/stages.ts). start/end: the published altitudes, to sanity-check the route.
  * closed: a circuit, forced to close exactly (heading included). noElevation: shape only. trimToTop: a summit
- * finish, cut at the highest point (routing to a waypoint just past it adds a short descent).
+ * finish, cut at the highest point (routing to a waypoint just past it adds a short descent). smoothing: a
+ * multiple of the usual elevation smoothing, for a rolling road whose SRTM wobble adds climbing that isn't there.
  */
 const ROUTES = {
   'alpe-dhuez': {
@@ -71,7 +72,7 @@ const ROUTES = {
   // they sit on the drive itself, since one on a viewpoint's parking loop sends the route round the loop.
   'hotw-tour-of-the-moon': {
     lonlats: [[-108.619, 39.044], [-108.6465, 39.0307], [-108.7328, 39.0956], [-108.7379, 39.1316]],
-    length: 37000, start: 1440, end: 1440,
+    length: 37000, start: 1440, end: 1440, smoothing: 3,
   },
   // The Morgul-Bismark loop (Superior, Colorado), ridden the way it finished: from the top of the Wall
   // at McCaslin Boulevard and Highway 128, west on 128 to Highway 93, north on 93, east on Highway 170
@@ -239,8 +240,8 @@ function medianFilter(a, k) {
 }
 
 /** Elevation smoothed over ~100 m (SRTM is 90 m cells, so finer is noise), sampled every ELE_STEP metres. */
-function elevations(E, length) {
-  const s = boxSmooth(boxSmooth(boxSmooth(medianFilter(E, 60), 30), 30), 20);
+function elevations(E, length, k = 1) {
+  const s = boxSmooth(boxSmooth(boxSmooth(medianFilter(E, Math.round(60 * k)), Math.round(30 * k)), Math.round(30 * k)), Math.round(20 * k));
   const n = Math.ceil(length / ELE_STEP) + 1;
   const e = Float64Array.from({ length: n }, (_, i) => s[Math.min(s.length - 1, Math.round(Math.min(i * ELE_STEP, length)))]);
   // No road is steeper than ~35% over 20 m; where SRTM says so (tunnels, cliff edges) cap it, and spread what
@@ -308,7 +309,7 @@ async function bake(id, cfg) {
   }
   let h = limitTurnRate(headings(X, Z, length));
   if (cfg.closed) h = closeLoop(h);
-  const e = cfg.noElevation ? null : elevations(E, length);
+  const e = cfg.noElevation ? null : elevations(E, length, cfg.smoothing);
 
   // Report against the published figures.
   const gain = e ? e.reduce((a, v, i) => a + (i ? Math.max(0, v - e[i - 1]) : 0), 0) : 0;
