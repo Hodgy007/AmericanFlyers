@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { currentStage, elevationAt, ROAD_ORIGIN, ROAD_STEP, roadX, roadZ } from '../course';
 import { nearLandmark } from './landmarks';
 import { fbm, rng, smoothstep } from './noise';
+import { REACH } from './canyon';
+import type { Scenery } from '../stages';
 import { TREE_SPECIES, TreeKit, chooseLod, defaultMix, loneTreeShare, pickSpecies, standRoll, treeLineRule, treeScale, treeTint, type TreeLod, type TreeSpecies } from './trees';
 import type { GroundTextures } from './ground'; // the splatting shader and textures are their own chunk (ground.ts), loaded after the first frame
 import { LAYER, LAYER_COUNT, type SceneryTier } from './scenery';
@@ -14,11 +16,14 @@ const TILE = 200; // metres
 const SEG = 50; // 4 m grid
 const RANGE = 1150; // build tiles whose centre is within this distance
 const ROAD_INFLUENCE = 260; // beyond this the road no longer shapes the land
+const CLIFF_SLOPE = 0.6; // steeper than this (about 31 degrees) nothing grows
 const COARSE = 5; // coarse nearest-road search stride, in samples (10 m)
 
 export interface Near {
   dist: number; // metres from the road centreline
   d: number; // course distance of the closest road point
+  /** Metres right (+) or left (-) of the centreline; the roadside hook (canyons) needs the side. Left out by callers who only know a distance. */
+  lateral?: number;
   /** Closest point on a different stretch of road (e.g. the next hairpin straight up). */
   other?: { dist: number; d: number };
 }
@@ -33,9 +38,18 @@ const SECTION_GAP = 120; // road points this far apart along the course count as
  * hairpins) the road level is blended between them, giving a smooth slope.
  */
 export function heightAt(x: number, z: number, near: Near | null): number {
-  const { wildHeight, bumpAmp } = currentStage().scenery;
-  const bumps = fbm(x / 70, z / 70, 3) * bumpAmp;
-  if (!near || near.dist >= ROAD_INFLUENCE) return wildHeight(x, z) + bumps;
+  const sc = currentStage().scenery;
+  const bumps = fbm(x / 70, z / 70, 3) * sc.bumpAmp;
+  if (!near || near.dist >= reach(sc)) return sc.wildHeight(x, z) + bumps;
+  return shapeAt(sc, near, near.lateral, sc.wildHeight(x, z)) + bumps * smoothstep(9, 45, near.dist);
+}
+
+/** How far from the road it shapes the land: a stage with canyons beside the road reaches much further. */
+const reach = (sc: Scenery) => (sc.roadside ? REACH : ROAD_INFLUENCE);
+
+/** The height with the road's influence and the stage's roadside hook but no small bumps; `lateral` can differ from the point's own (for slopes). */
+function shapeAt(sc: Scenery, near: Near, lateral: number | undefined, wild: number): number {
+  const dist = lateral === undefined ? near.dist : Math.abs(lateral);
   let road = elevationAt(near.d);
   if (near.other) {
     const wa = 1 / (near.dist + 1) ** 4;
@@ -43,13 +57,29 @@ export function heightAt(x: number, z: number, near: Near | null): number {
     road = (road * wa + elevationAt(near.other.d) * wb) / (wa + wb);
   }
   road -= 0.15;
-  const w = smoothstep(9, ROAD_INFLUENCE, near.dist);
-  return road * (1 - w) + wildHeight(x, z) * w + bumps * smoothstep(9, 45, near.dist);
+  const w = smoothstep(9, ROAD_INFLUENCE, dist);
+  const plain = road * (1 - w) + wild * w;
+  if (sc.roadside && lateral !== undefined) {
+    const rel = sc.roadside(near.d, lateral, plain - road);
+    if (rel !== null) return road + rel;
+  }
+  return plain;
+}
+
+/**
+ * How steep the ground is across the road at a point (rise over run, 0 where the stage has no
+ * roadside hook): the 4 m grid and the scatter code can't see a cliff face, this can.
+ */
+export function roadsideSlope(x: number, z: number, near: Near | null): number {
+  const sc = currentStage().scenery;
+  if (!sc.roadside || !near || near.lateral === undefined || near.dist >= reach(sc)) return 0;
+  const wild = sc.wildHeight(x, z);
+  return Math.abs(shapeAt(sc, near, near.lateral + 1.5, wild) - shapeAt(sc, near, near.lateral - 1.5, wild)) / 3;
 }
 
 /** Road samples that could be the nearest road point to anything in the box. */
 function candidatesFor(minX: number, maxX: number, minZ: number, maxZ: number): number[] {
-  const m = ROAD_INFLUENCE + COARSE * ROAD_STEP * 2;
+  const m = reach(currentStage().scenery) + COARSE * ROAD_STEP * 2;
   const out: number[] = [];
   for (let i = 0; i < roadX.length; i += COARSE) {
     const x = roadX[i];
@@ -68,7 +98,7 @@ function nearestRoad(cands: number[], x: number, z: number): Near | null {
     const d2 = dx * dx + dz * dz;
     if (d2 < bestD2) { bestD2 = d2; best = i; }
   }
-  const limit = ROAD_INFLUENCE + COARSE * ROAD_STEP;
+  const limit = reach(currentStage().scenery) + COARSE * ROAD_STEP;
   if (best < 0 || bestD2 > limit * limit) return null;
   const near = refine(best, bestD2, x, z);
 
@@ -98,6 +128,7 @@ function refine(best: number, bestD2: number, x: number, z: number): Near {
   }
   let dist2 = bestD2;
   let d = ROAD_ORIGIN + bi * ROAD_STEP;
+  let lateral = 0;
   for (const j of [bi - 1, bi]) {
     if (j < 0 || j + 1 >= roadX.length) continue;
     const ax = roadX[j], az = roadZ[j];
@@ -105,9 +136,13 @@ function refine(best: number, bestD2: number, x: number, z: number): Near {
     const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz)));
     const px = ax + vx * t - x, pz = az + vz * t - z;
     const p2 = px * px + pz * pz;
-    if (p2 < dist2) { dist2 = p2; d = ROAD_ORIGIN + (j + t) * ROAD_STEP; }
+    if (p2 <= dist2) {
+      dist2 = p2;
+      d = ROAD_ORIGIN + (j + t) * ROAD_STEP;
+      lateral = (px * vz - pz * vx) / Math.sqrt(vx * vx + vz * vz); // the right-hand component of (point - road point)
+    }
   }
-  return { dist: Math.sqrt(dist2), d };
+  return { dist: Math.sqrt(dist2), d, lateral };
 }
 
 /**
@@ -218,7 +253,7 @@ export function groundColor(x: number, z: number, h: number, near: Near | null, 
 }
 
 /** What a probe found at a point: the ground height and how far the nearest road centreline is. One object, reused by every call. */
-export interface GroundHit { h: number; roadDist: number }
+export interface GroundHit { h: number; roadDist: number; /** Rise over run across the road beside canyons (0 elsewhere): cliffs grow nothing. */ slope?: number }
 
 /**
  * A lookup for things stood on the ground (ground cover): at (x, z) it fills `w` with the
@@ -233,6 +268,7 @@ export function groundProbe(minX: number, maxX: number, minZ: number, maxZ: numb
     const near = nearestRoad(cands, x, z);
     hit.h = heightAt(x, z, near);
     hit.roadDist = near ? near.dist : Infinity;
+    hit.slope = roadsideSlope(x, z, near);
     w.fill(0);
     groundColor(x, z, hit.h, near, c, w);
     return hit;
@@ -428,7 +464,7 @@ export class Terrain {
       const keep = rand();
       if (desert ? forest < 0.0 && keep > 0.08 : forest < 0.05 - sc.forestCover && keep > lone) continue;
       const near = nearestRoad(cands, x, z);
-      if (near && (near.dist < 12 || nearLandmark(x, z, near.d))) continue;
+      if (near && (near.dist < 12 || nearLandmark(x, z, near.d) || roadsideSlope(x, z, near) > CLIFF_SLOPE)) continue; // nor on a cliff face
       const h = heightAt(x, z, near);
       const rule = treeLineRule(h, sc.treeLine, forest, rand()); // the tree line
       if (!rule) continue;

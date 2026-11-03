@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { roadPoint } from '../course';
 import { currentStage } from '../course';
-import { barrierKind, barrierSections, buildBarriers, railGeometry, stoneGeometry } from './barriers';
+import { barrierKind, hasBarriers, barrierSections, buildBarriers, railGeometry, stoneGeometry } from './barriers';
 import { buildCrowd, crowdMaterial, crowdUniforms, planCrowd, spectatorGeometry } from './crowds';
 import { buildPaint, drawAtlas, paintName, planPaint, type PaintSpot } from './roadPaint';
 import { isClimb } from './roadside';
@@ -90,7 +90,7 @@ export class RoadExtras {
           geos.push(geo);
         }
       }
-      if (spec.barriers && isClimb(stage)) {
+      if (spec.barriers && hasBarriers(stage)) {
         const a = roadPoint(d0 + CHUNK / 2);
         const ground = groundSampler(a.x - 140, a.x + 140, a.z - 140, a.z + 140);
         const stone = barrierKind(stage) === 'stone';
