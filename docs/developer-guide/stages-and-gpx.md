@@ -36,6 +36,8 @@ The `scenery` object:
 | `forestCover` | Negative for open farmland, higher for more forest. |
 | `fields` | Whether farmland patches appear. |
 | `mountainScale` | Height of the distant mountain ring. |
+| `road` | Optional `RoadStyle`: `'us-highway'` (default), `'alpine'`, `'lane'` or `'park'`. Sets the road's paint and surface (see `world/roadStyle.ts` and the road section of the 3D world guide). Uploaded routes use the default. |
+| `barrier` | Optional `'rail'` (default, W-beam guardrails) or `'stone'` (low dry-stone parapets). |
 
 `course.ts` wraps the current stage: `elevationAt`, `gradeAt` (a central difference over ±2 m), `headingAt`, and a cached centerline built by stepping 2 m along the heading. Changing stage clears that cache.
 

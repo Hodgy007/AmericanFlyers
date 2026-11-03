@@ -31,7 +31,14 @@ export interface Scenery {
   mountainScale: number; // height of the distant mountain ring
   /** 'desert': red and orange rock, sparse junipers instead of forest (Colorado's red-rock country). */
   palette?: 'desert';
+  /** How the road looks: its paint and surface (see world/roadStyle.ts). Left out: 'us-highway'. */
+  road?: RoadStyle;
+  /** What stands at the roadside on hairpins and drops: W-beam guardrails (default) or low dry-stone parapets. */
+  barrier?: 'rail' | 'stone';
 }
+
+/** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
+export type RoadStyle = 'us-highway' | 'alpine' | 'lane' | 'park';
 
 export interface StageSign {
   d: number;
@@ -370,6 +377,7 @@ const alpe = buildClimb({
     forestCover: 0.3,
     fields: false,
     mountainScale: 2.6,
+    road: 'alpine',
   },
 });
 
@@ -402,6 +410,8 @@ const stelvio = buildClimb({
     forestCover: 0.35,
     fields: false,
     mountainScale: 3.4,
+    road: 'alpine',
+    barrier: 'stone',
   },
 });
 
@@ -477,6 +487,8 @@ const ventoux = buildClimb({
     forestCover: 0.35,
     fields: false,
     mountainScale: 1.6,
+    road: 'alpine',
+    barrier: 'stone',
   },
 });
 
@@ -508,6 +520,8 @@ const tourmalet = buildClimb({
     forestCover: 0.3,
     fields: false,
     mountainScale: 3.0,
+    road: 'alpine',
+    barrier: 'stone',
   },
 });
 
@@ -538,6 +552,7 @@ const zoncolan = buildClimb({
     forestCover: 0.4,
     fields: false,
     mountainScale: 2.8,
+    road: 'lane',
   },
 });
 
@@ -804,6 +819,7 @@ const tourOfTheMoon: Stage = {
     fields: false,
     mountainScale: 1.3, // the Book Cliffs
     palette: 'desert',
+    road: 'park',
   },
   landmarks: [startArch, finishArch(TM_FINISH), finishArch(24500)],
   signs: [],

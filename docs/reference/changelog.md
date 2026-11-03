@@ -13,6 +13,12 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Per tier.** `layersFor()` takes the scree flag, so only Ventoux downloads the scree texture; Low uses grass, rock and scree there (still three layers). The texture array is eight layers deep on every stage (about 4 MB more GPU memory at 1K). The vertex-colour fallback is pale as well, before the textures arrive.
 - Tests: `tests/unit/roadside.test.ts` (scree weights and colour, `layersFor`), `tests/e2e/scenery.spec.ts` (Ventoux fetches scree, not snow).
 
+### Road style per region
+
+- The road's look is now a property of the stage (`Scenery.road`). **Alpine** (Alpe d'Huez, Stelvio, Tourmalet, Ventoux): a white dashed centre line, thin worn edge lines, no gravel strip, darker patched asphalt. **Lane** (Monte Zoncolan): no markings, ragged dark edges. **Park** (Tour of the Moon): solid double yellow, red chip-seal tint, dusty-red shoulders. Everything else keeps the US highway look. The colour map and the asphalt normal/roughness maps both come from one pure description per style (`src/world/roadStyle.ts`, tested in `tests/unit/roadStyle.test.ts`), and the road repaints when the stage changes. The alpine texture is 768 px long so a 3 m dash and a 10.8 m gap tile.
+- **Milestones.** On the French and Italian climbs the distance signs are cyclists' milestones: a white post with a yellow (France) or red (Italy) top showing the climb, the distance to the summit and the next kilometre's average gradient ("Sommet 7 km / Pente moy. 8.1 %", "Cima 7 km / Pendenza media 8.1 %"). New `src/world/milestones.ts`.
+- **Stone parapets.** `Scenery.barrier: 'stone'` (Stelvio, Tourmalet, Ventoux) replaces the guardrails with low dry-stone parapets in the same places (`stoneGeometry()` in `barriers.ts`). Low costs the same as before.
+
 ### A Bluefy link for iPhone and iPad riders
 
 - Signed-in riders on an iPhone or iPad whose browser has no Web Bluetooth (Safari, Chrome and Edge there are all WebKit) see a small card in the hub's Ride panel with Bluefy's icon, a **Get Bluefy on the App Store** link and a **Copy link** button (the site's address, to paste into Bluefy). It never shows signed out, on other platforms, or inside Bluefy (where `navigator.bluetooth` exists). iPadOS 13+ is detected by its Mac user agent plus touch points.
