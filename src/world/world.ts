@@ -14,6 +14,7 @@ import { DEFAULT_LANE, LANE_MAX, LANE_MIN } from '../steering';
 import type { TimeOfDay, Weather } from '../settings';
 import { Terrain } from './terrain';
 import { updateSway } from './sway';
+import { Monoliths } from './monoliths';
 import type { GroundCover } from './groundCover'; // grass, flowers and stones beside the road: High and Ultra only, a lazily loaded chunk
 
 export interface WorldState {
@@ -43,6 +44,7 @@ export class World {
   private readonly road: Road;
   private readonly sky = new Sky(currentStage().scenery.mountainScale);
   private readonly landmarks = new Landmarks();
+  private readonly monoliths = new Monoliths();
   private readonly others = new OtherRiders();
   private readonly hemi = new THREE.HemisphereLight('#cfe3ff', '#4d5a3a', 1.1);
   private atmosphere!: Atmosphere;
@@ -87,10 +89,10 @@ export class World {
 
     this.road = new Road(this.renderer, markers);
     this.terrain = new Terrain(this.renderer);
-    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.rider.group, this.others.group);
+    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.monoliths.group, this.rider.group, this.others.group);
     this.atmosphere = new Atmosphere({
       renderer: this.renderer, scene: this.scene, sun: this.sun, hemi: this.hemi, sky: this.sky,
-      setWet: (w) => { this.road.setWet(w); this.terrain.setWet(w); this.cover?.setWet(w); this.coverWet = w; },
+      setWet: (w) => { this.road.setWet(w); this.terrain.setWet(w); this.monoliths.setWet(w); this.cover?.setWet(w); this.coverWet = w; },
     });
     this.atmosphere.restage(currentStage());
     // Graphics tier (Low to Ultra, Auto by default): shadows, post-processing, sky detail, render scale. See graphics.ts.
@@ -114,6 +116,7 @@ export class World {
     this.sceneryTier = tier;
     const spec = TIER_SPECS[tier];
     this.road.setTier(spec.scenery, spec.ibl);
+    this.monoliths.setShadows(tier === 'high' || tier === 'ultra');
     if (this.framesDrawn > 0) { this.terrain.setScenery(spec.scenery); this.syncCover(); }
   }
 
@@ -230,6 +233,7 @@ export class World {
     this.terrain.clear();
     this.cover?.clear();
     this.landmarks.clear();
+    this.monoliths.clear();
     this.road.setMarkers(markers);
     this.sky.setMountainScale(currentStage().scenery.mountainScale);
     this.atmosphere.restage(currentStage());
@@ -254,6 +258,7 @@ export class World {
     this.road.update(state.distance);
     const placed = this.landmarks.group.children.length;
     this.landmarks.update(state.distance);
+    this.monoliths.update(state.distance);
     if (this.landmarks.group.children.length > placed) this.gfx.pause(1000); // a model just arrived: its first draw compiles shaders and uploads textures
     built = performance.now() - built;
 
