@@ -4,8 +4,9 @@ import { currentStage, gradeAt, roadPoint } from '../course';
 import type { LandmarkKind } from '../stages';
 import { heightAt } from './terrain';
 
-// Roadside landmarks loaded from GLB models in public/models/. Each stage
-// lists the kinds it uses; each kind repeats along the course at a fixed
+// Roadside landmarks: GLB models from public/models/, or monuments built in code
+// (monuments.ts, a lazy chunk fetched the first time a stage needs one). Each
+// stage lists the kinds it uses; each kind repeats along the course at a fixed
 // spacing. A missing model file is skipped quietly.
 
 const BEHIND = 250;
@@ -13,29 +14,34 @@ const AHEAD = 1500;
 
 interface Site {
   kind: LandmarkKind;
+  key: string; // which kind of the stage and which repeat, for telling placed ones apart
   d: number;
   x: number;
   z: number;
 }
 
-function siteAt(kind: LandmarkKind, d: number): Site {
+function siteAt(kind: LandmarkKind, index: number, d: number): Site {
   const p = roadPoint(d);
   return {
     kind,
+    key: `${index}@${d}`,
     d,
     x: p.x - Math.sin(p.heading) * kind.offset * kind.side,
     z: p.z + Math.cos(p.heading) * kind.offset * kind.side,
   };
 }
 
-/** Landmark sites whose course distance lies in [from, to]. */
-function sitesBetween(from: number, to: number): Site[] {
+/** Landmark sites whose course distance lies in [from, to]. With `widen`, a kind with a `reach` is looked for that far either side of the window's middle instead. */
+function sitesBetween(from: number, to: number, widen = false): Site[] {
   const out: Site[] = [];
-  for (const kind of currentStage().landmarks) {
-    for (let k = Math.max(0, Math.ceil((from - kind.first) / kind.every)); kind.first + k * kind.every <= to; k++) {
-      out.push(siteAt(kind, kind.first + k * kind.every));
+  const mid = (from + to) / 2;
+  currentStage().landmarks.forEach((kind, index) => {
+    const lo = widen && kind.reach ? Math.min(from, mid - kind.reach) : from;
+    const hi = widen && kind.reach ? Math.max(to, mid + kind.reach) : to;
+    for (let k = Math.max(0, Math.ceil((lo - kind.first) / kind.every)); kind.first + k * kind.every <= hi; k++) {
+      out.push(siteAt(kind, index, kind.first + k * kind.every));
     }
-  }
+  });
   return out;
 }
 
@@ -55,6 +61,8 @@ export class Landmarks {
 
   private readonly loader = new GLTFLoader();
   private readonly requested = new Set<string>(); // files already being fetched
+  private monuments: typeof import('./monuments') | null = null; // the lazy chunk, once it has arrived
+  private monumentsRequested = false;
 
   /**
    * A model file is fetched the first time a landmark that uses it comes within
@@ -75,6 +83,16 @@ export class Landmarks {
     );
   }
 
+  /** The code-built monuments are one lazy chunk, fetched when the first one comes into range (stages without any never download it). */
+  private requestMonuments() {
+    if (this.monumentsRequested) return;
+    this.monumentsRequested = true;
+    import('./monuments').then(
+      (m) => { this.monuments = m; },
+      () => console.info('Landmark monuments failed to load (skipped)'),
+    );
+  }
+
   /** Removes everything placed (after a stage change). */
   clear() {
     for (const obj of this.placed.values()) this.group.remove(obj);
@@ -84,10 +102,16 @@ export class Landmarks {
   private model(kind: LandmarkKind) {
     let m = this.prepared.get(kind);
     if (!m) {
-      this.request(kind.file);
-      const src = this.sources.get(kind.file);
-      if (!src) return null; // still loading, or missing
-      m = normalise(src.clone(true), kind);
+      if (kind.model) {
+        this.requestMonuments();
+        if (!this.monuments) return null; // still loading
+        m = stand(this.monuments.buildMonument(kind.model, kind.options), kind);
+      } else {
+        this.request(kind.file);
+        const src = this.sources.get(kind.file);
+        if (!src) return null; // still loading, or missing
+        m = normalise(src.clone(true), kind);
+      }
       this.prepared.set(kind, m);
     }
     return m;
@@ -95,8 +119,8 @@ export class Landmarks {
 
   update(distance: number) {
     const keep = new Set<string>();
-    for (const site of sitesBetween(distance - BEHIND, distance + AHEAD)) {
-      const key = `${site.kind.file}@${site.d}`;
+    for (const site of sitesBetween(distance - BEHIND, distance + AHEAD, true)) {
+      const key = site.key;
       keep.add(key);
       if (this.placed.has(key)) continue;
       const model = this.model(site.kind);
@@ -160,5 +184,25 @@ function normalise(scene: THREE.Object3D, kind: LandmarkKind): THREE.Object3D {
       o.receiveShadow = true;
     }
   });
+  return holder;
+}
+
+/**
+ * Scales a code-built monument so it is `kind.size` tall, as built: its own origin is the ground
+ * (the builder put any footing below y = 0) and it faces +z, so unlike a GLB it is not re-centred.
+ * It casts shadows only if the builder said so (the distant Flatirons would shade the valley).
+ */
+function stand(group: THREE.Group, kind: LandmarkKind): THREE.Object3D {
+  const height = new THREE.Box3().setFromObject(group).max.y;
+  group.scale.setScalar(kind.size / Math.max(height, 0.01));
+  const shadows = group.userData.shadows !== false;
+  group.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) {
+      o.castShadow = shadows;
+      o.receiveShadow = shadows;
+    }
+  });
+  const holder = new THREE.Group();
+  holder.add(group);
   return holder;
 }
