@@ -13,6 +13,8 @@ import ventouxRoute from './routes/real/ventoux';
 import tourmaletRoute from './routes/real/tourmalet';
 import zoncolanRoute from './routes/real/zoncolan';
 import echoLakeRoute from './routes/real/hell-of-the-west';
+import morgulRoute from './routes/real/hotw-morgul-bismark';
+import moonRoute from './routes/real/hotw-tour-of-the-moon';
 
 interface LandmarkBase {
   every: number; // metres between repeats
@@ -288,7 +290,23 @@ interface ClimbSites {
 }
 
 const SIGN_LEAD = 12; // metres before a hairpin that its number sign stands
-const CLIMB_STEP = 2; // metres between samples when fitting the land to the road
+const PLANE_STEP = 2; // metres between samples when fitting the land to the road
+
+/**
+ * A plane through the road's rise across the land beside it, so the ground far from the road climbs
+ * with it instead of the road sitting on a pillar.
+ */
+function landPlane(headingAt: (d: number) => number, elevationAt: (d: number) => number, length: number) {
+  let x = 0, z = 0;
+  const pts: [number, number, number][] = [];
+  for (let d = 0; d < length; d += PLANE_STEP) {
+    const h = headingAt(d + PLANE_STEP / 2);
+    x += Math.cos(h) * PLANE_STEP;
+    z += Math.sin(h) * PLANE_STEP;
+    if (d % 50 === 0) pts.push([x, z, elevationAt(d)]);
+  }
+  return fitPlane(pts);
+}
 
 function buildClimb(spec: ClimbSpec): Stage {
   const { length } = spec;
@@ -320,17 +338,7 @@ function buildClimb(spec: ClimbSpec): Stage {
   for (const p of places) signs.push({ d: p.d, label: '', name: p.name, style: 'hairpin', numbered: false });
   signs.sort((a, b) => a.d - b.d);
 
-  // Fit a plane to the road's rise across the mountainside, so the land far
-  // from the road climbs with it instead of the road sitting on a pillar.
-  let x = 0, z = 0;
-  const pts: [number, number, number][] = [];
-  for (let d = 0; d < length; d += CLIMB_STEP) {
-    const h = headingAt(d + CLIMB_STEP / 2);
-    x += Math.cos(h) * CLIMB_STEP;
-    z += Math.sin(h) * CLIMB_STEP;
-    if (d % 50 === 0) pts.push([x, z, elevationAt(d)]);
-  }
-  const plane = fitPlane(pts);
+  const plane = landPlane(headingAt, elevationAt, length);
 
   const wildHeight = (wx: number, wz: number) => {
     const base = Math.max(-40, Math.min(spec.gain + 150, plane(wx, wz)));
@@ -643,61 +651,41 @@ function pchip(knots: [number, number][]) {
 
 // ---- Stage 1: Morgul-Bismark ----
 //
-// The Morgul-Bismark loop south of Boulder, used by the Red Zinger and Coors
+// The Morgul-Bismark loop around Superior, south of Boulder, used by the Red Zinger and Coors
 // Classics and for the first race in the film: 13.1 miles (21.1 km), starting
 // where Highway 128 meets McCaslin Boulevard, west on 128 to Highway 93, north
 // on 93, east on 170 and back down McCaslin, with "The Wall" at the south end
 // of McCaslin: a mile-long incline that kicks up to 18% (wikipedia.org
 // Morgul-Bismark; coloradohometownweekly.com 2011-05-25 gives 13.3 mi). The
 // Coors Classic riders did eight laps and sprinted to the top of the Wall.
-// Here the lap is ridden the way the Coors Classic finished it: round the
-// rounded-rectangle loop and up the Wall to the line, two laps (42 km). The
-// elevation range is approximated (about 90 m up the Wall, a rolling 128, a
-// gentle rise to Highway 93).
-const MB_R = 40; // corner radius, m
-const MB_A = 5600; // the east–west roads (128 and 170)
-const MB_B1 = 3240; // McCaslin north of the Wall
+// Here the lap is ridden the way the Coors Classic finished it, in that
+// direction: out along 128, round, and up the Wall to the line, two laps
+// (42 km). The shape of the loop is the real road's (OpenStreetMap, baked
+// into routes/real/hotw-morgul-bismark.ts, which is a little longer than
+// the stage's lap and is scaled to it, and closes exactly so laps meet). The elevation is
+// approximated (about 90 m up the Wall, a rolling 128, a gentle rise to
+// Highway 93); the Wall is the lap's last 1,600 m.
 const MB_WALL = 1600; // "one mile"
-const MB_B = MB_B1 + MB_WALL; // the north–south roads (McCaslin and 93)
-const MB_ARC = (Math.PI / 2) * MB_R;
-// Opposite straights carry the same bend so the lap closes exactly: the
-// wiggles integrate to nothing sideways, and the along-road loss matches.
-const MB_WIG = 0.045;
-interface LoopSeg { len: number; turn: number; amp: number; waves: number }
-const MB_SEGS: LoopSeg[] = [
-  { len: MB_B1, turn: 0, amp: MB_WIG, waves: 3 }, // McCaslin north of the Wall
-  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
-  { len: MB_A, turn: 0, amp: MB_WIG * 0.9, waves: 4 }, // Highway 170 west
-  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
-  { len: MB_B, turn: 0, amp: MB_WIG * Math.sqrt(MB_B1 / MB_B), waves: 5 }, // Highway 93 south
-  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
-  { len: MB_A, turn: 0, amp: MB_WIG * 0.9, waves: 4 }, // Highway 128 east
-  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
-  { len: MB_WALL, turn: 0, amp: 0, waves: 0 }, // The Wall
-];
-const MB_LAP = MB_SEGS.reduce((a, s) => a + s.len, 0);
+// The lap's length, which leaderboards and races are timed against, kept to the metre it had as a
+// rounded rectangle: 3,240 m of McCaslin above the Wall, two 5,600 m east-west roads, 4,840 m of
+// Highway 93 (to the Wall's foot) and four 40 m corners, in lap order.
+const MB_ARC = (Math.PI / 2) * 40;
+const MB_PIECES = [3240, MB_ARC, 5600, MB_ARC, 4840, MB_ARC, 5600, MB_ARC, MB_WALL];
+const MB_LAP = MB_PIECES.reduce((a, v) => a + v, 0);
+// Where Highway 93 begins and where the second east-west road does, which the elevation knots below sit at.
+const MB_HWY93 = MB_PIECES.slice(0, 4).reduce((a, v) => a + v, 0);
+const MB_SOUTH = MB_PIECES.slice(0, 6).reduce((a, v) => a + v, 0);
 const MB_LAPS = 2;
 const MB_FINISH = MB_LAP * MB_LAPS;
-const MB_START: number[] = [];
-{
-  let a = 0;
-  for (const s of MB_SEGS) { MB_START.push(a); a += s.len; }
-}
-
+const mbRoute = mapRoute(morgulRoute, MB_LAP);
+/** Half way up the Highway 93 leg of the lap (found from the baked road): the sprint, and the Flatirons stand opposite. */
+const MB_SPRINT = 6900;
+// The real loop turns a whole number of times (once, clockwise); each lap adds that again.
+const MB_TURN = mbRoute.headingAt(MB_LAP) - mbRoute.headingAt(0);
 function mbHeading(d: number) {
-  if (d <= 0) return 0;
+  if (d <= 0) return mbRoute.headingAt(0);
   const lap = Math.floor(d / MB_LAP);
-  const u = d - lap * MB_LAP;
-  let h = -2 * Math.PI * lap;
-  for (let i = 0; i < MB_SEGS.length; i++) {
-    const s = MB_SEGS[i];
-    if (u < MB_START[i] + s.len) {
-      const t = (u - MB_START[i]) / s.len;
-      return h + s.turn * t + s.amp * Math.sin(2 * Math.PI * s.waves * t);
-    }
-    h += s.turn;
-  }
-  return h;
+  return mbRoute.headingAt(d - lap * MB_LAP) + lap * MB_TURN;
 }
 
 // Elevation above the line at the top of the Wall, around one lap.
@@ -715,9 +703,9 @@ const mbWall = (m: number) => {
   return e;
 };
 const mbBase = pchip([
-  [0, 0], [MB_B1, 12], [5900, 30], [MB_START[4], 36], [11400, 41], [MB_START[6], 24], [16700, -32], [MB_WALL_START, -MB_WALL_RISE],
+  [0, 0], [3240, 12], [5900, 30], [MB_HWY93, 36], [11400, 41], [MB_SOUTH, 24], [16700, -32], [MB_WALL_START, -MB_WALL_RISE],
 ]);
-const MB_KNOT_U = [0, MB_B1, 5900, MB_START[4], 11400, MB_START[6], 16700, MB_WALL_START];
+const MB_KNOT_U = [0, 3240, 5900, MB_HWY93, 11400, MB_SOUTH, 16700, MB_WALL_START];
 function mbLapElevation(u: number) {
   if (u >= MB_WALL_START) return mbWall(u - MB_WALL_START);
   // Rolling swells between the knots, fading to nothing at each knot.
@@ -753,18 +741,18 @@ const morgulBismark: Stage = {
     mountainScale: 1.7, // the Front Range and the Flatirons to the west
   },
   landmarks: [
-    startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(11300), finishArch(MB_LAP + 11300), ...lapFarm,
-    // The Flatirons, 2.5 km west of Highway 93 (the west side of the circuit: the right-hand side riding south), once a lap.
+    startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(MB_SPRINT), finishArch(MB_LAP + MB_SPRINT), ...lapFarm,
+    // The Flatirons, 2.5 km west of Highway 93 (the west side of the circuit: the left-hand side riding north), once a lap.
     // Visible from 7 km away along the road, hazy rather than fogged out (monuments.ts).
-    { ...monumentAt('flatirons', MB_START[4] + MB_B / 2, 1, 2500, 500, { clearance: 1 }), every: MB_LAP, reach: 7000 },
+    { ...monumentAt('flatirons', MB_SPRINT, -1, 2500, 500, { clearance: 1 }), every: MB_LAP, reach: 7000 },
   ],
   signs: [],
   baseAltitude: 1680, // Superior, Colorado: about 5,500 ft
   tourStage: 1,
   race: {
     sprints: [
-      { d: 11300, name: 'Highway 93 sprint' },
-      { d: MB_LAP + 11300, name: 'Highway 93 sprint' },
+      { d: MB_SPRINT, name: 'Highway 93 sprint' },
+      { d: MB_LAP + MB_SPRINT, name: 'Highway 93 sprint' },
     ],
     summits: [
       { d: MB_LAP, name: 'The Wall', cat: 3 },
@@ -786,38 +774,17 @@ const morgulBismark: Stage = {
 // plateau at Cold Shivers; five or six more miles of rolling uphill reach the
 // high point, then a descent with one more rise at Black Ridge, the visitor
 // center, and a rapid drop through two short tunnels to Fruita
-// (mtntownmagazine.com). The knots below follow that story; the exact grades
-// between them are approximated.
+// (mtntownmagazine.com). The road line and profile are the real ones
+// (OpenStreetMap and SRTM, baked into routes/real/hotw-tour-of-the-moon.ts),
+// scaled so the high point is the published 2,024 m.
 const TM_FINISH = 37000;
-const tmBase = pchip([
-  [0, 0], [600, 3], [1200, 25], [2200, 95], [3200, 170], [4200, 245], [5200, 325], [6200, 405], [6800, 432], [8000, 450],
-  [10000, 482], [12000, 528], [14000, 574], [15500, 590], [17000, 574], [18500, 556], [20000, 540], [22500, 562], [24000, 520],
-  [26000, 478], [28000, 440], [30600, 335], [32000, 300], [33500, 215], [35000, 110], [36300, 25], [TM_FINISH, 0],
-]);
-const tmElevation = (d: number) => {
-  if (d <= 0) return 0;
-  const ramp = smoothstep(0, 1500, d) * (1 - smoothstep(35500, TM_FINISH, d));
-  return tmBase(d) + ramp * (1.3 * Math.sin((2 * Math.PI * d) / 700 + 0.7) + 0.5 * Math.sin((2 * Math.PI * d) / 260 + 1.9));
-};
-const tmHeading = (d: number) => {
-  if (d <= 0) return 0;
-  // Switchbacks up the canyon wall, then bends that follow the rim.
-  const wall = smoothstep(500, 1100, d) * (1 - smoothstep(6000, 6800, d));
-  const rim = smoothstep(6000, 7500, d);
-  return wall * 1.5 * Math.sin((2 * Math.PI * (d - 500)) / 1500) + rim * (0.3 * Math.sin((2 * Math.PI * d) / 2700) + 0.18 * Math.sin((2 * Math.PI * d) / 1130 + 2));
-};
+const TM_START_ALTITUDE = 1460; // where the baked road starts, on Monument Road just below the park entrance
+const tm = mapRoute(moonRoute, TM_FINISH);
+const tmElevation = elevationFrom(tm, TM_FINISH, { peak: 2024 - TM_START_ALTITUDE, maxGrade: 0.1 });
+const tmHeading = tm.headingAt;
 // Fit a plane to the road, as the climbs do, so the land follows the road's overall rise.
-const tmPlane = (() => {
-  let x = 0, z = 0;
-  const pts: [number, number, number][] = [];
-  for (let d = 0; d < TM_FINISH; d += 4) {
-    const h = tmHeading(d + 2);
-    x += Math.cos(h) * 4;
-    z += Math.sin(h) * 4;
-    if (d % 200 === 0) pts.push([x, z, tmElevation(d)]);
-  }
-  return fitPlane(pts);
-})();
+const TM_VISITOR_CENTER = 29050;
+const tmPlane = landPlane(tmHeading, tmElevation, TM_FINISH);
 /** Flat shelves joined by cliffs: the stepped mesas and layered sandstone of the Colorado Plateau. */
 const terrace = (v: number, step: number) => {
   const f = v / step;
@@ -853,16 +820,17 @@ const tourOfTheMoon: Stage = {
     barrier: 'stone',
     roadside: makeRoadside(RIM_ROCK_SECTIONS), // the rims of Monument Canyon and its neighbours
   },
-  landmarks: [startArch, finishArch(TM_FINISH), finishArch(24500)],
+  landmarks: [startArch, finishArch(TM_FINISH), finishArch(TM_VISITOR_CENTER)],
   signs: [],
-  baseAltitude: 1440, // the Grand Junction entrance, about 4,700 ft
+  baseAltitude: TM_START_ALTITUDE, // just below the Grand Junction entrance (4,700 ft)
   tourStage: 2,
   race: {
-    sprints: [{ d: 24500, name: 'Visitor center sprint' }],
+    // Places on the real road: Cold Shivers Point, the high point (2,024 m), the rise at Black Ridge and the Saddlehorn visitor center.
+    sprints: [{ d: TM_VISITOR_CENTER, name: 'Visitor center sprint' }],
     summits: [
-      { d: 6600, name: 'Cold Shivers', cat: 1 },
-      { d: 15500, name: 'The high point', cat: 2 },
-      { d: 22500, name: 'Black Ridge', cat: 4 },
+      { d: 6900, name: 'Cold Shivers', cat: 1 },
+      { d: 13100, name: 'The high point', cat: 2 },
+      { d: 19700, name: 'Black Ridge', cat: 4 },
     ],
   },
 };

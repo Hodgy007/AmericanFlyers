@@ -71,6 +71,14 @@ const ROUTES = {
     lonlats: [[-108.619, 39.044], [-108.6545, 39.0312], [-108.7344, 39.1008], [-108.7379, 39.1316]],
     length: 37000, start: 1440, end: 1440,
   },
+  // The Morgul-Bismark loop (Superior, Colorado), ridden the way it finished: from the top of the Wall
+  // at McCaslin Boulevard and Highway 128, west on 128 to Highway 93, north on 93, east on Highway 170
+  // (Marshall Road) and back south down McCaslin to the line. The real loop is longer than the stage's
+  // lap, so it is scaled; only its shape is used (the stage keeps its own elevation, with the Wall).
+  'hotw-morgul-bismark': {
+    lonlats: [[-105.1742, 39.9089], [-105.2133, 39.9139], [-105.23, 39.9269], [-105.23, 39.9441], [-105.218, 39.956], [-105.1933, 39.9622], [-105.1734, 39.9604], [-105.1649, 39.9506], [-105.1658, 39.9336], [-105.1742, 39.9089]],
+    length: 21131, closed: true, noElevation: true,
+  },
 };
 
 // ---------------------------------------------------------------- fetch ----
@@ -193,11 +201,11 @@ function endOffset(h) {
 /** Nudges a circuit's heading so it closes exactly: it turns a whole 2π and the end meets the start. */
 function closeLoop(h) {
   const n = h.length;
-  const sign = Math.sign(h[n - 1] - h[0]) || 1;
   const out = new Float64Array(h);
-  // Spread the leftover from a whole turn linearly, then trim the position error with two sine bumps
-  // that vanish at both ends (so the heading's start and end stay put).
-  const left = sign * 2 * Math.PI - (h[n - 1] - h[0]);
+  // A whole number of turns (one, unless the road crosses itself): spread the leftover linearly, then
+  // trim the position error with two sine bumps that vanish at both ends (so the heading's start and end stay put).
+  const left = Math.round((h[n - 1] - h[0]) / (2 * Math.PI)) * 2 * Math.PI - (h[n - 1] - h[0]);
+  if (Math.abs(left) > 0.6) console.warn(`  WARNING: the loop's start and end headings differ by ${(left * 57.3).toFixed(0)} degrees: start it on a straight`);
   for (let i = 0; i < n; i++) out[i] += (left * i) / (n - 1);
   const basis = [1, 2].map((k) => Float64Array.from({ length: n }, (_, i) => Math.sin((k * Math.PI * i) / (n - 1))));
   const coef = [0, 0];
@@ -307,7 +315,7 @@ async function bake(id, cfg) {
   console.log(`  length ${length.toFixed(0)} m (stage ${cfg.length}, ${(((length / cfg.length) - 1) * 100).toFixed(1)}%)`);
   if (e) console.log(`  elevation ${e[0].toFixed(0)} -> ${e[e.length - 1].toFixed(0)} m (published ${cfg.start} -> ${cfg.end}), gain ${gain.toFixed(0)} m`);
   console.log(`  total turning ${(turns / Math.PI).toFixed(1)} pi; loop closing error ${endOffset(h).map((v) => v.toFixed(2)).join(', ')} m`);
-  if (Math.abs(length / cfg.length - 1) > 0.08) console.warn(`  WARNING: length is more than 8% off the stage's`);
+  if (Math.abs(length / cfg.length - 1) > 0.08 && !cfg.closed) console.warn(`  WARNING: length is more than 8% off the stage's`);
   if (e && (Math.abs(e[0] - cfg.start) > 40 || Math.abs(e[e.length - 1] - cfg.end) > 60)) console.warn('  WARNING: start or end altitude is far from the published one');
 
   mkdirSync(OUT, { recursive: true });
