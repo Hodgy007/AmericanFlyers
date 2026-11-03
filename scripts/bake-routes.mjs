@@ -37,7 +37,7 @@ const EARTH_R = 6371000;
  */
 const ROUTES = {
   'alpe-dhuez': {
-    lonlats: [[6.0385, 45.0655], [6.0698, 45.0912]],
+    lonlats: [[6.0399, 45.0658], [6.0698, 45.0912]],
     length: 14000, start: 723, end: 1841,
   },
   // Prato allo Stelvio up the SS38 through Gomagoi and Trafoi (no waypoint needed: it is the only road).
@@ -57,7 +57,7 @@ const ROUTES = {
   },
   // Ovaro to the Sella Zoncolan by the Liariis road.
   zoncolan: {
-    lonlats: [[12.8668, 46.485], [12.9301, 46.5049]],
+    lonlats: [[12.8673, 46.4835], [12.9301, 46.5049]],
     length: 10100, start: 525, end: 1735, trimToTop: true,
   },
   // Idaho Springs up Colorado 103 (Chicago Creek Road) to Echo Lake.
@@ -65,10 +65,11 @@ const ROUTES = {
     lonlats: [[-105.5131, 39.7427], [-105.597, 39.6612]],
     length: 20800, start: 2293, end: 3235,
   },
-  // Rim Rock Drive, Grand Junction entrance (Monument Road side) via Cold Shivers Point and the
-  // Saddlehorn visitor center to the Fruita entrance. The waypoints keep the router on the park road.
+  // Rim Rock Drive, Grand Junction entrance (Monument Road side) past Cold Shivers Point and the
+  // Saddlehorn visitor center to the Fruita entrance. The waypoints keep the router on the park road:
+  // they sit on the drive itself, since one on a viewpoint's parking loop sends the route round the loop.
   'hotw-tour-of-the-moon': {
-    lonlats: [[-108.619, 39.044], [-108.6545, 39.0312], [-108.7344, 39.1008], [-108.7379, 39.1316]],
+    lonlats: [[-108.619, 39.044], [-108.6465, 39.0307], [-108.7328, 39.0956], [-108.7379, 39.1316]],
     length: 37000, start: 1440, end: 1440,
   },
   // The Morgul-Bismark loop (Superior, Colorado), ridden the way it finished: from the top of the Wall

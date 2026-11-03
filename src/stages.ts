@@ -783,7 +783,7 @@ const tm = mapRoute(moonRoute, TM_FINISH);
 const tmElevation = elevationFrom(tm, TM_FINISH, { peak: 2024 - TM_START_ALTITUDE, maxGrade: 0.1 });
 const tmHeading = tm.headingAt;
 // Fit a plane to the road, as the climbs do, so the land follows the road's overall rise.
-const TM_VISITOR_CENTER = 29050;
+const TM_VISITOR_CENTER = 29080;
 const tmPlane = landPlane(tmHeading, tmElevation, TM_FINISH);
 /** Flat shelves joined by cliffs: the stepped mesas and layered sandstone of the Colorado Plateau. */
 const terrace = (v: number, step: number) => {
@@ -828,9 +828,9 @@ const tourOfTheMoon: Stage = {
     // Places on the real road: Cold Shivers Point, the high point (2,024 m), the rise at Black Ridge and the Saddlehorn visitor center.
     sprints: [{ d: TM_VISITOR_CENTER, name: 'Visitor center sprint' }],
     summits: [
-      { d: 6900, name: 'Cold Shivers', cat: 1 },
-      { d: 13100, name: 'The high point', cat: 2 },
-      { d: 19700, name: 'Black Ridge', cat: 4 },
+      { d: 6950, name: 'Cold Shivers', cat: 1 },
+      { d: 13000, name: 'The high point', cat: 2 },
+      { d: 20000, name: 'Black Ridge', cat: 4 },
     ],
   },
 };
