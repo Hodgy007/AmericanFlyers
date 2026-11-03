@@ -124,12 +124,12 @@ All three apply per 100 m chunk (`Road.buildChunk()` asks `RoadExtras.addTo()`),
 - **Guardrails** ([`barriers.ts`](../../src/world/barriers.ts)). `bendsOf(stage)` (in [`roadside.ts`](../../src/world/roadside.ts)) finds each hairpin from the stage's signs (where the heading turns faster than 0.04 rad/m); a rail goes along the outside of each (a right turn has its outside on the left) with 9 m of lead-in and out, and on any stretch where the ground 13 m from the centreline is more than 4 m below the road. One instanced 3 m section (a W-beam, a post and a reflector, 1 m outside the gravel shoulder), pitched to the grade.
 - **Crowds** ([`crowds.ts`](../../src/world/crowds.ts)). `crowdNear(d)` in [`crowdZones.ts`](../../src/world/crowdZones.ts) (moved out of `main.ts`, where the sound still reads it) says how thick the crowd is: round each hairpin sign and the last 700 m of a finish. `planCrowd()` fills slots every 1.7 m on both sides, two rows deep, in clumps, thinned by the tier's `crowd` share. Spectators are low-poly (about 70 triangles) and instanced, shirt colour per instance and skin tone from a hash of their position; about one in seven waves a flag where the tier allows. The cheering is in the vertex shader: they jump, wave their arms and ripple their flags more as the rider comes within 70 m (`Road.animate()` passes the rider's position and the clock each frame), and sway a little otherwise. Their shadows are on from High; they are not animated in the shadow pass.
 
-| Tier | Terrain layers (size) | Normals | Triplanar rock | Anisotropy | Road normal | Crowd share | Flags | Crowd shadows | Guardrails and paint | Detailed trees |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low | 3 (512) | no | no | 2 | no | 0.35 | no | no | yes | no |
-| Medium | 8 (1K) | no | yes | 4 | yes | 0.7 | yes | no | yes | yes |
-| High | 8 (1K) | yes | yes | 8 | yes | 1 | yes | yes | yes | yes |
-| Ultra | 8 (1K) | yes | yes | 16 | yes | 1 | yes | yes | yes | yes |
+| Tier | Terrain layers (size) | Normals | Triplanar rock | Anisotropy | Road normal | Crowd share | Flags | Crowd shadows | Guardrails and paint | Detailed trees | Ground cover |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low | 3 (512) | no | no | 2 | no | 0.35 | no | no | yes | no | none |
+| Medium | 8 (1K) | no | yes | 4 | yes | 0.7 | yes | no | yes | yes | none |
+| High | 8 (1K) | yes | yes | 8 | yes | 1 | yes | yes | yes | yes | half |
+| Ultra | 8 (1K) | yes | yes | 16 | yes | 1 | yes | yes | yes | yes | full |
 
 
 ## Terrain
@@ -167,6 +167,17 @@ The splatting itself is [`src/world/ground.ts`](../../src/world/ground.ts), a la
 - **Rock is triplanar**, and any pixel steeper than about 40° turns to rock (judged per pixel from the smooth normal), so cliffs never stretch. With normals (High and up) rock's normal map is blended triplanar (whiteout) and the other layers' normals are projected from above and fade out beyond 60 to 260 m.
 - **Lazy and per stage.** One JPEG per layer in `public/textures/terrain/` (`grass.jpg`, `grass-n.jpg` …), fetched and decoded a layer at a time, then uploaded once. Only the layers a stage can show are fetched (`layersFor()`: no sandstone on the Alpe, no snow where the snow line is out of reach, no scree unless the stage has a `screeLine`, no grass in the desert). Sources and licences are in [`public/textures/README.md`](../../public/textures/README.md); all are CC0 (Poly Haven).
 - **Per tier** (`TIER_SPECS[tier].scenery`, see [`scenery.ts`](../../src/world/scenery.ts)): Low fetches **three layers** (grass and rock plus snow or scree, or sandstone and rock in the desert; dry grass and dirt fold into grass, sand into sandstone), shrinks them to 512 px while decoding, has no normals and projects rock along one horizontal axis instead of three. Medium has every layer the stage needs (the array holds eight) at 1K with triplanar rock. High and Ultra add the detail normals. Anisotropy is capped at 2, 4, 8 and 16.
+
+### Ground cover
+
+[`src/world/groundCover.ts`](../../src/world/groundCover.ts) puts small instanced plants and stones on the flat verges and fields beside the road: grass tufts, wildflowers, stones and, in the desert, sage bushes. **High draws half of it, Ultra all of it** (`SceneryTier.groundCover`: 0, 0.5 or 1); Low and Medium draw nothing and never download the chunk. `World.syncCover()` imports it after the first frame, `World.update()` calls `update()` each frame next to the terrain, and a tier change goes through `applyScenery()`: Auto stepping down to Medium disposes the cover (meshes, geometry, materials and instance buffers), stepping back up makes it again.
+
+- **Cells.** The ground beside the road is cut into cells keyed by road distance, like road chunks: 10 m along the road, three bands across it from 5.6 m from the centreline (just outside the gravel shoulder) to 30 m. Cells whose middle is within 104 m of the rider are built, nearest first and at most about 4 ms of work a frame, and dropped beyond 114 m. The search covers 700 m of road either way, so the next leg of a hairpin is found too. In steady state a frame only moves the fade centre; cells change every 10 m of riding.
+- **Placement is deterministic.** Each cell tries a fixed number of jittered candidate points, hashed from the cell, the candidate and the stage (`hash2`). A candidate survives a draw against the density at its distance from the road (2.2 per m² at the verge, falling to nothing at 30 m) times a patchiness noise and the tier's share, so High's items are a subset of Ultra's. Ground the road is nearer to another leg of (the inside of a hairpin) is skipped.
+- **What grows follows the ground.** `groundProbe()` in `terrain.ts` (next to `groundColor()`) gives the ground height and the same layer weights the splatting uses; `pickCover()` treats the weights as odds. Grass: green tufts, a few white, yellow and purple wildflowers in drifts, the odd stone. Dry grass and fields: straw tufts. The dirt verge: sparse tufts and pebbles. Rock: stones and tiny alpine flowers. Snow: nothing. The desert palette: sage bushes (more on the sage patches) and red stones. Heights are the terrain's own, so items sit on the ground.
+- **Geometry.** A tuft is seven bent, tapered blades (3 triangles each, 21 in all; real geometry, no alpha-tested textures); a flower a crossed stem, a six-sided head and a centre (15); a stone a jittered icosahedron squashed by its instance scale (20); a bush three lumps (60). Vertex colours run dark at the base to light at the tip and are multiplied by a per-instance colour; a per-vertex `aTint` lets a flower's stem and centre keep their own colour.
+- **Drawing.** One `InstancedMesh` per kind, four draw calls for the whole cover, on camera layer 1 (the ambient-occlusion pass's own camera has layer 0 only, so it does not redraw the blades for their normals), receiving shadows and casting none. Built cells keep their matrices; when the set of cells changes they are copied side by side into the instance buffers and only the used range is uploaded. About 2,500 tufts, 200 flowers and 450 stones are in view at Ultra on Heartland (about 64,000 triangles; half that on High).
+- **Wind and fade, in the vertex shader.** Plants take `afSway()` from `sway.ts` (stiffness 0.25, and four times their height as its height argument, because the bend grows with the square of height and was tuned for trees); stones do not move. Everything scales to nothing between 75 m and 90 m from the rider, so the edge of the cover never pops. Rain darkens it with the ground (`setWet`).
 
 ## Rider and bike
 
@@ -278,4 +289,5 @@ The farm landmarks used on lowland stages and most GPX routes are in `FARM_LANDM
 - Shadows are limited to a 60 m box around the rider.
 - Relative frame cost per tier, measured in headless Chromium's software renderer at 800 × 500 (so a guide to the extra work, not to a real GPU): Low 1.0, Medium 1.2, High 1.8, Ultra 2.3.
 - Quality is per device (see [Graphics tiers and post-processing](#graphics-tiers-and-post-processing)): Low draws straight to the screen with no post-processing, and the whole post chunk (about 50 kB gzip of three addons plus 2 kB of ours) is only fetched on Medium and up.
-- Changing stage clears the terrain and landmarks, and rebuilds them for the new stage.
+- Changing stage clears the terrain, landmarks and ground cover, and rebuilds them for the new stage.
+- Ground cover is High and Ultra only; it adds four draw calls and about 30,000 (High) to 65,000 (Ultra) triangles on a grass stage (see [Ground cover](#ground-cover)).
