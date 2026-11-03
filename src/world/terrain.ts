@@ -214,7 +214,7 @@ export function groundColor(x: number, z: number, h: number, near: Near | null, 
   w[LAYER.snow] = snowT;
   w[LAYER.scree] = screeT * (1 - snowT) * (1 - verge);
   const sum = w[0] + w[1] + w[2] + w[3] + w[4] + w[7];
-  if (sum > 0) for (const i of [0, 1, 2, 3, 4, 7]) w[i] /= sum;
+  if (sum > 0) { for (let i = 0; i < 5; i++) w[i] /= sum; w[7] /= sum; } // no array per vertex: this runs for every ground point
 }
 
 /** Darkens steep grass and turns cliffs to rock, using the tile's own height grid. */
