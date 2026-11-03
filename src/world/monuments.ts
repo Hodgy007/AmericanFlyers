@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { buildApartments, buildChalet, buildChurch, buildCrestHouseRuins, buildDiabloSummit, buildLogLodge, buildObservatory, buildPassBuildings, buildWashingtonSummit } from './monumentBuildings';
 import { buildFlatirons } from './flatirons';
-import { Kit, boardMaterial, finish, fitText, type MonumentOptions } from './monumentKit';
+import { Kit, boardMaterial, finish, fitText } from './monumentKit';
+import type { MonumentId, MonumentOptions } from './monumentTypes';
 
-export type { MonumentOptions } from './monumentKit';
+export type { MonumentId, MonumentOptions } from './monumentTypes';
 
 // Landmarks built in code from primitives instead of loaded from GLB models (see
 // landmarks.ts, which imports this file lazily the first time a stage needs one).
@@ -11,22 +12,6 @@ export type { MonumentOptions } from './monumentKit';
 // the colours matter at riding speed, the detail does not. Each builder returns a
 // group standing on y = 0 with its front towards +z; landmarks.ts scales it to the
 // kind's `size` (its height) and turns it to face the road.
-
-export type MonumentId =
-  | 'ventoux-observatory'
-  | 'simpson-memorial'
-  | 'chalet'
-  | 'alpine-church'
-  | 'ski-apartments'
-  | 'geant-tourmalet'
-  | 'pass-buildings'
-  | 'col-sign'
-  | 'log-lodge'
-  | 'flatirons'
-  | 'washington-summit'
-  | 'diablo-summit'
-  | 'crest-house-ruins'
-  | 'summit-sign-us';
 
 // ------------------------------------------------------------------ signs ----
 

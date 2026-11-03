@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { Kit, farMaterial, finish, mix, type MonumentOptions } from './monumentKit';
+import { Kit, farMaterial, finish, mix } from './monumentKit';
+import type { MonumentOptions } from './monumentTypes';
 import { fbm } from './noise';
 
 // The Flatirons above Boulder: a handful of huge, steeply tilted slabs of red-tan

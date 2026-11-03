@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { Kit, boardMaterial, finish, fitText, mix, rnd, type Col, type MonumentOptions } from './monumentKit';
+import { Kit, boardMaterial, finish, fitText, mix, rnd, type Col } from './monumentKit';
+import type { MonumentOptions } from './monumentTypes';
 
 // The buildings among the procedural monuments (monuments.ts has the registry): a
 // summit observatory, a chalet, a village church, ski apartments, hotels on a pass,

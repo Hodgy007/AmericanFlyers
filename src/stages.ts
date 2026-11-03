@@ -1,7 +1,7 @@
 // Stage definitions: each stage supplies its own elevation profile, road
 // bends, scenery style, roadside landmarks and signs.
 
-import type { MonumentId, MonumentOptions } from './world/monuments';
+import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
 
 interface LandmarkBase {
@@ -421,9 +421,9 @@ const alpe = buildClimb({
   landmarks: (at) => {
     const seven = at.hairpin('7'); // Huez village: its church stands on the outside of hairpin 7
     return [
-      monumentAt('alpine-church', seven.d, seven.outside, 30, 26, { yaw: seven.outside * -0.3, clearance: 16 }),
-      monumentAt('ski-apartments', 13450, -1, 38, 18, { options: { seed: 1 }, yaw: 0.3, clearance: 30 }),
-      monumentAt('ski-apartments', 13700, 1, 42, 18, { options: { seed: 2 }, yaw: -0.3, clearance: 30 }),
+      monumentAt('alpine-church', seven.d, seven.outside, 30, 26.6, { yaw: seven.outside * -0.3, clearance: 16 }),
+      monumentAt('ski-apartments', 13450, -1, 38, 14, { options: { seed: 1 }, yaw: 0.3, clearance: 30 }),
+      monumentAt('ski-apartments', 13700, 1, 42, 17, { options: { seed: 2 }, yaw: -0.3, clearance: 30 }),
       colSign(14000, { style: 'fr', lines: ["ALPE D'HUEZ", '1850 m'] }),
     ];
   },
@@ -462,8 +462,8 @@ const stelvio = buildClimb({
     barrier: 'stone',
   },
   landmarks: [
-    monumentAt('pass-buildings', 24400, 1, 30, 26, { options: { style: 'it' }, yaw: -0.25, clearance: 28 }),
-    monumentAt('pass-buildings', 24470, -1, 36, 26, { options: { seed: 5 }, yaw: 0.25, clearance: 28 }),
+    monumentAt('pass-buildings', 24400, 1, 30, 22.5, { options: { style: 'it' }, yaw: -0.25, clearance: 28 }),
+    monumentAt('pass-buildings', 24470, -1, 36, 22.5, { options: { seed: 5 }, yaw: 0.25, clearance: 28 }),
     colSign(24500, { style: 'it', lines: ['PASSO DELLO STELVIO', '2758 m'] }),
   ],
 });
@@ -500,7 +500,7 @@ const hellOfTheWestClimb = buildClimb({
     fields: false,
     mountainScale: 3.2,
   },
-  landmarks: [monumentAt('log-lodge', 20720, 1, 30, 9.6, { yaw: -0.4, clearance: 22 })],
+  landmarks: [monumentAt('log-lodge', 20720, 1, 30, 8.1, { yaw: -0.4, clearance: 22 })],
 });
 
 const hellOfTheWest: Stage = {
@@ -545,9 +545,9 @@ const ventoux = buildClimb({
     barrier: 'stone',
   },
   landmarks: [
-    monumentAt('chalet', 15600, 1, 24, 12, { options: { lines: ['CHALET REYNARD'] }, yaw: -0.4, clearance: 20 }),
+    monumentAt('chalet', 15600, 1, 24, 10.2, { options: { lines: ['CHALET REYNARD'] }, yaw: -0.4, clearance: 20 }),
     monumentAt('simpson-memorial', 20100, 1, 8, 2.9, { yaw: -0.5, clearance: 6 }),
-    monumentAt('ventoux-observatory', 21330, -1, 46, 55, { yaw: 0.2, clearance: 34 }),
+    monumentAt('ventoux-observatory', 21330, -1, 46, 52, { yaw: 0.2, clearance: 34 }),
     colSign(21400, { style: 'fr', lines: ['MONT VENTOUX', '1910 m'] }),
   ],
 });
@@ -584,8 +584,8 @@ const tourmalet = buildClimb({
     barrier: 'stone',
   },
   landmarks: [
-    monumentAt('ski-apartments', 15000, -1, 38, 18, { options: { seed: 3 }, yaw: 0.3, clearance: 30 }),
-    monumentAt('ski-apartments', 15180, 1, 44, 18, { options: { seed: 4 }, yaw: -0.3, clearance: 30 }),
+    monumentAt('ski-apartments', 15000, -1, 38, 17, { options: { seed: 3 }, yaw: 0.3, clearance: 30 }),
+    monumentAt('ski-apartments', 15180, 1, 44, 17, { options: { seed: 4 }, yaw: -0.3, clearance: 30 }),
     monumentAt('geant-tourmalet', 18940, 1, 20, 7.4, { yaw: -0.35, clearance: 12 }),
     colSign(19000, { style: 'fr', lines: ['COL DU TOURMALET', 'ALT. 2115 m'] }),
   ],
@@ -799,7 +799,7 @@ const morgulBismark: Stage = {
     startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(11300), finishArch(MB_LAP + 11300), ...lapFarm,
     // The Flatirons, 2.5 km west of Highway 93 (the west side of the circuit: the right-hand side riding south), once a lap.
     // Visible from 7 km away along the road, hazy rather than fogged out (monuments.ts).
-    { ...monumentAt('flatirons', MB_START[4] + MB_B / 2, 1, 2500, 515, { clearance: 1 }), every: MB_LAP, reach: 7000 },
+    { ...monumentAt('flatirons', MB_START[4] + MB_B / 2, 1, 2500, 500, { clearance: 1 }), every: MB_LAP, reach: 7000 },
   ],
   signs: [],
   baseAltitude: 1680, // Superior, Colorado: about 5,500 ft
