@@ -129,6 +129,10 @@ const COL = {
   field: new THREE.Color('#c2b75a'),
   rock: new THREE.Color('#878274'),
   snow: new THREE.Color('#f1f4f8'),
+  // Pale limestone scree (Mont Ventoux's summit): warm pale grey, a shade darker where the stones are bigger or in shadow.
+  screeA: new THREE.Color('#d8d4cb'),
+  screeB: new THREE.Color('#b9b3a6'),
+  limestone: new THREE.Color('#aaa496'), // cliffs among the scree are pale limestone too
   // Red-rock desert (Stage.scenery.palette = 'desert'): layered sandstone, pale sand, grey-green sage.
   strataA: new THREE.Color('#b4532f'),
   strataB: new THREE.Color('#cf7a47'),
@@ -141,8 +145,8 @@ const COL = {
 const tmp = new THREE.Color();
 
 /**
- * What the ground is made of at a point: seven layer weights summing to 1 (see
- * ground.ts: grass, dry grass, dirt, rock, snow, sandstone, sand). It follows
+ * What the ground is made of at a point: eight layer weights summing to 1 (see
+ * ground.ts: grass, dry grass, dirt, rock, snow, sandstone, sand, scree). It follows
  * the same logic as the colours, so the textures follow each stage's palette.
  */
 export type Weights = number[];
@@ -178,30 +182,46 @@ export function groundColor(x: number, z: number, h: number, near: Near | null, 
   const fields = fbm(x / 380 + 9, z / 380, 2);
   const fieldK = sc.fields && fields > 0.28 ? smoothstep(0.28, 0.4, fields) * 0.8 : 0;
   if (fieldK) out.lerp(COL.field, fieldK);
-  const band = Math.max(14, (sc.snowLine - sc.rockLine) * 0.4);
+  // The bands are sized by the next line up (snow, or scree where a stage has no snow), so Ventoux's rock fades into scree over tens of metres.
+  const band = Math.max(14, (Math.min(sc.snowLine, sc.screeLine ?? Infinity) - sc.rockLine) * 0.4);
   const rockLine = sc.rockLine + fbm(x / 60, z / 60, 2) * band;
   const rockT = h > rockLine ? smoothstep(rockLine, rockLine + band, h) : 0;
   if (rockT) out.lerp(COL.rock, rockT);
+  let screeT = 0;
+  if (sc.screeLine !== undefined) {
+    const screeLine = sc.screeLine + fbm(x / 80 + 9, z / 80 - 4, 2) * band * 0.8;
+    screeT = h > screeLine ? smoothstep(screeLine, screeLine + band * 0.8, h) : 0;
+    if (screeT) {
+      // Broken stones: patches of paler and darker ground at a few metres, with the odd dark stone.
+      const stones = fbm(x / 9 + 3, z / 9 - 7, 2) * 0.5 + 0.5;
+      tmp.copy(COL.screeA).lerp(COL.screeB, smoothstep(0.45, 0.8, stones) * 0.8 + Math.max(0, fbm(x / 3.1, z / 3.1, 1)) * 0.25);
+      out.lerp(tmp, screeT);
+    }
+  }
   const snowLine = sc.snowLine + fbm(x / 90 + 5, z / 90, 2) * band;
   const snowT = h > snowLine ? smoothstep(snowLine, snowLine + band * 0.6, h) : 0;
   if (snowT) out.lerp(COL.snow, snowT);
-  const verge = near && near.dist < 9 ? 1 - smoothstep(6, 9, near.dist) : 0;
+  let verge = near && near.dist < 9 ? 1 - smoothstep(6, 9, near.dist) : 0;
+  verge *= 1 - 0.75 * screeT; // the shoulder of a road over scree is scree, not dirt
   if (verge) out.lerp(COL.verge, verge);
-  // Grass, with dry grass in the brighter patches and wherever the fields are; the verge is dirt; then rock and snow take over by height.
+  // Grass, with dry grass in the brighter patches and wherever the fields are; the verge is dirt; then rock, scree and snow take over by height.
   const dry = Math.max(fieldK, 0.5 * smoothstep(0.62, 1, t));
-  const base = (1 - rockT) * (1 - snowT) * (1 - verge);
+  const base = (1 - rockT) * (1 - snowT) * (1 - screeT) * (1 - verge);
   w[LAYER.grass] = base * (1 - dry);
   w[LAYER.dry] = base * dry;
   w[LAYER.dirt] = verge * (1 - rockT) * (1 - snowT);
-  w[LAYER.rock] = rockT * (1 - snowT) * (1 - verge * 0.5);
+  w[LAYER.rock] = rockT * (1 - snowT) * (1 - screeT) * (1 - verge * 0.5);
   w[LAYER.snow] = snowT;
-  const sum = w[0] + w[1] + w[2] + w[3] + w[4];
-  if (sum > 0) for (let i = 0; i < 5; i++) w[i] /= sum;
+  w[LAYER.scree] = screeT * (1 - snowT) * (1 - verge);
+  const sum = w[0] + w[1] + w[2] + w[3] + w[4] + w[7];
+  if (sum > 0) for (const i of [0, 1, 2, 3, 4, 7]) w[i] /= sum;
 }
 
 /** Darkens steep grass and turns cliffs to rock, using the tile's own height grid. */
 function shadeSlopes(pos: THREE.BufferAttribute, colors: Float32Array) {
-  const rock = currentStage().scenery.palette === 'desert' ? COL.desertRock : COL.rock;
+  const sc = currentStage().scenery;
+  const rock = sc.palette === 'desert' ? COL.desertRock : COL.rock;
+  const paleRock = new THREE.Color();
   const n = SEG + 1;
   const step = TILE / SEG;
   const h = (ix: number, iz: number) => pos.getY(Math.min(n - 1, Math.max(0, iz)) * n + Math.min(n - 1, Math.max(0, ix)));
@@ -215,7 +235,9 @@ function shadeSlopes(pos: THREE.BufferAttribute, colors: Float32Array) {
       const i = (iz * n + ix) * 3;
       c.setRGB(colors[i], colors[i + 1], colors[i + 2]);
       c.multiplyScalar(1 - 0.25 * smoothstep(0.35, 0.8, slope)); // shadier, rougher grass
-      c.lerp(rock, smoothstep(0.75, 1.1, slope)); // bare rock on cliffs
+      let cliff = rock;
+      if (sc.screeLine !== undefined) cliff = paleRock.copy(rock).lerp(COL.limestone, smoothstep(sc.screeLine - 20, sc.screeLine + 30, pos.getY(iz * n + ix)));
+      c.lerp(cliff, smoothstep(0.75, 1.1, slope)); // bare rock on cliffs
       colors.set([c.r, c.g, c.b], i);
     }
   }
@@ -296,7 +318,7 @@ export class Terrain {
   private requestTextures() {
     if (!this.spec || !this.textures) return;
     const sc = currentStage().scenery;
-    this.textures.request(this.spec, sc.palette === 'desert', sc.snowLine < 2500);
+    this.textures.request(this.spec, sc.palette === 'desert', sc.snowLine < 2500, sc.screeLine !== undefined && sc.screeLine < 2500);
   }
 
   private readonly treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
@@ -360,7 +382,7 @@ export class Terrain {
     const geo = new THREE.PlaneGeometry(TILE, TILE, SEG, SEG).rotateX(-Math.PI / 2);
     const pos = geo.attributes.position as THREE.BufferAttribute;
     const colors = new Float32Array(pos.count * 3);
-    const wa = new Uint8Array(pos.count * 4); // aWa: grass, dry grass, dirt, rock; aWb: snow, sandstone, sand (0..255)
+    const wa = new Uint8Array(pos.count * 4); // aWa: grass, dry grass, dirt, rock; aWb: snow, sandstone, sand, scree (0..255)
     const wb = new Uint8Array(pos.count * 4);
     const w: Weights = new Array(LAYER_COUNT).fill(0);
     for (let i = 0; i < pos.count; i++) {
@@ -406,7 +428,7 @@ export class Terrain {
       if (near && (near.dist < 12 || nearLandmark(x, z, near.d))) continue;
       const h = heightAt(x, z, near);
       const sc = currentStage().scenery;
-      if (h > sc.treeLine + forest * 40) continue; // tree line
+      if (h > sc.treeLine + forest * 40 || (sc.screeLine !== undefined && h > sc.screeLine)) continue; // tree line, and none on the scree
       const s = 0.75 + rand() * 0.7;
       q.setFromAxisAngle(up, rand() * Math.PI * 2);
       const m = new THREE.Matrix4().compose(new THREE.Vector3(lx, h - 0.3, lz), q, new THREE.Vector3(s, s * (0.85 + rand() * 0.35), s));

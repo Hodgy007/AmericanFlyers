@@ -3,12 +3,12 @@ import { LAYER_COUNT, layersFor, type SceneryTier } from './scenery';
 
 // Terrain texture splatting. The terrain keeps its per-vertex colour (the stage's
 // own palette: grass, fields, rock, snow, red sandstone) and gains two small
-// vertex attributes, `aWa` and `aWb`: how much of each of seven ground layers is
+// vertex attributes, `aWa` and `aWb`: how much of each of eight ground layers is
 // here. The fragment shader reads the layers from one texture array and lays
 // their *detail* (the texture divided by its own average) over the vertex colour,
 // so every stage still looks like itself, only with grain instead of flat paint.
 //
-//   layer   0 grass   1 dry grass   2 dirt   3 rock   4 snow   5 sandstone   6 sand
+//   layer   0 grass   1 dry grass   2 dirt   3 rock   4 snow   5 sandstone   6 sand   7 scree
 //
 // - Rock is triplanar (cliffs don't stretch) and also takes over any steep pixel,
 //   judged per pixel from the smooth normal, so a cliff is rock whatever the
@@ -18,15 +18,15 @@ import { LAYER_COUNT, layersFor, type SceneryTier } from './scenery';
 // - Textures are CC0 (see public/textures/README.md), fetched lazily after the
 //   first frame, one JPEG per layer. Until they arrive `uAfMix` is 0 and the
 //   plain vertex colours show. Only the layers a stage can show are fetched
-//   (no sandstone on the Alpe, no snow in Heartland), and Low fetches three.
+//   (no sandstone on the Alpe, no snow in Heartland, no scree off Ventoux), and Low fetches three.
 
-const FILES = ['grass', 'dry', 'dirt', 'rock', 'snow', 'sandstone', 'sand'];
+const FILES = ['grass', 'dry', 'dirt', 'rock', 'snow', 'sandstone', 'sand', 'scree'];
 /** Metres of ground one repeat of each layer covers. */
-const SCALE = [5, 5, 4, 6, 6, 6, 4];
+const SCALE = [5, 5, 4, 6, 6, 6, 4, 4];
 /** How much of each layer's grain to keep (snow's trampled dark patches, for one, would read as dirt). */
-const CONTRAST = [1.9, 1.6, 1.4, 1.3, 0.6, 1.3, 1.2];
+const CONTRAST = [1.9, 1.6, 1.4, 1.3, 0.6, 1.3, 1.2, 1];
 /** How hard each layer's normal map pushes. */
-const NORMAL = [0.7, 0.6, 0.6, 1, 0.3, 0.8, 0.6];
+const NORMAL = [0.7, 0.6, 0.6, 1, 0.3, 0.8, 0.6, 0.9];
 
 interface Decoded {
   rgba: Uint8ClampedArray;
@@ -73,6 +73,7 @@ export class GroundTextures {
   private spec: SceneryTier | null = null;
   private desert = false;
   private snow = false;
+  private scree = false;
 
   constructor(private readonly maxAniso: number) {
     // For tests and screenshots: what has been fetched, and whether the shader is using it yet.
@@ -80,10 +81,11 @@ export class GroundTextures {
   }
 
   /** Applies the tier's switches now, and fetches what that tier and stage need and don't have yet. */
-  request(spec: SceneryTier, desert: boolean, snow: boolean) {
+  request(spec: SceneryTier, desert: boolean, snow: boolean, scree: boolean) {
     this.spec = spec;
     this.desert = desert;
     this.snow = snow;
+    this.scree = scree;
     const u = this.uniforms;
     u.uAfNormals.value = spec.detailNormals ? 1 : 0;
     u.uAfTri.value = spec.triplanar ? 1 : 0;
@@ -101,7 +103,7 @@ export class GroundTextures {
     try {
       const size = Math.max(this.size, spec.terrainTexSize); // a bigger set is never shrunk again
       if (size !== this.size) { this.albData.clear(); this.nrmData.clear(); this.size = size; }
-      const want = layersFor(this.desert, this.snow, spec.terrainLayers);
+      const want = layersFor(this.desert, this.snow, spec.terrainLayers, this.scree);
       const base = `${import.meta.env.BASE_URL}textures/terrain/`;
       let changed = false;
       for (const i of want) {
@@ -184,10 +186,10 @@ uniform float uAfMix;
 uniform float uAfNormals;
 uniform float uAfTri;
 uniform float uAfLow;
-uniform vec3 uAfAvg[7];
-uniform float uAfScale[7];
-uniform float uAfContrast[7];
-uniform float uAfNorm[7];
+uniform vec3 uAfAvg[8];
+uniform float uAfScale[8];
+uniform float uAfContrast[8];
+uniform float uAfNorm[8];
 varying vec4 vWa;
 varying vec4 vWb;
 varying vec3 vAfW;
@@ -214,22 +216,22 @@ vec3 afNrm(int i, vec2 uv, vec2 dx, vec2 dy) {
   return textureGrad(uAfNrm, vec3(uv / s, float(i)), dx / s, dy / s).xyz * 2.0 - 1.0;
 }
 // Final layer weights: the vertex weights, steep ground turned to rock, and Low's three layers.
-void afWeights(float n_y, out float w[7]) {
-  w[0] = vWa.x; w[1] = vWa.y; w[2] = vWa.z; w[3] = vWa.w; w[4] = vWb.x; w[5] = vWb.y; w[6] = vWb.z;
+void afWeights(float n_y, out float w[8]) {
+  w[0] = vWa.x; w[1] = vWa.y; w[2] = vWa.z; w[3] = vWa.w; w[4] = vWb.x; w[5] = vWb.y; w[6] = vWb.z; w[7] = vWb.w;
   float steep = 1.0 - smoothstep(0.66, 0.82, n_y);
-  for (int i = 0; i < 7; i++) w[i] *= (1.0 - steep);
+  for (int i = 0; i < 8; i++) w[i] *= (1.0 - steep);
   w[3] += steep;
   if (uAfLow > 0.5) { w[0] += w[1] + w[2]; w[1] = 0.0; w[2] = 0.0; w[5] += w[6]; w[6] = 0.0; }
   float sum = 0.0;
-  for (int i = 0; i < 7; i++) sum += w[i];
-  for (int i = 0; i < 7; i++) w[i] /= max(sum, 0.0001);
+  for (int i = 0; i < 8; i++) sum += w[i];
+  for (int i = 0; i < 8; i++) w[i] /= max(sum, 0.0001);
 }
 `;
 
 // After <color_fragment>: lay the textures' grain over the vertex colour.
 const FRAG_ALBEDO = /* glsl */ `
 vec3 afN = normalize(vAfN);
-float afW[7];
+float afW[8];
 if (uAfMix > 0.001) {
   afWeights(afN.y, afW);
   vec3 afP = vAfW;
@@ -238,7 +240,7 @@ if (uAfMix > 0.001) {
   vec2 afDy = dFdy(afUv);
   float afFade = 1.0 - smoothstep(160.0, 600.0, length(vViewPosition));
   vec3 afAcc = vec3(0.0);
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < 8; i++) {
     if (i == 3 || afW[i] < 0.01) continue;
     vec3 afG = afAlb(i, afUv, afDx, afDy, afFade);
     // A second look at the same layer at a fifth of the scale (about 25 m a repeat): mottling that still shows from afar, and tiling that doesn't.
@@ -281,7 +283,7 @@ if (uAfMix > 0.001 && uAfNormals > 0.5) {
   vec3 afT = normalize(vec3(1.0, 0.0, 0.0) - afN0 * afN0.x);
   vec3 afB = cross(afN0, afT);
   vec2 afXY = vec2(0.0);
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < 8; i++) {
     if (i == 3 || afW[i] < 0.02) continue;
     afXY += afW[i] * uAfNorm[i] * afNrm(i, afUv0, afDx0, afDy0).xy;
   }
@@ -320,5 +322,5 @@ export function patchGroundMaterial(mat: THREE.MeshStandardMaterial, tex: Ground
       .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_ALBEDO}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${FRAG_NORMAL}`);
   };
-  mat.customProgramCacheKey = () => 'af-ground-1';
+  mat.customProgramCacheKey = () => 'af-ground-2';
 }

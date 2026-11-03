@@ -31,6 +31,7 @@ The `scenery` object:
 | `wildHeight(x, z)` | Ground height far from the road. |
 | `bumpAmp` | Small-scale roughness, in meters. |
 | `rockLine`, `snowLine`, `treeLine` | Heights where rock, snow and the tree line begin. |
+| `screeLine` (optional) | Height where bare pale limestone scree begins, with no trees above it. Ventoux sets it, with `snowLine: 1e9` (its white summit is limestone, not snow). Same datum as the other lines: metres above the stage's start. |
 | `coniferBias` | 0 for broadleaf, 1 for conifers. |
 | `forestCover` | Negative for open farmland, higher for more forest. |
 | `fields` | Whether farmland patches appear. |
@@ -73,7 +74,7 @@ How it works:
   - **Morgul-Bismark** (`hotw-morgul-bismark`): a closed loop made of straights and quarter-circle corners (`MB_SEGS`), 21.1 km (13.1 miles; wikipedia.org *Morgul-Bismark*, coloradohometownweekly.com 2011-05-25), ridden twice. Opposite straights carry the same small bend, so the lap closes to within a metre and lap 2 lies on lap 1; elevation is periodic (`d mod lap`), and farm landmarks' spacing divides the lap so the scenery repeats too. The Wall is the last 1.6 km of each lap, building to 18% and easing before the line. `Stage.lapLength` is the lap.
   - **Tour of the Moon** (`hotw-tour-of-the-moon`): Rim Rock Drive, 37 km (23 miles), high point 2,024 m (6,640 ft), about 700 m of climbing for the park loop (nps.gov *Road Biking on Rim Rock Drive*; mtntownmagazine.com *Classic Rides: The Colorado National Monument's Tour of the Moon* for the order of climbs). Switchbacks are a heading wiggle over the first 6 km. The scenery is `palette: 'desert'`.
   - `Stage.race` lists intermediate sprints and named summits (`RacePoints`); where it has no summits they are found from the profile by `detectSummits()`. `Stage.tourStage` is the stage's number in the tour.
-- **Mont Ventoux** (`ventoux`). From Bédoin, 21.4 km, 1,610 m, 300 → 1,910 m. Per-kilometer shape approximated from published profiles: gentle to Saint-Estève, 9–10% through the forest, easing past Chalet Reynard. The bald white summit uses the snow shading (snow line set just above the tree line).
+- **Mont Ventoux** (`ventoux`). From Bédoin, 21.4 km, 1,610 m, 300 → 1,910 m. Per-kilometer shape approximated from published profiles: gentle to Saint-Estève, 9–10% through the forest, easing past Chalet Reynard. The bald white summit is limestone scree (`screeLine` just above the tree line; no snow, it is summer).
 - **Col du Tourmalet** (`tourmalet`). From Luz-Saint-Sauveur, 19 km, 1,404 m, 711 → 2,115 m, steeper above Barèges with eight hairpins. Shape approximated.
 - **Monte Zoncolan** (`zoncolan`). From Ovaro, 10.1 km, 1,210 m, 525 → 1,735 m, 11.9% average with long 13–15% stretches and nine hairpins. Shape approximated; the steepest 10 m ramps reach about 16% (the real road touches 22%, smoothed out by the per-kilometer model).
 

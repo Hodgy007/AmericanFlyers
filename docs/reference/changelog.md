@@ -6,6 +6,13 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Mont Ventoux's summit is limestone scree, not snow
+
+- **A scree ground layer.** The terrain gets an eighth splatting layer, `scree` (Poly Haven's CC0 *Gray Rocks*: broken pale stones, `public/textures/terrain/scree.jpg` and `scree-n.jpg`, credited in `public/textures/README.md`). A stage's optional `Scenery.screeLine` (same datum as `rockLine` and `snowLine`) turns the ground above it, over a noisy band like the snow line, to warm pale grey with darker stones; rock still shows on steep slopes, cliffs there are a paler limestone, the road's shoulder stays scree rather than dirt, snow still wins above `snowLine`, and no trees grow above the line.
+- **Ventoux** now uses `screeLine: 1150` (Chalet Reynard, where the forest ends) and `snowLine: 1e9`: it is summer, so the white summit is no longer a snowfield. Other stages are unchanged (Stelvio keeps its snow).
+- **Per tier.** `layersFor()` takes the scree flag, so only Ventoux downloads the scree texture; Low uses grass, rock and scree there (still three layers). The texture array is eight layers deep on every stage (about 4 MB more GPU memory at 1K). The vertex-colour fallback is pale as well, before the textures arrive.
+- Tests: `tests/unit/roadside.test.ts` (scree weights and colour, `layersFor`), `tests/e2e/scenery.spec.ts` (Ventoux fetches scree, not snow).
+
 ### A Bluefy link for iPhone and iPad riders
 
 - Signed-in riders on an iPhone or iPad whose browser has no Web Bluetooth (Safari, Chrome and Edge there are all WebKit) see a small card in the hub's Ride panel with Bluefy's icon, a **Get Bluefy on the App Store** link and a **Copy link** button (the site's address, to paste into Bluefy). It never shows signed out, on other platforms, or inside Bluefy (where `navigator.bluetooth` exists). iPadOS 13+ is detected by its Mac user agent plus touch points.
