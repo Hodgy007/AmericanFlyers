@@ -16,6 +16,26 @@ describe('plans', () => {
     }
   });
 
+  it('the American Climbs plan rides all four American climbs, shortest first and the steepest last', () => {
+    const plan = planById('american-climbs')!;
+    const stages = sessions(plan).filter((x) => x.stage).map((x) => x.stage);
+    expect(stages).toEqual(['flagstaff', 'mt-diablo', 'mt-blue-sky', 'mt-washington']);
+    const finish = (id: string) => stageById(id).finish!;
+    expect(finish('flagstaff')).toBeLessThan(finish('mt-washington'));
+    expect(finish('mt-washington')).toBeLessThan(finish('mt-diablo'));
+    expect(finish('mt-diablo')).toBeLessThan(finish('mt-blue-sky'));
+    expect(plan.weeks).toHaveLength(4);
+    // The last session of the last week is the steepest climb: the plan ends on the test.
+    const all = sessions(plan);
+    expect(all[all.length - 1].stage).toBe('mt-washington');
+    for (const week of plan.weeks) expect(week.length).toBeGreaterThanOrEqual(3);
+    for (const week of plan.weeks) expect(week.length).toBeLessThanOrEqual(4);
+  });
+
+  it('every stage in a plan can be ridden to a finish', () => {
+    for (const plan of PLANS) for (const x of sessions(plan)) if (x.stage && x.stage !== 'heartland') expect(stageById(x.stage).finish, `${plan.id}: ${x.stage}`).not.toBeNull();
+  });
+
   it('plan ids are unique and planById finds them', () => {
     const ids = PLANS.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);

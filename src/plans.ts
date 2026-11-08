@@ -131,6 +131,35 @@ export const PLANS: Plan[] = [
       ],
     ],
   },
+  {
+    id: 'american-climbs',
+    name: 'American Climbs',
+    level: 'Intermediate · 4 weeks · 3–4 rides a week',
+    description: 'Four American hill climbs, shortest to steepest: Flagstaff’s short, hard pitch, Mount Diablo’s long steady grade, Mount Blue Sky at altitude and the Mount Washington Auto Road, the toughest test of all.',
+    weeks: [
+      [
+        s('Ramp FTP Test', 'Know your numbers: every climb below is paced from them.', { workout: W.ramp }),
+        s('Sweet Spot 3×10', 'Climbing power: comfortably hard.', { workout: W.sweetSpot }),
+        s('Flagstaff Mountain', 'Boulder’s own climb: 7 km at 8%, short enough to ride hard. Settle in on the lower road, then keep the power even up the switchbacks.', { stage: 'flagstaff' }),
+      ],
+      [
+        s('Tempo 2×20', 'The steady effort of a long climb.', { workout: W.tempo }),
+        s('Endurance 75', 'Long and steady.', { workout: W.endurance75 }),
+        s('Mount Diablo', 'A long, steady 18 km at about 5.5%. Hold tempo from South Gate to the stone summit tower and keep it even.', { stage: 'mt-diablo' }),
+      ],
+      [
+        s('Threshold 2×15', 'Right at FTP.', { workout: W.threshold }),
+        s('VO2 Max 5×3', 'Raise the ceiling for the steep pitches.', { workout: W.vo2 }),
+        s('Over-Unders 3×9', 'Surge over the ramps, then settle back in.', { workout: W.overUnders }),
+        s('Mount Blue Sky', 'The long one: 23 km from Echo Lake Lodge to 14,130 ft, the highest paved road in North America. The grade is gentle but the air is thin, so pace it by feel and save something for the top.', { stage: 'mt-blue-sky' }),
+      ],
+      [
+        s('Recovery Spin 30', 'Rest before the big one.', { workout: W.recovery }),
+        s('Openers 30', 'A few sharp efforts to wake the legs.', { workout: W.openers }),
+        s('Mount Washington Auto Road', 'The steepest test: 12 km at 12% with pitches to 22%, in cloud and a headwind. Ride the first half gently and keep something for the last 50 yards.', { stage: 'mt-washington' }),
+      ],
+    ],
+  },
 ];
 
 export function planById(id: string | undefined | null) {

@@ -55,7 +55,7 @@ On a computer the sections are tabs (use the **←** and **→** keys on the tab
 | --- | --- | --- |
 | **🏁 Route** | Every stage and climb, plus your uploaded GPX routes, each with its elevation profile, length, climbing and your best time. The small **🏁 Race it** chip on a route with a finish is a shortcut that starts a race against the pro teams straight away, whatever ride mode is chosen. | The Hell of the West tour, the stage picker (to delete uploaded routes) and the GPX upload. |
 | **🏋 Training** | The Ramp FTP test first, then your own workouts, then the built-in ones, with their block charts. | **＋ Create a workout** and the workout library. |
-| **📅 Plan** | The plan you follow: progress, a dot for each session, the next session with **Ride it**, and what comes after. Without a plan, the three plans with **Start this plan**. | The full plan. |
+| **📅 Plan** | The plan you follow: progress, a dot for each session, the next session with **Ride it**, and what comes after. Without a plan, the four plans with **Start this plan**. | The full plan. |
 | **🏅 Achievements** | The badges you've earned and the next few to go, with progress. | The profile's Achievements tab. |
 | **🚲 Garage** | Your bike and kit on a turntable (drag to turn it), level and credits, what you're wearing, and this week's challenges with progress. | The garage and store, the weekly challenges and *My kit*. |
 | **📊 Stats** | This week and the last four weeks (distance, time, climbing, TSS, rides), your FTP and its history, distance for the last eight weeks, and your last five rides. | A ride's full detail in your profile, and the profile's Stats tab. |
