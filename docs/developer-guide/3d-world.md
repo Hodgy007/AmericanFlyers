@@ -298,7 +298,7 @@ Landmarks that would otherwise need a generated model are built from primitives 
 | `chalet` | Ventoux at Chalet Reynard (15.6 km); `lines[0]` is the name board. |
 | `alpine-church` | Alpe d'Huez, on the outside of hairpin 7 (found from the stage's signs). |
 | `ski-apartments` | Alpe d'Huez near the finish; La Mongie on the Tourmalet (15 km). 3 to 5 blocks, varied by `seed`. |
-| `geant-tourmalet` | Col du Tourmalet: a bronze cyclist out of the saddle on a steel bike (two spoked wheels, diamond frame, drop bars) on a stepped stone plinth with a plaque, right. About 1.6k triangles; the statue is its own mesh with a glossier metallic material, the plinth uses the shared matt one. |
+| `geant-tourmalet` | Col du Tourmalet: a steel cyclist out of the saddle on a steel bike (two spoked wheels, diamond frame, drop bars) on a stepped stone plinth with a plaque, right. About 1.6k triangles; the statue is its own mesh with a glossier metallic material, the plinth uses the shared matt one. |
 | `pass-buildings` | Stelvio summit: a row of hotels, with Italian flags for `style: 'it'`. |
 | `col-sign` | Summit board before every European finish: `lines` (name, altitude) and `style` `'fr'` (brown) or `'it'` (green). |
 | `log-lodge` | Echo Lake and the start of Mount Blue Sky: log lodge with a green roof, `lines[0]` on the porch. |

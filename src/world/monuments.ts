@@ -102,11 +102,11 @@ export function buildSimpsonMemorial(o: MonumentOptions = {}): THREE.Group {
 
 // ---------------------------------------------------------------- Le Géant ----
 
-/** Cast bronze and polished steel: metallic enough to catch the sun, matt enough not to need an environment map. */
-const castMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.42, metalness: 0.45 });
+/** Polished steel: metallic enough to catch the sun, matt enough not to need an environment map. */
+const castMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.38, metalness: 0.3 });
 
 /**
- * Le Géant du Tourmalet: a bronze cyclist hauling a steel bike up the col, out of the saddle with
+ * Le Géant du Tourmalet: a steel cyclist hauling a steel bike up the col, out of the saddle with
  * one pedal down and one knee up, on a stepped stone plinth with a plaque. He rides towards -x,
  * so he climbs in the direction of travel when he stands on the right of the road. About 1.6k triangles.
  */
@@ -131,9 +131,10 @@ export function buildGeant(): THREE.Group {
 
   const stone = k.build();
   const cast = new Kit();
-  const BRONZE = '#6e4c2c';
-  const BRONZE_LIGHT = '#94683a';
-  const SILVER = '#b4bac1';
+  const STEEL = '#b9c0c8'; // the rider: brushed steel, a little darker than chrome so the sky doesn't swallow him
+  const STEEL_LIGHT = '#d0d6dc';
+  const HELMET = '#6d7680';
+  const SILVER = '#8c949d'; // the bike, a shade darker so it reads against the rider
   const TYRE = '#26292d';
   // (u, v, z) in the statue's own frame: u forward, v up, z across, in life-size metres; mapped to x = -u so he rides towards -x.
   const P = (u: number, v: number, z = 0): [number, number, number] => [-u * S, v * S, z * S];
@@ -161,36 +162,38 @@ export function buildGeant(): THREE.Group {
     }
     cast.ring(0.09 * S, 0.01 * S, bb[0], bb[1], 0.05 * S, SILVER, 10); // chainring
     cast.bar(seatTop, P(-0.16, 1.05), t * 0.8, SILVER); // seat post
-    cast.bar(P(-0.24, 1.07), P(-0.04, 1.05), t * 1.7, BRONZE); // saddle
+    cast.bar(P(-0.24, 1.07), P(-0.04, 1.05), t * 1.7, HELMET); // saddle
     cast.bar(headTop, P(0.46, 0.95), t * 1.1, SILVER); // stem
     cast.bar(P(0.46, 0.95, -0.2), P(0.46, 0.95, 0.2), t * 0.9, SILVER); // the bars...
     for (const side of [1, -1]) {
       cast.bar(P(0.46, 0.95, side * 0.2), P(0.57, 0.93, side * 0.2), t * 0.8, SILVER); // ...and their drops
       cast.bar(P(0.57, 0.93, side * 0.2), P(0.55, 0.84, side * 0.2), t * 0.8, SILVER);
     }
-    // The rider, out of the saddle: hips back over the saddle, back low and long, head up, hands on the hoods.
-    const hip = P(-0.1, 1.1), shoulder = P(0.3, 1.5), head = P(0.45, 1.58);
-    cast.rod(hip, shoulder, 0.072 * S, 0.092 * S, BRONZE, 7); // torso
-    cast.ball(0.085 * S, hip[0], hip[1], 0, BRONZE, 1, 0.9, 1.4); // pelvis
-    cast.rod(P(0.3, 1.5, -0.16), P(0.3, 1.5, 0.16), 0.045 * S, 0.045 * S, BRONZE, 6); // shoulders
-    cast.rod(shoulder, P(0.4, 1.56), 0.045 * S, 0.035 * S, BRONZE, 6); // neck
-    cast.ball(0.072 * S, head[0], head[1], 0, BRONZE_LIGHT, 1.15, 1, 0.9); // head
-    cast.ball(0.08 * S, head[0] - 0.02 * S, head[1] + 0.04 * S, 0, SILVER, 1.4, 0.7, 1.05); // helmet
+    // The rider, a 1.75 m man out of the saddle: hips over the bottom bracket, a thick back about 40 degrees off horizontal, shoulders over the bars, arms reaching down to the hoods.
+    const hip = P(-0.02, 1.05), shoulder = P(0.44, 1.42), chest = P(0.34, 1.33);
+    const head = P(0.56, 1.55);
+    cast.rod(hip, shoulder, 0.115 * S, 0.145 * S, STEEL, 8); // torso, narrow at the waist and broad at the chest
+    cast.ball(0.12 * S, hip[0], hip[1], 0, STEEL, 1.1, 0.9, 1.5); // pelvis
+    cast.ball(0.15 * S, chest[0], chest[1], 0, STEEL_LIGHT, 1.1, 0.95, 1.2); // chest
+    cast.rod(P(0.44, 1.42, -0.2), P(0.44, 1.42, 0.2), 0.065 * S, 0.065 * S, STEEL, 6); // shoulders
+    cast.rod(shoulder, P(0.52, 1.5), 0.06 * S, 0.05 * S, STEEL, 6); // neck
+    cast.ball(0.1 * S, head[0], head[1], 0, STEEL_LIGHT, 1.15, 1.15, 0.95); // head
+    cast.ball(0.115 * S, head[0] - 0.03 * S, head[1] + 0.035 * S, 0, HELMET, 1.3, 0.75, 1.05); // helmet
     for (const side of [1, -1]) {
-      const sh = P(0.3, 1.5, side * 0.17), elbow = P(0.46, 1.27, side * 0.21), hand = P(0.52, 1.0, side * 0.2);
-      cast.rod(sh, elbow, 0.036 * S, 0.032 * S, BRONZE, 6); // upper arm
-      cast.rod(elbow, hand, 0.032 * S, 0.026 * S, BRONZE, 6); // forearm
-      cast.ball(0.04 * S, hand[0], hand[1], hand[2], BRONZE_LIGHT); // hand
+      const sh = P(0.44, 1.42, side * 0.2), elbow = P(0.54, 1.17, side * 0.22), hand = P(0.56, 0.97, side * 0.2);
+      cast.rod(sh, elbow, 0.055 * S, 0.042 * S, STEEL, 6); // upper arm
+      cast.ball(0.05 * S, elbow[0], elbow[1], elbow[2], STEEL_LIGHT);
+      cast.rod(elbow, hand, 0.045 * S, 0.034 * S, STEEL, 6); // forearm
+      cast.ball(0.05 * S, hand[0], hand[1], hand[2], STEEL_LIGHT); // hand
     }
     // Legs: the near one (z +) pushing the pedal down and nearly straight, the far one coming up with the knee high.
-    const hipZ = (side: number) => P(-0.1, 1.08, side * 0.09);
-    const legs: [number, [number, number], [number, number]][] = [[1, [0.2, 0.64], [0.05, 0.14]], [-1, [0.32, 0.82], [-0.05, 0.46]]];
+    const legs: [number, [number, number], [number, number]][] = [[1, [0.1, 0.6], [0.04, 0.14]], [-1, [0.3, 0.8], [-0.04, 0.46]]];
     for (const [side, knee, foot] of legs) {
-      const h = hipZ(side), kn = P(knee[0], knee[1], side * 0.11), ft = P(foot[0], foot[1], side * 0.11);
-      cast.rod(h, kn, 0.06 * S, 0.045 * S, BRONZE_LIGHT, 6); // thigh
-      cast.ball(0.046 * S, kn[0], kn[1], kn[2], BRONZE_LIGHT);
-      cast.rod(kn, ft, 0.042 * S, 0.03 * S, BRONZE_LIGHT, 6); // shin
-      cast.bar(P(foot[0] - 0.04, foot[1] + 0.02, side * 0.11), P(foot[0] + 0.14, foot[1] + 0.03, side * 0.11), 0.05 * S, BRONZE); // shoe
+      const h = P(-0.02, 1.03, side * 0.1), kn = P(knee[0], knee[1], side * 0.11), ft = P(foot[0], foot[1] + 0.03, side * 0.11);
+      cast.rod(h, kn, 0.1 * S, 0.062 * S, STEEL, 7); // thigh
+      cast.ball(0.068 * S, kn[0], kn[1], kn[2], STEEL_LIGHT);
+      cast.rod(kn, ft, 0.065 * S, 0.04 * S, STEEL, 7); // calf
+      cast.bar(P(foot[0] - 0.05, foot[1] + 0.02, side * 0.11), P(foot[0] + 0.15, foot[1] + 0.03, side * 0.11), 0.06 * S, STEEL_LIGHT); // shoe
       cast.bar(bb, P(foot[0], foot[1], side * 0.09), t * 0.7, SILVER); // crank
     }
   });
