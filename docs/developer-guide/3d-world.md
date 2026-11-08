@@ -104,10 +104,10 @@ Chase and side views ease toward their targets. The rider's view copies the posi
 
 | Style | Stages | Look |
 | --- | --- | --- |
-| `us-highway` | Heartland, Route 66, Morgul-Bismark, Echo Lake, uploaded GPX | Dashed double yellow centre, white edge lines, gravel shoulders (exactly as before) |
+| `us-highway` | Heartland, Route 66, Morgul-Bismark, Echo Lake, Flagstaff, uploaded GPX | Dashed double yellow centre, white edge lines, gravel shoulders (exactly as before) |
 | `alpine` | Alpe d'Huez, Stelvio, Tourmalet, Ventoux | One white dashed centre line (3 m dash, 10.8 m gap), thin worn white edge lines, no gravel (a dark dirty edge instead), darker asphalt with repair patches and tar seams |
-| `lane` | Monte Zoncolan | No lines; ragged dark edges (a noise width per row, periodic so it tiles) |
-| `park` | Tour of the Moon | Solid double yellow, no edge lines, warm red chip-seal tint, narrow dusty-red shoulders |
+| `lane` | Monte Zoncolan, Mount Washington | No lines; ragged dark edges (a noise width per row, periodic so it tiles) |
+| `park` | Tour of the Moon, Mount Blue Sky, Mount Diablo | Solid double yellow, no edge lines, warm red chip-seal tint, narrow dusty-red shoulders |
 
 A 3 m dash and a 10.8 m gap are 13.8 m, which doesn't fit the 512 px (9.2 m) texture the US styles repeat. The alpine texture is 768 px tall (13.8 m; three times the 256 px asphalt tile, so the photo still tiles) and `v` runs `d / layout.repeatM`. That keeps the dash in the one texture (wet look and flat normals like every other mark, no extra draw calls or geometry), which is why it was chosen over separate dash strips per chunk. The puddle shader scales by the `uRepeat` uniform for the same reason. Low pays nothing extra: it is the same single canvas texture.
 
@@ -301,11 +301,11 @@ Landmarks that would otherwise need a generated model are built from primitives 
 | `geant-tourmalet` | Col du Tourmalet: the dark steel cyclist on a plinth, right. |
 | `pass-buildings` | Stelvio summit: a row of hotels, with Italian flags for `style: 'it'`. |
 | `col-sign` | Summit board before every European finish: `lines` (name, altitude) and `style` `'fr'` (brown) or `'it'` (green). |
-| `log-lodge` | Echo Lake: log lodge with a green roof, `lines[0]` on the porch. |
-| `flatirons` | Morgul-Bismark: see below. |
-| `washington-summit`, `diablo-summit`, `crest-house-ruins`, `summit-sign-us` | Built and tested, not placed yet (for the American stages that come later). |
+| `log-lodge` | Echo Lake and the start of Mount Blue Sky: log lodge with a green roof, `lines[0]` on the porch. |
+| `flatirons` | Morgul-Bismark and Flagstaff Mountain: see below. |
+| `washington-summit`, `diablo-summit`, `crest-house-ruins`, `summit-sign-us` | The American climbs: the summit buildings of Mount Washington and Mount Diablo, the Crest House ruins on Mount Blue Sky, and the brown park board (`summitSign()` in `stages.ts`, `lines` give the words) just before each of the four finishes. The buildings stand close to the road (24 to 28 m) and at or just past the finish: the ground beside a summit road climbs, and a building further out would be above the rider's view. |
 
-- **The Flatirons** are 2.5 km west of Highway 93, once a lap, with `reach: 7000` so they are in view along much of the circuit. They stand beyond the terrain tiles, so the model brings its own forested ridge (a coarse vertex-coloured heightfield, `mountainHeight()`) with six or seven red-tan slabs leaning on its face. Height fog would hide anything this far away, so the model uses `farMaterial`: its vertex shader shrinks `vFogRel` (see [Haze and height fog](#haze-and-height-fog)) by 0.22, so the fog treats it as about a quarter of its distance and it is hazy, in the scene's own haze colours, rather than fogged out. In rain, where the fog is shorter, it still disappears.
+- **The Flatirons** are 2.5 km west of Highway 93, once a lap, with `reach: 7000` so they are in view along much of the circuit. They stand beyond the terrain tiles, so the model brings its own forested ridge (a coarse vertex-coloured heightfield, `mountainHeight()`) with six or seven red-tan slabs leaning on its face. Height fog would hide anything this far away, so the model uses `farMaterial`: its vertex shader shrinks `vFogRel` (see [Haze and height fog](#haze-and-height-fog)) by 0.22, so the fog treats it as about a quarter of its distance and it is hazy, in the scene's own haze colours, rather than fogged out. In rain, where the fog is shorter, it still disappears. On Flagstaff Mountain it stands 1.5 km to the left of the road at 2.5 km, `reach: 3000`: the road doubles back on itself there (Panorama Point, the first switchbacks), so the slabs come and go on the left of the lower road rather than staying ahead of you.
 
 ### Adding a model
 

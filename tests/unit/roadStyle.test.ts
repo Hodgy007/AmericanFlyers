@@ -21,6 +21,10 @@ describe('which stage has which road', () => {
       ventoux: 'alpine',
       tourmalet: 'alpine',
       zoncolan: 'lane',
+      'mt-washington': 'lane',
+      'mt-blue-sky': 'park',
+      'mt-diablo': 'park',
+      flagstaff: 'us-highway',
     };
     for (const s of STAGES) expect(roadStyleOf(s), s.id).toBe(want[s.id]);
   });

@@ -162,6 +162,7 @@ const COL = {
   grassA: new THREE.Color('#3f7d35'),
   grassB: new THREE.Color('#77a843'),
   field: new THREE.Color('#c2b75a'),
+  straw: new THREE.Color('#bfa459'), // grass dried by a summer without rain (Scenery.dryGrass)
   rock: new THREE.Color('#878274'),
   snow: new THREE.Color('#f1f4f8'),
   // Pale limestone scree (Mont Ventoux's summit): warm pale grey, a shade darker where the stones are bigger or in shadow.
@@ -217,6 +218,8 @@ export function groundColor(x: number, z: number, h: number, near: Near | null, 
   const fields = fbm(x / 380 + 9, z / 380, 2);
   const fieldK = sc.fields && fields > 0.28 ? smoothstep(0.28, 0.4, fields) * 0.8 : 0;
   if (fieldK) out.lerp(COL.field, fieldK);
+  const strawK = (sc.dryGrass ?? 0) * (0.8 + 0.2 * t);
+  if (strawK) out.lerp(COL.straw, strawK);
   // The bands are sized by the next line up (snow, or scree where a stage has no snow), so Ventoux's rock fades into scree over tens of metres.
   const band = Math.max(14, (Math.min(sc.snowLine, sc.screeLine ?? Infinity) - sc.rockLine) * 0.4);
   const rockLine = sc.rockLine + fbm(x / 60, z / 60, 2) * band;
@@ -240,7 +243,7 @@ export function groundColor(x: number, z: number, h: number, near: Near | null, 
   verge *= 1 - 0.75 * screeT; // the shoulder of a road over scree is scree, not dirt
   if (verge) out.lerp(COL.verge, verge);
   // Grass, with dry grass in the brighter patches and wherever the fields are; the verge is dirt; then rock, scree and snow take over by height.
-  const dry = Math.max(fieldK, 0.5 * smoothstep(0.62, 1, t));
+  const dry = Math.max(fieldK, strawK, 0.5 * smoothstep(0.62, 1, t));
   const base = (1 - rockT) * (1 - snowT) * (1 - screeT) * (1 - verge);
   w[LAYER.grass] = base * (1 - dry);
   w[LAYER.dry] = base * dry;

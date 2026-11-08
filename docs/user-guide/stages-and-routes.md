@@ -23,8 +23,12 @@ Choosing a stage resets the ride. If your current ride is at least a minute long
 | **Mont Ventoux** | 21.4 km | From Bédoin (300 m) to the summit (1,910 m) at 7.5%: vineyards, then 9–10% through the forest to Chalet Reynard, then the bare white limestone to the top. The road line and profile are the real ones (OpenStreetMap and SRTM). The hairpins are not numbered on the real road, so they are not here. |
 | **Col du Tourmalet** | 19 km | From Luz-Saint-Sauveur (711 m) to the col (2,115 m) at 7.4%, steeper through the hairpins above Barèges. The road line and profile are the real ones (OpenStreetMap and SRTM). |
 | **Monte Zoncolan** | 10.1 km | From Ovaro (525 m) to 1,735 m at 11.9%, with long stretches at 13–15%. The road line and profile are the real ones (OpenStreetMap and SRTM). |
+| **Mount Washington Auto Road** | 12.2 km | New Hampshire: from the Glen House (about 500 m) to the summit at 1,917 m (6,288 ft), 11.6% on average with pitches to 22%. Hardwood forest, then spruce, then bare grey rock above the tree line, usually in cloud and always windy. |
+| **Mount Blue Sky** | 23.3 km | Colorado's highest paved road (formerly Mount Evans): from Echo Lake Lodge, where the Hell of the West stops, from 3,231 m up to 4,311 m (14,130 ft), 4.6% on average. Spruce and bristlecone pines, then tundra, rock and snow above the tree line, ending at the Crest House ruins. |
+| **Mount Diablo** | 18 km | California: from Diablo Road in Danville through the South Gate to the stone summit tower at 1,173 m, 990 m of climbing. Golden summer grass, oaks and chaparral. |
+| **Flagstaff Mountain** | 7.4 km | Boulder, Colorado: Flagstaff Road from Baseline Road (1,746 m) to the crest at 2,349 m, 8.1% on average, through ponderosa pines with the Flatirons beside the lower switchbacks. |
 
-Each stage also has its own light and weather when **Time & weather** is on Auto: Route 66 Flats and Hell of the West start at dusk (and it goes dark as you ride), and the Tourmalet is cloudy. See [Riding](riding.md#time-of-day-and-weather).
+Each stage also has its own light and weather when **Time & weather** is on Auto: Route 66 Flats and Hell of the West start at dusk (and it goes dark as you ride), the Tourmalet and Mount Washington are cloudy. See [Riding](riding.md#time-of-day-and-weather).
 
 On every climb the elevation readout shows real altitude. Hairpins count down from the bottom: the first you reach is the highest number.
 

@@ -12,6 +12,10 @@ import stelvioRoute from './routes/real/stelvio';
 import ventouxRoute from './routes/real/ventoux';
 import tourmaletRoute from './routes/real/tourmalet';
 import zoncolanRoute from './routes/real/zoncolan';
+import washingtonRoute from './routes/real/mt-washington';
+import blueSkyRoute from './routes/real/mt-blue-sky';
+import diabloRoute from './routes/real/mt-diablo';
+import flagstaffRoute from './routes/real/flagstaff';
 import echoLakeRoute from './routes/real/hell-of-the-west';
 import morgulRoute from './routes/real/hotw-morgul-bismark';
 import moonRoute from './routes/real/hotw-tour-of-the-moon';
@@ -56,6 +60,8 @@ export interface Scenery {
   palette?: 'desert';
   /** How the road looks: its paint and surface (see world/roadStyle.ts). Left out: 'us-highway'. */
   road?: RoadStyle;
+  /** 0 to 1: how much of the grass has dried to straw (Mount Diablo's golden summer hills). Omitted: none beyond the usual dry patches. */
+  dryGrass?: number;
   /** What stands at the roadside on hairpins and drops: W-beam guardrails (default) or low dry-stone parapets. */
   barrier?: 'rail' | 'stone';
   /**
@@ -585,6 +591,152 @@ const zoncolan = buildClimb({
   landmarks: [colSign(10100, { style: 'it', lines: ['MONTE ZONCOLAN', '1750 m'] })],
 });
 
+// ------------------------------------------------------ American climbs ----
+//
+// Four famous US hill climbs on their real roads (OpenStreetMap, SRTM). Their summit boards are the
+// brown park signs (`summit-sign-us`), and each ends at the building or ruin that stands there.
+
+/** The wooden park sign at the top of an American climb, just before the finish, on the right. */
+const summitSign = (finish: number, ...lines: string[]): LandmarkKind =>
+  monumentAt('summit-sign-us', finish - 55, 1, 8, 2.8, { yaw: -0.35, clearance: 6, options: { lines } });
+
+// Mount Washington Auto Road, New Hampshire: from the toll house on NH-16 (about 1,640 ft) to the summit
+// parking at 6,288 ft (1,917 m). 7.6 miles (12.2 km) climbing 4,650 ft (1,417 m) at 12% on average, with
+// stretches of 18% and the last 50 yards at 22% (the Mount Washington Hillclimb: wikipedia.org, mwarbh.org).
+// Northern hardwoods, then spruce and fir, then krummholz at the tree line (about 4,400 ft) and bare grey rock
+// above; usually in cloud and always windy. The road is tagged bicycle=no, so it is baked with the car profile.
+const mtWashington = buildClimb({
+  id: 'mt-washington',
+  route: washingtonRoute,
+  name: 'Mount Washington Auto Road',
+  tagline: '7.6 miles at 12% from the Glen House to the summit of New England, with the last pitch at 22%. Cloud, wind and bare rock above the tree line.',
+  length: 12200,
+  gain: 1417,
+  maxGrade: 0.22,
+  hairpinWord: 'Switchback',
+  baseAltitude: 499,
+  weather: 'cloudy',
+  places: (at) => [{ d: at.altitude(1170), name: 'Halfway House' }],
+  scenery: {
+    bumpAmp: 12,
+    rockLine: 700, // bare rock from about 1,200 m
+    snowLine: 1700, // it is summer: no snow on the road
+    treeLine: 850, // krummholz at about 1,350 m
+    coniferBias: 0.7,
+    forestCover: 0.5,
+    trees: { beech: 0.3, spruce: 0.5, aspen: 0.12, shrub: 0.08 },
+    fields: false,
+    mountainScale: 3.0,
+    road: 'lane',
+  },
+  landmarks: [
+    monumentAt('washington-summit', 12215, 1, 28, 27.5, { yaw: -0.2, clearance: 30 }), // by the summit parking: further out the ground climbs and the roof would be above the view
+    summitSign(12200, 'MOUNT WASHINGTON', 'ELEV. 6,288 FT'),
+  ],
+});
+
+// Mount Blue Sky (formerly Mount Evans), Colorado: Colorado 5 from Echo Lake Lodge (10,600 ft) to the summit
+// parking at 14,130 ft, the highest paved road in North America. 14.5 miles (23.3 km), 3,543 ft (1,080 m) of
+// climbing at 4.6% (pjammcycling.com, codot.gov). Spruce and bristlecone pines below the tree line (about 3,500 m),
+// then tundra, rock and lingering snow; Summit Lake is at 12,830 ft. It carries on from the Hell of the West's Echo Lake stage.
+const mtBlueSky = buildClimb({
+  id: 'mt-blue-sky',
+  route: blueSkyRoute,
+  name: 'Mount Blue Sky',
+  tagline: '14.5 miles from Echo Lake Lodge, where the Hell of the West stops, up the highest paved road in North America to 14,130 ft.',
+  length: 23300,
+  gain: 1080,
+  maxGrade: 0.09,
+  hairpinWord: 'Switchback',
+  baseAltitude: 3231,
+  places: [{ d: 14630, name: 'Summit Lake' }],
+  scenery: {
+    bumpAmp: 12,
+    rockLine: 350,
+    snowLine: 1100, // lingering snow patches near the top
+    treeLine: 270, // about 3,500 m
+    coniferBias: 1,
+    forestCover: 0.35,
+    trees: { spruce: 0.55, pine: 0.45 },
+    fields: false,
+    mountainScale: 3.6,
+    road: 'park',
+  },
+  landmarks: [
+    monumentAt('log-lodge', 70, 1, 20, 8.1, { options: { lines: ['ECHO LAKE LODGE'] }, yaw: -0.4, clearance: 22 }),
+    monumentAt('crest-house-ruins', 23180, 1, 42, 5.6, { yaw: -0.3, clearance: 24 }),
+    summitSign(23300, 'MOUNT BLUE SKY', '14,130 FT'),
+  ],
+});
+
+// Mount Diablo, California: from Diablo Road in Danville up Mount Diablo Scenic Boulevard, South Gate Road and
+// Summit Road to the summit (3,849 ft, 1,173 m). The Mount Diablo Challenge's 11.2 miles (18 km) climb 3,249 ft
+// (990 m) from the Athenian School's road (mountdiablochallenge.itsyourrace.com). Golden summer grass, blue and
+// live oaks, grey pines and chaparral. (It stays on daytime light: at dusk the straw goes brown.)
+const mtDiablo = buildClimb({
+  id: 'mt-diablo',
+  route: diabloRoute,
+  name: 'Mount Diablo',
+  tagline: '11.2 miles from Danville through South Gate to the stone summit tower, over golden grass and oaks.',
+  length: 18000,
+  gain: 990,
+  maxGrade: 0.16,
+  hairpinWord: 'Switchback',
+  baseAltitude: 183,
+  places: [{ d: 5900, name: 'South Gate' }],
+  scenery: {
+    bumpAmp: 9,
+    rockLine: 750,
+    snowLine: 1900,
+    treeLine: 1500,
+    dryGrass: 1,
+    coniferBias: 0.3,
+    forestCover: 0.1, // oak savanna: groves among the grass
+    trees: { oak: 0.5, pine: 0.2, shrub: 0.3 },
+    fields: false,
+    mountainScale: 1.8,
+    road: 'park',
+  },
+  landmarks: [
+    monumentAt('diablo-summit', 18035, 1, 26, 19, { yaw: -0.2, clearance: 24 }),
+    summitSign(18000, 'MOUNT DIABLO', 'SUMMIT 3,849 FT'),
+  ],
+});
+
+// Flagstaff Mountain, Boulder, Colorado: Flagstaff Road from Baseline Road (5,730 ft) round Panorama Point and up
+// the switchbacks to the crest at 7,705 ft. 4.6 miles, 1,975 ft (602 m), 8.1% (pjammcycling.com; the Super Flag
+// climb the locals race). Ponderosa pine and open meadow, sandstone outcrops, and the Flatirons across the valley.
+const flagstaff = buildClimb({
+  id: 'flagstaff',
+  route: flagstaffRoute,
+  name: 'Flagstaff Mountain',
+  tagline: '4.6 miles at 8% up Boulder’s own climb: Flagstaff Road from Baseline, with the Flatirons beside the first switchbacks.',
+  length: 7400,
+  gain: 602,
+  maxGrade: 0.13,
+  hairpinWord: 'Switchback',
+  baseAltitude: 1746,
+  places: [{ d: 1125, name: 'Panorama Point' }],
+  scenery: {
+    bumpAmp: 9,
+    rockLine: 500,
+    snowLine: 1100,
+    treeLine: 900,
+    coniferBias: 0.9,
+    forestCover: 0.15,
+    trees: { pine: 0.75, spruce: 0.1, shrub: 0.15 },
+    fields: false,
+    mountainScale: 2.4,
+    road: 'us-highway',
+  },
+  landmarks: [
+    // The Flatirons stand above Chautauqua, south of the lower road: on the left. The road doubles back on itself
+    // (Panorama Point, the first switchbacks), so they come and go on the left of the first 2.5 km, ahead of you off the start.
+    { ...monumentAt('flatirons', 2500, -1, 1500, 500, { clearance: 1 }), reach: 3000 },
+    summitSign(7400, 'FLAGSTAFF MOUNTAIN'),
+  ],
+});
+
 /** Least-squares plane e = a + b·x + c·z through the points. */
 export function fitPlane(pts: [number, number, number][]) {
   let n = 0, sx = 0, sz = 0, se = 0, sxx = 0, szz = 0, sxz = 0, sxe = 0, sze = 0;
@@ -833,7 +985,7 @@ const tourOfTheMoon: Stage = {
   },
 };
 
-export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan];
+export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan, mtWashington, mtBlueSky, mtDiablo, flagstaff];
 
 export function stageById(id: string | null): Stage {
   return STAGES.find((s) => s.id === id) ?? heartland;

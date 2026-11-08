@@ -10,6 +10,10 @@ import zoncolan from '../../src/routes/real/zoncolan';
 import echo from '../../src/routes/real/hell-of-the-west';
 import moon from '../../src/routes/real/hotw-tour-of-the-moon';
 import morgul from '../../src/routes/real/hotw-morgul-bismark';
+import washington from '../../src/routes/real/mt-washington';
+import blueSky from '../../src/routes/real/mt-blue-sky';
+import diablo from '../../src/routes/real/mt-diablo';
+import flagstaff from '../../src/routes/real/flagstaff';
 
 /** Encodes headings (rad) and elevations (m) the way scripts/bake-routes.mjs does. */
 function encode(heading: number[], elevation: number[], length: number): RealRouteData {
@@ -193,6 +197,10 @@ describe('the baked stages', () => {
     ['tourmalet', 19000, 1404],
     ['zoncolan', 10100, 1210],
     ['hell-of-the-west', 20800, 942],
+    ['mt-washington', 12200, 1417],
+    ['mt-blue-sky', 23300, 1080],
+    ['mt-diablo', 18000, 990],
+    ['flagstaff', 7400, 602],
   ];
 
   it('keep their published length and gain', () => {
@@ -204,12 +212,12 @@ describe('the baked stages', () => {
   });
 
   it('have real roads whose lengths are within a few per cent of the stage’s', () => {
-    const real: [RealRouteData, number][] = [[alpe, 14000], [stelvio, 24500], [ventoux, 21400], [tourmalet, 19000], [zoncolan, 10100], [echo, 20800], [moon, 37000]];
+    const real: [RealRouteData, number][] = [[alpe, 14000], [stelvio, 24500], [ventoux, 21400], [tourmalet, 19000], [zoncolan, 10100], [echo, 20800], [moon, 37000], [washington, 12200], [blueSky, 23300], [diablo, 18000], [flagstaff, 7400]];
     for (const [data, length] of real) expect(Math.abs(data.length / length - 1)).toBeLessThan(0.08);
   });
 
   it('keep every bend wide enough for the road (no tighter than a 10 m radius) at the stage’s scale', () => {
-    for (const s of STAGES.filter((x) => ['alpe-dhuez', 'stelvio', 'ventoux', 'tourmalet', 'zoncolan', 'hell-of-the-west', 'hotw-tour-of-the-moon', 'hotw-morgul-bismark'].includes(x.id))) {
+    for (const s of STAGES.filter((x) => ['alpe-dhuez', 'stelvio', 'ventoux', 'tourmalet', 'zoncolan', 'hell-of-the-west', 'hotw-tour-of-the-moon', 'hotw-morgul-bismark', 'mt-washington', 'mt-blue-sky', 'mt-diablo', 'flagstaff'].includes(x.id))) {
       let worst = 0;
       for (let d = 0; d < s.finish! - 1; d++) worst = Math.max(worst, Math.abs(s.headingAt(d + 1) - s.headingAt(d)));
       expect(worst, s.id).toBeLessThan(0.1); // rad per metre
@@ -221,7 +229,7 @@ describe('the baked stages', () => {
     expect(numbered('alpe-dhuez')).toHaveLength(21);
     expect(numbered('stelvio')).toHaveLength(48);
     expect(numbered('alpe-dhuez').map((g) => g.label)[0]).toBe('21');
-    for (const id of ['ventoux', 'tourmalet', 'zoncolan', 'hell-of-the-west']) expect(numbered(id), id).toHaveLength(0);
+    for (const id of ['ventoux', 'tourmalet', 'zoncolan', 'hell-of-the-west', 'mt-washington', 'mt-blue-sky', 'mt-diablo', 'flagstaff']) expect(numbered(id), id).toHaveLength(0);
     // Hairpin 7 is the Dutch Corner, in Huez village (about 1,400 m).
     const s = stageById('alpe-dhuez');
     const seven = s.signs.find((g) => g.label === '7')!;
@@ -295,7 +303,7 @@ describe('the Morgul-Bismark loop', () => {
 
 describe('data size', () => {
   it('keeps the baked roads small enough for the first load', () => {
-    const all = [alpe, stelvio, ventoux, tourmalet, zoncolan, echo, moon, morgul];
+    const all = [alpe, stelvio, ventoux, tourmalet, zoncolan, echo, moon, morgul, washington, blueSky, diablo, flagstaff];
     const chars = all.reduce((a, d) => a + d.head.length + d.ele.length, 0);
     expect(chars).toBeLessThan(120_000);
   });

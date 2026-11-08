@@ -40,11 +40,11 @@ export const CULTURES: Record<CultureId, Culture> = {
   nl: { shirts: [['#ff6a00', 14], ['#ff8a1f', 8], ['#f26a1b', 6], ['#ffffff', 1], ['#d4202c', 0.6], ['#1f4ea0', 0.6], ['#2b2d42', 0.4]], flags: ['nl', 'nl', 'nl', 'orange', 'orange', 'nl', 'orange', 'nl'] },
 };
 
-/** The crowd's home culture on a stage, from its hairpin word (so no per-stage list): Virage is France, Tornante Italy, the Hell of the West stages are Colorado, anything else the USA. */
+/** The crowd's home culture on a stage, from its hairpin word (so no per-stage list): Virage is France, Tornante Italy, the Hell of the West stages and the Colorado climbs are Colorado, anything else the USA. */
 export function cultureOf(stage: Pick<Stage, 'id' | 'hairpinWord' | 'finish'>): CultureId {
   const sign = signStyleOf(stage);
   if (sign !== 'us') return sign;
-  return stage.id.startsWith('hotw-') || stage.id === 'hell-of-the-west' ? 'co' : 'us';
+  return stage.id.startsWith('hotw-') || ['hell-of-the-west', 'mt-blue-sky', 'flagstaff'].includes(stage.id) ? 'co' : 'us';
 }
 
 /** A shirt colour for `r` in [0, 1): weighted by the culture's list. */

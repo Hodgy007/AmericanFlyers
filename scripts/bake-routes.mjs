@@ -36,6 +36,8 @@ const EARTH_R = 6371000;
  * closed: a circuit, forced to close exactly (heading included). noElevation: shape only. trimToTop: a summit
  * finish, cut at the highest point (routing to a waypoint just past it adds a short descent). smoothing: a
  * multiple of the usual elevation smoothing, for a rolling road whose SRTM wobble adds climbing that isn't there.
+ * profile: the BRouter profile (default fastbike); 'car-eco' for a road that is closed to bicycles in the map
+ * (the Mount Washington Auto Road is tagged bicycle=no: fastbike routes round it over footpaths).
  */
 const ROUTES = {
   'alpe-dhuez': {
@@ -81,6 +83,29 @@ const ROUTES = {
   'hotw-morgul-bismark': {
     lonlats: [[-105.1742, 39.9089], [-105.2133, 39.9139], [-105.23, 39.9269], [-105.23, 39.9441], [-105.218, 39.956], [-105.1933, 39.9622], [-105.1734, 39.9604], [-105.1649, 39.9506], [-105.1658, 39.9336], [-105.1742, 39.9089]],
     length: 21131, closed: true, noElevation: true,
+  },
+  // Mount Washington Auto Road: the toll house on NH-16 at the foot of the Glen House to the summit parking.
+  // The road is tagged bicycle=no (cars only, bicycles on the hill-climb day), so the car profile follows it.
+  'mt-washington': {
+    lonlats: [[-71.2269798, 44.2890986], [-71.3031133, 44.2699445]],
+    length: 12200, start: 499, end: 1917, profile: 'car-eco',
+  },
+  // Mount Blue Sky Road (CO 5) from Echo Lake Lodge, at the foot of the byway, to the summit parking lot.
+  'mt-blue-sky': {
+    lonlats: [[-105.596298, 39.656757], [-105.6432544, 39.587607]],
+    length: 23300, start: 3231, end: 4307,
+  },
+  // Mount Diablo: Diablo Road and Mt Diablo Scenic Boulevard in Danville (the Athenian School road; the Mount Diablo
+  // Challenge's 11.2 miles), South Gate Road and Summit Road to the summit.
+  'mt-diablo': {
+    lonlats: [[-121.9529, 37.83193], [-121.9147509, 37.8817362]],
+    length: 18000, start: 183, end: 1173,
+  },
+  // Flagstaff Road, Boulder: from Baseline Road up past Panorama Point and the switchbacks to the crest (7,705 ft), where
+  // the road stops climbing (a waypoint a little past it would add the descent to Gross Reservoir).
+  flagstaff: {
+    lonlats: [[-105.2877748, 40.0000659], [-105.3234, 39.9834]],
+    length: 7400, start: 1746, end: 2349,
   },
 };
 

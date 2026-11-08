@@ -81,6 +81,10 @@ export function achievements(acts: Activity[], ftp: FtpEntry[], riderKg: number)
   first('🏁', 'Route 66 time-trial', 'Finish the Route 66 Flats stage.', (a) => a.finished && a.stage_id === 'route66');
   first('⛰', "Alpe d'Huez", "Conquer all 21 hairpins of Alpe d'Huez.", (a) => a.finished && a.stage_id === 'alpe-dhuez');
   first('🏔', 'Stelvio', 'Reach the top of the Passo dello Stelvio.', (a) => a.finished && a.stage_id === 'stelvio');
+  first('🌫', 'Mount Washington', 'Reach the summit of New England up the Auto Road.', (a) => a.finished && a.stage_id === 'mt-washington');
+  first('🦅', 'Mount Blue Sky', 'Ride to 14,130 feet on the highest paved road in North America.', (a) => a.finished && a.stage_id === 'mt-blue-sky');
+  first('🌅', 'Mount Diablo', 'Climb Mount Diablo from Danville to the summit tower.', (a) => a.finished && a.stage_id === 'mt-diablo');
+  first('🌲', 'Flagstaff', 'Climb Flagstaff Road above Boulder.', (a) => a.finished && a.stage_id === 'flagstaff');
   first('🧪', 'Tested', 'Complete a ramp FTP test.', (a) => a.workout_name === RAMP_TEST_NAME);
   first('⚡', 'Sprinter', 'Hold 800 W for 5 seconds.', (a) => (a.best_power?.['5'] ?? 0) >= 800);
   first('🔥', 'Four watts', `Hold 4 W/kg for 20 minutes (${Math.round(riderKg * 4)} W at ${riderKg} kg).`, (a) => (a.best_power?.['1200'] ?? 0) >= riderKg * 4);

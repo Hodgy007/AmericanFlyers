@@ -17,6 +17,10 @@ export const EVENT_STAGE_POOL: PoolStage[] = [
   { id: 'hell-of-the-west', name: 'Echo Lake', lengthM: 20800 },
   { id: 'tourmalet', name: 'Col du Tourmalet', lengthM: 19000 },
   { id: 'zoncolan', name: 'Monte Zoncolan', lengthM: 10100 },
+  { id: 'mt-washington', name: 'Mount Washington', lengthM: 12200 },
+  { id: 'mt-blue-sky', name: 'Mount Blue Sky', lengthM: 23300 },
+  { id: 'mt-diablo', name: 'Mount Diablo', lengthM: 18000 },
+  { id: 'flagstaff', name: 'Flagstaff Mountain', lengthM: 7400 },
 ];
 
 export const RACE_HOUR_UTC = 19.5; // 19:30 UTC every day

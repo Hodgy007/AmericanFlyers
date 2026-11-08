@@ -19,6 +19,7 @@ describe('crowd cultures', () => {
       stelvio: 'it', zoncolan: 'it',
       heartland: 'us', route66: 'us',
       'hell-of-the-west': 'co', 'hotw-morgul-bismark': 'co', 'hotw-tour-of-the-moon': 'co',
+      'mt-washington': 'us', 'mt-blue-sky': 'co', 'mt-diablo': 'us', flagstaff: 'co',
     };
     for (const s of STAGES) expect(cultureOf(s), s.id).toBe(want[s.id]);
   });

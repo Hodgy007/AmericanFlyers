@@ -6,6 +6,15 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Four American climbs
+
+- **New stages** on their real roads: **Mount Washington Auto Road** (`mt-washington`, 12.2 km, 1,417 m, pitches to 22%, cloudy and very windy, bare grey rock above the tree line), **Mount Blue Sky** (`mt-blue-sky`, 23.3 km, 1,080 m to 14,130 ft, the continuation of the Echo Lake stage from Echo Lake Lodge, tundra and snow patches above the tree line), **Mount Diablo** (`mt-diablo`, 18 km, 990 m, golden grass and oaks) and **Flagstaff Mountain** (`flagstaff`, 7.4 km, 602 m, with the Flatirons beside the lower switchbacks). Each ends at its summit building or ruin and a brown park sign with the real elevation, and has a finish badge.
+- **Baking.** `scripts/bake-routes.mjs` gains a per-road `profile`: the Auto Road is tagged `bicycle=no` in OpenStreetMap, so it is baked with BRouter's `car-eco` profile. The four roads add about 23 KB of source to the first load (the main chunk goes from 154.2 to 166.7 KB gzipped).
+- **Golden grass.** New optional `Scenery.dryGrass` (0 to 1) dries the grass to straw on the ground colour, the dry-grass layer and the tufts; Mount Diablo uses it.
+- **Scheduling and limits.** The evening race rotation gains the four stages (`EVENT_STAGE_POOL` and `event_stage_pool` positions 9 to 12) and `stage_limits` gains their rows (`db/schema.sql`: apply it to the database). `tests/unit/stageLimits.test.ts` computes the limits for every stage through the app's physics; the older rows sit 0.4 to 3% below the computed floor, so they are slightly permissive.
+- **Colorado crowds.** Mount Blue Sky and Flagstaff get the Colorado crowd culture; Washington and Diablo the American one.
+- Tests: `tests/unit/americanClimbs.test.ts`, `tests/unit/stageLimits.test.ts`, and the stage lists in the existing stage tests.
+
 ### Real roads and gradients for the built-in stages
 
 - **Real road lines.** Alpe d'Huez, Stelvio, Mont Ventoux, the Tourmalet, Monte Zoncolan, Echo Lake (Hell of the West stage 3) and the Tour of the Moon now follow their real roads, with real elevation, instead of a zig-zag of identical 12 m hairpins. The Morgul-Bismark circuit takes the shape of the real loop around Superior, Colorado (scaled to its 21.1 km lap, closing exactly); its elevation, with The Wall, is unchanged. Every stage keeps its length and published gain, so leaderboards, ghosts, schedules and `stage_limits` are unaffected, and Alpe d'Huez keeps its per-kilometre gradients.

@@ -10,6 +10,10 @@ const CLIMBS: [string, number, number][] = [
   ['ventoux', 21400, 1610],
   ['tourmalet', 19000, 1404],
   ['zoncolan', 10100, 1210],
+  ['mt-washington', 12200, 1417],
+  ['mt-blue-sky', 23300, 1080],
+  ['mt-diablo', 18000, 990],
+  ['flagstaff', 7400, 602],
 ];
 
 describe('stage list', () => {

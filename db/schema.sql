@@ -434,7 +434,11 @@ insert into public.stage_limits (stage_id, distance_m, min_finish_s, max_avg_kmh
   ('stelvio', 24500, 3042, 30),
   ('ventoux', 21400, 2672, 29),
   ('tourmalet', 19000, 2328, 30),
-  ('zoncolan', 10100, 1813, 21)
+  ('zoncolan', 10100, 1813, 21),
+  ('mt-washington', 12200, 2146, 21),
+  ('mt-blue-sky', 23300, 2246, 38),
+  ('mt-diablo', 18000, 1927, 34),
+  ('flagstaff', 7400, 999, 27)
 on conflict (stage_id) do update set distance_m = excluded.distance_m, min_finish_s = excluded.min_finish_s, max_avg_kmh = excluded.max_avg_kmh;
 
 -- Set by the app when a ride used the demo slider or ?timescale: such rides never count for times.
@@ -597,7 +601,11 @@ insert into public.event_stage_pool (stage_id, name, length_m, position) values
   ('ventoux', 'Mont Ventoux', 21400, 5),
   ('hell-of-the-west', 'Echo Lake', 20800, 6),
   ('tourmalet', 'Col du Tourmalet', 19000, 7),
-  ('zoncolan', 'Monte Zoncolan', 10100, 8)
+  ('zoncolan', 'Monte Zoncolan', 10100, 8),
+  ('mt-washington', 'Mount Washington', 12200, 9),
+  ('mt-blue-sky', 'Mount Blue Sky', 23300, 10),
+  ('mt-diablo', 'Mount Diablo', 18000, 11),
+  ('flagstaff', 'Flagstaff Mountain', 7400, 12)
 on conflict (stage_id) do nothing;
 
 create table if not exists public.events (

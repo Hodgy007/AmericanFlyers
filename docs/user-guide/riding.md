@@ -54,7 +54,7 @@ Why steer? To line up on someone's wheel for the draft (see [Riding together](ri
 
 ## On the climbs
 
-The big climbs (Alpe d'Huez, Stelvio, Ventoux, Tourmalet, Zoncolan and Echo Lake) are dressed like the Tour's mountains:
+The big climbs (Alpe d'Huez, Stelvio, Ventoux, Tourmalet, Zoncolan, Echo Lake and the American climbs) are dressed like the Tour's mountains:
 
 - **Painted words** on the road over the last few kilometres and on the straights before some hairpins: ALLEZ, VAS!, GO GO GO, stars and arrows, and your own first name ("ALLEZ SAM", taken from your account name; letters only). They're in the same places every ride.
 - **Guardrails** on the outside of the hairpins and wherever the ground falls away beside the road.
