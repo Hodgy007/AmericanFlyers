@@ -204,6 +204,7 @@ test('opt in, coach tips, rival lines and debriefs (mocked AI)', async ({ page }
   await page.evaluate(() => { (window as unknown as { __rafDelay: number }).__rafDelay = 250; });
   await press(page, '#btn-menu');
   await press(page, '#btn-reset');
+  await press(page, '#hub-leave-go'); // ⏹ End ride asks first
   await expect(page.locator('#finish .coach-debrief')).toContainText('Steady ride, strong finish', { timeout: 30_000 });
   await expect(page.locator('#finish .coach-next')).toContainText('Sweet Spot');
   await page.locator('#finish .coach-card').scrollIntoViewIfNeeded();

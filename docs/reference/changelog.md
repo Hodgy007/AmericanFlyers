@@ -6,6 +6,12 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### A visible way to end the ride
+
+- A **⏹ End** button sits in the top bar on the ride screen (first in the row on phones, next to ☰ Menu elsewhere). After a minute or more (or in a race or group ride) it asks **End ride?** with **Save and finish** (**End ride** when signed out) or **Keep riding**, then shows the ride summary, which has **Start a new ride** and **Back to the hub**. Under a minute it goes straight to the hub. The old **↺ End / reset ride** menu item is now **⏹ End ride** and does the same.
+- **🏠 Hub** and **⏹ End ride** now sit near the top of the ☰ Menu. The menu also has a `vh` height fallback plus touch scrolling, so on browsers without `dvh` (older Safari) it scrolls instead of running off the screen.
+- `askToLeave()` in `src/hub/leave.ts` serves both questions (`purpose: 'end'`); `finishRide()` in `src/main.ts`. Test: `tests/e2e/endRide.spec.ts`.
+
 ### A Bluefy link for iPhone and iPad riders
 
 - Signed-in riders on an iPhone or iPad whose browser has no Web Bluetooth (Safari, Chrome and Edge there are all WebKit) see a small card in the hub's Ride panel with Bluefy's icon, a **Get Bluefy on the App Store** link and a **Copy link** button (the site's address, to paste into Bluefy). It never shows signed out, on other platforms, or inside Bluefy (where `navigator.bluetooth` exists). iPadOS 13+ is detected by its Mac user agent plus touch points.

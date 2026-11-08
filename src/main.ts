@@ -973,6 +973,14 @@ function endRide() {
   saveRide().then((saved) => coach?.rideSaved(saved ? rideId : null));
 }
 
+/** Ends a race and leaves a group ride, keeping the ride's own numbers. */
+function leaveRaceAndEvent() {
+  if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); }
+  raceCommentary = null;
+  commentary.peek()?.clipPlayer.stop();
+  endEvent();
+}
+
 function resetRide() {
   ai?.newRide();
   ensureAi();
@@ -983,10 +991,7 @@ function resetRide() {
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
-  if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); } // starting afresh ends a race
-  raceCommentary = null;
-  commentary.peek()?.clipPlayer.stop();
-  endEvent(); // ...and leaves a scheduled event
+  leaveRaceAndEvent(); // starting afresh ends a race, and leaves a scheduled event
   drivetrain.reset();
   powerSamples.length = 0;
   stats = new RideStats(zoneRefs);
@@ -1602,7 +1607,8 @@ profileCanvas.addEventListener('pointermove', (e) => {
   const imperial = settings.units === 'imperial';
   profileCanvas.title = `Jump to ${(profileDistanceAt(e.clientX) / 1000 / (imperial ? KM_PER_MI : 1)).toFixed(1)} ${imperial ? 'mi' : 'km'}`;
 });
-$('btn-reset').addEventListener('click', endRide);
+$('btn-reset').addEventListener('click', () => { void finishRide(); }); // ☰ Menu → ⏹ End ride
+$('btn-end').addEventListener('click', () => { void finishRide(); }); // the ⏹ End button in the top bar
 $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);
 function setSound(on: boolean) {
@@ -2078,6 +2084,22 @@ function startFromHub(c: { stageId: string; workoutId: string | null }, mode: Ri
   const w = c.workoutId ? workoutById(c.workoutId) : undefined;
   if (w) startWorkout(w);
   if (proTeamsOnRoad(mode)) peloton.reset(0); // fresh teams around the start line
+}
+
+/**
+ * ⏹ End (top bar) and ☰ Menu → ⏹ End ride. A ride under way asks "End ride?" and then saves and shows its summary
+ * (with Back to the hub and Start a new ride); a ride not worth keeping goes straight to the hub.
+ */
+async function finishRide() {
+  if (hub.isOpen()) return;
+  const underWay = $('finish').hidden && (stats.seconds >= MIN_RIDE_S || !!race || !!eventState);
+  if (!underWay) return goToHub({ ask: false });
+  const also = [race ? (eventState ? 'your race' : 'the race') : eventState ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
+  if (!(await askToLeave({ signedIn: !!account(), time: formatTime(stats.seconds), also, purpose: 'end' }))) return;
+  if (stats.seconds < MIN_RIDE_S) { if (player) stopWorkout(); resetRide(); hub.open(); return; } // a short race: nothing to save or summarise
+  leaveRaceAndEvent();
+  endRide(); // the summary card; it saves the ride, and "Start a new ride" won't save it again
+  if (player) stopWorkout(); // after the summary, which reads the workout for its debrief
 }
 
 /**
