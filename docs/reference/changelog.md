@@ -6,6 +6,10 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Auto graphics at a few frames a second
+
+- Auto graphics now steps down on a device managing only a few frames a second (frames of 120–400 ms): the 3 s window never held the 20 frames a verdict needed, so it stayed on Ultra. Six frames are now enough when their median is over 120 ms (`ADAPT.slowFewFrames`, `slowFewMs` in `src/world/adapt.ts`). Unit test in `tests/unit/quality.test.ts`.
+
 ### A visible way to end the ride
 
 - A **⏹ End** button sits in the top bar on the ride screen (first in the row on phones, next to ☰ Menu elsewhere). After a minute or more (or in a race or group ride) it asks **End ride?** with **Save and finish** (**End ride** when signed out) or **Keep riding**, then shows the ride summary, which has **Start a new ride** and **Back to the hub**. Under a minute it goes straight to the hub. The old **↺ End / reset ride** menu item is now **⏹ End ride** and does the same.
