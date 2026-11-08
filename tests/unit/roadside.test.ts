@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { setStage } from '../../src/course';
 import { stageById } from '../../src/stages';
-import { barrierSections } from '../../src/world/barriers';
+import { barrierKind, barrierSections, hasBarriers } from '../../src/world/barriers';
 import { crowdNear } from '../../src/world/crowdZones';
 import { planCrowd } from '../../src/world/crowds';
 import { paintName, planPaint } from '../../src/world/roadPaint';
@@ -84,6 +84,16 @@ describe('guardrails', () => {
   it('also stand where the ground falls away beside the road', () => {
     const drop = (_x: number, _z: number) => -100; // far below the road everywhere
     expect(barrierSections(alpe, 3000, 3100, drop).length).toBeGreaterThan(40);
+  });
+  it('are left out entirely where the stage says the road is unguarded (Mount Washington)', () => {
+    const washington = stageById('mt-washington');
+    const drop = (_x: number, _z: number) => -100;
+    expect(barrierKind(washington)).toBe('none');
+    expect(hasBarriers(washington)).toBe(false);
+    expect(isClimb(washington)).toBe(true); // it is still a climb: crowds, painted words, campers
+    for (const [a, b] of [[0, 12200], [11000, 11400]]) expect(barrierSections(washington, a, b, drop)).toEqual([]);
+    // The other American climbs and the alpine passes keep theirs.
+    for (const id of ['mt-blue-sky', 'mt-diablo', 'flagstaff', 'stelvio']) expect(hasBarriers(stageById(id)), id).toBe(true);
   });
 });
 

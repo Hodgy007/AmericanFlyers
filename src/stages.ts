@@ -5,6 +5,7 @@ import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
 import { RIM_ROCK_SECTIONS, makeRoadside } from './world/canyon.js';
+import { summitCone, type SummitCone } from './world/summitCone';
 import type { RealRouteData } from './routes/realRoute';
 import { detectHairpins, elevationFrom, mapRoute } from './routes/realStage';
 import alpeRoute from './routes/real/alpe-dhuez';
@@ -62,8 +63,8 @@ export interface Scenery {
   road?: RoadStyle;
   /** 0 to 1: how much of the grass has dried to straw (Mount Diablo's golden summer hills). Omitted: none beyond the usual dry patches. */
   dryGrass?: number;
-  /** What stands at the roadside on hairpins and drops: W-beam guardrails (default) or low dry-stone parapets. */
-  barrier?: 'rail' | 'stone';
+  /** What stands at the roadside on hairpins and drops: W-beam guardrails (default), low dry-stone parapets, or nothing (the Mount Washington Auto Road is unguarded over most of its length). */
+  barrier?: 'rail' | 'stone' | 'none';
   /**
    * Shapes the ground beside the road (canyons, cuttings). Given a point at course distance `d`
    * and signed lateral offset from the centreline (+ right), and `plain`, the height relative
@@ -280,6 +281,8 @@ interface ClimbSpec {
   timeOfDay?: Stage['timeOfDay'];
   weather?: Stage['weather'];
   scenery: Omit<Scenery, 'wildHeight'>;
+  /** A bare cone at the summit that the ground falls away from, so buildings there stand clear of the land (world/summitCone.ts). */
+  summit?: SummitCone;
   /**
    * Landmarks beyond the start and finish arches. A function is given where things on the road are
    * (see ClimbSites), for those that belong at a particular bend or altitude.
@@ -346,11 +349,13 @@ function buildClimb(spec: ClimbSpec): Stage {
 
   const plane = landPlane(headingAt, elevationAt, length);
 
+  const cone = spec.summit ? summitCone(spec.summit, headingAt, elevationAt) : null;
   const wildHeight = (wx: number, wz: number) => {
     const base = Math.max(-40, Math.min(spec.gain + 150, plane(wx, wz)));
     const massif = fbm(wx / 1300, wz / 1300, 4) * 260;
     const ridges = (1 - Math.abs(fbm(wx / 420 + 7, wz / 420 - 3, 3))) * 170;
-    return base + 60 + massif + ridges;
+    const wild = base + 60 + massif + ridges;
+    return cone ? cone(wx, wz, wild) : wild;
   };
 
   const extra = typeof spec.landmarks === 'function' ? spec.landmarks(at) : spec.landmarks ?? [];
@@ -628,9 +633,13 @@ const mtWashington = buildClimb({
     fields: false,
     mountainScale: 3.0,
     road: 'lane',
+    barrier: 'none', // the Auto Road is unguarded over most of its length: steep drops, no rails
   },
+  // The ground falls away from a bare cone at the summit, so the buildings stand against the sky and are in view from
+  // the last 500 m (the generic wild ground climbs hundreds of metres within a kilometre of the road and hid them).
+  summit: { d: 12225, side: 1, offset: 32, rise: 3, flat: 60, slope: 0.5, fadeFrom: 380, fadeTo: 1200 },
   landmarks: [
-    monumentAt('washington-summit', 12215, 1, 28, 27.5, { yaw: -0.2, clearance: 30 }), // by the summit parking: further out the ground climbs and the roof would be above the view
+    monumentAt('washington-summit', 12225, 1, 32, 57, { yaw: -0.12, clearance: 40 }), // inside the last bend, just past the finish: the road wraps round it, so it is ahead on the right from 500 m out and again in the last 100 m
     summitSign(12200, 'MOUNT WASHINGTON', 'ELEV. 6,288 FT'),
   ],
 });
