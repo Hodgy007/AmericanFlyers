@@ -128,7 +128,7 @@ describe('where the stages put monuments', () => {
   it("each monument's size matches what its builder makes (within 20%), so it is not stretched", () => {
     const natural = new Map<string, number>();
     for (const [id, k] of kinds) {
-      if (!k.model) continue;
+      if (!k.model || k.world) continue; // a world-placed one (the Flagstaff Flatirons) is scaled to fit its real size on purpose
       const key = `${k.model}|${JSON.stringify(k.options ?? {})}`;
       if (!natural.has(key)) natural.set(key, bounds(buildMonument(k.model, k.options)).max.y);
       const h = natural.get(key)!;
