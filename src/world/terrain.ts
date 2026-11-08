@@ -74,7 +74,7 @@ export function roadsideSlope(x: number, z: number, near: Near | null): number {
   const sc = currentStage().scenery;
   if (!sc.roadside || !near || near.lateral === undefined || near.dist >= reach(sc)) return 0;
   const wild = sc.wildHeight(x, z);
-  return Math.abs(shapeAt(sc, near, near.lateral + 1.5, wild) - shapeAt(sc, near, near.lateral - 1.5, wild)) / 3;
+  return Math.abs(shapeAt(sc, near, near.lateral + 4, wild) - shapeAt(sc, near, near.lateral - 4, wild)) / 8; // +-4 m: a cell of the 4 m grid, so nothing is planted within a cell of a step (it would hang over the cut)
 }
 
 /** Road samples that could be the nearest road point to anything in the box. */

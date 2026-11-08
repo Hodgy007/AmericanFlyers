@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { ensureRoad, setStage } from '../../src/course';
 import { stageById } from '../../src/stages';
 import { MONOLITHS, independenceGeometry, siteOf, triangleCount, type MonolithKind } from '../../src/world/monoliths';
-import { RIM_ROCK_SECTIONS, canyonWeight } from '../../src/world/canyon';
+import { RIM_ROCK_SECTIONS, canyonWeight, shapeAt } from '../../src/world/canyon';
 
 describe('monolith geometry', () => {
   it('stays under 5,000 triangles each', () => {
@@ -35,23 +35,33 @@ describe('monolith placement', () => {
   const stage = stageById('hotw-tour-of-the-moon');
   setStage(stage);
   ensureRoad(32000);
-  it('stands on the canyon side of the road, 150 to 600 m out', () => {
-    for (const p of MONOLITHS[stage.id]) {
+  const all = MONOLITHS[stage.id];
+  it('stands on the canyon side of the road, in a canyon section', () => {
+    for (const p of all) {
       const side = p.lateral < 0 ? -1 : 1;
       expect(canyonWeight(RIM_ROCK_SECTIONS, p.d, side)).toBe(1);
-      expect(Math.abs(p.lateral)).toBeGreaterThanOrEqual(150);
-      expect(Math.abs(p.lateral)).toBeLessThanOrEqual(600);
       const s = siteOf(p);
       expect(Number.isFinite(s.x + s.z + s.yaw)).toBe(true);
     }
   });
-  it('puts Independence Monument at about km 8 to 9, the Kissing Couple near 10 and the Coke Ovens near 12', () => {
-    const first = (k: MonolithKind) => MONOLITHS[stage.id].find((p) => p.kind === k)!.d;
-    expect(first('independence')).toBeGreaterThan(8000);
-    expect(first('independence')).toBeLessThan(9000);
-    expect(first('kissing')).toBeGreaterThan(9500);
-    expect(first('kissing')).toBeLessThan(11000);
-    expect(first('coke')).toBeGreaterThan(11500);
-    expect(first('coke')).toBeLessThan(12500);
+  it('stands on the canyon floor: past the talus and before the far wall rises', () => {
+    for (const p of all) {
+      const q = shapeAt(p.d, p.lateral < 0 ? -1 : 1);
+      expect(Math.abs(p.lateral)).toBeGreaterThan(q.lip + q.cliffWidth + q.talusWidth + 20);
+      expect(Math.abs(p.lateral)).toBeLessThan(q.floorEnd);
+    }
+  });
+  it('puts the Coke Ovens, Kissing Couple and Independence Monument where the real ones are, in Monument Canyon', () => {
+    // Real positions along the baked road (OpenStreetMap nodes projected onto it): Coke Ovens km 22.6,
+    // Bell Tower (Kissing Couple) km 25.3, Independence Monument km 26.6, all on the right of the road.
+    const at = (k: MonolithKind) => all.find((p) => p.kind === k)!;
+    expect(at('coke').d).toBeGreaterThan(22500);
+    expect(at('coke').d).toBeLessThan(22800);
+    expect(at('kissing').d).toBeGreaterThan(25100);
+    expect(at('kissing').d).toBeLessThan(25400);
+    expect(at('independence').d).toBeGreaterThan(26400);
+    expect(at('independence').d).toBeLessThan(26700);
+    for (const p of all) expect(p.lateral).toBeGreaterThan(0);
+    expect(all.map((p) => p.kind)).toEqual(['coke', 'kissing', 'independence']);
   });
 });

@@ -14,6 +14,14 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Training plans.** A fourth plan, **American Climbs** (4 weeks): Flagstaff, Mount Diablo, Mount Blue Sky, and the Mount Washington Auto Road last.
 - Tests: `tests/unit/summitCone.test.ts`, `tests/unit/flatironsPlacement.test.ts`, and additions to `realStage`, `roadside` and `plans`.
 
+### Tour of the Moon: canyons and monoliths on the real rim
+
+- `RIM_ROCK_SECTIONS` re-surveyed against the baked Rim Rock Drive (USGS 3DEP ground heights either side of the road, OpenStreetMap place names): Monument Canyon is on the right from Artists Point to Independence Monument View, Red Canyon, Ute Canyon and Fruita Canyon on their real sides, the drop on the left on the switchbacks above Monument Road and down Fruita Canyon, and no cliff across the plateau at Black Ridge and the visitor center. The cliff's lines are warped so its faces aren't ruled straight.
+- The Coke Ovens, the Kissing Couple and Independence Monument stand at their real places along the road in Monument Canyon (the old extra copies are gone). Independence Monument is brought in from 566 m to 340 m so it reads through the haze.
+- New optional `Scenery.clearAir` (the haze distance is multiplied by it); the Tour of the Moon sets 3.2, so the canyon floors and monoliths no longer wash out.
+- `roadsideSlope()` now measures over +-4 m (a cell of the 4 m grid) instead of +-1.5 m, so no stone or bush is planted within a cell of a step in a cliff, where it would hang over the cut.
+- Tests: `tests/unit/canyon.test.ts`, `tests/unit/monoliths.test.ts` (sides at sample distances, monoliths on the canyon floor, continuity).
+
 ### Auto graphics at a few frames a second
 
 - Auto graphics now steps down on a device managing only a few frames a second (frames of 120–400 ms): the 3 s window never held the 20 frames a verdict needed, so it stayed on Ultra. Six frames are now enough when their median is over 120 ms (`ADAPT.slowFewFrames`, `slowFewMs` in `src/world/adapt.ts`). Unit test in `tests/unit/quality.test.ts`.

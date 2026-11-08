@@ -21,15 +21,21 @@ export interface Placement {
   yaw?: number;
 }
 
-/** Monoliths per stage id. */
+/**
+ * Monoliths per stage id. The Tour of the Moon's three stand where the real ones do along the baked
+ * road (OpenStreetMap nodes projected onto the road line, with the same scaling as the stage): the
+ * Coke Ovens at km 22.6 (node "Coke Ovens", 303 m out, seen from Coke Ovens Viewpoint and Overlook),
+ * the Kissing Couple at km 25.3 (node "Bell Tower (Kissing Couple)", 305 m out, from Monument Canyon View)
+ * and Independence Monument at km 26.6 (566 m out, from Grand View and Independence Monument View).
+ * All are on the right of the road, in Monument Canyon. The hook's canyon floor lies 200 to 440 m out,
+ * so Independence Monument, really 566 m out, is brought in to 340 m: the bearing is kept, the
+ * distance made modest enough to read through the fog.
+ */
 export const MONOLITHS: Record<string, Placement[]> = {
   'hotw-tour-of-the-moon': [
-    { kind: 'independence', d: 8650, lateral: -310 },
-    { kind: 'kissing', d: 10250, lateral: 330, yaw: 0.5 },
-    { kind: 'coke', d: 12100, lateral: 290 },
-    { kind: 'independence', d: 18200, lateral: -270, scale: 0.6, yaw: 1.2 },
-    { kind: 'coke', d: 23000, lateral: -300, scale: 0.7, yaw: 0.3 },
-    { kind: 'kissing', d: 28000, lateral: -340, scale: 0.8, yaw: -0.6 },
+    { kind: 'coke', d: 22640, lateral: 320 },
+    { kind: 'kissing', d: 25260, lateral: 330, yaw: 0.5 },
+    { kind: 'independence', d: 26560, lateral: 340, yaw: 1.2 },
   ],
 };
 

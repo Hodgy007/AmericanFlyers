@@ -81,6 +81,8 @@ export interface Scenery {
    * keep it cheap, and key it off `d` and `lateral` only.
    */
   roadside?(d: number, lateral: number, plain: number): number | null;
+  /** How much clearer than the usual the air is: the haze distance is multiplied by this (default 1). Dry Colorado air lets a canyon's far wall and floor read. */
+  clearAir?: number;
 }
 
 /** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
@@ -1006,6 +1008,7 @@ const tourOfTheMoon: Stage = {
     road: 'park',
     barrier: 'stone',
     roadside: makeRoadside(RIM_ROCK_SECTIONS), // the rims of Monument Canyon and its neighbours
+    clearAir: 3.2, // dry plateau air: the canyon floors and the monoliths stay readable
   },
   landmarks: [startArch, finishArch(TM_FINISH), finishArch(TM_VISITOR_CENTER)],
   signs: [],
