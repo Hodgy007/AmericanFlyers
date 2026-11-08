@@ -258,6 +258,7 @@ export class Atmosphere {
 
   private choice = { time: 'auto' as TimeOfDay, weather: 'auto' as Weather };
   private heightK = 1 / 110; // how fast the fog thins with height, per metre
+  private clearAir = 1; // the stage's air clarity: the haze distance is multiplied by it
   private stageTime: Phase = 'day';
   private stageWeather: Climate = 'clear';
   private hour = PHASE_HOUR.day; // the Auto clock
@@ -302,6 +303,7 @@ export class Atmosphere {
   /** A new stage: restart the Auto clock and weather from the stage's own, and show them straight away. */
   restage(stage: Stage) {
     this.heightK = stage.scenery.roadside ? 1 / 500 : 1 / 110; // a stage with canyons beside the road must not fog its depths white
+    this.clearAir = stage.scenery.clearAir ?? 1;
     this.stageTime = stage.timeOfDay ?? 'day';
     this.stageWeather = stage.weather ?? 'clear';
     this.hour = PHASE_HOUR[this.stageTime];
@@ -367,7 +369,7 @@ export class Atmosphere {
     sky.setSkyLook(l.glow, l.night, l.overcast, band);
     sky.setClouds(l.cloudColor, l.cloudGlow);
     // Exponential height fog: about 1.5 optical depths over the old fog distance (after a 70 m clear start), thicker at dawn and dusk, thinning above the valley floor.
-    const density = (1.45 / l.fogFar) * (1 + 0.5 * gold);
+    const density = (1.45 / (l.fogFar * this.clearAir)) * (1 + 0.5 * gold);
     sky.setMountainTint(l.mountain, density * 3600);
     const up = THREE.MathUtils.smoothstep(sunY, -0.06, 0.06);
     const shade = this.cloudShadows ? 0.6 * (1 - 0.6 * l.overcast) * THREE.MathUtils.smoothstep(sunY, 0.05, 0.25) : 0;

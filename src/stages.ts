@@ -5,6 +5,8 @@ import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
 import { RIM_ROCK_SECTIONS, makeRoadside } from './world/canyon.js';
+import { basinHeight, summitCone, type Basin, type SummitCone } from './world/summitCone';
+import { eastSouth, flatironsPlacement, type LonLat } from './world/flatironsPlacement';
 import type { RealRouteData } from './routes/realRoute';
 import { detectHairpins, elevationFrom, mapRoute } from './routes/realStage';
 import alpeRoute from './routes/real/alpe-dhuez';
@@ -32,6 +34,13 @@ interface LandmarkBase {
   clearance: number; // keep trees this far away
   /** Metres of course either side within which it is placed (default: 250 behind, 1,500 ahead). For huge, distant things. */
   reach?: number;
+  /**
+   * Placed in the world instead of along the road, for something whose real position is known (the Flatirons):
+   * metres east (x) and south (z) of the course start, `y` above the start's datum, and `yaw` about the vertical
+   * (three.js `rotation.y`: the model's +z faces (sin yaw, cos yaw)). `side` and `offset` are then ignored;
+   * `first` and `reach` still say when it is in range, by course distance.
+   */
+  world?: { x: number; z: number; y: number; yaw: number };
 }
 
 /**
@@ -62,8 +71,8 @@ export interface Scenery {
   road?: RoadStyle;
   /** 0 to 1: how much of the grass has dried to straw (Mount Diablo's golden summer hills). Omitted: none beyond the usual dry patches. */
   dryGrass?: number;
-  /** What stands at the roadside on hairpins and drops: W-beam guardrails (default) or low dry-stone parapets. */
-  barrier?: 'rail' | 'stone';
+  /** What stands at the roadside on hairpins and drops: W-beam guardrails (default), low dry-stone parapets, or nothing (the Mount Washington Auto Road is unguarded over most of its length). */
+  barrier?: 'rail' | 'stone' | 'none';
   /**
    * Shapes the ground beside the road (canyons, cuttings). Given a point at course distance `d`
    * and signed lateral offset from the centreline (+ right), and `plain`, the height relative
@@ -72,6 +81,8 @@ export interface Scenery {
    * keep it cheap, and key it off `d` and `lateral` only.
    */
   roadside?(d: number, lateral: number, plain: number): number | null;
+  /** How much clearer than the usual the air is: the haze distance is multiplied by this (default 1). Dry Colorado air lets a canyon's far wall and floor read. */
+  clearAir?: number;
 }
 
 /** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
@@ -154,6 +165,10 @@ const lowlandHills = (x: number, z: number) =>
 /** A code-built landmark standing once at course distance `d` (see world/monuments.ts). `size` is its height in metres. */
 export const monumentAt = (model: MonumentId, d: number, side: -1 | 1, offset: number, size: number, extra: Partial<LandmarkBase> & { options?: MonumentOptions } = {}): LandmarkKind =>
   ({ model, first: d, every: 1e9, side, offset, size, clearance: 8, ...extra });
+
+/** A code-built landmark at a fixed place in the world (see `LandmarkBase.world`), in range the whole stage: `size` is its height in metres. */
+const monumentInWorld = (model: MonumentId, world: NonNullable<LandmarkBase['world']>, size: number, extra: Partial<LandmarkBase> & { options?: MonumentOptions } = {}): LandmarkKind =>
+  ({ model, first: 0, every: 1e9, side: 0, offset: 0, size, clearance: 1, reach: 20000, world, ...extra });
 
 /** The summit board at the top of a European climb, just before the finish line, on the right. */
 const colSign = (finish: number, options: MonumentOptions): LandmarkKind => monumentAt('col-sign', finish - 55, 1, 8.5, 2.6, { yaw: -0.35, clearance: 6, options });
@@ -280,6 +295,10 @@ interface ClimbSpec {
   timeOfDay?: Stage['timeOfDay'];
   weather?: Stage['weather'];
   scenery: Omit<Scenery, 'wildHeight'>;
+  /** A bare cone at the summit that the ground falls away from, so buildings there stand clear of the land (world/summitCone.ts). */
+  summit?: SummitCone;
+  /** A basin the wild ground sinks into, so a distant landmark can be seen across it (world/summitCone.ts). */
+  basin?: Basin;
   /**
    * Landmarks beyond the start and finish arches. A function is given where things on the road are
    * (see ClimbSites), for those that belong at a particular bend or altitude.
@@ -346,11 +365,14 @@ function buildClimb(spec: ClimbSpec): Stage {
 
   const plane = landPlane(headingAt, elevationAt, length);
 
+  const cone = spec.summit ? summitCone(spec.summit, headingAt, elevationAt) : null;
+  const basin = spec.basin ? basinHeight(spec.basin) : null;
   const wildHeight = (wx: number, wz: number) => {
     const base = Math.max(-40, Math.min(spec.gain + 150, plane(wx, wz)));
     const massif = fbm(wx / 1300, wz / 1300, 4) * 260;
     const ridges = (1 - Math.abs(fbm(wx / 420 + 7, wz / 420 - 3, 3))) * 170;
-    return base + 60 + massif + ridges;
+    const wild = base + 60 + massif + ridges;
+    return basin ? basin(wx, wz, cone ? cone(wx, wz, wild) : wild) : cone ? cone(wx, wz, wild) : wild;
   };
 
   const extra = typeof spec.landmarks === 'function' ? spec.landmarks(at) : spec.landmarks ?? [];
@@ -628,9 +650,13 @@ const mtWashington = buildClimb({
     fields: false,
     mountainScale: 3.0,
     road: 'lane',
+    barrier: 'none', // the Auto Road is unguarded over most of its length: steep drops, no rails
   },
+  // The ground falls away from a bare cone at the summit, so the buildings stand against the sky and are in view from
+  // the last 500 m (the generic wild ground climbs hundreds of metres within a kilometre of the road and hid them).
+  summit: { d: 12225, side: 1, offset: 32, rise: 3, flat: 60, slope: 0.5, fadeFrom: 380, fadeTo: 1200 },
   landmarks: [
-    monumentAt('washington-summit', 12215, 1, 28, 27.5, { yaw: -0.2, clearance: 30 }), // by the summit parking: further out the ground climbs and the roof would be above the view
+    monumentAt('washington-summit', 12225, 1, 32, 57, { yaw: -0.12, clearance: 40 }), // inside the last bend, just past the finish: the road wraps round it, so it is ahead on the right from 500 m out and again in the last 100 m
     summitSign(12200, 'MOUNT WASHINGTON', 'ELEV. 6,288 FT'),
   ],
 });
@@ -706,6 +732,14 @@ const mtDiablo = buildClimb({
 // Flagstaff Mountain, Boulder, Colorado: Flagstaff Road from Baseline Road (5,730 ft) round Panorama Point and up
 // the switchbacks to the crest at 7,705 ft. 4.6 miles, 1,975 ft (602 m), 8.1% (pjammcycling.com; the Super Flag
 // climb the locals race). Ponderosa pine and open meadow, sandstone outcrops, and the Flatirons across the valley.
+const FLAGSTAFF_START: LonLat = [-105.2877748, 40.0000659]; // Baseline Road and Flagstaff Road: the point the road is baked from
+const FLAGSTAFF_FLATIRONS_SIZE = 270; // m tall: about 10 degrees of sky from the start, so they read from the road
+const FIRST_FLATIRON: LonLat = [-105.29467, 39.99047];
+const FIFTH_FLATIRON: LonLat = [-105.29281, 39.982];
+const flatirons = flatironsPlacement(FLAGSTAFF_START, FIRST_FLATIRON, FIFTH_FLATIRON, [-105.2, 39.99], FLAGSTAFF_FLATIRONS_SIZE);
+const flatironsMid = { x: (eastSouth(FLAGSTAFF_START, FIRST_FLATIRON).x + eastSouth(FLAGSTAFF_START, FIFTH_FLATIRON).x) / 2, z: (eastSouth(FLAGSTAFF_START, FIRST_FLATIRON).z + eastSouth(FLAGSTAFF_START, FIFTH_FLATIRON).z) / 2 };
+const FLAGSTAFF_FLATIRONS = monumentInWorld('flatirons', { x: flatirons.x, z: flatirons.z, y: 10, yaw: flatirons.yaw }, FLAGSTAFF_FLATIRONS_SIZE);
+
 const flagstaff = buildClimb({
   id: 'flagstaff',
   route: flagstaffRoute,
@@ -729,10 +763,15 @@ const flagstaff = buildClimb({
     mountainScale: 2.4,
     road: 'us-highway',
   },
+  // Boulder lies in a basin below the road and the Flatirons rise from its edge: sink the wild ground towards them so the road
+  // looks across to them instead of into the hillside beside it.
+  basin: { ...flatironsMid, radius: 900, fade: 1500, floor: 0 },
   landmarks: [
-    // The Flatirons stand above Chautauqua, south of the lower road: on the left. The road doubles back on itself
-    // (Panorama Point, the first switchbacks), so they come and go on the left of the first 2.5 km, ahead of you off the start.
-    { ...monumentAt('flatirons', 2500, -1, 1500, 500, { clearance: 1 }), reach: 3000 },
+    // The Flatirons stand where they really do: their slabs run north to south about 1.1 to 2 km south-west of the start
+    // (the First Flatiron at 39°59'25.7"N 105°17'40.8"W, the Fifth at 39°58'55.2"N 105°17'34.1"W, uncovercolorado.com)
+    // and face east, over Boulder. So they are on the left of the lower road and of the first switchbacks, and the road
+    // swings round until they are behind it. See world/flatironsPlacement.ts.
+    FLAGSTAFF_FLATIRONS,
     summitSign(7400, 'FLAGSTAFF MOUNTAIN'),
   ],
 });
@@ -969,6 +1008,7 @@ const tourOfTheMoon: Stage = {
     road: 'park',
     barrier: 'stone',
     roadside: makeRoadside(RIM_ROCK_SECTIONS), // the rims of Monument Canyon and its neighbours
+    clearAir: 3.2, // dry plateau air: the canyon floors and the monoliths stay readable
   },
   landmarks: [startArch, finishArch(TM_FINISH), finishArch(TM_VISITOR_CENTER)],
   signs: [],

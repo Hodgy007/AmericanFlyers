@@ -247,30 +247,81 @@ export function buildLogLodge(o: MonumentOptions = {}): THREE.Group {
 
 // ------------------------------------------------- American summit buildings ----
 
-/** Mount Washington's summit: the low grey Sherman Adams building and the weather observatory tower with its guyed instrument mast, rimed with ice. */
+/**
+ * Mount Washington's summit, built to be read from half a kilometre: the long low grey Sherman Adams building
+ * (about 64 m), the weather observatory tower with its guyed instrument mast, a lattice broadcast tower with
+ * a red-and-white top, a small stone hut and antenna masts, all on a mound of bare grey rock and rimed with ice.
+ * The building's long side faces the road (+z); its natural height is the broadcast tower's, 57 m, on an 11 m knoll.
+ */
 export function buildWashingtonSummit(): THREE.Group {
   const k = new Kit();
   const STONE = '#9b968c';
+  const DARK = '#77736b';
   const RIME = '#f1f5f7';
-  k.box(34, 2, 14, -2, -2, 0, '#6f6b64');
-  k.box(24, 6, 11, -8, 0, 0, STONE); // Sherman Adams building
-  k.box(25, 0.6, 12, -8, 6, 0, '#7d7a73', 0, 1);
-  k.box(25.2, 0.3, 4, -8, 6.6, 3.6, RIME, 0, 1); // rime on the roof edge
-  k.box(14, 3.2, 8, -13, 6.6, 0, mix(STONE, '#8a867d', 0.5));
-  windows(k, -8, 5.5, 0, 9, 2.5, 1, 1.4, 0, 1.3, 1.6);
-  windows(k, -13, 4, 0, 5, 2.6, 1, 7.8, 0, 1.2, 1.4);
-  k.box(6.4, 12, 6.4, 7, 0, 0, mix(STONE, '#a3a095', 0.4)); // the observatory tower
-  k.box(7.4, 3.2, 7.4, 7, 12, 0, mix(STONE, '#8c887f', 0.3)); // its instrument deck
-  k.box(7.8, 0.4, 7.8, 7, 15.2, 0, '#7d7a73', 0, 1);
-  windows(k, 7, 3.3, 0, 2, 2.6, 2, 3.0, 4.0, 1.1, 1.5);
-  windows(k, 7, 3.7, 0, 3, 2.2, 1, 12.9, 0, 1.2, 1.4);
-  k.bar([7, 15.4, 0], [7, 27, 0], 0.4, '#82868c', 1); // the mast
-  k.bar([4.6, 22, 0], [9.4, 22, 0], 0.2, '#82868c', 1); // cross arms
-  k.bar([7, 25, -2.2], [7, 25, 2.2], 0.2, '#82868c', 1);
-  k.bar([4.6, 22.2, 0], [4.6, 23.2, 0], 0.5, RIME, 1); // rime on the arms
-  k.bar([9.4, 22.2, 0], [9.4, 23.2, 0], 0.5, RIME, 1);
-  k.box(0.9, 0.5, 0.9, 7, 27, 0, '#d8d8d8', 0, 1); // anemometer
-  for (const [gx, gz] of [[16, 8], [-2, 8], [16, -8], [-2, -8]] as const) k.bar([7, 19, 0], [gx, 0, gz], 0.1, '#6c6f74', 1);
+  const STEEL = '#82868c';
+  // The knoll the buildings stand on: bare rock 11 m high with a lower step in front, and blocks and boulders strewn on its flanks.
+  const TOP = 5;
+  k.taper(112, 52, 11, 0.7, 0, -6, -2, '#6b6760', 0.7);
+  k.taper(84, 34, 6, 0.62, -4, -6, 12, '#77736b', 0.75);
+  for (let i = 0; i < 16; i++) {
+    const r = (j: number) => rnd(11, i * 5 + j);
+    const side = i % 2 === 0 ? 1 : -1;
+    const bs = 1.8 + r(0) * 3.4;
+    k.box(bs, bs * (0.5 + r(1) * 0.4), bs * (0.7 + r(2) * 0.4), -58 + r(3) * 116, -2 + r(4) * 3, 8 + r(5) * 12 + (side > 0 ? 4 : 0), mix('#5f5b55', '#85817a', r(6)), r(7) * 3);
+  }
+  k.within([0, TOP, 0], [0, 0, 0], () => {
+  // Sherman Adams: a long, low block with a deep-set row of windows, a flat roof with a parapet, and a lower wing.
+  k.box(64, 6.6, 12, -8, 0, -3, STONE);
+  k.box(65, 0.7, 13, -8, 6.6, -3, '#7d7a73', 0, 1);
+  k.box(65.2, 0.35, 4, -8, 7.3, 2.8, RIME, 0, 1); // rime on the roof edge
+  k.box(26, 4.4, 9, -41, 0, 4.5, mix(STONE, '#8a867d', 0.5)); // the lower west wing
+  k.box(27, 0.5, 9.8, -41, 4.4, 4.5, '#7d7a73', 0, 1);
+  k.box(18, 3.6, 8, 14, 6.6, -3, mix(STONE, '#a3a095', 0.4)); // a second storey over the east end
+  windows(k, -8, 3.1, 0, 16, 3.8, 1, 1.8, 0, 2.2, 2.1);
+  windows(k, -41, 9.1, 0, 7, 3.6, 1, 1.4, 0, 2.0, 1.8);
+  windows(k, 14, 1.2, 0, 5, 3.4, 1, 7.6, 0, 1.8, 1.6);
+  k.box(6, 3.4, 1.4, -8, 0, 3.7, DARK); // the entrance porch
+  k.box(7, 0.4, 2.2, -8, 3.4, 3.7, '#6c6a64', 0, 1);
+  // The observatory tower: stone shaft, instrument deck, mast with cross arms and an anemometer.
+  k.box(7.4, 14, 7.4, 33, 0, -4, mix(STONE, '#a3a095', 0.4));
+  k.box(8.6, 3.6, 8.6, 33, 14, -4, mix(STONE, '#8c887f', 0.3));
+  k.box(9, 0.45, 9, 33, 17.6, -4, '#7d7a73', 0, 1);
+  windows(k, 33, -0.2, 0, 2, 3.0, 3, 3.4, 3.6, 1.2, 1.6);
+  windows(k, 33, 0.4, 0, 3, 2.4, 1, 14.9, 0, 1.3, 1.5);
+  k.bar([33, 17.8, -4], [33, 33, -4], 0.45, STEEL, 1);
+  k.bar([30.2, 27, -4], [35.8, 27, -4], 0.22, STEEL, 1);
+  k.bar([33, 30, -6.4], [33, 30, -1.6], 0.22, STEEL, 1);
+  k.bar([30.2, 27.2, -4], [30.2, 28.4, -4], 0.6, RIME, 1);
+  k.bar([35.8, 27.2, -4], [35.8, 28.4, -4], 0.6, RIME, 1);
+  k.box(1, 0.55, 1, 33, 33, -4, '#d8d8d8', 0, 1);
+  for (const [gx, gz] of [[42, 4], [24, 4], [42, -12], [24, -12]] as const) k.bar([33, 24, -4], [gx, 0, gz], 0.12, '#6c6f74', 1);
+  // The broadcast tower: a tapering lattice of four legs, banded red and white at the top, with guy wires.
+  const TX = -52;
+  const TZ = -6;
+  const H = 40;
+  const half = (y: number) => 1.7 - (1.2 * y) / H;
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) k.bar([TX + sx * half(0), 0, TZ + sz * half(0)], [TX + sx * half(H), H, TZ + sz * half(H)], 0.3, STEEL, 1);
+  }
+  for (let y = 0; y < H; y += 5) {
+    const y2 = y + 5;
+    const a = half(y);
+    const b = half(y2);
+    k.bar([TX - a, y, TZ + a], [TX + a, y, TZ + a], 0.16, STEEL, 1); // a ring (front and back faces)
+    k.bar([TX - a, y, TZ - a], [TX + a, y, TZ - a], 0.16, STEEL, 1);
+    k.bar([TX - a, y, TZ + a], [TX + b, y2, TZ + b], 0.14, STEEL, 1); // a diagonal on the front and a side
+    k.bar([TX + a, y, TZ - a], [TX + b, y2, TZ + b], 0.14, STEEL, 1);
+  }
+  k.bar([TX, H, TZ], [TX, H + 12, TZ], 0.5, '#d8453a', 1);
+  k.bar([TX, H + 4, TZ], [TX, H + 8, TZ], 0.52, '#f3f3f3', 1);
+  for (const [gx, gz] of [[8, 8], [-8, 8], [8, -8], [-8, -8]] as const) k.bar([TX, 30, TZ], [TX + gx * 1.6, 0, TZ + gz * 1.6], 0.1, '#6c6f74', 1);
+  // The old Tip-Top House: a small stone hut with a gabled roof, and two thin antenna masts.
+  k.box(11, 3.8, 7, 20, 0, 9, mix(STONE, '#847f75', 0.6));
+  k.gable(12.4, 8.2, 2.4, 20, 3.8, 9, '#5b564f', mix(STONE, '#847f75', 0.6));
+  k.bar([-24, 7.3, -3], [-24, 17, -3], 0.2, STEEL, 1);
+  k.bar([-30, 7.3, -3], [-30, 14, -3], 0.2, STEEL, 1);
+  k.bar([-24, 15.5, -3], [-24, 15.5, -4.4], 0.3, '#d8d8d8', 1);
+  });
   return finish(k.build());
 }
 

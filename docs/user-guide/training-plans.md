@@ -9,6 +9,7 @@ A training plan is a few weeks of sessions. Each session is a workout or a stage
 | Get Started | Beginner | 3 weeks, 3 rides a week | Learn the app and your numbers, finishing on Alpe d'Huez. |
 | FTP Builder | Intermediate | 6 weeks, 3–4 rides a week | Sweet spot and threshold work, an easy week, and a retest. |
 | Hell of the West | All levels | 4 weeks, 3–4 rides a week | Tempo, climbing and race efforts, building to the final stage from *American Flyers*. |
+| American Climbs | Intermediate | 4 weeks, 3–4 rides a week | Threshold and climbing work around the four American climbs: Flagstaff Mountain (short and hard), Mount Diablo (long and steady), Mount Blue Sky (long, at altitude) and the Mount Washington Auto Road, the steepest test, last. |
 
 ## Following a plan
 

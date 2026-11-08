@@ -79,8 +79,10 @@ function stairs(t: number, steps: readonly number[], widths?: readonly number[])
 }
 
 /** Height relative to the road at `s` m from the centreline on the canyon side, with the cliff scaled to `c` of its full height. */
-export function canyonRel(p: CanyonShape, c: number, s: number, d: number, plain: number): number {
-  if (s <= p.lip) return ROAD_LEVEL;
+export function canyonRel(p: CanyonShape, c: number, s0: number, d: number, plain: number): number {
+  if (s0 <= p.lip) return ROAD_LEVEL;
+  // Out of the ledge the cliff's lines wander in and out (up to ~30 m) so its faces and benches aren't ruled straight.
+  const s = s0 + 30 * fbm(d / 420, s0 / 150 + 5, 2) * smoothstep(p.lip, p.lip + 25, s0);
   const cliff = p.cliff * c;
   const cEnd = p.lip + p.cliffWidth;
   if (s < cEnd) return ROAD_LEVEL - cliff * stairs((s - p.lip) / p.cliffWidth, CLIFF_STEPS, CLIFF_WIDTHS);
@@ -132,14 +134,39 @@ export function makeRoadside(sections: readonly CanyonSection[]): (d: number, la
   };
 }
 
-/** Rim Rock Drive: the road runs along the rims of Monument Canyon and its neighbours (Tour of the Moon). */
+/**
+ * Rim Rock Drive (Tour of the Moon), surveyed against the baked road. For every 250 m of the stage the
+ * ground height was sampled (USGS 3DEP 10 m, through opentopodata.org) at 60 to 800 m either side of the
+ * road line (stage metres scaled back to real metres): a canyon is wherever one side falls away
+ * 100 to 200 m within 150 to 300 m, and the other side stays level or rises. Named places are OpenStreetMap
+ * nodes (Nominatim and the OSM map API, © OpenStreetMap contributors, ODbL) projected onto the same line.
+ * The road runs from the Grand Junction entrance west and north, so "right" is the Grand Valley side
+ * for most of the way and every Monument Canyon feature lies on the right:
+ *  - 4,900 to 5,800: the first switchbacks above Monument Road, the slope falling away on the right; 5,900 to
+ *    6,500 the hairpin above turns the drop to the left.
+ *  - 6,850 to 7,650: Cold Shivers Point (km 7.0), right; 8,200 to 10,300: the head of Red Canyon, right.
+ *  - 10,900 to 12,700: Red Canyon Overlook (km 11.2) and Ute Canyon View (km 12.2), right.
+ *  - 13,200 to 17,000: the high point's rim above Ute Canyon (Fallen Rock Overlook km 15.5, Upper Ute Canyon
+ *    Overlook km 15.9), right.
+ *  - 17,000 to 21,150: the plateau at Black Ridge and Highland View (km 20.6), both sides level or rising: no cliff.
+ *  - 21,150 to 29,100: Monument Canyon, right, all the way: Artists Point (km 22.5), Coke Ovens (km 22.6),
+ *    Monument Canyon View (km 24.7), Grand View (km 26.5), Independence Monument View (km 27.3).
+ *  - 29,100 to 29,700: the plateau at the Saddlehorn visitor center (km 29.2); 29,700 to 31,900: the
+ *    rim of Fruita Canyon, right (Fruita Canyon View km 29.8, Distant View km 30.5).
+ *  - 32,000 to 34,600: the road doubles back down Fruita Canyon's switchbacks and tunnels (Rim Rock Drive tunnels
+ *    km 32.1 to 32.4, Balanced Rock View km 33.0) with the drop on the left; 34,700 to 35,400: a last drop on the right.
+ *  - 35,400 to 37,000: the road is down on the valley floor towards Fruita.
+ */
 // One entry per canyon (same-side stretches are one section: abutting ones would each fade to half).
 export const RIM_ROCK_SECTIONS: CanyonSection[] = [
-  { from: 7400, to: 11300, left: true, right: false },
-  { from: 9900, to: 14300, left: false, right: true },
-  { from: 16800, to: 19800, left: true, right: false },
-  { from: 19800, to: 24000, left: false, right: true },
-  { from: 22000, to: 24000, left: true, right: false },
-  { from: 26500, to: 29500, left: true, right: false },
-  { from: 29500, to: 31500, left: false, right: true },
+  { from: 4900, to: 5800, left: false, right: true },
+  { from: 5900, to: 6500, left: true, right: false },
+  { from: 6850, to: 7650, left: false, right: true },
+  { from: 8200, to: 10300, left: false, right: true },
+  { from: 10900, to: 12700, left: false, right: true },
+  { from: 13200, to: 17000, left: false, right: true },
+  { from: 21150, to: 29100, left: false, right: true },
+  { from: 29700, to: 31900, left: false, right: true },
+  { from: 32000, to: 34600, left: true, right: false },
+  { from: 34700, to: 35400, left: false, right: true },
 ];

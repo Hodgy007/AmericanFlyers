@@ -6,6 +6,28 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Stage fixes: Washington, Flagstaff, training plans
+
+- **Stelvio's hairpin numbers were already right.** The detector's 48 match the real plaques (48 and 47 follow Gomagoi below Trafoi, 46 is at the Hotel Bella Vista in Trafoi, the Franzenshöhe is at 22, 4 to 1 come together before the last ~500 m straight); the docs said they might be out by four. Pinned by a test; no detector change.
+- **Mount Washington.** `Scenery.barrier` gains `'none'` (`barrierKind()` / `hasBarriers()`): the Auto Road has no guardrails. A bare **summit cone** (`ClimbSpec.summit`, `world/summitCone.ts`) makes the ground fall away from the top, and the summit is now the long Sherman Adams building, observatory tower, a lattice broadcast tower, a stone hut and masts on a rock knoll, inside the last bend: in view from about 500 m out and again in the last 100 m.
+- **Flagstaff's Flatirons** stand where the real ones do (from the First and Fifth Flatiron's coordinates, facing east, 270 m tall), through a new landmark option `world` (position in metres east/south of the start, height, yaw) and `world/flatironsPlacement.ts`; `ClimbSpec.basin` sinks the ground towards them. They are broadside and on the left over the first kilometre (clearest from the side camera) and behind the road further up.
+- **Training plans.** A fourth plan, **American Climbs** (4 weeks): Flagstaff, Mount Diablo, Mount Blue Sky, and the Mount Washington Auto Road last.
+- Tests: `tests/unit/summitCone.test.ts`, `tests/unit/flatironsPlacement.test.ts`, and additions to `realStage`, `roadside` and `plans`.
+
+### Tour of the Moon: canyons and monoliths on the real rim
+
+- `RIM_ROCK_SECTIONS` re-surveyed against the baked Rim Rock Drive (USGS 3DEP ground heights either side of the road, OpenStreetMap place names): Monument Canyon is on the right from Artists Point to Independence Monument View, Red Canyon, Ute Canyon and Fruita Canyon on their real sides, the drop on the left on the switchbacks above Monument Road and down Fruita Canyon, and no cliff across the plateau at Black Ridge and the visitor center. The cliff's lines are warped so its faces aren't ruled straight.
+- The Coke Ovens, the Kissing Couple and Independence Monument stand at their real places along the road in Monument Canyon (the old extra copies are gone). Independence Monument is brought in from 566 m to 340 m so it reads through the haze.
+- New optional `Scenery.clearAir` (the haze distance is multiplied by it); the Tour of the Moon sets 3.2, so the canyon floors and monoliths no longer wash out.
+- `roadsideSlope()` now measures over +-4 m (a cell of the 4 m grid) instead of +-1.5 m, so no stone or bush is planted within a cell of a step in a cliff, where it would hang over the cut.
+- Tests: `tests/unit/canyon.test.ts`, `tests/unit/monoliths.test.ts` (sides at sample distances, monoliths on the canyon floor, continuity).
+
+### Ventoux scree, Le Géant, campers on stacked hairpins
+
+- Mont Ventoux's summit scree reads as limestone rubble, not snow: a darker pale-grey base, warm ochre patches, dark streaks and gaps, a stronger grain and normal map for the scree layer (`CONTRAST`, `NORMAL` in `src/world/ground.ts`) and thicker, darker scattered stones on High and Ultra. Other stages are unchanged.
+- Le Géant du Tourmalet is rebuilt: a steel cyclist (broad torso leaning 40 degrees, tapered limbs, head and helmet) out of the saddle on a steel bike with spoked wheels, on a stepped plinth with a "Le Géant du Tourmalet" plaque, with its own metallic material. `Kit.rod()` and `Kit.ball()` in `src/world/monumentKit.ts`.
+- Campers (and every other `groundSampler()` user) no longer float or sink on stacked hairpins. Cause: the road centreline is generated lazily, and a sampler only scanned what existed when it was made, so the other leg of a hairpin further up the course was missing from the blend between legs until the road had been extended. `candidatesFor()` in `src/world/terrain.ts` now generates the road to the finish first. The strict test is back: every camper within 0.3 m of the ground (`tests/unit/crowdLife.test.ts`).
+
 ### Auto graphics at a few frames a second
 
 - Auto graphics now steps down on a device managing only a few frames a second (frames of 120–400 ms): the 3 s window never held the 20 frames a verdict needed, so it stayed on Ultra. Six frames are now enough when their median is over 120 ms (`ADAPT.slowFewFrames`, `slowFewMs` in `src/world/adapt.ts`). Unit test in `tests/unit/quality.test.ts`.

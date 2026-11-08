@@ -8,7 +8,8 @@ import { ROAD_HALF_WIDTH, bendsOf, isClimb } from './roadside';
 // Guardrails (a W-beam on posts) on mountain stages: along the outside of every
 // hairpin and wherever the ground falls away beside the road. One instanced
 // 3 m section, placed per road chunk. The alpine passes (`barrier: 'stone'` in the
-// stage's scenery) get a low dry-stone parapet in the same places instead.
+// stage's scenery) get a low dry-stone parapet in the same places instead, and a
+// road with `barrier: 'none'` gets nothing: the drop is just a drop.
 
 const SECTION = 3; // metres per section
 const SIDE_OFFSET = ROAD_HALF_WIDTH + 1.0; // just beyond the gravel shoulder
@@ -16,10 +17,10 @@ const DROP_AT = 13; // metres from the centreline where the ground is compared w
 const DROP_MIN = 4; // metres lower than the road there = a drop worth a rail
 
 /** What stands at the roadside on this stage. */
-export const barrierKind = (stage: Stage): 'rail' | 'stone' => stage.scenery.barrier ?? 'rail';
+export const barrierKind = (stage: Stage): 'rail' | 'stone' | 'none' => stage.scenery.barrier ?? 'rail';
 
-/** Climbs, and stages with canyons beside the road, get barriers. */
-export const hasBarriers = (stage: Stage) => isClimb(stage) || stage.scenery.roadside !== undefined;
+/** Climbs, and stages with canyons beside the road, get barriers, unless the stage says the road is unguarded (`barrier: 'none'`, Mount Washington). */
+export const hasBarriers = (stage: Stage) => barrierKind(stage) !== 'none' && (isClimb(stage) || stage.scenery.roadside !== undefined);
 
 /** Which sections along [d0, d1) get a rail, and on which side (-1 left, +1 right). `ground` is a height lookup (terrain's `groundSampler`). */
 export function barrierSections(stage: Stage, d0: number, d1: number, ground: (x: number, z: number) => number): { d: number; side: -1 | 1 }[] {

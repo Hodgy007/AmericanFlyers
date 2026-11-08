@@ -56,15 +56,6 @@ describe('American climbs', () => {
     for (const [id] of CLIMBS) expect(sign(id).first, id).toBeGreaterThan(stageById(id).finish! - 100);
   });
 
-  it('shows the Flatirons from the lower switchbacks of Flagstaff, on the left', () => {
-    const s = stageById('flagstaff');
-    const flat = s.landmarks.find((k) => k.model === 'flatirons')!;
-    expect(flat.side).toBe(-1);
-    expect(flat.first).toBeLessThan(3000);
-    expect(flat.reach ?? 0, 'placed from the start line on').toBeGreaterThanOrEqual(flat.first);
-    expect(flat.offset).toBeLessThan(2500);
-  });
-
   it('gives Mount Diablo golden grass, and the others none', () => {
     expect(stageById('mt-diablo').scenery.dryGrass).toBe(1);
     for (const id of ['mt-washington', 'mt-blue-sky', 'flagstaff']) expect(stageById(id).scenery.dryGrass, id).toBeUndefined();

@@ -58,7 +58,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **AI coach and AI rivals** (opt-in, ⚙ Settings): Coach Marty plans your ride, gives a few reactive tips and writes a debrief with a suggested next session; ☰ Menu → 🤺 Rivals has four original rivals (a showboat sprinter, a cold climber, a crafty veteran, a data-obsessed time triallist) who ride at your pace, talk, and remember your rides. Powered by Claude through one Vercel function (`api/ai.ts`); built-in tips and lines when the AI is off or busy. See `docs/developer-guide/ai.md`.
 - **Time of day and weather** (☰ Menu → 🌤): dawn, day, dusk and night (moon, stars, a front light) and clear, cloudy or rain (streaks, wet glossy road, mist, rain sound), or Auto: stages start at their own time and weather, the light moves on as you ride, and the weather changes now and then.
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
-- **Training plans** (📅 in Workouts): Get Started, FTP Builder and Hell of the West, with sessions that tick off as you ride.
+- **Training plans** (📅 in Workouts): Get Started, FTP Builder, Hell of the West and American Climbs, with sessions that tick off as you ride.
 - **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
 - **Virtual shifting** (Settings): 24 virtual gears with on-screen −/+ buttons and keys; harder gears push back harder.
 - **First-ride setup**, **install as an app** (⬇ Install app, or Add to Home Screen), full screen (**F**), and bigger numbers on TVs.

@@ -21,6 +21,7 @@ interface Site {
 }
 
 function siteAt(kind: LandmarkKind, index: number, d: number): Site {
+  if (kind.world) return { kind, key: `${index}@${d}`, d, x: kind.world.x, z: kind.world.z };
   const p = roadPoint(d);
   return {
     kind,
@@ -144,8 +145,14 @@ export class Landmarks {
   }
 
   private position(obj: THREE.Object3D, site: Site) {
-    const p = roadPoint(site.d);
     const { kind } = site;
+    if (kind.world) {
+      // Placed in the world, not along the road: its own height and heading (see LandmarkBase.world).
+      obj.position.set(kind.world.x, kind.world.y, kind.world.z);
+      obj.rotation.y = kind.world.yaw;
+      return;
+    }
+    const p = roadPoint(site.d);
     const y = kind.side === 0 ? p.y : heightAt(site.x, site.z, { dist: kind.offset, d: site.d });
     obj.position.set(site.x, y - 0.4, site.z); // sink slightly so slopes don't show a gap
     if (kind.span === 'along') {

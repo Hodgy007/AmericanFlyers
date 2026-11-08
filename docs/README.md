@@ -32,7 +32,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [Garage, credits and challenges](user-guide/garage-and-credits.md): levels, credits, the bike store, the Tron bike, weekly challenges and the share card.
 - [AI coach and AI rivals](user-guide/ai-coach-and-rivals.md): Coach Marty's tips and debriefs, the four rivals who remember you, turning them on, and the daily limits.
 - [Leaderboards and ghosts](user-guide/leaderboards-and-ghosts.md): what counts, the 🏆 leaderboard, and racing ghosts.
-- [Training plans](user-guide/training-plans.md): the three plans and how sessions tick off.
+- [Training plans](user-guide/training-plans.md): the four plans and how sessions tick off.
 - [Sound and virtual shifting](user-guide/sound-and-shifting.md): ride sounds, and choosing your own gears.
 - [Installing the app](user-guide/installing-the-app.md): the first-ride setup guide, installing as an app, full screen and TVs.
 - [Data blocks](user-guide/data-blocks.md): choosing and ordering the numbers on screen, with a table of all 24 fields.
