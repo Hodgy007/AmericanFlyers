@@ -238,6 +238,28 @@ describe('the baked stages', () => {
     expect(alt).toBeLessThan(1480);
   });
 
+  it("numbers Stelvio's hairpins as the real plaques are (quaeldich.de, Prad ramp description)", () => {
+    // 48 and 47 are the pair just after Gomagoi, below Trafoi (1,543 m); 46 is at the Hotel Bella Vista in Trafoi;
+    // the Gasthof Weisser Knott follows 33; the Franzenshöhe (2,188 m) is at 22; 4 to 1 are the last bends, with a ~500 m straight to the pass.
+    const s = stageById('stelvio');
+    const sign = (label: string) => s.signs.find((g) => g.label === label)!;
+    const alt = (label: string) => s.baseAltitude! + s.elevationAt(sign(label).d + 12 + 20);
+    expect(alt('48')).toBeGreaterThan(1380);
+    expect(alt('48')).toBeLessThan(1480);
+    expect(sign('47').d - sign('48').d).toBeLessThan(150); // the first two follow directly
+    expect(alt('46')).toBeGreaterThan(1540);
+    expect(alt('46')).toBeLessThan(1660); // Trafoi
+    expect(alt('22')).toBeGreaterThan(2160);
+    expect(alt('22')).toBeLessThan(2260); // the Franzenshöhe
+    expect(s.finish! - sign('1').d).toBeGreaterThan(400);
+    expect(s.finish! - sign('1').d).toBeLessThan(600); // the last bend, just below the pass
+    expect(sign('4').d).toBeGreaterThan(s.finish! - 1000); // the last four bunch together
+    // Odd hairpins are left-handers, even ones right-handers (hairpin 33 is a left, as the describers say).
+    const turn = (label: string) => Math.sign(s.headingAt(sign(label).d + 12 + 40) - s.headingAt(sign(label).d + 12));
+    for (const l of ['47', '33', '1']) expect(turn(l), l).toBe(-1);
+    for (const l of ['48', '34', '2']) expect(turn(l), l).toBe(1);
+  });
+
   it('name the places Ventoux and Tourmalet announce', () => {
     const names = (id: string) => stageById(id).signs.filter((g) => g.name).map((g) => g.name);
     expect(names('ventoux')).toEqual(['Saint-Estève', 'Chalet Reynard']);
