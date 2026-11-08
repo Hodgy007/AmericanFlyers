@@ -6,6 +6,14 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Stage fixes: Washington, Flagstaff, training plans
+
+- **Stelvio's hairpin numbers were already right.** The detector's 48 match the real plaques (48 and 47 follow Gomagoi below Trafoi, 46 is at the Hotel Bella Vista in Trafoi, the Franzenshöhe is at 22, 4 to 1 come together before the last ~500 m straight); the docs said they might be out by four. Pinned by a test; no detector change.
+- **Mount Washington.** `Scenery.barrier` gains `'none'` (`barrierKind()` / `hasBarriers()`): the Auto Road has no guardrails. A bare **summit cone** (`ClimbSpec.summit`, `world/summitCone.ts`) makes the ground fall away from the top, and the summit is now the long Sherman Adams building, observatory tower, a lattice broadcast tower, a stone hut and masts on a rock knoll, inside the last bend: in view from about 500 m out and again in the last 100 m.
+- **Flagstaff's Flatirons** stand where the real ones do (from the First and Fifth Flatiron's coordinates, facing east, 270 m tall), through a new landmark option `world` (position in metres east/south of the start, height, yaw) and `world/flatironsPlacement.ts`; `ClimbSpec.basin` sinks the ground towards them. They are broadside and on the left over the first kilometre (clearest from the side camera) and behind the road further up.
+- **Training plans.** A fourth plan, **American Climbs** (4 weeks): Flagstaff, Mount Diablo, Mount Blue Sky, and the Mount Washington Auto Road last.
+- Tests: `tests/unit/summitCone.test.ts`, `tests/unit/flatironsPlacement.test.ts`, and additions to `realStage`, `roadside` and `plans`.
+
 ### Auto graphics at a few frames a second
 
 - Auto graphics now steps down on a device managing only a few frames a second (frames of 120–400 ms): the 3 s window never held the 20 frames a verdict needed, so it stayed on Ultra. Six frames are now enough when their median is over 120 ms (`ADAPT.slowFewFrames`, `slowFewMs` in `src/world/adapt.ts`). Unit test in `tests/unit/quality.test.ts`.

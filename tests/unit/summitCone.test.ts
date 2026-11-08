@@ -3,7 +3,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { roadPoint, setStage } from '../../src/course';
 import { stageById } from '../../src/stages';
-import { coneHeight, roadXZ, summitCone } from '../../src/world/summitCone';
+import { basinHeight, coneHeight, roadXZ, summitCone } from '../../src/world/summitCone';
 
 describe('coneHeight', () => {
   it('is level to the flat radius, then falls at the slope', () => {
@@ -76,5 +76,25 @@ describe('Mount Washington summit', () => {
       b = ((b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
       expect(Math.abs(b) * (180 / Math.PI), `${out} m out`).toBeLessThan(43);
     }
+  });
+});
+
+describe('basinHeight', () => {
+  const basin = basinHeight({ x: 100, z: 200, radius: 500, fade: 1000, floor: 7 });
+  it('is the floor inside the radius, the wild ground beyond the fade, and between them in between', () => {
+    expect(basin(100, 200, 300)).toBe(7);
+    expect(basin(600, 200, 300)).toBe(7);
+    expect(basin(100 + 1500, 200, 300)).toBe(300);
+    const mid = basin(100 + 1000, 200, 300);
+    expect(mid).toBeGreaterThan(7);
+    expect(mid).toBeLessThan(300);
+  });
+  it('sinks Flagstaff’s ground towards the Flatirons and not elsewhere', () => {
+    const s = stageById('flagstaff');
+    const b = s.scenery.wildHeight;
+    // At the middle of the slab line the ground is at the basin's floor; far on the other side of the road it is the usual hills.
+    expect(s.scenery.basin).toBeUndefined(); // the basin is a build option, not part of the finished scenery
+    expect(b(-510, 1536)).toBeCloseTo(0, 6);
+    expect(b(-6000, -4000)).toBeGreaterThan(-40);
   });
 });

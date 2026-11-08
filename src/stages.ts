@@ -5,8 +5,8 @@ import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
 import { RIM_ROCK_SECTIONS, makeRoadside } from './world/canyon.js';
-import { summitCone, type SummitCone } from './world/summitCone';
-import { flatironsPlacement, type LonLat } from './world/flatironsPlacement';
+import { basinHeight, summitCone, type Basin, type SummitCone } from './world/summitCone';
+import { eastSouth, flatironsPlacement, type LonLat } from './world/flatironsPlacement';
 import type { RealRouteData } from './routes/realRoute';
 import { detectHairpins, elevationFrom, mapRoute } from './routes/realStage';
 import alpeRoute from './routes/real/alpe-dhuez';
@@ -295,6 +295,8 @@ interface ClimbSpec {
   scenery: Omit<Scenery, 'wildHeight'>;
   /** A bare cone at the summit that the ground falls away from, so buildings there stand clear of the land (world/summitCone.ts). */
   summit?: SummitCone;
+  /** A basin the wild ground sinks into, so a distant landmark can be seen across it (world/summitCone.ts). */
+  basin?: Basin;
   /**
    * Landmarks beyond the start and finish arches. A function is given where things on the road are
    * (see ClimbSites), for those that belong at a particular bend or altitude.
@@ -362,12 +364,13 @@ function buildClimb(spec: ClimbSpec): Stage {
   const plane = landPlane(headingAt, elevationAt, length);
 
   const cone = spec.summit ? summitCone(spec.summit, headingAt, elevationAt) : null;
+  const basin = spec.basin ? basinHeight(spec.basin) : null;
   const wildHeight = (wx: number, wz: number) => {
     const base = Math.max(-40, Math.min(spec.gain + 150, plane(wx, wz)));
     const massif = fbm(wx / 1300, wz / 1300, 4) * 260;
     const ridges = (1 - Math.abs(fbm(wx / 420 + 7, wz / 420 - 3, 3))) * 170;
     const wild = base + 60 + massif + ridges;
-    return cone ? cone(wx, wz, wild) : wild;
+    return basin ? basin(wx, wz, cone ? cone(wx, wz, wild) : wild) : cone ? cone(wx, wz, wild) : wild;
   };
 
   const extra = typeof spec.landmarks === 'function' ? spec.landmarks(at) : spec.landmarks ?? [];
@@ -729,7 +732,10 @@ const mtDiablo = buildClimb({
 // climb the locals race). Ponderosa pine and open meadow, sandstone outcrops, and the Flatirons across the valley.
 const FLAGSTAFF_START: LonLat = [-105.2877748, 40.0000659]; // Baseline Road and Flagstaff Road: the point the road is baked from
 const FLAGSTAFF_FLATIRONS_SIZE = 270; // m tall: about 10 degrees of sky from the start, so they read from the road
-const flatirons = flatironsPlacement(FLAGSTAFF_START, [-105.29467, 39.99047], [-105.29281, 39.982], [-105.2, 39.99], FLAGSTAFF_FLATIRONS_SIZE);
+const FIRST_FLATIRON: LonLat = [-105.29467, 39.99047];
+const FIFTH_FLATIRON: LonLat = [-105.29281, 39.982];
+const flatirons = flatironsPlacement(FLAGSTAFF_START, FIRST_FLATIRON, FIFTH_FLATIRON, [-105.2, 39.99], FLAGSTAFF_FLATIRONS_SIZE);
+const flatironsMid = { x: (eastSouth(FLAGSTAFF_START, FIRST_FLATIRON).x + eastSouth(FLAGSTAFF_START, FIFTH_FLATIRON).x) / 2, z: (eastSouth(FLAGSTAFF_START, FIRST_FLATIRON).z + eastSouth(FLAGSTAFF_START, FIFTH_FLATIRON).z) / 2 };
 const FLAGSTAFF_FLATIRONS = monumentInWorld('flatirons', { x: flatirons.x, z: flatirons.z, y: 10, yaw: flatirons.yaw }, FLAGSTAFF_FLATIRONS_SIZE);
 
 const flagstaff = buildClimb({
@@ -755,6 +761,9 @@ const flagstaff = buildClimb({
     mountainScale: 2.4,
     road: 'us-highway',
   },
+  // Boulder lies in a basin below the road and the Flatirons rise from its edge: sink the wild ground towards them so the road
+  // looks across to them instead of into the hillside beside it.
+  basin: { ...flatironsMid, radius: 900, fade: 1500, floor: 0 },
   landmarks: [
     // The Flatirons stand where they really do: their slabs run north to south about 1.1 to 2 km south-west of the start
     // (the First Flatiron at 39°59'25.7"N 105°17'40.8"W, the Fifth at 39°58'55.2"N 105°17'34.1"W, uncovercolorado.com)

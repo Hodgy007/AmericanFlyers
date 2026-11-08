@@ -66,3 +66,23 @@ export function summitCone(cone: SummitCone, headingAt: (d: number) => number, e
     return wild + (coneHeight(top, dist, cone.flat, cone.slope) - wild) * w;
   };
 }
+
+/** A basin the wild ground sinks into around a point, so a distant landmark can be seen across it (Flagstaff's Flatirons over Boulder). World metres east/south of the start; heights in the road's datum. */
+export interface Basin {
+  x: number;
+  z: number;
+  /** Level floor out to this radius, m. */
+  radius: number;
+  /** Then the ground rises back to the stage's wild height over this much further, m. */
+  fade: number;
+  /** The floor's height. */
+  floor: number;
+}
+
+/** The replacement for a stage's wild height: `(x, z, wild)` gives `wild` far from the basin and its floor in it. */
+export function basinHeight(b: Basin) {
+  return (x: number, z: number, wild: number) => {
+    const w = 1 - smoothstep(b.radius, b.radius + b.fade, Math.hypot(x - b.x, z - b.z));
+    return w <= 0 ? wild : wild + (b.floor - wild) * w;
+  };
+}
