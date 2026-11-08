@@ -1,10 +1,26 @@
 // Stage definitions: each stage supplies its own elevation profile, road
 // bends, scenery style, roadside landmarks and signs.
 
+import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
+import type { TreeMix } from './world/trees.js';
+import { RIM_ROCK_SECTIONS, makeRoadside } from './world/canyon.js';
+import type { RealRouteData } from './routes/realRoute';
+import { detectHairpins, elevationFrom, mapRoute } from './routes/realStage';
+import alpeRoute from './routes/real/alpe-dhuez';
+import stelvioRoute from './routes/real/stelvio';
+import ventouxRoute from './routes/real/ventoux';
+import tourmaletRoute from './routes/real/tourmalet';
+import zoncolanRoute from './routes/real/zoncolan';
+import washingtonRoute from './routes/real/mt-washington';
+import blueSkyRoute from './routes/real/mt-blue-sky';
+import diabloRoute from './routes/real/mt-diablo';
+import flagstaffRoute from './routes/real/flagstaff';
+import echoLakeRoute from './routes/real/hell-of-the-west';
+import morgulRoute from './routes/real/hotw-morgul-bismark';
+import moonRoute from './routes/real/hotw-tour-of-the-moon';
 
-export interface LandmarkKind {
-  file: string;
+interface LandmarkBase {
   every: number; // metres between repeats
   first: number; // distance of the first one
   side: -1 | 0 | 1; // -1 left, 1 right, 0 on the road itself
@@ -14,7 +30,16 @@ export interface LandmarkKind {
   size: number; // target height in metres; width for side-0 kinds
   yaw?: number; // extra turn in radians after facing the road
   clearance: number; // keep trees this far away
+  /** Metres of course either side within which it is placed (default: 250 behind, 1,500 ahead). For huge, distant things. */
+  reach?: number;
 }
+
+/**
+ * A roadside landmark: either a GLB model in public/models/ (`file`) or a monument built in code
+ * (`model`, see world/monuments.ts), never both. `options` gives a monument its words and looks.
+ */
+export type LandmarkKind = LandmarkBase &
+  ({ file: string; model?: never; options?: never } | { model: MonumentId; options?: MonumentOptions; file?: never });
 
 export interface Scenery {
   /** Ground height far from the road. */
@@ -23,18 +48,44 @@ export interface Scenery {
   rockLine: number; // heights (same datum as the road) where rock, snow and the tree line start
   snowLine: number;
   treeLine: number;
+  /** Where bare pale limestone scree starts (same datum), above which there are no trees either: Mont Ventoux's summit. Omitted: none. */
+  screeLine?: number;
   coniferBias: number; // 0 = mostly broadleaf, 1 = all conifers
   forestCover: number; // 0 = farmland with woods, higher = more forest
+  /** Relative weights of the tree species the stage grows (trees.ts). Left out: derived from `coniferBias`, as for an uploaded route. */
+  trees?: TreeMix;
   fields: boolean; // patches of farmland
   mountainScale: number; // height of the distant mountain ring
   /** 'desert': red and orange rock, sparse junipers instead of forest (Colorado's red-rock country). */
   palette?: 'desert';
+  /** How the road looks: its paint and surface (see world/roadStyle.ts). Left out: 'us-highway'. */
+  road?: RoadStyle;
+  /** 0 to 1: how much of the grass has dried to straw (Mount Diablo's golden summer hills). Omitted: none beyond the usual dry patches. */
+  dryGrass?: number;
+  /** What stands at the roadside on hairpins and drops: W-beam guardrails (default) or low dry-stone parapets. */
+  barrier?: 'rail' | 'stone';
+  /**
+   * Shapes the ground beside the road (canyons, cuttings). Given a point at course distance `d`
+   * and signed lateral offset from the centreline (+ right), and `plain`, the height relative
+   * to the road the terrain would give there, it returns the height relative to the road, or
+   * null for no opinion. It runs for every terrain vertex within REACH (900 m) of the road, so
+   * keep it cheap, and key it off `d` and `lateral` only.
+   */
+  roadside?(d: number, lateral: number, plain: number): number | null;
 }
+
+/** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
+export type RoadStyle = 'us-highway' | 'alpine' | 'lane' | 'park';
 
 export interface StageSign {
   d: number;
+  /** The hairpin's number as signed on the road ("7"); empty for a bend that has no number sign. */
   label: string;
   style: 'hairpin';
+  /** False for a bend the real road does not number (guardrails and crowds still gather there) or a named place. Default true. */
+  numbered?: boolean;
+  /** A place the HUD announces ("Saint-Estève") in place of a hairpin number. */
+  name?: string;
 }
 
 /** Where a race awards points on a stage: intermediate sprints and climbs. */
@@ -100,6 +151,13 @@ export const FARM_LANDMARKS: LandmarkKind[] = [
 const lowlandHills = (x: number, z: number) =>
   6 + fbm(x / 850, z / 850, 4) * 105 + (1 - Math.abs(fbm(x / 320 + 41, z / 320 - 7, 3))) * 28;
 
+/** A code-built landmark standing once at course distance `d` (see world/monuments.ts). `size` is its height in metres. */
+export const monumentAt = (model: MonumentId, d: number, side: -1 | 1, offset: number, size: number, extra: Partial<LandmarkBase> & { options?: MonumentOptions } = {}): LandmarkKind =>
+  ({ model, first: d, every: 1e9, side, offset, size, clearance: 8, ...extra });
+
+/** The summit board at the top of a European climb, just before the finish line, on the right. */
+const colSign = (finish: number, options: MonumentOptions): LandmarkKind => monumentAt('col-sign', finish - 55, 1, 8.5, 2.6, { yaw: -0.35, clearance: 6, options });
+
 export const GANTRY: LandmarkKind = { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 };
 export const startArch: LandmarkKind = { ...GANTRY, every: 1e9 };
 export const finishArch = (at: number): LandmarkKind => ({ ...GANTRY, first: at, every: 1e9 });
@@ -133,6 +191,7 @@ const heartland: Stage = {
     treeLine: 82,
     coniferBias: 0.4,
     forestCover: 0,
+    trees: { oak: 0.4, beech: 0.3, cottonwood: 0.15, shrub: 0.15 },
     fields: true,
     mountainScale: 1,
   },
@@ -178,6 +237,7 @@ const route66: Stage = {
     treeLine: 30,
     coniferBias: 0.15,
     forestCover: -0.15,
+    trees: { oak: 0.3, cottonwood: 0.3, beech: 0.2, shrub: 0.2 },
     fields: true,
     mountainScale: 0.8,
   },
@@ -195,128 +255,96 @@ const route66: Stage = {
 
 // -------------------------------------------------------- mountain climbs ----
 //
-// A climb is built from published figures: per-kilometre gradients, total
-// gain, and where its numbered hairpins sit. Hairpins are 180° bends of 12 m
-// radius joined by straights that angle up the mountainside; the bends
-// themselves are flatter than the straights, so the straights are steepened to
-// keep each kilometre's average.
+// A climb follows its real road: heading and elevation come from OpenStreetMap and SRTM data baked by
+// scripts/bake-routes.mjs (src/routes/real/), mapped onto the stage's published length and rescaled to
+// its published gain. Its hairpins are found in that heading (routes/realStage.ts) and numbered
+// when the road numbers them (Alpe d'Huez, Stelvio).
 
 interface ClimbSpec {
   id: string;
   name: string;
   tagline: string;
-  kmGrades: number[]; // % per kilometre; the last entry may cover a part-kilometre
+  route: RealRouteData;
   length: number; // metres
   gain: number; // metres
-  hairpins: number;
-  firstHairpin: number; // metres
-  lastHairpin: number; // metres
-  /** >1 bunches the hairpins towards the top (shorter straights higher up). */
-  bunching: number;
-  approachBends: number; // radians of gentle valley bends before the first hairpin
-  finalBend: number; // radians of sweeping bend after the last hairpin
+  /** The steepest gradient as a fraction, near the published maximum (SRTM's ramps are flattened to it). Default 0.25. */
+  maxGrade?: number;
+  /** % per kilometre as published: each kilometre of the real profile is rescaled to it (left out: the real profile's own). */
+  kmGrades?: number[];
+  /** The official number of numbered hairpins. Left out: the road's hairpins are not numbered. */
+  hairpins?: number;
+  /** Named places that get a "next:" announcement (a function is given the sites, to place them by altitude). */
+  places?: { d: number; name: string }[] | ((at: ClimbSites) => { d: number; name: string }[]);
   hairpinWord: string;
   baseAltitude: number;
   timeOfDay?: Stage['timeOfDay'];
   weather?: Stage['weather'];
   scenery: Omit<Scenery, 'wildHeight'>;
+  /**
+   * Landmarks beyond the start and finish arches. A function is given where things on the road are
+   * (see ClimbSites), for those that belong at a particular bend or altitude.
+   */
+  landmarks?: LandmarkKind[] | ((at: ClimbSites) => LandmarkKind[]);
 }
 
-const HAIRPIN_R = 12; // metres, centreline radius
-const LEG_ALPHA = 0.12; // straights angle up the mountainside (rad)
-const TURN = Math.PI - 2 * LEG_ALPHA;
-const ARC = HAIRPIN_R * TURN;
-const CLIMB_STEP = 1;
+/** Where things on a climb can be anchored. */
+interface ClimbSites {
+  /** A numbered hairpin's apex and which side of the road is the outside of its turn. */
+  hairpin(label: string): { d: number; outside: -1 | 1 };
+  /** Course distance where the road first reaches this altitude above sea level. */
+  altitude(metres: number): number;
+}
 
-function buildClimb(spec: ClimbSpec): Stage {
-  const { length, hairpins } = spec;
+const SIGN_LEAD = 12; // metres before a hairpin that its number sign stands
+const PLANE_STEP = 2; // metres between samples when fitting the land to the road
 
-  // Hairpin start positions, with uneven straights that shorten towards the top.
-  const legs = Array.from({ length: hairpins - 1 }, (_, i) => {
-    const jitter = 0.75 + 0.5 * ((((Math.sin((i + 1) * 12.9898) * 43758.5453) % 1) + 1) % 1);
-    return jitter * Math.pow(1 - (i / hairpins) * 0.85, spec.bunching);
-  });
-  const legTotal = spec.lastHairpin - spec.firstHairpin - (hairpins - 1) * ARC;
-  const legSum = legs.reduce((a, b) => a + b, 0);
-  const pins: number[] = [spec.firstHairpin];
-  for (let i = 0; i < hairpins - 1; i++) pins.push(pins[i] + ARC + (legs[i] / legSum) * legTotal);
-
-  /** Zero-ended meander so straights aren't ruler-straight; longer stretches get more waves. */
-  const meander = (d: number, a: number, b: number, amp: number) => {
-    const waves = Math.max(1, Math.round((b - a) / 1500));
-    return amp * Math.sin((2 * Math.PI * waves * (d - a)) / (b - a));
-  };
-
-  const headingAt = (d: number): number => {
-    if (d <= 0) return LEG_ALPHA;
-    if (d < pins[0]) return LEG_ALPHA + meander(d, 0, pins[0], Math.max(0.08, spec.approachBends));
-    for (let i = 0; i < hairpins; i++) {
-      const start = i % 2 === 0 ? LEG_ALPHA : Math.PI - LEG_ALPHA;
-      const turn = i % 2 === 0 ? TURN : -TURN;
-      const arcEnd = pins[i] + ARC;
-      if (d < arcEnd) return start + turn * ((d - pins[i]) / ARC);
-      const next = i + 1 < hairpins ? pins[i + 1] : Infinity;
-      if (d < next) {
-        const h = start + turn;
-        if (next === Infinity) {
-          const span = Math.max(1, length - arcEnd);
-          return h + spec.finalBend * smoothstep(arcEnd + span * 0.15, arcEnd + span * 0.7, d) + meander(Math.min(d, length), arcEnd, Math.max(length, arcEnd + 1), 0.05);
-        }
-        return h + meander(d, arcEnd, next, 0.05);
-      }
-    }
-    return LEG_ALPHA;
-  };
-
-  // Raw gradient: interpolated between kilometre midpoints, halved in bends.
-  const inBend = (d: number) => pins.some((p) => d >= p && d < p + ARC);
-  const grades = spec.kmGrades;
-  const kmGrade = (d: number) => {
-    const f = Math.min(Math.max(d / 1000 - 0.5, 0), grades.length - 1);
-    const i = Math.floor(f);
-    const t = f - i;
-    return (grades[i] + (grades[Math.min(i + 1, grades.length - 1)] - grades[i]) * t) / 100;
-  };
-  const n = Math.round(length / CLIMB_STEP);
-  const raw = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const d = (i + 0.5) * CLIMB_STEP;
-    raw[i] = kmGrade(d) * (inBend(d) ? 0.5 : 1);
-  }
-  // Rescale each kilometre to its published average, then the whole climb to the published gain.
-  for (let k = 0; k < grades.length; k++) {
-    const a = Math.floor((k * 1000) / CLIMB_STEP);
-    const b = Math.min(n, Math.floor(((k + 1) * 1000) / CLIMB_STEP));
-    if (b <= a) continue;
-    let sum = 0;
-    for (let i = a; i < b; i++) sum += raw[i];
-    const target = (grades[k] / 100) * (b - a);
-    for (let i = a; i < b; i++) raw[i] *= target / sum;
-  }
-  const elev = new Float64Array(n + 1);
-  for (let i = 0; i < n; i++) elev[i + 1] = elev[i] + raw[i] * CLIMB_STEP;
-  const scale = spec.gain / elev[n];
-  for (let i = 0; i <= n; i++) elev[i] *= scale;
-
-  const elevationAt = (d: number): number => {
-    if (d <= 0) return 0;
-    if (d >= length) return elev[n] + Math.min(d - length, 60) * 0.01; // level run-out at the top
-    const f = d / CLIMB_STEP;
-    const i = Math.floor(f);
-    return elev[i] + (elev[i + 1] - elev[i]) * (f - i);
-  };
-
-  // Fit a plane to the road's rise across the mountainside, so the land far
-  // from the road climbs with it instead of the road sitting on a pillar.
+/**
+ * A plane through the road's rise across the land beside it, so the ground far from the road climbs
+ * with it instead of the road sitting on a pillar.
+ */
+function landPlane(headingAt: (d: number) => number, elevationAt: (d: number) => number, length: number) {
   let x = 0, z = 0;
   const pts: [number, number, number][] = [];
-  for (let d = 0; d < length; d += CLIMB_STEP * 2) {
-    const h = headingAt(d + CLIMB_STEP);
-    x += Math.cos(h) * CLIMB_STEP * 2;
-    z += Math.sin(h) * CLIMB_STEP * 2;
+  for (let d = 0; d < length; d += PLANE_STEP) {
+    const h = headingAt(d + PLANE_STEP / 2);
+    x += Math.cos(h) * PLANE_STEP;
+    z += Math.sin(h) * PLANE_STEP;
     if (d % 50 === 0) pts.push([x, z, elevationAt(d)]);
   }
-  const plane = fitPlane(pts);
+  return fitPlane(pts);
+}
+
+function buildClimb(spec: ClimbSpec): Stage {
+  const { length } = spec;
+  const geo = mapRoute(spec.route, length);
+  const { headingAt } = geo;
+  const elevationAt = elevationFrom(geo, length, { gain: spec.gain, maxGrade: spec.maxGrade, climbOnly: true }, spec.kmGrades);
+
+  const found = detectHairpins(headingAt, length, spec.hairpins);
+  const numbered = spec.hairpins !== undefined;
+  const at: ClimbSites = {
+    hairpin: (label) => {
+      const i = found.findIndex((_, k) => String(found.length - k) === label);
+      if (!numbered || i < 0) throw new Error(`${spec.id} has no hairpin ${label}`);
+      // A right turn (heading rising) has its outside on the left.
+      return { d: found[i].apex, outside: found[i].turn > 0 ? -1 : 1 };
+    },
+    altitude: (metres) => {
+      for (let d = 0; d < length; d += 5) if (spec.baseAltitude + elevationAt(d) >= metres) return d;
+      return length;
+    },
+  };
+  const signs: StageSign[] = found.map((h, i) => ({
+    d: Math.max(0, h.start - SIGN_LEAD),
+    label: numbered ? String(found.length - i) : '',
+    style: 'hairpin',
+    numbered,
+  }));
+  const places = typeof spec.places === 'function' ? spec.places(at) : spec.places ?? [];
+  for (const p of places) signs.push({ d: p.d, label: '', name: p.name, style: 'hairpin', numbered: false });
+  signs.sort((a, b) => a.d - b.d);
+
+  const plane = landPlane(headingAt, elevationAt, length);
 
   const wildHeight = (wx: number, wz: number) => {
     const base = Math.max(-40, Math.min(spec.gain + 150, plane(wx, wz)));
@@ -324,6 +352,8 @@ function buildClimb(spec: ClimbSpec): Stage {
     const ridges = (1 - Math.abs(fbm(wx / 420 + 7, wz / 420 - 3, 3))) * 170;
     return base + 60 + massif + ridges;
   };
+
+  const extra = typeof spec.landmarks === 'function' ? spec.landmarks(at) : spec.landmarks ?? [];
 
   return {
     id: spec.id,
@@ -333,8 +363,8 @@ function buildClimb(spec: ClimbSpec): Stage {
     elevationAt,
     headingAt,
     scenery: { ...spec.scenery, wildHeight },
-    landmarks: [startArch, finishArch(length)],
-    signs: pins.map((p, i) => ({ d: p - 12, label: String(hairpins - i), style: 'hairpin' as const })),
+    landmarks: [startArch, finishArch(length), ...extra],
+    signs,
     hairpinWord: spec.hairpinWord,
     baseAltitude: spec.baseAltitude,
     timeOfDay: spec.timeOfDay,
@@ -342,21 +372,18 @@ function buildClimb(spec: ClimbSpec): Stage {
   };
 }
 
-// From Le Bourg-d'Oisans (723 m) to the top (1841 m). Per-kilometre gradients
-// from swi-cycling.com; hairpin positions approximated.
+// From Le Bourg-d'Oisans (723 m) to the top (1841 m). The road is the real one;
+// per-kilometre gradients from swi-cycling.com. Its 21 hairpins are found in the road.
 const alpe = buildClimb({
   id: 'alpe-dhuez',
+  route: alpeRoute,
   name: "Alpe d'Huez",
   tagline: "14 km at 8% from Le Bourg-d'Oisans, up all 21 hairpins. Real gradients.",
   kmGrades: [9.3, 10.2, 8.6, 8.2, 8.6, 8.0, 8.6, 8.9, 7.3, 8.4, 8.8, 8.7, 5.8, 2.4],
   length: 14000,
   gain: 1118,
+  maxGrade: 0.135,
   hairpins: 21,
-  firstHairpin: 1150,
-  lastHairpin: 12100,
-  bunching: 0,
-  approachBends: 0.08,
-  finalBend: 0.6,
   hairpinWord: 'Virage',
   baseAltitude: 723,
   scenery: {
@@ -366,29 +393,36 @@ const alpe = buildClimb({
     treeLine: 760,
     coniferBias: 0.9,
     forestCover: 0.3,
+    trees: { spruce: 0.5, larch: 0.25, beech: 0.25 },
     fields: false,
     mountainScale: 2.6,
+    road: 'alpine',
+  },
+  landmarks: (at) => {
+    const seven = at.hairpin('7'); // Huez village: its church stands on the outside of hairpin 7
+    return [
+      monumentAt('alpine-church', seven.d, seven.outside, 30, 26.6, { yaw: seven.outside * -0.3, clearance: 16 }),
+      monumentAt('ski-apartments', 13450, -1, 38, 14, { options: { seed: 1 }, yaw: 0.3, clearance: 30 }),
+      monumentAt('ski-apartments', 13700, 1, 42, 17, { options: { seed: 2 }, yaw: -0.3, clearance: 30 }),
+      colSign(14000, { style: 'fr', lines: ["ALPE D'HUEZ", '1850 m'] }),
+    ];
   },
 });
 
 // From Prato allo Stelvio (~915 m) to the pass (2758 m): 24.5 km, 1843 m,
-// 7.5% average, max ~9.5% (mycols.app, climbfinder.com). No per-kilometre
-// source was found, so the shape is approximated: an easier valley start past
-// Gomagoi and Trafoi, then a steady 8–9% up the 48 numbered hairpins, which
+// 7.5% average (mycols.app, climbfinder.com). The road is the real one: an
+// easier valley start past Gomagoi and Trafoi, then the 48 hairpins, which
 // bunch into the famous wall below the summit.
 const stelvio = buildClimb({
   id: 'stelvio',
+  route: stelvioRoute,
   name: 'Stelvio Pass',
   tagline: '24.5 km at 7.5% from Prato to 2758 m, through 48 numbered hairpins.',
   kmGrades: [4.5, 5.0, 5.5, 6.0, 6.0, 6.5, 6.5, 7.0, 7.5, 8.0, 8.0, 8.5, 8.5, 8.0, 8.5, 8.5, 9.0, 8.5, 8.5, 8.0, 8.5, 8.5, 8.0, 8.0, 7.5],
   length: 24500,
   gain: 1843, // 915 m + 1843 m = 2758 m at the pass
+  maxGrade: 0.13,
   hairpins: 48,
-  firstHairpin: 8600,
-  lastHairpin: 24150,
-  bunching: 1.6,
-  approachBends: 0.3,
-  finalBend: 0.2,
   hairpinWord: 'Tornante',
   baseAltitude: 915,
   scenery: {
@@ -398,30 +432,34 @@ const stelvio = buildClimb({
     treeLine: 1050,
     coniferBias: 0.95,
     forestCover: 0.35,
+    trees: { spruce: 0.45, larch: 0.3, pine: 0.25 },
     fields: false,
     mountainScale: 3.4,
+    road: 'alpine',
+    barrier: 'stone',
   },
+  landmarks: [
+    monumentAt('pass-buildings', 24400, 1, 30, 22.5, { options: { style: 'it' }, yaw: -0.25, clearance: 28 }),
+    monumentAt('pass-buildings', 24470, -1, 36, 22.5, { options: { seed: 5 }, yaw: 0.25, clearance: 28 }),
+    colSign(24500, { style: 'it', lines: ['PASSO DELLO STELVIO', '2758 m'] }),
+  ],
 });
 
 // "Hell of the West", the final stage in American Flyers (1985): filmed on
 // Colorado 103 from Idaho Springs (2,293 m) up Chicago Creek to the sprint at
 // Echo Lake (3,235 m), below Mount Evans (fast-rewind.com filming notes).
 // 20.8 km, 942 m: about 3.5% for the first 11 km, 5.8% for the next 9, then
-// the short flat at the lake (pjammcycling.com, summitbiking.org). The
-// switchbacks sit in the steeper upper half.
+// the short flat at the lake (pjammcycling.com, summitbiking.org); the real
+// road's profile and its two wide switchbacks, in the steeper upper half.
 const hellOfTheWestClimb = buildClimb({
   id: 'hell-of-the-west', // keep this id: leaderboards and plans use it
+  route: echoLakeRoute,
   name: 'Hell of the West · Stage 3: Echo Lake',
   tagline: 'The Hell of the West’s final stage: 20.8 km from Idaho Springs up Chicago Creek to the sprint at Echo Lake, 3,235 m.',
   kmGrades: [3.0, 3.2, 3.6, 3.8, 3.4, 3.0, 3.8, 4.0, 3.6, 3.4, 3.9, 5.2, 5.8, 6.2, 6.0, 5.8, 6.4, 6.0, 5.6, 5.9, 1.2],
   length: 20800,
   gain: 942,
-  hairpins: 5,
-  firstHairpin: 12400,
-  lastHairpin: 18900,
-  bunching: 0.5,
-  approachBends: 0.45,
-  finalBend: 0.5,
+  maxGrade: 0.1,
   hairpinWord: 'Switchback',
   baseAltitude: 2293,
   timeOfDay: 'dusk',
@@ -432,9 +470,11 @@ const hellOfTheWestClimb = buildClimb({
     treeLine: 1220, // Colorado's treeline is near 3,500 m, above Echo Lake
     coniferBias: 1,
     forestCover: 0.45,
+    trees: { pine: 0.5, spruce: 0.35, aspen: 0.15 },
     fields: false,
     mountainScale: 3.2,
   },
+  landmarks: [monumentAt('log-lodge', 20720, 1, 30, 8.1, { yaw: -0.4, clearance: 22 })],
 });
 
 const hellOfTheWest: Stage = {
@@ -442,58 +482,61 @@ const hellOfTheWest: Stage = {
   tourStage: 3,
   // Echo Lake is a summit finish. The mountain prime is where the road leaves
   // the creek and starts to climb in earnest (approximate: no published prime).
-  race: { summits: [{ d: 14500, name: 'Chicago Creek prime', cat: 3 }, { d: 20800, name: 'Echo Lake', cat: 1 }], sprints: [{ d: 10400, name: 'Mid-stage sprint' }] },
+  race: { summits: [{ d: 12500, name: 'Chicago Creek prime', cat: 3 }, { d: 20800, name: 'Echo Lake', cat: 1 }], sprints: [{ d: 10400, name: 'Mid-stage sprint' }] },
 };
 
 // Mont Ventoux from Bédoin (300 m) to the summit (1,910 m): 21.4 km, 1,610 m,
 // 7.5%. Gentle vineyards to Saint-Estève, then 9–10% through the forest to
-// Chalet Reynard, then the bare white limestone to the top. Per-kilometre
-// figures approximated from published profiles (climbbybike.com,
-// cyclingcols.com). The white scree is drawn with the snow shading.
+// Chalet Reynard, then the bare white limestone to the top. The road and its
+// profile are the real ones. The white scree is the ground's scree layer (`screeLine`).
 const ventoux = buildClimb({
   id: 'ventoux',
+  route: ventouxRoute,
   name: 'Mont Ventoux',
   tagline: '21.4 km at 7.5% from Bédoin: the forest at 9–10%, then the bare white moonscape to 1,910 m.',
   kmGrades: [4.3, 4.8, 3.4, 5.2, 4.4, 7.6, 10.7, 9.4, 9.2, 9.4, 9.7, 9.0, 8.4, 8.9, 9.1, 6.4, 7.4, 7.8, 6.5, 8.1, 9.0, 9.0],
   length: 21400,
   gain: 1610,
-  hairpins: 3,
-  firstHairpin: 5900,
-  lastHairpin: 21000,
-  bunching: 0,
-  approachBends: 0.4,
-  finalBend: 0.4,
+  maxGrade: 0.13,
   hairpinWord: 'Virage',
   baseAltitude: 300,
   scenery: {
     bumpAmp: 9,
     rockLine: 1060,
-    snowLine: 1150, // the bald white summit above Chalet Reynard
+    snowLine: 1e9, // it is summer: the white summit is limestone, not snow
+    screeLine: 1150, // the bald white summit above Chalet Reynard (about 1,450 m up the mountain)
     treeLine: 1100,
     coniferBias: 0.7,
     forestCover: 0.35,
+    trees: { oak: 0.3, pine: 0.4, beech: 0.3 },
     fields: false,
     mountainScale: 1.6,
+    road: 'alpine',
+    barrier: 'stone',
   },
+  // Chalet Reynard is at 1,440 m on the real road; the Simpson memorial stands 1.3 km below the top.
+  places: (at) => [{ d: 5500, name: 'Saint-Estève' }, { d: at.altitude(1440) - 90, name: 'Chalet Reynard' }],
+  landmarks: (at) => [
+    monumentAt('chalet', at.altitude(1440), 1, 24, 10.2, { options: { lines: ['CHALET REYNARD'] }, yaw: -0.4, clearance: 20 }),
+    monumentAt('simpson-memorial', 20100, 1, 8, 2.9, { yaw: -0.5, clearance: 6 }),
+    monumentAt('ventoux-observatory', 21330, -1, 46, 52, { yaw: 0.2, clearance: 34 }),
+    colSign(21400, { style: 'fr', lines: ['MONT VENTOUX', '1910 m'] }),
+  ],
 });
 
 // Col du Tourmalet from Luz-Saint-Sauveur (711 m) to the col (2,115 m):
 // 19 km, 1,404 m, 7.4%; steadier below Barèges, then 8.5–10% through the
-// hairpins of Super-Barèges. Shape approximated from published profiles.
+// hairpins of Super-Barèges. The road and its profile are the real ones.
 const tourmalet = buildClimb({
   id: 'tourmalet',
+  route: tourmaletRoute,
   weather: 'cloudy',
   name: 'Col du Tourmalet',
   tagline: '19 km at 7.4% from Luz-Saint-Sauveur, through Barèges and the hairpins to 2,115 m.',
   kmGrades: [5.2, 6.4, 7.0, 7.2, 7.0, 7.4, 6.2, 6.8, 7.2, 7.6, 7.8, 7.0, 8.6, 8.8, 9.2, 8.4, 9.0, 9.6, 9.8],
   length: 19000,
   gain: 1404,
-  hairpins: 8,
-  firstHairpin: 13300,
-  lastHairpin: 18400,
-  bunching: 0.6,
-  approachBends: 0.35,
-  finalBend: 0.3,
+  maxGrade: 0.12,
   hairpinWord: 'Virage',
   baseAltitude: 711,
   scenery: {
@@ -503,27 +546,34 @@ const tourmalet = buildClimb({
     treeLine: 900,
     coniferBias: 0.6,
     forestCover: 0.3,
+    trees: { beech: 0.45, pine: 0.3, shrub: 0.25 },
     fields: false,
     mountainScale: 3.0,
+    road: 'alpine',
+    barrier: 'stone',
   },
+  // Barèges is at 1,230 m; La Mongie's apartment blocks stand about 4 km below the col.
+  places: (at) => [{ d: at.altitude(1230), name: 'Barèges' }, { d: 14800, name: 'La Mongie' }],
+  landmarks: [
+    monumentAt('ski-apartments', 15000, -1, 38, 17, { options: { seed: 3 }, yaw: 0.3, clearance: 30 }),
+    monumentAt('ski-apartments', 15180, 1, 44, 17, { options: { seed: 4 }, yaw: -0.3, clearance: 30 }),
+    monumentAt('geant-tourmalet', 18940, 1, 20, 7.4, { yaw: -0.35, clearance: 12 }),
+    colSign(19000, { style: 'fr', lines: ['COL DU TOURMALET', 'ALT. 2115 m'] }),
+  ],
 });
 
 // Monte Zoncolan from Ovaro (525 m) to the top (1,735 m): 10.1 km, 1,210 m,
-// 11.9%, with long stretches at 13–15% and ramps over 20%. Per-kilometre
-// figures approximated from published profiles (salite.ch, climbbybike.com).
+// 11.9%, with long stretches at 13–15% and ramps over 20%. The road and its
+// profile are the real ones (the steepest ramps flattened to 22%).
 const zoncolan = buildClimb({
   id: 'zoncolan',
+  route: zoncolanRoute,
   name: 'Monte Zoncolan',
   tagline: '10.1 km at 11.9% from Ovaro, with ramps over 20%. The hardest climb in Italy.',
   kmGrades: [6.5, 8.8, 12.4, 14.2, 15.0, 14.5, 13.8, 15.4, 13.6, 8.0, 6.0],
   length: 10100,
   gain: 1210,
-  hairpins: 9,
-  firstHairpin: 4300,
-  lastHairpin: 9500,
-  bunching: 0.8,
-  approachBends: 0.3,
-  finalBend: 0.25,
+  maxGrade: 0.22,
   hairpinWord: 'Tornante',
   baseAltitude: 525,
   scenery: {
@@ -533,9 +583,158 @@ const zoncolan = buildClimb({
     treeLine: 1000,
     coniferBias: 0.8,
     forestCover: 0.4,
+    trees: { beech: 0.55, spruce: 0.45 },
     fields: false,
     mountainScale: 2.8,
+    road: 'lane',
   },
+  landmarks: [colSign(10100, { style: 'it', lines: ['MONTE ZONCOLAN', '1750 m'] })],
+});
+
+// ------------------------------------------------------ American climbs ----
+//
+// Four famous US hill climbs on their real roads (OpenStreetMap, SRTM). Their summit boards are the
+// brown park signs (`summit-sign-us`), and each ends at the building or ruin that stands there.
+
+/** The wooden park sign at the top of an American climb, just before the finish, on the right. */
+const summitSign = (finish: number, ...lines: string[]): LandmarkKind =>
+  monumentAt('summit-sign-us', finish - 55, 1, 8, 2.8, { yaw: -0.35, clearance: 6, options: { lines } });
+
+// Mount Washington Auto Road, New Hampshire: from the toll house on NH-16 (about 1,640 ft) to the summit
+// parking at 6,288 ft (1,917 m). 7.6 miles (12.2 km) climbing 4,650 ft (1,417 m) at 12% on average, with
+// stretches of 18% and the last 50 yards at 22% (the Mount Washington Hillclimb: wikipedia.org, mwarbh.org).
+// Northern hardwoods, then spruce and fir, then krummholz at the tree line (about 4,400 ft) and bare grey rock
+// above; usually in cloud and always windy. The road is tagged bicycle=no, so it is baked with the car profile.
+const mtWashington = buildClimb({
+  id: 'mt-washington',
+  route: washingtonRoute,
+  name: 'Mount Washington Auto Road',
+  tagline: '7.6 miles at 12% from the Glen House to the summit of New England, with the last pitch at 22%. Cloud, wind and bare rock above the tree line.',
+  length: 12200,
+  gain: 1417,
+  maxGrade: 0.22,
+  hairpinWord: 'Switchback',
+  baseAltitude: 499,
+  weather: 'cloudy',
+  places: (at) => [{ d: at.altitude(1170), name: 'Halfway House' }],
+  scenery: {
+    bumpAmp: 12,
+    rockLine: 700, // bare rock from about 1,200 m
+    snowLine: 1700, // it is summer: no snow on the road
+    treeLine: 850, // krummholz at about 1,350 m
+    coniferBias: 0.7,
+    forestCover: 0.5,
+    trees: { beech: 0.3, spruce: 0.5, aspen: 0.12, shrub: 0.08 },
+    fields: false,
+    mountainScale: 3.0,
+    road: 'lane',
+  },
+  landmarks: [
+    monumentAt('washington-summit', 12215, 1, 28, 27.5, { yaw: -0.2, clearance: 30 }), // by the summit parking: further out the ground climbs and the roof would be above the view
+    summitSign(12200, 'MOUNT WASHINGTON', 'ELEV. 6,288 FT'),
+  ],
+});
+
+// Mount Blue Sky (formerly Mount Evans), Colorado: Colorado 5 from Echo Lake Lodge (10,600 ft) to the summit
+// parking at 14,130 ft, the highest paved road in North America. 14.5 miles (23.3 km), 3,543 ft (1,080 m) of
+// climbing at 4.6% (pjammcycling.com, codot.gov). Spruce and bristlecone pines below the tree line (about 3,500 m),
+// then tundra, rock and lingering snow; Summit Lake is at 12,830 ft. It carries on from the Hell of the West's Echo Lake stage.
+const mtBlueSky = buildClimb({
+  id: 'mt-blue-sky',
+  route: blueSkyRoute,
+  name: 'Mount Blue Sky',
+  tagline: '14.5 miles from Echo Lake Lodge, where the Hell of the West stops, up the highest paved road in North America to 14,130 ft.',
+  length: 23300,
+  gain: 1080,
+  maxGrade: 0.09,
+  hairpinWord: 'Switchback',
+  baseAltitude: 3231,
+  places: [{ d: 14630, name: 'Summit Lake' }],
+  scenery: {
+    bumpAmp: 12,
+    rockLine: 350,
+    snowLine: 1100, // lingering snow patches near the top
+    treeLine: 270, // about 3,500 m
+    coniferBias: 1,
+    forestCover: 0.35,
+    trees: { spruce: 0.55, pine: 0.45 },
+    fields: false,
+    mountainScale: 3.6,
+    road: 'park',
+  },
+  landmarks: [
+    monumentAt('log-lodge', 70, 1, 20, 8.1, { options: { lines: ['ECHO LAKE LODGE'] }, yaw: -0.4, clearance: 22 }),
+    monumentAt('crest-house-ruins', 23180, 1, 42, 5.6, { yaw: -0.3, clearance: 24 }),
+    summitSign(23300, 'MOUNT BLUE SKY', '14,130 FT'),
+  ],
+});
+
+// Mount Diablo, California: from Diablo Road in Danville up Mount Diablo Scenic Boulevard, South Gate Road and
+// Summit Road to the summit (3,849 ft, 1,173 m). The Mount Diablo Challenge's 11.2 miles (18 km) climb 3,249 ft
+// (990 m) from the Athenian School's road (mountdiablochallenge.itsyourrace.com). Golden summer grass, blue and
+// live oaks, grey pines and chaparral. (It stays on daytime light: at dusk the straw goes brown.)
+const mtDiablo = buildClimb({
+  id: 'mt-diablo',
+  route: diabloRoute,
+  name: 'Mount Diablo',
+  tagline: '11.2 miles from Danville through South Gate to the stone summit tower, over golden grass and oaks.',
+  length: 18000,
+  gain: 990,
+  maxGrade: 0.16,
+  hairpinWord: 'Switchback',
+  baseAltitude: 183,
+  places: [{ d: 5900, name: 'South Gate' }],
+  scenery: {
+    bumpAmp: 9,
+    rockLine: 750,
+    snowLine: 1900,
+    treeLine: 1500,
+    dryGrass: 1,
+    coniferBias: 0.3,
+    forestCover: 0.1, // oak savanna: groves among the grass
+    trees: { oak: 0.5, pine: 0.2, shrub: 0.3 },
+    fields: false,
+    mountainScale: 1.8,
+    road: 'park',
+  },
+  landmarks: [
+    monumentAt('diablo-summit', 18035, 1, 26, 19, { yaw: -0.2, clearance: 24 }),
+    summitSign(18000, 'MOUNT DIABLO', 'SUMMIT 3,849 FT'),
+  ],
+});
+
+// Flagstaff Mountain, Boulder, Colorado: Flagstaff Road from Baseline Road (5,730 ft) round Panorama Point and up
+// the switchbacks to the crest at 7,705 ft. 4.6 miles, 1,975 ft (602 m), 8.1% (pjammcycling.com; the Super Flag
+// climb the locals race). Ponderosa pine and open meadow, sandstone outcrops, and the Flatirons across the valley.
+const flagstaff = buildClimb({
+  id: 'flagstaff',
+  route: flagstaffRoute,
+  name: 'Flagstaff Mountain',
+  tagline: '4.6 miles at 8% up Boulder’s own climb: Flagstaff Road from Baseline, with the Flatirons beside the first switchbacks.',
+  length: 7400,
+  gain: 602,
+  maxGrade: 0.13,
+  hairpinWord: 'Switchback',
+  baseAltitude: 1746,
+  places: [{ d: 1125, name: 'Panorama Point' }],
+  scenery: {
+    bumpAmp: 9,
+    rockLine: 500,
+    snowLine: 1100,
+    treeLine: 900,
+    coniferBias: 0.9,
+    forestCover: 0.15,
+    trees: { pine: 0.75, spruce: 0.1, shrub: 0.15 },
+    fields: false,
+    mountainScale: 2.4,
+    road: 'us-highway',
+  },
+  landmarks: [
+    // The Flatirons stand above Chautauqua, south of the lower road: on the left. The road doubles back on itself
+    // (Panorama Point, the first switchbacks), so they come and go on the left of the first 2.5 km, ahead of you off the start.
+    { ...monumentAt('flatirons', 2500, -1, 1500, 500, { clearance: 1 }), reach: 3000 },
+    summitSign(7400, 'FLAGSTAFF MOUNTAIN'),
+  ],
 });
 
 /** Least-squares plane e = a + b·x + c·z through the points. */
@@ -565,9 +764,9 @@ export function fitPlane(pts: [number, number, number][]) {
 //
 // American Flyers (1985) has three stages: the Morgul-Bismark circuit near
 // Boulder, the "Tour of the Moon" through Colorado National Monument, and the
-// final climb to Echo Lake (the existing Hell of the West stage). Stages 1 and
-// 2 are shaped from published figures; the road's bends and rolls between the
-// landmarks are approximated.
+// final climb to Echo Lake (the existing Hell of the West stage). Stage 1's
+// loop and stage 2's road are the real ones (see routes/real/); stage 1's
+// elevation is shaped from published figures.
 
 /** Monotone cubic interpolation (Fritsch–Carlson) through (x, y) knots: no overshoot, no flat spots. */
 function pchip(knots: [number, number][]) {
@@ -602,61 +801,41 @@ function pchip(knots: [number, number][]) {
 
 // ---- Stage 1: Morgul-Bismark ----
 //
-// The Morgul-Bismark loop south of Boulder, used by the Red Zinger and Coors
+// The Morgul-Bismark loop around Superior, south of Boulder, used by the Red Zinger and Coors
 // Classics and for the first race in the film: 13.1 miles (21.1 km), starting
 // where Highway 128 meets McCaslin Boulevard, west on 128 to Highway 93, north
 // on 93, east on 170 and back down McCaslin, with "The Wall" at the south end
 // of McCaslin: a mile-long incline that kicks up to 18% (wikipedia.org
 // Morgul-Bismark; coloradohometownweekly.com 2011-05-25 gives 13.3 mi). The
 // Coors Classic riders did eight laps and sprinted to the top of the Wall.
-// Here the lap is ridden the way the Coors Classic finished it: round the
-// rounded-rectangle loop and up the Wall to the line, two laps (42 km). The
-// elevation range is approximated (about 90 m up the Wall, a rolling 128, a
-// gentle rise to Highway 93).
-const MB_R = 40; // corner radius, m
-const MB_A = 5600; // the east–west roads (128 and 170)
-const MB_B1 = 3240; // McCaslin north of the Wall
+// Here the lap is ridden the way the Coors Classic finished it, in that
+// direction: out along 128, round, and up the Wall to the line, two laps
+// (42 km). The shape of the loop is the real road's (OpenStreetMap, baked
+// into routes/real/hotw-morgul-bismark.ts, which is a little longer than
+// the stage's lap and is scaled to it, and closes exactly so laps meet). The elevation is
+// approximated (about 90 m up the Wall, a rolling 128, a gentle rise to
+// Highway 93); the Wall is the lap's last 1,600 m.
 const MB_WALL = 1600; // "one mile"
-const MB_B = MB_B1 + MB_WALL; // the north–south roads (McCaslin and 93)
-const MB_ARC = (Math.PI / 2) * MB_R;
-// Opposite straights carry the same bend so the lap closes exactly: the
-// wiggles integrate to nothing sideways, and the along-road loss matches.
-const MB_WIG = 0.045;
-interface LoopSeg { len: number; turn: number; amp: number; waves: number }
-const MB_SEGS: LoopSeg[] = [
-  { len: MB_B1, turn: 0, amp: MB_WIG, waves: 3 }, // McCaslin north of the Wall
-  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
-  { len: MB_A, turn: 0, amp: MB_WIG * 0.9, waves: 4 }, // Highway 170 west
-  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
-  { len: MB_B, turn: 0, amp: MB_WIG * Math.sqrt(MB_B1 / MB_B), waves: 5 }, // Highway 93 south
-  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
-  { len: MB_A, turn: 0, amp: MB_WIG * 0.9, waves: 4 }, // Highway 128 east
-  { len: MB_ARC, turn: -Math.PI / 2, amp: 0, waves: 0 },
-  { len: MB_WALL, turn: 0, amp: 0, waves: 0 }, // The Wall
-];
-const MB_LAP = MB_SEGS.reduce((a, s) => a + s.len, 0);
+// The lap's length, which leaderboards and races are timed against, kept to the metre it had as a
+// rounded rectangle: 3,240 m of McCaslin above the Wall, two 5,600 m east-west roads, 4,840 m of
+// Highway 93 (to the Wall's foot) and four 40 m corners, in lap order.
+const MB_ARC = (Math.PI / 2) * 40;
+const MB_PIECES = [3240, MB_ARC, 5600, MB_ARC, 4840, MB_ARC, 5600, MB_ARC, MB_WALL];
+const MB_LAP = MB_PIECES.reduce((a, v) => a + v, 0);
+// Where Highway 93 begins and where the second east-west road does, which the elevation knots below sit at.
+const MB_HWY93 = MB_PIECES.slice(0, 4).reduce((a, v) => a + v, 0);
+const MB_SOUTH = MB_PIECES.slice(0, 6).reduce((a, v) => a + v, 0);
 const MB_LAPS = 2;
 const MB_FINISH = MB_LAP * MB_LAPS;
-const MB_START: number[] = [];
-{
-  let a = 0;
-  for (const s of MB_SEGS) { MB_START.push(a); a += s.len; }
-}
-
+const mbRoute = mapRoute(morgulRoute, MB_LAP);
+/** Half way up the Highway 93 leg of the lap (found from the baked road): the sprint, and the Flatirons stand opposite. */
+const MB_SPRINT = 6900;
+// The real loop turns a whole number of times (once, clockwise); each lap adds that again.
+const MB_TURN = mbRoute.headingAt(MB_LAP) - mbRoute.headingAt(0);
 function mbHeading(d: number) {
-  if (d <= 0) return 0;
+  if (d <= 0) return mbRoute.headingAt(0);
   const lap = Math.floor(d / MB_LAP);
-  const u = d - lap * MB_LAP;
-  let h = -2 * Math.PI * lap;
-  for (let i = 0; i < MB_SEGS.length; i++) {
-    const s = MB_SEGS[i];
-    if (u < MB_START[i] + s.len) {
-      const t = (u - MB_START[i]) / s.len;
-      return h + s.turn * t + s.amp * Math.sin(2 * Math.PI * s.waves * t);
-    }
-    h += s.turn;
-  }
-  return h;
+  return mbRoute.headingAt(d - lap * MB_LAP) + lap * MB_TURN;
 }
 
 // Elevation above the line at the top of the Wall, around one lap.
@@ -674,9 +853,9 @@ const mbWall = (m: number) => {
   return e;
 };
 const mbBase = pchip([
-  [0, 0], [MB_B1, 12], [5900, 30], [MB_START[4], 36], [11400, 41], [MB_START[6], 24], [16700, -32], [MB_WALL_START, -MB_WALL_RISE],
+  [0, 0], [3240, 12], [5900, 30], [MB_HWY93, 36], [11400, 41], [MB_SOUTH, 24], [16700, -32], [MB_WALL_START, -MB_WALL_RISE],
 ]);
-const MB_KNOT_U = [0, MB_B1, 5900, MB_START[4], 11400, MB_START[6], 16700, MB_WALL_START];
+const MB_KNOT_U = [0, 3240, 5900, MB_HWY93, 11400, MB_SOUTH, 16700, MB_WALL_START];
 function mbLapElevation(u: number) {
   if (u >= MB_WALL_START) return mbWall(u - MB_WALL_START);
   // Rolling swells between the knots, fading to nothing at each knot.
@@ -706,18 +885,24 @@ const morgulBismark: Stage = {
     snowLine: 1e9,
     treeLine: 400,
     coniferBias: 0.1,
-    forestCover: -0.2,
+    forestCover: -0.45, // open foothills grassland: lone trees and the odd clump (the forest noise only reaches 0.5 in a few patches)
+    trees: { cottonwood: 0.3, pine: 0.35, shrub: 0.35 },
     fields: true,
     mountainScale: 1.7, // the Front Range and the Flatirons to the west
   },
-  landmarks: [startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(11300), finishArch(MB_LAP + 11300), ...lapFarm],
+  landmarks: [
+    startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(MB_SPRINT), finishArch(MB_LAP + MB_SPRINT), ...lapFarm,
+    // The Flatirons, 2.5 km west of Highway 93 (the west side of the circuit: the left-hand side riding north), once a lap.
+    // Visible from 7 km away along the road, hazy rather than fogged out (monuments.ts).
+    { ...monumentAt('flatirons', MB_SPRINT, -1, 2500, 500, { clearance: 1 }), every: MB_LAP, reach: 7000 },
+  ],
   signs: [],
   baseAltitude: 1680, // Superior, Colorado: about 5,500 ft
   tourStage: 1,
   race: {
     sprints: [
-      { d: 11300, name: 'Highway 93 sprint' },
-      { d: MB_LAP + 11300, name: 'Highway 93 sprint' },
+      { d: MB_SPRINT, name: 'Highway 93 sprint' },
+      { d: MB_LAP + MB_SPRINT, name: 'Highway 93 sprint' },
     ],
     summits: [
       { d: MB_LAP, name: 'The Wall', cat: 3 },
@@ -739,38 +924,17 @@ const morgulBismark: Stage = {
 // plateau at Cold Shivers; five or six more miles of rolling uphill reach the
 // high point, then a descent with one more rise at Black Ridge, the visitor
 // center, and a rapid drop through two short tunnels to Fruita
-// (mtntownmagazine.com). The knots below follow that story; the exact grades
-// between them are approximated.
+// (mtntownmagazine.com). The road line and profile are the real ones
+// (OpenStreetMap and SRTM, baked into routes/real/hotw-tour-of-the-moon.ts),
+// scaled so the high point is the published 2,024 m.
 const TM_FINISH = 37000;
-const tmBase = pchip([
-  [0, 0], [600, 3], [1200, 25], [2200, 95], [3200, 170], [4200, 245], [5200, 325], [6200, 405], [6800, 432], [8000, 450],
-  [10000, 482], [12000, 528], [14000, 574], [15500, 590], [17000, 574], [18500, 556], [20000, 540], [22500, 562], [24000, 520],
-  [26000, 478], [28000, 440], [30600, 335], [32000, 300], [33500, 215], [35000, 110], [36300, 25], [TM_FINISH, 0],
-]);
-const tmElevation = (d: number) => {
-  if (d <= 0) return 0;
-  const ramp = smoothstep(0, 1500, d) * (1 - smoothstep(35500, TM_FINISH, d));
-  return tmBase(d) + ramp * (1.3 * Math.sin((2 * Math.PI * d) / 700 + 0.7) + 0.5 * Math.sin((2 * Math.PI * d) / 260 + 1.9));
-};
-const tmHeading = (d: number) => {
-  if (d <= 0) return 0;
-  // Switchbacks up the canyon wall, then bends that follow the rim.
-  const wall = smoothstep(500, 1100, d) * (1 - smoothstep(6000, 6800, d));
-  const rim = smoothstep(6000, 7500, d);
-  return wall * 1.5 * Math.sin((2 * Math.PI * (d - 500)) / 1500) + rim * (0.3 * Math.sin((2 * Math.PI * d) / 2700) + 0.18 * Math.sin((2 * Math.PI * d) / 1130 + 2));
-};
+const TM_START_ALTITUDE = 1460; // where the baked road starts, on Monument Road just below the park entrance
+const tm = mapRoute(moonRoute, TM_FINISH);
+const tmElevation = elevationFrom(tm, TM_FINISH, { peak: 2024 - TM_START_ALTITUDE, maxGrade: 0.1 });
+const tmHeading = tm.headingAt;
 // Fit a plane to the road, as the climbs do, so the land follows the road's overall rise.
-const tmPlane = (() => {
-  let x = 0, z = 0;
-  const pts: [number, number, number][] = [];
-  for (let d = 0; d < TM_FINISH; d += 4) {
-    const h = tmHeading(d + 2);
-    x += Math.cos(h) * 4;
-    z += Math.sin(h) * 4;
-    if (d % 200 === 0) pts.push([x, z, tmElevation(d)]);
-  }
-  return fitPlane(pts);
-})();
+const TM_VISITOR_CENTER = 29080;
+const tmPlane = landPlane(tmHeading, tmElevation, TM_FINISH);
 /** Flat shelves joined by cliffs: the stepped mesas and layered sandstone of the Colorado Plateau. */
 const terrace = (v: number, step: number) => {
   const f = v / step;
@@ -798,25 +962,30 @@ const tourOfTheMoon: Stage = {
     treeLine: 1e9,
     coniferBias: 1,
     forestCover: -0.3,
+    trees: { juniper: 0.75, shrub: 0.25 },
     fields: false,
     mountainScale: 1.3, // the Book Cliffs
     palette: 'desert',
+    road: 'park',
+    barrier: 'stone',
+    roadside: makeRoadside(RIM_ROCK_SECTIONS), // the rims of Monument Canyon and its neighbours
   },
-  landmarks: [startArch, finishArch(TM_FINISH), finishArch(24500)],
+  landmarks: [startArch, finishArch(TM_FINISH), finishArch(TM_VISITOR_CENTER)],
   signs: [],
-  baseAltitude: 1440, // the Grand Junction entrance, about 4,700 ft
+  baseAltitude: TM_START_ALTITUDE, // just below the Grand Junction entrance (4,700 ft)
   tourStage: 2,
   race: {
-    sprints: [{ d: 24500, name: 'Visitor center sprint' }],
+    // Places on the real road: Cold Shivers Point, the high point (2,024 m), the rise at Black Ridge and the Saddlehorn visitor center.
+    sprints: [{ d: TM_VISITOR_CENTER, name: 'Visitor center sprint' }],
     summits: [
-      { d: 6600, name: 'Cold Shivers', cat: 1 },
-      { d: 15500, name: 'The high point', cat: 2 },
-      { d: 22500, name: 'Black Ridge', cat: 4 },
+      { d: 6950, name: 'Cold Shivers', cat: 1 },
+      { d: 13000, name: 'The high point', cat: 2 },
+      { d: 20000, name: 'Black Ridge', cat: 4 },
     ],
   },
 };
 
-export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan];
+export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan, mtWashington, mtBlueSky, mtDiablo, flagstaff];
 
 export function stageById(id: string | null): Stage {
   return STAGES.find((s) => s.id === id) ?? heartland;

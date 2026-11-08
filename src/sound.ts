@@ -18,7 +18,7 @@ const LOOKAHEAD_S = 0.06; // ticks are scheduled this far ahead on the audio clo
 export interface SoundState {
   speedMs: number;
   pedalling: boolean;
-  crowd: number; // 0..1: how close the nearest crowd is
+  crowd: number; // 0..1: how close the nearest crowd is (above 1 in a crowd hotspot, the Dutch Corner: louder)
   /** How fast the cassette turns (rev/s) while coasting; the freewheel ticks as the wheel outruns it. */
   cassetteRevs?: number;
 }

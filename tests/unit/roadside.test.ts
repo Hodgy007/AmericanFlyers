@@ -13,16 +13,26 @@ import { groundColor } from '../../src/world/terrain';
 
 const alpe = stageById('alpe-dhuez');
 const stelvio = stageById('stelvio');
+const ventoux = stageById('ventoux');
 
 describe('hairpins', () => {
-  it('finds every numbered hairpin on the climbs, alternating left and right', () => {
-    for (const s of [alpe, stelvio, stageById('hell-of-the-west'), stageById('tourmalet')]) {
+  it('finds every hairpin of the climbs, in the direction the real road turns', () => {
+    for (const s of [alpe, stelvio]) {
       const bends = bendsOf(s);
-      expect(bends.length).toBe(s.signs.length);
-      bends.forEach((b, i) => {
-        expect(b.end - b.start).toBeGreaterThan(25); // a 35 m arc
-        expect(b.turn).toBe(i % 2 === 0 ? 1 : -1); // buildClimb: first hairpin turns right, then left, then right...
+      const hairpins = s.signs.filter((g) => g.numbered !== false || !g.name);
+      expect(bends.length).toBe(hairpins.length);
+      bends.forEach((b) => {
+        expect(b.end - b.start).toBeGreaterThan(10); // the part of the arc tighter than a 25 m radius
+        const dh = s.headingAt(b.end) - s.headingAt(b.start);
+        expect(b.turn).toBe(dh > 0 ? 1 : -1);
       });
+    }
+  });
+  it('numbers only the hairpins the real road numbers', () => {
+    expect(alpe.signs.every((g) => g.numbered !== false && /^\d+$/.test(g.label))).toBe(true);
+    expect(stelvio.signs).toHaveLength(48);
+    for (const id of ['ventoux', 'tourmalet', 'zoncolan', 'hell-of-the-west']) {
+      for (const g of stageById(id).signs) expect(g.numbered, `${id} at ${g.d}`).toBe(false);
     }
   });
   it('has none on flat stages', () => {
@@ -63,12 +73,13 @@ describe('guardrails', () => {
   it('stand on the outside of each hairpin and nowhere on flat stages', () => {
     const flat = () => 1e6; // ground level with the sky: no drop beside the road
     expect(barrierSections(stageById('heartland'), 0, 5000, flat)).toEqual([]);
-    const b = bendsOf(alpe)[2]; // the third hairpin turns right: outside is the left
-    const here = barrierSections(alpe, b.start, b.end, flat);
-    expect(here.length).toBeGreaterThan(8);
-    expect(here.every((r) => r.side === -1)).toBe(true);
-    const b1 = bendsOf(alpe)[1]; // turns left: outside is the right
-    expect(barrierSections(alpe, b1.start, b1.end, flat).every((r) => r.side === 1)).toBe(true);
+    const bends = bendsOf(alpe);
+    for (const b of [bends[2], bends[3]]) {
+      const here = barrierSections(alpe, b.start, b.end, flat);
+      expect(here.length).toBeGreaterThan(8);
+      // A right turn has its outside on the left (-1), a left turn on the right.
+      expect(here.every((r) => r.side === (b.turn > 0 ? -1 : 1))).toBe(true);
+    }
   });
   it('also stand where the ground falls away beside the road', () => {
     const drop = (_x: number, _z: number) => -100; // far below the road everywhere
@@ -81,8 +92,9 @@ describe('crowds', () => {
   it('line the last few hundred metres and the hairpins, not the empty road', () => {
     expect(crowdNear(alpe.finish! - 50)).toBeGreaterThan(0.9);
     expect(crowdNear(alpe.signs[3].d + 10)).toBeCloseTo(0.75, 2);
-    expect(crowdNear(alpe.signs[0].d - 400)).toBe(0);
-    expect(planCrowd(alpe, 100, 200, 1, [], true)).toEqual([]);
+    const gap = (alpe.signs[13].d + alpe.signs[14].d) / 2; // the longest empty stretch, far from any hairpin
+    expect(crowdNear(gap)).toBe(0);
+    expect(planCrowd(alpe, gap - 50, gap + 50, 1, [], true)).toEqual([]);
     expect(planCrowd(alpe, alpe.finish! - 300, alpe.finish! - 200, 1, [], true).length).toBeGreaterThan(30);
   });
   it('are deterministic, thinner on weaker tiers, and keep clear of roadside signs', () => {
@@ -98,7 +110,7 @@ describe('crowds', () => {
 });
 
 describe('ground layers', () => {
-  const w = new Array(7).fill(0);
+  const w = new Array(8).fill(0);
   const sum = () => w.reduce((a, b) => a + b, 0);
   const sample = (stage: typeof alpe, h: number, dist = 40) => {
     setStage(stage);
@@ -107,7 +119,7 @@ describe('ground layers', () => {
     return [...w];
   };
   it('are weights that sum to one on every palette', () => {
-    for (const [stage, h] of [[alpe, 0], [alpe, 600], [alpe, 1400], [alpe, 1900], [stageById('heartland'), 30], [stageById('hotw-tour-of-the-moon'), 200]] as const) {
+    for (const [stage, h] of [[alpe, 0], [alpe, 600], [alpe, 1400], [alpe, 1900], [stageById('heartland'), 30], [stageById('hotw-tour-of-the-moon'), 200], [ventoux, 1000], [ventoux, 1200], [ventoux, 1600]] as const) {
       sample(stage, h);
       expect(sum()).toBeCloseTo(1, 1);
       for (const v of w) expect(v).toBeGreaterThanOrEqual(0);
@@ -118,6 +130,20 @@ describe('ground layers', () => {
     expect(sample(alpe, 1500)[3]).toBeGreaterThan(0.5);
     expect(sample(alpe, 2200)[4]).toBeGreaterThan(0.9);
   });
+  it('turn to scree above a stage\'s scree line, with no snow (Ventoux), and never elsewhere', () => {
+    expect(sample(ventoux, 700)[0] + sample(ventoux, 700)[1]).toBeGreaterThan(0.95);
+    expect(sample(ventoux, 1600)[7]).toBeGreaterThan(0.95);
+    expect(sample(ventoux, 1600)[4]).toBe(0);
+    expect(sample(ventoux, 1200)[7]).toBeGreaterThan(0);
+    for (const s of [alpe, stelvio, stageById('heartland'), stageById('hotw-tour-of-the-moon')]) expect(sample(s, 2200)[7]).toBe(0);
+  });
+  it('paint the scree pale', () => {
+    setStage(ventoux);
+    const c = new THREE.Color();
+    groundColor(1234, 567, 1700, { dist: 40, d: 100 }, c, new Array(8).fill(0));
+    expect(Math.min(c.r, c.g, c.b)).toBeGreaterThan(0.35);
+    expect(c.r).toBeGreaterThanOrEqual(c.b); // warm grey, not blue-white like snow
+  });
   it('make the verge dirt, and use sandstone and sand in the desert', () => {
     expect(sample(alpe, 0, 3)[2]).toBeGreaterThan(0.9);
     const d = sample(stageById('hotw-tour-of-the-moon'), 200);
@@ -127,9 +153,14 @@ describe('ground layers', () => {
   it('only ask for the layers a stage and tier can show', () => {
     expect(layersFor(false, false, 3)).toEqual([0, 3]);
     expect(layersFor(false, true, 3)).toEqual([0, 3, 4]);
+    expect(layersFor(false, false, 3, true)).toEqual([0, 3, 7]); // Low: grass, rock and scree
+    expect(layersFor(false, false, 8, true)).toEqual([0, 1, 2, 3, 7]);
+    expect(layersFor(false, false, 8)).not.toContain(7);
+    expect(layersFor(false, true, 8)).not.toContain(7);
+    expect(layersFor(true, false, 8, false)).not.toContain(7);
     expect(layersFor(true, false, 3)).toEqual([5, 3]);
-    expect(layersFor(false, false, 7)).not.toContain(5);
-    expect(layersFor(true, false, 7)).not.toContain(0);
+    expect(layersFor(false, false, 8)).not.toContain(5);
+    expect(layersFor(true, false, 8)).not.toContain(0);
   });
 });
 

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { mockNeon } from './mockNeon';
 
 // Round 6: the climbs' roadside extras (painted words, guardrails, crowds) and the terrain textures
-// load lazily after the first frame without errors, on Low (three layers) and Medium (seven, with the road's asphalt normal map).
+// load lazily after the first frame without errors, on Low (three layers) and Medium (every layer a stage needs, with the road's asphalt normal map).
 
 for (const tier of ['low', 'medium']) {
   test(`Alpe d'Huez summit on ${tier}: textures and roadside extras load without errors`, async ({ page }) => {
@@ -37,3 +37,23 @@ for (const tier of ['low', 'medium']) {
     expect(errors, errors.join('\n')).toEqual([]);
   });
 }
+
+// Mont Ventoux's bare summit is limestone scree, not snow: the scree layer is fetched, the snow one is not.
+test('Mont Ventoux summit fetches the scree layer instead of snow', async ({ page }) => {
+  test.setTimeout(240_000);
+  const fetched: string[] = [];
+  page.on('response', (r) => { if (/textures\/terrain\/[a-z]+\.jpg$/.test(r.url()) && r.ok()) fetched.push(r.url().split('/').slice(-1)[0].slice(0, -4)); });
+  await mockNeon(page, { signedIn: true });
+  await page.addInitScript(() => {
+    localStorage.setItem('americanflyers.signedIn', '1');
+    localStorage.setItem('americanflyers.onboarded', '1');
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => window.setTimeout(() => raf(cb), 1000) as unknown as number;
+  });
+  await page.goto('/?stage=ventoux&start=19&graphics=low&adapt=off');
+  await expect(page.locator('#hub')).toBeVisible();
+  await page.locator('#hub-go').evaluate((el) => (el as HTMLElement).click());
+  await expect(page.locator('#hub')).toBeHidden();
+  await expect.poll(() => fetched.length, { timeout: 150_000 }).toBeGreaterThanOrEqual(3);
+  expect(new Set(fetched)).toEqual(new Set(['grass', 'rock', 'scree']));
+});

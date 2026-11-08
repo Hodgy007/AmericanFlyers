@@ -18,9 +18,13 @@ describe('daily schedule', () => {
     expect(ev.map((e) => e.startsAt)).toEqual([...ev.map((e) => e.startsAt)].sort((a, b) => a - b));
   });
 
-  it('matches what the database created for 1–2 November 2026 (Route 66, then Mont Ventoux)', () => {
-    expect(raceStageForDay(utc('2026-11-01T00:00:00Z')).id).toBe('route66');
-    expect(raceStageForDay(utc('2026-11-02T00:00:00Z')).id).toBe('ventoux');
+  it('keeps the first nine pool positions as the database has them and adds the American climbs after them', () => {
+    expect(EVENT_STAGE_POOL.slice(0, 9).map((s) => s.id)).toEqual([
+      'hotw-morgul-bismark', 'alpe-dhuez', 'hotw-tour-of-the-moon', 'stelvio', 'route66', 'ventoux', 'hell-of-the-west', 'tourmalet', 'zoncolan',
+    ]);
+    expect(EVENT_STAGE_POOL.slice(9).map((s) => s.id)).toEqual(['mt-washington', 'mt-blue-sky', 'mt-diablo', 'flagstaff']);
+    // The SQL picks position (day number mod pool size): 1 November 2026 is day 20758.
+    expect(raceStageForDay(utc('2026-11-01T00:00:00Z')).id).toBe(EVENT_STAGE_POOL[20758 % EVENT_STAGE_POOL.length].id);
   });
 
   it('rotates through every stage in the pool, one a day, then starts over', () => {

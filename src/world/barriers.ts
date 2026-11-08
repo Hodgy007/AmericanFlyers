@@ -2,20 +2,28 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { roadPoint } from '../course';
 import type { Stage } from '../stages';
+import { hash2 } from './noise';
 import { ROAD_HALF_WIDTH, bendsOf, isClimb } from './roadside';
 
 // Guardrails (a W-beam on posts) on mountain stages: along the outside of every
 // hairpin and wherever the ground falls away beside the road. One instanced
-// 3 m section, placed per road chunk.
+// 3 m section, placed per road chunk. The alpine passes (`barrier: 'stone'` in the
+// stage's scenery) get a low dry-stone parapet in the same places instead.
 
 const SECTION = 3; // metres per section
 const SIDE_OFFSET = ROAD_HALF_WIDTH + 1.0; // just beyond the gravel shoulder
 const DROP_AT = 13; // metres from the centreline where the ground is compared with the road
 const DROP_MIN = 4; // metres lower than the road there = a drop worth a rail
 
+/** What stands at the roadside on this stage. */
+export const barrierKind = (stage: Stage): 'rail' | 'stone' => stage.scenery.barrier ?? 'rail';
+
+/** Climbs, and stages with canyons beside the road, get barriers. */
+export const hasBarriers = (stage: Stage) => isClimb(stage) || stage.scenery.roadside !== undefined;
+
 /** Which sections along [d0, d1) get a rail, and on which side (-1 left, +1 right). `ground` is a height lookup (terrain's `groundSampler`). */
 export function barrierSections(stage: Stage, d0: number, d1: number, ground: (x: number, z: number) => number): { d: number; side: -1 | 1 }[] {
-  if (!isClimb(stage)) return [];
+  if (!hasBarriers(stage)) return [];
   const bends = bendsOf(stage);
   const out: { d: number; side: -1 | 1 }[] = [];
   const first = Math.ceil(d0 / SECTION);
@@ -58,6 +66,54 @@ export function railGeometry(): THREE.BufferGeometry {
   ])!;
 }
 
+const SINK = 0.12; // how far below the road's surface a section's origin sits (see buildBarriers)
+const PARAPET_T = 0.45; // thick
+// Course boundaries in the section's own y: the first is buried (so it sits on a sloping verge), the last is
+// 0.55 m above the road.
+const COURSE_Y = [-0.4, 0.2, 0.44, 0.55 + SINK];
+
+/**
+ * A 3 m dry-stone parapet section lying along +x: three courses of irregular grey
+ * stones (each a slightly jittered block, joints staggered from course to course).
+ * Colour is baked in per stone as vertex colours; the material is flat-shaded, so
+ * the faces read as stones. Deterministic: the same section everywhere.
+ */
+export function stoneGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const total = SECTION + 0.06; // a little overlap so bends don't open gaps
+  for (let course = 0; course < COURSE_Y.length - 1; course++) {
+    const y0 = COURSE_Y[course];
+    const height = COURSE_Y[course + 1] - y0;
+    const top = course === COURSE_Y.length - 2;
+    let x = course % 2 === 0 ? 0 : -0.3; // staggered joints
+    for (let i = 0; x < total; i++) {
+      const len = 0.42 + hash2(i + course * 40, 11) * 0.42;
+      const x0 = Math.max(0, x);
+      const x1 = Math.min(total, x + len);
+      if (x1 - x0 > 0.05) {
+        const rnd = (k: number) => hash2(i * 7 + course * 131 + k, 23);
+        const sy = height + (top ? (rnd(1) - 0.5) * 0.07 : 0); // the cap stones are uneven
+        const sz = PARAPET_T * (top ? 1 : 0.88 + rnd(2) * 0.12);
+        const geo = new THREE.BoxGeometry(x1 - x0 - 0.02, sy, sz).toNonIndexed();
+        geo.deleteAttribute('uv');
+        geo.translate((x0 + x1) / 2, y0 + sy / 2, (rnd(3) - 0.5) * 0.04);
+        // Grey stone with a warm or green cast, darker low down, the odd lichen-bright one.
+        const shade = 0.42 + rnd(4) * 0.22 - (course === 0 ? 0.06 : 0) + (rnd(5) > 0.9 ? 0.1 : 0);
+        const c = new THREE.Color().setRGB(shade * (0.96 + rnd(6) * 0.1), shade * (0.97 + rnd(7) * 0.06), shade * (0.92 + rnd(8) * 0.12), THREE.SRGBColorSpace);
+        const arr = new Float32Array(geo.attributes.position.count * 3);
+        for (let k = 0; k < arr.length; k += 3) {
+          const jitter = 1 + (hash2(k + i * 977, course) - 0.5) * 0.12; // a little noise across each face
+          arr[k] = c.r * jitter; arr[k + 1] = c.g * jitter; arr[k + 2] = c.b * jitter;
+        }
+        geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+        parts.push(geo);
+      }
+      x += len;
+    }
+  }
+  return mergeGeometries(parts)!;
+}
+
 /** Builds one chunk's guardrail mesh from the sections that fall in it; null if none. `origin` is the chunk group's world position. */
 export function buildBarriers(sections: { d: number; side: -1 | 1 }[], geo: THREE.BufferGeometry, mat: THREE.Material, origin: { x: number; z: number }): THREE.InstancedMesh | null {
   if (!sections.length) return null;
@@ -80,7 +136,7 @@ export function buildBarriers(sections: { d: number; side: -1 | 1 }[], geo: THRE
     // Local +x runs along (bx - ax, bz - az); rotation about Y by -atan2(dz, dx).
     q.setFromAxisAngle(up, -Math.atan2(bz - az, bx - ax));
     q.multiply(pitch.setFromAxisAngle(zAxis, Math.atan2(b.y - a.y, Math.hypot(bx - ax, bz - az)))); // and up the grade
-    pos.set(ax - origin.x, a.y - 0.12, az - origin.z);
+    pos.set(ax - origin.x, a.y - SINK, az - origin.z);
     m.compose(pos, q, one);
     mesh.setMatrixAt(i, m);
   });

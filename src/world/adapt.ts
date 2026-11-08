@@ -44,6 +44,8 @@ export const ADAPT = {
   undoWithinMs: 45000, // a lowering this soon after a raise means the raise was a mistake
   maxFrameMs: 400, // longer gaps (tab hidden, hitches) are not samples ...
   longRun: 3, // ... unless this many come in a row (under 2.5 fps): then it is clearly struggling
+  slowFewFrames: 6, // under 20 frames in the slow window (a few fps), judge on this many ...
+  slowFewMs: 120, // ... when their median is over this (under ~8 fps)
 };
 
 function median(a: number[]): number {
@@ -151,7 +153,9 @@ export class Adapter {
     const span = now - this.t[0];
     if (from >= 0 && span >= ADAPT.slowWindowMs * 0.9) {
       const recent = this.frame.slice(from);
-      if (recent.length >= 20) {
+      // 20 frames make a fair verdict; at a few frames a second (150-400 ms each) there are never 20 in the
+      // window, so a handful is enough when they are plainly far too slow.
+      if (recent.length >= 20 || (recent.length >= ADAPT.slowFewFrames && median(recent) > ADAPT.slowFewMs)) {
         const v = judge(recent);
         if (v.jerky) return this.lower(now, v.severe);
       }

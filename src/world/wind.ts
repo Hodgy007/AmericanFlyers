@@ -37,6 +37,10 @@ export const STAGE_WINDS: Record<string, StageWind> = {
   ventoux: { ms: 7.5, angle: 255 }, // the windy one: the mistral
   tourmalet: { ms: 3.5, angle: 20 },
   zoncolan: { ms: 3, angle: 120 },
+  'mt-washington': { ms: 11, angle: 165 }, // "home of the world's worst weather": a gale from the west, into your face on the way up
+  'mt-blue-sky': { ms: 6.5, angle: 190 }, // exposed above the tree line: the westerlies
+  'mt-diablo': { ms: 3.5, angle: 100 }, // the evening sea breeze
+  flagstaff: { ms: 4, angle: 150 }, // the foothills' westerly
 };
 
 /** Wind speed scale by weather: lighter on clear days, much more when it rains. */

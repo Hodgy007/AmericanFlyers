@@ -313,6 +313,14 @@ describe('Adapter: stepping down', () => {
     expect(second.at - first.at).toBeGreaterThanOrEqual(ADAPT.fastCooldownMs);
     expect(second.at - first.at).toBeLessThan(ADAPT.cooldownMs + 3000); // quicker than the gentle path
   });
+  it('steps down at a few frames a second too, where the window never holds 20 frames', () => {
+    for (const ms of [150, 250, 390]) {
+      const a = new Adapter('ultra', 'ultra', true, 0);
+      const hit = run(a, ADAPT.warmupMs, 60000, ms)!;
+      expect(hit, `${ms} ms frames`).not.toBeNull();
+      expect(hit.ev).toMatchObject({ tier: 'high', fast: true });
+    }
+  });
   it('drops a whole tier at once on a flood of hitches, and puts the scale back to 1', () => {
     const a = new Adapter('high', 'high', true, 0, false, 2); // starts at 70% sharpness
     const ev = runPattern(a, ADAPT.warmupMs, 30000, (i) => (i % 4 === 0 ? 90 : 16.7))!.ev; // 25% hitches, median 16.7

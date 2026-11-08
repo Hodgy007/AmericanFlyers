@@ -1,18 +1,22 @@
 import * as THREE from 'three';
 import { roadPoint } from '../course';
 import { currentStage } from '../course';
-import { barrierSections, buildBarriers, railGeometry } from './barriers';
+import { barrierKind, hasBarriers, barrierSections, buildBarriers, railGeometry, stoneGeometry } from './barriers';
+import { buildCampers, camperGeometries, camperMaterial, planCampers, type CamperGeometries } from './campers';
+import { CULTURES, type CultureId } from './crowdCulture';
 import { buildCrowd, crowdMaterial, crowdUniforms, planCrowd, spectatorGeometry } from './crowds';
 import { buildPaint, drawAtlas, paintName, planPaint, type PaintSpot } from './roadPaint';
 import { isClimb } from './roadside';
 import { RoadSurface } from './roadSurface';
+import type { RoadPaintLayout } from './roadStyle';
 import type { SceneryTier } from './scenery';
 import { groundSampler } from './terrain';
 
 // Everything round 6 puts on and beside the road, in one lazily loaded chunk
 // (road.ts fetches it after the first frame): the asphalt detail and the wet
 // look (roadSurface.ts), words painted on the climbs (roadPaint.ts), guardrails
-// (barriers.ts) and spectators (crowds.ts). `addTo()` fits out one 100 m road chunk.
+// (barriers.ts), spectators (crowds.ts) and the roadside camp of vans, tents and
+// parasols (campers.ts). `addTo()` fits out one 100 m road chunk.
 
 const CHUNK = 100; // road.ts's chunk length
 
@@ -25,12 +29,21 @@ export class RoadExtras {
   private paintMat: THREE.MeshStandardMaterial | null = null;
   private readonly railGeo = railGeometry();
   private readonly railMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.5 });
-  private readonly crowdGeo = spectatorGeometry(false);
-  private readonly flaggerGeo = spectatorGeometry(true);
+  private stoneGeo: THREE.BufferGeometry | null = null; // only the alpine passes need these
+  private stoneMat: THREE.MeshStandardMaterial | null = null;
+  // Spectators: the plain and flag-waving meshes (simple, or detailed with caps from High), one material for plain spectators and one per culture for flag-wavers.
+  private readonly crowdGeos = new Map<boolean, { plain: THREE.BufferGeometry; flag: THREE.BufferGeometry }>();
   private readonly crowdMat = crowdMaterial();
+  private readonly flagMats = new Map<CultureId, THREE.MeshStandardMaterial>();
+  private camp: { geos: CamperGeometries; mat: THREE.MeshStandardMaterial } | null = null; // only the climbs need these
 
   constructor(private readonly roadMaterial: THREE.MeshStandardMaterial, map: THREE.Texture, maxAniso: number) {
     this.surface = new RoadSurface(roadMaterial, map, maxAniso);
+  }
+
+  /** The stage's road style, so the normal and roughness maps keep its painted lines flat. */
+  setRoadLayout(layout: RoadPaintLayout) {
+    this.surface.setLayout(layout);
   }
 
   setTier(spec: SceneryTier, ibl: boolean) {
@@ -82,16 +95,40 @@ export class RoadExtras {
           geos.push(geo);
         }
       }
-      if (spec.barriers && isClimb(stage)) {
+      const climb = isClimb(stage);
+      const camping = climb && spec.crowd > 0;
+      const barriers = spec.barriers && hasBarriers(stage); // climbs, and stages that shape their roadside (canyon rims)
+      let ground: ((x: number, z: number) => number) | null = null;
+      if (barriers || camping) {
         const a = roadPoint(d0 + CHUNK / 2);
-        const ground = groundSampler(a.x - 140, a.x + 140, a.z - 140, a.z + 140);
-        const rails = buildBarriers(barrierSections(stage, d0, d1, ground), this.railGeo, this.railMat, origin);
+        ground = groundSampler(a.x - 140, a.x + 140, a.z - 140, a.z + 140);
+      }
+      if (barriers && ground) {
+        const stone = barrierKind(stage) === 'stone';
+        if (stone && !this.stoneGeo) {
+          this.stoneGeo = stoneGeometry();
+          this.stoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
+        }
+        const rails = buildBarriers(barrierSections(stage, d0, d1, ground), stone ? this.stoneGeo! : this.railGeo, stone ? this.stoneMat! : this.railMat, origin);
         if (rails) objects.push(rails);
+      }
+      if (camping && ground) {
+        // Vans, tents and parasols keep clear of every rail section within reach of the chunk (the neighbours' too).
+        const spots = planCampers(stage, d0, d1, spec.crowd, ground, barrierSections(stage, d0 - 20, d1 + 20, ground));
+        if (spots.length) {
+          this.camp ??= { geos: camperGeometries(), mat: camperMaterial() };
+          objects.push(...buildCampers(spots, this.camp.geos, this.camp.mat, origin, spec.crowdShadows));
+        }
       }
       if (spec.crowd > 0 && stage.finish !== null) {
         const all = planCrowd(stage, d0, d1, spec.crowd, stage.signs.map((s) => s.d), spec.crowdFlags);
-        for (const [people, geo] of [[all.filter((p) => !p.flag), this.crowdGeo], [all.filter((p) => p.flag), this.flaggerGeo]] as const) {
-          const mesh = buildCrowd(people, geo, this.crowdMat, origin, spec.crowdShadows);
+        const geos = this.crowdGeometry(spec.crowdDetail);
+        const plain = buildCrowd(all.filter((p) => !p.flag), geos.plain, this.crowdMat, origin, spec.crowdShadows);
+        if (plain) objects.push(plain);
+        // Flag-wavers wave their own culture's flags: a mesh per culture present.
+        const flaggers = all.filter((p) => p.flag);
+        for (const culture of new Set(flaggers.map((p) => p.culture))) {
+          const mesh = buildCrowd(flaggers.filter((p) => p.culture === culture), geos.flag, this.flagMaterial(culture), origin, spec.crowdShadows);
           if (mesh) objects.push(mesh);
         }
       }
@@ -103,6 +140,18 @@ export class RoadExtras {
         for (const g of geos) g.dispose();
       },
     };
+  }
+
+  private crowdGeometry(detailed: boolean) {
+    let g = this.crowdGeos.get(detailed);
+    if (!g) this.crowdGeos.set(detailed, (g = { plain: spectatorGeometry(false, detailed), flag: spectatorGeometry(true, detailed) }));
+    return g;
+  }
+
+  private flagMaterial(culture: CultureId) {
+    let m = this.flagMats.get(culture);
+    if (!m) this.flagMats.set(culture, (m = crowdMaterial(CULTURES[culture].flags)));
+    return m;
   }
 
   private paintMaterial(spec: SceneryTier) {

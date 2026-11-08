@@ -64,5 +64,5 @@ The tour stages are also ordinary stages: ride them freely, race them on their o
 ## Limits
 
 - Races start from the start line, so `?start=` isn't used in a race.
-- The route's bends and rolling hills between the published landmarks are approximated. See [Stages and routes](stages-and-routes.md).
+- Stage 1's rolling hills are approximated, and the canyon walls and rock towers on stage 2 stand where they look right rather than where they are surveyed; the road lines are real. See [Stages and routes](stages-and-routes.md).
 - The field's riders don't change kit for the jerseys, and your own kit doesn't change either yet.

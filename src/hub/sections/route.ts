@@ -19,7 +19,9 @@ export const mount: SectionMount = (root, ctx) => {
   const grid = h('div', { class: 'hub-grid hub-stages' });
   const mine = h('div', { class: 'hub-grid hub-stages' });
   const mineHead = h('h3', { class: 'hub-sub', text: 'Your routes' });
-  root.replaceChildren(actions, grid, mineHead, mine);
+  // The mountain stages and the Hell of the West follow real roads.
+  const credit = h('p', { class: 'hub-note', text: 'Map data: road lines © OpenStreetMap contributors (ODbL), routed with BRouter; elevation: SRTM (NASA, public domain).' });
+  root.replaceChildren(actions, grid, mineHead, mine, credit);
 
   const cards = new Map<string, HTMLElement>();
   const canvases: HTMLCanvasElement[] = [];

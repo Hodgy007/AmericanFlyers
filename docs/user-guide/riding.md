@@ -55,7 +55,7 @@ Why steer? To line up on someone's wheel for the draft (see [Riding together](ri
 
 ## On the climbs
 
-The big climbs (Alpe d'Huez, Stelvio, Ventoux, Tourmalet, Zoncolan and Echo Lake) are dressed like the Tour's mountains:
+The big climbs (Alpe d'Huez, Stelvio, Ventoux, Tourmalet, Zoncolan, Echo Lake and the American climbs) are dressed like the Tour's mountains:
 
 - **Painted words** on the road over the last few kilometres and on the straights before some hairpins: ALLEZ, VAS!, GO GO GO, stars and arrows, and your own first name ("ALLEZ SAM", taken from your account name; letters only). They're in the same places every ride.
 - **Guardrails** on the outside of the hairpins and wherever the ground falls away beside the road.
@@ -87,7 +87,7 @@ The row of numbers across the top is made of **data blocks**. The first block is
 The bottom-left corner shows two things:
 
 - **Trainer status**, with a colored dot: connected, searching, reconnecting (a remembered trainer that dropped out; the ride carries on), or not connected.
-- **Stage name and progress.** On a stage with a finish line, this shows the distance to go and the next numbered hairpin, for example *Alpe d'Huez · 8.4 km to go · next: Virage 14 in 230 m*. On Heartland Rollers it shows just the name.
+- **Stage name and progress.** On a stage with a finish line, this shows the distance to go and the next numbered hairpin or named place, for example *Alpe d'Huez · 8.4 km to go · next: Virage 14 in 230 m* or *Mont Ventoux · 7 km to go · next: Chalet Reynard in 800 m*. Roads that don't number their hairpins show only the places. On Heartland Rollers it shows just the name.
 
 ## Panels at the bottom of the screen
 

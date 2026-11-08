@@ -13,6 +13,9 @@ import { TIER_SPECS, isChoice, type Tier } from './quality';
 import { DEFAULT_LANE, LANE_MAX, LANE_MIN } from '../steering';
 import type { TimeOfDay, Weather } from '../settings';
 import { Terrain } from './terrain';
+import { updateSway } from './sway';
+import { Monoliths } from './monoliths';
+import type { GroundCover } from './groundCover'; // grass, flowers and stones beside the road: High and Ultra only, a lazily loaded chunk
 
 export interface WorldState {
   distance: number; // metres along the course
@@ -28,6 +31,9 @@ const LANE_EASE_S = 0.27; // time constant: the bike settles on a new lane in ab
 /** A frame that spends longer than this building new scenery is a loading spike (Auto graphics ignores it). */
 const BUILD_SPIKE_MS = 8;
 
+/** Camera layer of the ground cover: the camera sees it, the ambient-occlusion pass's own camera does not (it would only redraw thousands of blades for their normals). */
+const COVER_LAYER = 1;
+
 export class World {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -38,6 +44,7 @@ export class World {
   private readonly road: Road;
   private readonly sky = new Sky(currentStage().scenery.mountainScale);
   private readonly landmarks = new Landmarks();
+  private readonly monoliths = new Monoliths();
   private readonly others = new OtherRiders();
   private readonly hemi = new THREE.HemisphereLight('#cfe3ff', '#4d5a3a', 1.1);
   private atmosphere!: Atmosphere;
@@ -53,6 +60,9 @@ export class World {
   private buildAvg = 0; // ms per frame usually spent building scenery (see update)
   private sceneryTier: Tier | null = null; // the tier the ground and roadside were last set up for (see applyScenery)
   private framesDrawn = 0;
+  private cover: GroundCover | null = null;
+  private coverWet = 0;
+  private coverModule: Promise<typeof import('./groundCover')> | null = null;
   // The hub (src/hub): a slow orbit round the rider instead of the ride cameras.
   private orbiting = false;
   private orbitAngle = 2.3;
@@ -79,15 +89,16 @@ export class World {
 
     this.road = new Road(this.renderer, markers);
     this.terrain = new Terrain(this.renderer);
-    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.rider.group, this.others.group);
+    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.monoliths.group, this.rider.group, this.others.group);
     this.atmosphere = new Atmosphere({
       renderer: this.renderer, scene: this.scene, sun: this.sun, hemi: this.hemi, sky: this.sky,
-      setWet: (w) => { this.road.setWet(w); this.terrain.setWet(w); },
+      setWet: (w) => { this.road.setWet(w); this.terrain.setWet(w); this.monoliths.setWet(w); this.cover?.setWet(w); this.coverWet = w; },
     });
     this.atmosphere.restage(currentStage());
     // Graphics tier (Low to Ultra, Auto by default): shadows, post-processing, sky detail, render scale. See graphics.ts.
     this.gfx = new Graphics({ renderer: this.renderer, scene: this.scene, camera: this.camera, sun: this.sun, sky: this.sky }, signals);
     this.gfx.attach(this.atmosphere);
+    this.camera.layers.enable(COVER_LAYER);
     this.applyScenery();
 
     this.resize();
@@ -105,7 +116,31 @@ export class World {
     this.sceneryTier = tier;
     const spec = TIER_SPECS[tier];
     this.road.setTier(spec.scenery, spec.ibl);
-    if (this.framesDrawn > 0) this.terrain.setScenery(spec.scenery);
+    this.monoliths.setShadows(tier === 'high' || tier === 'ultra');
+    if (this.framesDrawn > 0) { this.terrain.setScenery(spec.scenery); this.syncCover(); }
+  }
+
+  /**
+   * Ground cover follows the tier's share: none on Low and Medium (the chunk is not even fetched),
+   * some on High, all on Ultra. When Auto steps down to a tier without it, it is disposed; stepping
+   * back up makes it again. The chunk may arrive after the tier has changed again, so the share is read afresh.
+   */
+  private syncCover() {
+    const share = () => TIER_SPECS[this.gfx.currentTier].scenery.groundCover;
+    if (share() === 0) {
+      this.cover?.dispose();
+      this.cover = null;
+      return;
+    }
+    if (this.cover) { this.cover.setShare(share()); return; }
+    this.coverModule ??= import('./groundCover');
+    void this.coverModule.then((m) => {
+      if (this.cover || share() === 0) return;
+      this.cover = new m.GroundCover(COVER_LAYER);
+      this.cover.setShare(share());
+      this.cover.setWet(this.coverWet);
+      this.scene.add(this.cover.group);
+    }).catch(() => { /* chunk failed to load (offline): no cover */ });
   }
 
   /** The rider's first name, painted on the road on the big climbs ("ALLEZ SAM"). */
@@ -196,7 +231,9 @@ export class World {
   /** Rebuilds the world for the current stage (call after course.setStage). */
   restage(markers: MarkerConfig) {
     this.terrain.clear();
+    this.cover?.clear();
     this.landmarks.clear();
+    this.monoliths.clear();
     this.road.setMarkers(markers);
     this.sky.setMountainScale(currentStage().scenery.mountainScale);
     this.atmosphere.restage(currentStage());
@@ -221,6 +258,7 @@ export class World {
     this.road.update(state.distance);
     const placed = this.landmarks.group.children.length;
     this.landmarks.update(state.distance);
+    this.monoliths.update(state.distance);
     if (this.landmarks.group.children.length > placed) this.gfx.pause(1000); // a model just arrived: its first draw compiles shaders and uploads textures
     built = performance.now() - built;
 
@@ -243,6 +281,7 @@ export class World {
     // Build everything in view on the first frame, then a couple of tiles per frame.
     const tilesFrom = performance.now();
     this.terrain.update(riderPos.x, riderPos.z, this.terrainReady ? 2 : Infinity);
+    this.cover?.update(state.distance, riderPos.x, riderPos.z);
     built += performance.now() - tilesFrom;
     // Only a frame that built much more than usual is a spike: a slow device's steady cost must still count.
     if (built > BUILD_SPIKE_MS && built > 3 * this.buildAvg) this.gfx.pause(600); // a loading spike, not a verdict on the device
@@ -296,9 +335,10 @@ export class World {
 
     updateGlow(performance.now() / 1000, this.atmosphere.nightAmount); // the Tron bike's pulse
     this.sky.update(this.camera, dt);
+    updateSway(dt); // trees and grass bend with the wind
     this.road.animate(performance.now() / 1000, riderPos.x, riderPos.y, riderPos.z);
     this.gfx.render(dt);
-    if (++this.framesDrawn === 1) this.terrain.setScenery(TIER_SPECS[this.gfx.currentTier].scenery); // textures: after the first frame
+    if (++this.framesDrawn === 1) { this.terrain.setScenery(TIER_SPECS[this.gfx.currentTier].scenery); this.syncCover(); } // textures and ground cover: after the first frame
     this.applyScenery();
   }
 }

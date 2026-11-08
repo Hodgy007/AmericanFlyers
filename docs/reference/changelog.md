@@ -6,11 +6,84 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Auto graphics at a few frames a second
+
+- Auto graphics now steps down on a device managing only a few frames a second (frames of 120–400 ms): the 3 s window never held the 20 frames a verdict needed, so it stayed on Ultra. Six frames are now enough when their median is over 120 ms (`ADAPT.slowFewFrames`, `slowFewMs` in `src/world/adapt.ts`). Unit test in `tests/unit/quality.test.ts`.
+
 ### A visible way to end the ride
 
 - A **⏹ End** button sits in the top bar on the ride screen (first in the row on phones, next to ☰ Menu elsewhere). After a minute or more (or in a race or group ride) it asks **End ride?** with **Save and finish** (**End ride** when signed out) or **Keep riding**, then shows the ride summary, which has **Start a new ride** and **Back to the hub**. Under a minute it goes straight to the hub. The old **↺ End / reset ride** menu item is now **⏹ End ride** and does the same.
 - **🏠 Hub** and **⏹ End ride** now sit near the top of the ☰ Menu. The menu also has a `vh` height fallback plus touch scrolling, so on browsers without `dvh` (older Safari) it scrolls instead of running off the screen.
 - `askToLeave()` in `src/hub/leave.ts` serves both questions (`purpose: 'end'`); `finishRide()` in `src/main.ts`. Test: `tests/e2e/endRide.spec.ts`.
+
+### Four American climbs
+
+- **New stages** on their real roads: **Mount Washington Auto Road** (`mt-washington`, 12.2 km, 1,417 m, pitches to 22%, cloudy and very windy, bare grey rock above the tree line), **Mount Blue Sky** (`mt-blue-sky`, 23.3 km, 1,080 m to 14,130 ft, the continuation of the Echo Lake stage from Echo Lake Lodge, tundra and snow patches above the tree line), **Mount Diablo** (`mt-diablo`, 18 km, 990 m, golden grass and oaks) and **Flagstaff Mountain** (`flagstaff`, 7.4 km, 602 m, with the Flatirons beside the lower switchbacks). Each ends at its summit building or ruin and a brown park sign with the real elevation, and has a finish badge.
+- **Baking.** `scripts/bake-routes.mjs` gains a per-road `profile`: the Auto Road is tagged `bicycle=no` in OpenStreetMap, so it is baked with BRouter's `car-eco` profile. The four roads add about 23 KB of source to the first load (the main chunk goes from 154.2 to 166.7 KB gzipped).
+- **Golden grass.** New optional `Scenery.dryGrass` (0 to 1) dries the grass to straw on the ground colour, the dry-grass layer and the tufts; Mount Diablo uses it.
+- **Scheduling and limits.** The evening race rotation gains the four stages (`EVENT_STAGE_POOL` and `event_stage_pool` positions 9 to 12) and `stage_limits` gains their rows (`db/schema.sql`: apply it to the database). `tests/unit/stageLimits.test.ts` computes the limits for every stage through the app's physics; the older rows sit 0.4 to 3% below the computed floor, so they are slightly permissive.
+- **Colorado crowds.** Mount Blue Sky and Flagstaff get the Colorado crowd culture; Washington and Diablo the American one.
+- Tests: `tests/unit/americanClimbs.test.ts`, `tests/unit/stageLimits.test.ts`, and the stage lists in the existing stage tests.
+
+### Real roads and gradients for the built-in stages
+
+- **Real road lines.** Alpe d'Huez, Stelvio, Mont Ventoux, the Tourmalet, Monte Zoncolan, Echo Lake (Hell of the West stage 3) and the Tour of the Moon now follow their real roads, with real elevation, instead of a zig-zag of identical 12 m hairpins. The Morgul-Bismark circuit takes the shape of the real loop around Superior, Colorado (scaled to its 21.1 km lap, closing exactly); its elevation, with The Wall, is unchanged. Every stage keeps its length and published gain, so leaderboards, ghosts, schedules and `stage_limits` are unaffected, and Alpe d'Huez keeps its per-kilometre gradients.
+- **Baked once, small.** `scripts/bake-routes.mjs` fetches each road from BRouter (OpenStreetMap lines, SRTM elevation), cleans it (median-filtered elevation, no bend tighter than an 11 m radius) and writes `src/routes/real/<id>.ts`: int8 steps of heading every 5 m and elevation every 20 m, about 40 KB gzipped for all of them. `routes/realStage.ts` maps the real length onto the stage's, rescales the profile to the published figures and caps the gradient near the published maximum.
+- **Hairpins found, not invented.** They are detected in the real heading: Alpe d'Huez's 21 (hairpin 7, the Dutch Corner, is in Huez village at about 1,400 m) and Stelvio's 48 are numbered; Ventoux, the Tourmalet, Zoncolan and Echo Lake have none numbered, so the HUD no longer announces "next: Virage 1" on Ventoux. `StageSign` gained `numbered` and `name`: the HUD announces places ("next: Chalet Reynard in 800 m"), and crowds and guardrails still gather at every hairpin.
+- **Places moved to where they are.** Chalet Reynard stands at 1,440 m on the real Ventoux; the Tour of the Moon's race points (Cold Shivers, the high point, Black Ridge, the visitor center) and Echo Lake's mountain prime are on the real road; the Flatirons now stand west of Highway 93 on the real loop.
+- **Credit.** "Road lines © OpenStreetMap contributors (ODbL), routed with BRouter; elevation: SRTM (NASA, public domain)" is in the README, the developer guide and under the stage list in the hub's Route section.
+- Tests: `tests/unit/realStage.test.ts` (decoder round trip, length mapping, hairpin detection, gradient capping, each stage's length and gain, the loop's closure).
+
+### Crowds with local character, the Dutch Corner and roadside camps
+
+- **Culture.** Crowds dress for the country, from the stage's hairpin word: France (tricolour, polka-dot jerseys and flags, Breton and Basque flags), Italy (tricolour, lots of Giro pink), the USA (stars and stripes) and Colorado on the Hell of the West stages (with the state flag). Flags are canvas-drawn in one atlas.
+- **The Dutch Corner.** Alpe d'Huez's seventh hairpin has a crowd hotspot: three rows deep on both sides, mostly in orange with Dutch and orange flags, and louder (`crowdNear()` goes above 1 there). Hotspots are data (`{ d, radius, density, culture }` in `crowdZones.ts`), so other stages can have one.
+- **Camper vans, tents and parasols** on the big climbs, parked 8 to 14 m back on the uphill verge in the crowd zones, kept off the road, the guardrails and parapets, steep ground and the last 150 m; thinned by tier, shadows from High (new `src/world/campers.ts`). High and Ultra spectators also get caps and bigger flags (`Scenery.crowdDetail`).
+- Tests: `tests/unit/crowdLife.test.ts`.
+
+### Procedural landmarks for the climbs and the Boulder circuit
+
+- **Landmarks built in code.** `LandmarkKind` takes `model` (a `MonumentId`) as an alternative to `file` (a union: exactly one), with `options` (`lines`, `style`, `seed`) for words and looks. The builders (`src/world/monuments.ts`, `monumentBuildings.ts`, `flatirons.ts`, toolkit `monumentKit.ts`) make low-poly, flat-shaded, vertex-coloured groups from primitives, one merged mesh each under about 6,000 triangles; `landmarks.ts` imports them as a lazy chunk the first time one is in range, scales them to `size` and places them like models (small ones cast shadows).
+- **Ventoux:** the summit observatory with its red-and-white banded mast, the Tom Simpson memorial 1.3 km from the top, Chalet Reynard. **Alpe d'Huez:** a village church on the outside of hairpin 7 (found from the stage's signs, so it follows the road), ski apartments near the top. **Tourmalet:** La Mongie's apartment blocks at 15 km and Le Géant du Tourmalet at the col. **Stelvio:** the hotels at the pass. **Echo Lake:** a log lodge.
+- **Summit boards.** Every European climb ends with a brown (France) or green (Italy) board on posts: "COL DU TOURMALET / ALT. 2115 m", "PASSO DELLO STELVIO / 2758 m", "MONT VENTOUX / 1910 m", "MONTE ZONCOLAN / 1750 m", "ALPE D'HUEZ / 1850 m".
+- **The Flatirons** stand west of the Morgul-Bismark circuit: six or seven red-tan slabs leaning on a forested ridge, 2.5 km from Highway 93 and visible from up to 7 km along the road (`LandmarkKind.reach`). They use a material that shrinks the distance the height fog sees, so they are hazy rather than fogged out, and cast no shadows.
+- **For later stages** (built and tested, not placed yet): Mount Washington's summit buildings and mast, Mount Diablo's stone summit tower with its beacon, the ruins of the Mount Blue Sky summit house, and a wooden US park sign (`summit-sign-us`, any text).
+- `ClimbSpec.landmarks` (a list, or a function given `at.hairpin(label)`) adds landmarks after the arches. Tests: `tests/unit/monuments.test.ts` (every builder's budget and shape, sizes match the stages, the church is at hairpin 7, the far-fog patch).
+
+### Tour of the Moon: canyon rims, cliffs and monoliths
+
+- **Canyons beside the road.** New optional `Scenery.roadside(d, lateral, plain)` hook shapes the ground near the road, keyed off course distance and lateral offset so it survives a change of route. The Tour of the Moon uses it (`src/world/canyon.ts`) for stretches with a canyon on the left, the right, both or neither: a ledge, a sheer stepped cliff of 120 to 220 m, a talus slope and a canyon floor, with rock climbing in ledges on the other side. The terrain reaches 900 m from the road on such a stage. Stone parapets run along the edges (the stage uses `barrier: 'stone'`, and barriers are no longer limited to stages with hairpin signs).
+- **Nothing grows on cliffs.** `roadsideSlope()` keeps trees off slopes steeper than 0.6 and ground cover off slopes steeper than 0.5.
+- **Monoliths** (`src/world/monoliths.ts`): Independence Monument, the Coke Ovens and the Kissing Couple stand on the canyon floors, with smaller ones further on; banded sandstone, flat-shaded, under 5,000 triangles each, shadows on High and Ultra.
+- Tests: `tests/unit/canyon.test.ts`, `tests/unit/monoliths.test.ts`.
+
+### Mont Ventoux's summit is limestone scree, not snow
+
+- **A scree ground layer.** The terrain gets an eighth splatting layer, `scree` (Poly Haven's CC0 *Gray Rocks*: broken pale stones, `public/textures/terrain/scree.jpg` and `scree-n.jpg`, credited in `public/textures/README.md`). A stage's optional `Scenery.screeLine` (same datum as `rockLine` and `snowLine`) turns the ground above it, over a noisy band like the snow line, to warm pale grey with darker stones; rock still shows on steep slopes, cliffs there are a paler limestone, the road's shoulder stays scree rather than dirt, snow still wins above `snowLine`, and no trees grow above the line.
+- **Ventoux** now uses `screeLine: 1150` (Chalet Reynard, where the forest ends) and `snowLine: 1e9`: it is summer, so the white summit is no longer a snowfield. Other stages are unchanged (Stelvio keeps its snow).
+- **Per tier.** `layersFor()` takes the scree flag, so only Ventoux downloads the scree texture; Low uses grass, rock and scree there (still three layers). The texture array is eight layers deep on every stage (about 4 MB more GPU memory at 1K). The vertex-colour fallback is pale as well, before the textures arrive.
+- Tests: `tests/unit/roadside.test.ts` (scree weights and colour, `layersFor`), `tests/e2e/scenery.spec.ts` (Ventoux fetches scree, not snow).
+
+### Road style per region
+
+- The road's look is now a property of the stage (`Scenery.road`). **Alpine** (Alpe d'Huez, Stelvio, Tourmalet, Ventoux): a white dashed centre line, thin worn edge lines, no gravel strip, darker patched asphalt. **Lane** (Monte Zoncolan): no markings, ragged dark edges. **Park** (Tour of the Moon): solid double yellow, red chip-seal tint, dusty-red shoulders. Everything else keeps the US highway look. The colour map and the asphalt normal/roughness maps both come from one pure description per style (`src/world/roadStyle.ts`, tested in `tests/unit/roadStyle.test.ts`), and the road repaints when the stage changes. The alpine texture is 768 px long so a 3 m dash and a 10.8 m gap tile.
+- **Milestones.** On the French and Italian climbs the distance signs are cyclists' milestones: a white post with a yellow (France) or red (Italy) top showing the climb, the distance to the summit and the next kilometre's average gradient ("Sommet 7 km / Pente moy. 8.1 %", "Cima 7 km / Pendenza media 8.1 %"). New `src/world/milestones.ts`.
+- **Stone parapets.** `Scenery.barrier: 'stone'` (Stelvio, Tourmalet, Ventoux, and the Tour of the Moon) replaces the guardrails with low dry-stone parapets in the same places (`stoneGeometry()` in `barriers.ts`). Low costs the same as before.
+
+### Better trees: species per stage, one style, level of detail, wind sway
+
+- **Nine species in one low-poly style** (`src/world/trees.ts`): spruce, pine, larch, oak, beech (and maple), aspen, cottonwood, juniper (and pinyon) and shrub, replacing the three clashing primitives (cones, blobs, junipers). Per-vertex colour is darker at the bottom and inside of the crown and lighter at the tips; each instance also gets its own brightness, hue and saturation.
+- **Species per stage.** New optional `Scenery.trees` (relative weights) on every built-in stage: oaks, cottonwoods and maples on Heartland and Route 66; spruce, larch and beech on the Alpe; spruce, larch and pine on the Stelvio; oak, pine and beech on Ventoux; beech, pine and shrubs on the Tourmalet; beech and spruce on Zoncolan; lodgepole pine, spruce and aspen at Echo Lake; juniper, pinyon and shrubs on the Tour of the Moon. Height decides what fits (oaks low, larches higher), shrubs take over at the tree line, and a route without a mix (an uploaded GPX) derives one from `coniferBias`.
+- **Morgul-Bismark is open grassland** (`forestCover` -0.45, fewer lone trees): cottonwoods, ponderosas and shrubs, scattered, with the odd clump, instead of a dense conifer forest.
+- **Two levels of detail.** Near trees are 70 to 130 triangles, far ones 28 to 44 with the same silhouette; a tile swaps between them (with hysteresis) at 400 m. Low always draws the far geometry. Triangle counts are in the 3D world guide.
+- **Trees sway in the wind** (the shared `sway.ts`): each vertex leans by its height above the base, a crown moves as one, and the shadows sway too. One material for every tile and both levels of detail.
+- Tests: `tests/unit/trees.test.ts` (species weights, habitat, tree line, LOD hysteresis, tint, geometry budgets, stage mixes).
+
+### Ground cover beside the road on High and Ultra
+
+- **Grass tufts, wildflowers, stones and sage.** The verges and fields right beside the road (5.6 to 30 m from the centreline, within 90 m of the rider, thickest at the verge) now carry small instanced plants. They follow the ground: green tufts and a few white, yellow and purple wildflowers on grass, straw tufts on dry grass and fields, sparse tufts and pebbles on the dirt verge, stones and tiny alpine flowers on rock, nothing on snow, and sage bushes and red stones in the Tour of the Moon's desert. Plants sway with the wind (`sway.ts`), shade dark at the base to light at the tips, receive shadows and cast none, and shrink to nothing over the last 15 m of range.
+- **Per tier.** `SceneryTier.groundCover`: Low and Medium none (the chunk isn't downloaded), High half the density, Ultra all of it. The Auto controller disposes the cover when it steps down to Medium and rebuilds it when it climbs back.
+- **Cost.** One lazily loaded chunk (`groundCover`, about 5 kB gzip), four draw calls, about 64,000 triangles at Ultra on Heartland (30,000 on High), cells built nearest first in a few ms of a frame and kept until 114 m away; deterministic from the stage and position. `groundProbe()` in `terrain.ts` gives height and ground layer weights for things stood on the ground. New `tests/unit/groundCover.test.ts`.
 
 ### A Bluefy link for iPhone and iPad riders
 

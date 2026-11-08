@@ -14,17 +14,21 @@ Choosing a stage resets the ride. If your current ride is at least a minute long
 | --- | --- | --- |
 | **Heartland Rollers** | Endless | Rolling farmland with no finish line. A free ride. Farm buildings, a covered bridge and a start arch line the road. |
 | **Route 66 Flats** | 25 km | A time-trial along a flat, fast stretch of highway past diners and gas stations. Finishes at a checkered line under an arch. |
-| **Hell of the West · Stage 1: Morgul-Bismark** | 42.3 km | Two laps of the 21 km Morgul-Bismark circuit south of Boulder, Colorado (Highway 128, 93 and 170, then up McCaslin Boulevard), finishing each lap up **The Wall**, a mile-long climb that kicks up to 18%. Distances from published figures; the bends and rolling profile are approximated. Prairie scenery with the Front Range behind. |
-| **Hell of the West · Stage 2: Tour of the Moon** | 37 km | Rim Rock Drive through Colorado National Monument, from the Grand Junction entrance to Fruita, as in the Coors Classic. Switchbacks up the canyon wall (about 4 miles at 6 to 8%), rolling uphill to the 2,024 m (6,640 ft) high point, a rise at Black Ridge, then a fast drop to Fruita. About 630 m of climbing here (the Park Service quotes 2,300 ft for the whole loop). **Red rock desert** scenery: banded red and orange sandstone, mesas, sparse junipers. The exact grades are approximated. |
-| **Hell of the West · Stage 3: Echo Lake** | 20.8 km | The final stage: Colorado 103 from Idaho Springs (2,293 m) up Chicago Creek to the sprint at Echo Lake (3,235 m), below Mount Evans. About 3.5% for the first 11 km, then 5.8%, with switchbacks in the upper half and a flat finish at the lake. Totals from published figures; the per-kilometer shape is approximated. |
-| **Alpe d'Huez** | 14 km | Climbs from Le Bourg-d'Oisans (723 m) up 1,118 m of gain, at an average of about 8%. It has 21 numbered hairpins, marked with **Virage** plaques. The gradients follow published per-kilometer figures from swi-cycling.com. |
-| **Stelvio Pass** | 24.5 km | Climbs from Prato allo Stelvio (about 915 m) at an average of 7.5%, through 48 numbered hairpins marked **Tornante**. The summit is at 2,758 m. The per-kilometer shape is an approximation, because no per-kilometer source was found. |
+| **Hell of the West · Stage 1: Morgul-Bismark** | 42.3 km | Two laps of the 21 km Morgul-Bismark circuit south of Boulder, Colorado (Highway 128, 93 and 170, then up McCaslin Boulevard), finishing each lap up **The Wall**, a mile-long climb that kicks up to 18%. The loop's shape is the real road's (OpenStreetMap), scaled to the published 21 km lap; the rolling profile is approximated. Prairie scenery with the Front Range behind. |
+| **Hell of the West · Stage 2: Tour of the Moon** | 37 km | Rim Rock Drive through Colorado National Monument, from the Grand Junction entrance to Fruita, as in the Coors Classic. The road and its profile are the real ones (OpenStreetMap and SRTM): switchbacks up the canyon wall, rolling uphill past Cold Shivers Point to the 2,024 m (6,640 ft) high point, a rise at Black Ridge, the visitor center, then a fast drop to Fruita. **Red rock desert** scenery: banded red and orange sandstone, mesas, sparse junipers, with the canyons and rock towers placed approximately. |
+| **Hell of the West · Stage 3: Echo Lake** | 20.8 km | The final stage: Colorado 103 from Idaho Springs (2,293 m) up Chicago Creek to the sprint at Echo Lake (3,235 m), below Mount Evans. About 3.5% for the first 11 km, then 5.8%, with wide switchbacks in the upper half and a flat finish at the lake. The road line and profile are the real ones (OpenStreetMap and SRTM), scaled to the published length and gain. |
+| **Alpe d'Huez** | 14 km | Climbs from Le Bourg-d'Oisans (723 m) up 1,118 m of gain, at an average of about 8%. It has 21 numbered hairpins, marked with **Virage** plaques. The road line is the real one (OpenStreetMap) and the gradients follow published per-kilometer figures from swi-cycling.com. |
+| **Stelvio Pass** | 24.5 km | Climbs from Prato allo Stelvio (about 915 m) at an average of 7.5%, through 48 numbered hairpins marked **Tornante**. The summit is at 2,758 m. The road line and profile are the real ones (OpenStreetMap and SRTM), scaled to the published length and gain. |
 
-| **Mont Ventoux** | 21.4 km | From Bédoin (300 m) to the summit (1,910 m) at 7.5%: vineyards, then 9–10% through the forest to Chalet Reynard, then the bare white limestone to the top. Per-kilometer shape approximated. |
-| **Col du Tourmalet** | 19 km | From Luz-Saint-Sauveur (711 m) to the col (2,115 m) at 7.4%, steeper through the hairpins above Barèges (**Virage**). Per-kilometer shape approximated. |
-| **Monte Zoncolan** | 10.1 km | From Ovaro (525 m) to 1,735 m at 11.9%, with long stretches at 13–15% and hairpins marked **Tornante**. Per-kilometer shape approximated. |
+| **Mont Ventoux** | 21.4 km | From Bédoin (300 m) to the summit (1,910 m) at 7.5%: vineyards, then 9–10% through the forest to Chalet Reynard, then the bare white limestone to the top. The road line and profile are the real ones (OpenStreetMap and SRTM). The hairpins are not numbered on the real road, so they are not here. |
+| **Col du Tourmalet** | 19 km | From Luz-Saint-Sauveur (711 m) to the col (2,115 m) at 7.4%, steeper through the hairpins above Barèges. The road line and profile are the real ones (OpenStreetMap and SRTM). |
+| **Monte Zoncolan** | 10.1 km | From Ovaro (525 m) to 1,735 m at 11.9%, with long stretches at 13–15%. The road line and profile are the real ones (OpenStreetMap and SRTM). |
+| **Mount Washington Auto Road** | 12.2 km | New Hampshire: from the Glen House (about 500 m) to the summit at 1,917 m (6,288 ft), 11.6% on average with pitches to 22%. Hardwood forest, then spruce, then bare grey rock above the tree line, usually in cloud and always windy. |
+| **Mount Blue Sky** | 23.3 km | Colorado's highest paved road (formerly Mount Evans): from Echo Lake Lodge, where the Hell of the West stops, from 3,231 m up to 4,311 m (14,130 ft), 4.6% on average. Spruce and bristlecone pines, then tundra, rock and snow above the tree line, ending at the Crest House ruins. |
+| **Mount Diablo** | 18 km | California: from Diablo Road in Danville through the South Gate to the stone summit tower at 1,173 m, 990 m of climbing. Golden summer grass, oaks and chaparral. |
+| **Flagstaff Mountain** | 7.4 km | Boulder, Colorado: Flagstaff Road from Baseline Road (1,746 m) to the crest at 2,349 m, 8.1% on average, through ponderosa pines with the Flatirons beside the lower switchbacks. |
 
-Each stage also has its own light and weather when **Time & weather** is on Auto: Route 66 Flats and Hell of the West start at dusk (and it goes dark as you ride), and the Tourmalet is cloudy. See [Riding](riding.md#time-of-day-and-weather).
+Each stage also has its own light and weather when **Time & weather** is on Auto: Route 66 Flats and Hell of the West start at dusk (and it goes dark as you ride), the Tourmalet and Mount Washington are cloudy. See [Riding](riding.md#time-of-day-and-weather).
 
 On every climb the elevation readout shows real altitude. Hairpins count down from the bottom: the first you reach is the highest number.
 
@@ -79,6 +83,10 @@ When you're signed in, saved routes sync to your account. See [Accounts and prof
 3. Confirm.
 
 If the route is your current stage, the app switches back to Heartland Rollers. Built-in stages can't be deleted.
+
+## Map data
+
+The mountain stages, Echo Lake, the Tour of the Moon and the Morgul-Bismark loop follow real roads. Road lines © OpenStreetMap contributors (ODbL), routed with BRouter; elevation: SRTM (NASA, public domain). The credit is also under the stage list in the hub's Route section.
 
 ## Sharing a stage link
 
