@@ -112,6 +112,8 @@ async function setup(page: Page, f: Partial<Fixture> = {}, query = ''): Promise<
   await page.goto(`/${query}`);
   await ride(page);
   await expect(page.locator('#btn-menu')).toBeVisible();
+  // Settings reads the account when it opens, so wait for the sign-in to land first (it can lag under load).
+  await expect(page.locator('#btn-account')).not.toContainText('Sign in', { timeout: 30_000 });
   return fx;
 }
 
