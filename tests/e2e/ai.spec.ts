@@ -112,6 +112,8 @@ async function setup(page: Page, f: Partial<Fixture> = {}, query = ''): Promise<
   await page.goto(`/${query}`);
   await ride(page);
   await expect(page.locator('#btn-menu')).toBeVisible();
+  // Settings reads the account when it opens, so wait for the sign-in to land first (it can lag under load).
+  await expect(page.locator('#btn-account')).not.toContainText('Sign in', { timeout: 30_000 });
   return fx;
 }
 
@@ -204,6 +206,7 @@ test('opt in, coach tips, rival lines and debriefs (mocked AI)', async ({ page }
   await page.evaluate(() => { (window as unknown as { __rafDelay: number }).__rafDelay = 250; });
   await press(page, '#btn-menu');
   await press(page, '#btn-reset');
+  await press(page, '#hub-leave-go'); // ⏹ End ride asks first
   await expect(page.locator('#finish .coach-debrief')).toContainText('Steady ride, strong finish', { timeout: 30_000 });
   await expect(page.locator('#finish .coach-next')).toContainText('Sweet Spot');
   await page.locator('#finish .coach-card').scrollIntoViewIfNeeded();

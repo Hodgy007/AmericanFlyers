@@ -1,6 +1,6 @@
 # Riding
 
-This page is a tour of the riding screen: the top bar, the data blocks, the status line and elevation strip, the camera views, demo controls, and how Reset and the ride summary work.
+This page is a tour of the riding screen: the top bar, the data blocks, the status line and elevation strip, the camera views, demo controls, and how ending a ride and the ride summary work.
 
 ## The top bar
 
@@ -12,6 +12,7 @@ Buttons across the top of the screen, from left to right:
 | **🏋 Workouts** | Opens the workout library and training plans. See [Workouts](workouts.md) and [Training plans](training-plans.md). |
 | **👥** | Who else is riding this stage. See [Riding together](riding-together.md). |
 | **Connect trainer** / **Disconnect** | Connects or disconnects your trainer. The same is in **☰ Menu → 🔌**, along with **❤️ Heart rate**; both remember your devices. See [Connecting devices](connecting-devices.md). |
+| **⏹ End** | Ends the ride. See below. Always on the ride screen; on a phone it is the first button in the row. |
 | **☰ Menu** | Everything else, listed below. Click outside it or press Escape to close it. |
 | **👤 Your first name** | Opens your profile. |
 
@@ -19,6 +20,7 @@ The **☰ Menu** holds:
 
 | Item | What it does |
 | --- | --- |
+| **⏹ End ride** | The same as the **⏹ End** button in the top bar. See below. |
 | **🏠 Hub** | Ends the ride and goes back to the [hub](the-hub.md). If you've ridden a minute or more it asks first: *Keep riding*, or *Save and go to the hub*. |
 | **🎮 Demo ride** / **Stop demo** | Turns the demo ride on or off. See [Getting started](getting-started.md#try-the-demo-ride). |
 | **❤️ Heart rate strap** / **Heart rate ✓** | Connects or disconnects a heart-rate strap. |
@@ -30,7 +32,6 @@ The **☰ Menu** holds:
 | **🔊 Sound on** / **🔇 Sound off** | Shortcut: **M**. See [Sound and virtual shifting](sound-and-shifting.md). |
 | **⛶ Full screen** | Shortcut: **F**. |
 | **⬇ Install app** | Shown when your browser can install the app. See [Installing the app](installing-the-app.md). |
-| **↺ End / reset ride** | Ends the ride and shows its summary. See below. |
 | **⚙ Settings** | Opens Settings. |
 | **💬 Ideas & bug reports** | Requires sign-in. |
 | **🛠 Admin dashboard** | Only shown to admins. |
@@ -121,17 +122,18 @@ Press **C**, or click the camera button, to cycle through:
 
 When the demo ride is on, a panel shows **Demo power** with a slider from 0 to 600 W. Use the slider, or the **↑** and **↓** keys, which change power by 10 W. In a workout, the demo rider follows the workout's target.
 
-## Reset and the ride summary
+## Ending a ride and the ride summary
 
-Press **Reset** to finish the ride:
+Press **⏹ End** in the top bar (or **☰ Menu → ⏹ End ride**) to finish the ride:
 
-- **Under one minute:** the ride is cleared straight away. Nothing is saved.
-- **One minute or more:** a **Ride summary** appears with the time, distance, average power, normalized power, average heart rate, climbing and the heart-rate and power zones.
+- **Under one minute:** nothing is saved, and you go straight to the [hub](the-hub.md).
+- **One minute or more** (or in a race or group ride): it asks **End ride?** with *Save and finish* (*End ride* if you're signed out) or *Keep riding*. Finishing ends any race, group ride or workout and shows a **Ride summary** with the time, distance, average power, normalized power, average heart rate, climbing and the heart-rate and power zones.
 
-The summary has two buttons:
+The summary has these buttons:
 
 - **Keep riding** closes the summary and keeps your ride going.
 - **Start a new ride** clears the ride and starts again.
+- **Back to the hub** leaves for the [hub](the-hub.md).
 
 The ride is saved to your account when the summary appears. See [Accounts and profile](accounts-and-profile.md#when-rides-are-saved).
 

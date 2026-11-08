@@ -45,7 +45,7 @@ Your weight drives the speed model. FTP sets the power zones and workout targets
 4. American Flyers remembers your trainer (and a heart rate strap, if you connect one) on this browser, so next time it reconnects by itself or with one tap on **Reconnect**. See [Connecting devices](connecting-devices.md#remembered-devices-you-only-join-once).
 5. Start pedaling. The speed and data blocks update straight away.
 6. The trainer's resistance follows the road. On a climb it gets harder; on a descent it eases. The default difficulty is 50%, so you feel half of the road's grade.
-7. When you've finished, open **☰ Menu → ↺ End / reset ride**. You'll see a ride summary. If you're signed in, the ride is saved.
+7. When you've finished, press **⏹ End** in the top bar (or **☰ Menu → ⏹ End ride**) and confirm. You'll see a ride summary. If you're signed in, the ride is saved.
 
 ## Try the demo ride
 
