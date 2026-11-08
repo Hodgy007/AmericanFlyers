@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { currentStage, elevationAt, ROAD_ORIGIN, ROAD_STEP, roadX, roadZ } from '../course';
+import { currentStage, elevationAt, ensureRoad, ROAD_ORIGIN, ROAD_STEP, roadX, roadZ } from '../course';
 import { nearLandmark } from './landmarks';
 import { fbm, rng, smoothstep } from './noise';
 import { REACH } from './canyon';
@@ -79,6 +79,9 @@ export function roadsideSlope(x: number, z: number, near: Near | null): number {
 
 /** Road samples that could be the nearest road point to anything in the box. */
 function candidatesFor(minX: number, maxX: number, minZ: number, maxZ: number): number[] {
+  // The centreline is generated lazily as the rider (or a planner) looks along it. A leg of road stacked above this box but a long way on along the course must be in the scan too, or the blend between the two legs (heightAt) would depend on how far the road happened to have been generated when the sampler was made.
+  const finish = currentStage().finish;
+  if (finish !== null) ensureRoad(finish + 20);
   const m = reach(currentStage().scenery) + COARSE * ROAD_STEP * 2;
   const out: number[] = [];
   for (let i = 0; i < roadX.length; i += COARSE) {
@@ -166,8 +169,10 @@ const COL = {
   rock: new THREE.Color('#878274'),
   snow: new THREE.Color('#f1f4f8'),
   // Pale limestone scree (Mont Ventoux's summit): warm pale grey, a shade darker where the stones are bigger or in shadow.
-  screeA: new THREE.Color('#d8d4cb'),
-  screeB: new THREE.Color('#b9b3a6'),
+  screeA: new THREE.Color('#bdb6a8'),
+  screeB: new THREE.Color('#908977'),
+  screeWarm: new THREE.Color('#ad9a78'), // the faint ochre of old weathered limestone
+  screeGap: new THREE.Color('#5f5a50'), // dark gaps and shadowed stones between the rubble
   limestone: new THREE.Color('#aaa496'), // cliffs among the scree are pale limestone too
   // Red-rock desert (Stage.scenery.palette = 'desert'): layered sandstone, pale sand, grey-green sage.
   strataA: new THREE.Color('#b4532f'),
@@ -233,6 +238,11 @@ export function groundColor(x: number, z: number, h: number, near: Near | null, 
       // Broken stones: patches of paler and darker ground at a few metres, with the odd dark stone.
       const stones = fbm(x / 9 + 3, z / 9 - 7, 2) * 0.5 + 0.5;
       tmp.copy(COL.screeA).lerp(COL.screeB, smoothstep(0.45, 0.8, stones) * 0.8 + Math.max(0, fbm(x / 3.1, z / 3.1, 1)) * 0.25);
+      const warm = fbm(x / 45 - 11, z / 45 + 2, 2) * 0.5 + 0.5; // warm-grey patches at tens of metres
+      tmp.lerp(COL.screeWarm, smoothstep(0.45, 0.8, warm) * 0.55);
+      // Dark patches and streaks (stretched along x and z in turn, so they run every way down the slope) and the odd black gap between stones.
+      const streak = Math.max(fbm(x / 28 + 4, z / 6, 2), fbm(x / 6 - 8, z / 28, 2));
+      tmp.lerp(COL.screeGap, smoothstep(0.3, 0.7, streak) * 0.5 + smoothstep(0.55, 0.85, fbm(x / 2.2 + 1, z / 2.2, 1)) * 0.3);
       out.lerp(tmp, screeT);
     }
   }

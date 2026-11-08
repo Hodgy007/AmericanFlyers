@@ -102,54 +102,100 @@ export function buildSimpsonMemorial(o: MonumentOptions = {}): THREE.Group {
 
 // ---------------------------------------------------------------- Le Géant ----
 
-/** Le Géant du Tourmalet: a dark steel cyclist, out of the saddle and straining up the col, on a stone plinth. He rides towards -x, so he climbs in the direction of travel when he stands on the right of the road. */
+/** Cast bronze and polished steel: metallic enough to catch the sun, matt enough not to need an environment map. */
+const castMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.42, metalness: 0.45 });
+
+/**
+ * Le Géant du Tourmalet: a bronze cyclist hauling a steel bike up the col, out of the saddle with
+ * one pedal down and one knee up, on a stepped stone plinth with a plaque. He rides towards -x,
+ * so he climbs in the direction of travel when he stands on the right of the road. About 1.6k triangles.
+ */
 export function buildGeant(): THREE.Group {
   const k = new Kit();
-  const S = 3.5; // the statue is this many times life size
-  const PLINTH = 1.4;
-  k.box(5.6, 0.6, 2.8, 0, 0, 0, '#7f7c75');
-  k.box(4.6, 0.8, 2.1, 0, 0.6, 0, '#9a968d');
-  const STEEL = '#2c3036';
-  const STEEL_LIGHT = '#3f454d';
+  const S = 3.2; // the statue is this many times life size
+  // The plinth: two steps, a cap and a few blocks heaped at the foot, with a plaque on the road side.
+  k.box(5.8, 0.55, 3.0, 0, 0, 0, '#77746d');
+  k.box(4.8, 0.75, 2.2, 0, 0.55, 0, '#96928a');
+  k.box(4.1, 0.2, 1.7, 0, 1.3, 0, '#aaa59b', 0, 0.95);
+  const PLINTH = 1.5;
+  for (const [w, h, x, z, c, ry] of [[0.7, 0.35, -2.2, 1.25, '#8a867d', 0.3], [0.5, 0.26, -1.7, 1.5, '#a39e94', -0.4], [0.6, 0.3, 2.3, 1.3, '#7f7b73', 0.2], [0.45, 0.22, 1.8, 1.55, '#9d988e', 0.7]] as const) k.box(w, h, w * 0.8, x, 0, z, c, ry);
+  const plaque = ['LE GÉANT', 'DU TOURMALET'];
+  k.box(2.0, 0.5, 0.06, 0, 0.78, 1.11, '#2c2a26', 0, 1);
+  k.panel(1.94, 0.44, 0, 1.03, 1.145, boardMaterial(`geant|${plaque.join('|')}`, 384, 84, (g, w, h) => {
+    g.fillStyle = '#3a3226';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#e2cf93';
+    fitText(g, plaque[0], w / 2, h * 0.3, w - 30, 34);
+    fitText(g, plaque[1], w / 2, h * 0.72, w - 30, 34);
+  }, '#3a3226'));
+
+  const stone = k.build();
+  const cast = new Kit();
+  const BRONZE = '#6e4c2c';
+  const BRONZE_LIGHT = '#94683a';
+  const SILVER = '#b4bac1';
+  const TYRE = '#26292d';
+  // (u, v, z) in the statue's own frame: u forward, v up, z across, in life-size metres; mapped to x = -u so he rides towards -x.
   const P = (u: number, v: number, z = 0): [number, number, number] => [-u * S, v * S, z * S];
-  k.within([0, PLINTH + 0.14, 0], [0, 0, -0.07], () => {
-    // The bike: two wheels and the frame between them.
-    for (const u of [-0.5, 0.5]) {
+  cast.within([0, PLINTH - 0.02, 0], [0, 0, 0], () => {
+    // Wheels: a tyre, a rim, a hub and spokes.
+    for (const u of [-0.55, 0.55]) {
       const [x, y] = P(u, 0.34);
-      k.ring(0.34 * S, 0.03 * S, x, y, 0, STEEL, 18);
-      k.cyl(0.05 * S, 0.05 * S, 0.1 * S, x, y - 0.05 * S, 0, STEEL_LIGHT, 6);
+      cast.ring(0.34 * S, 0.026 * S, x, y, 0, TYRE, 20);
+      cast.ring(0.3 * S, 0.01 * S, x, y, 0, SILVER, 20);
+      cast.ball(0.03 * S, x, y, 0, SILVER);
+      for (const a of [0.2, 1.2, 2.2]) cast.bar([x + Math.cos(a) * 0.3 * S, y + Math.sin(a) * 0.3 * S, 0], [x - Math.cos(a) * 0.3 * S, y - Math.sin(a) * 0.3 * S, 0], 0.006 * S, SILVER);
     }
-    const t = 0.035 * S;
-    const bb = P(0, 0.27), seat = P(-0.12, 0.95), headTop = P(0.37, 0.9), headBot = P(0.43, 0.65);
-    k.bar(bb, seat, t, STEEL);
-    k.bar(bb, headBot, t * 1.3, STEEL);
-    k.bar(seat, headTop, t, STEEL);
-    k.bar(P(-0.5, 0.34), seat, t * 0.7, STEEL);
-    k.bar(P(-0.5, 0.34), bb, t * 0.7, STEEL);
-    k.bar(headBot, P(0.5, 0.34), t * 0.8, STEEL);
-    k.bar(headTop, P(0.42, 1.0), t, STEEL);
-    k.bar(P(0.4, 1.0, -0.2), P(0.4, 1.0, 0.2), t, STEEL); // the bars
-    k.bar(P(0.4, 1.0, 0.2), P(0.6, 0.9, 0.17), t * 0.8, STEEL);
-    k.bar(P(0.4, 1.0, -0.2), P(0.6, 0.9, -0.17), t * 0.8, STEEL);
-    k.bar(P(-0.2, 0.98), P(-0.04, 0.98), t * 1.4, STEEL_LIGHT); // saddle
-    // The rider, standing on the pedals and hauling on the bars.
-    const hip = P(-0.12, 1.1), shoulder = P(0.27, 1.42), head = P(0.37, 1.52);
-    k.bar(hip, shoulder, 0.14 * S, STEEL_LIGHT);
-    k.bar(shoulder, head, 0.08 * S, STEEL_LIGHT); // neck
-    k.cyl(0.095 * S, 0.085 * S, 0.19 * S, head[0], head[1] - 0.06 * S, 0, STEEL_LIGHT, 7); // head and helmet
+    // The frame: a diamond of tubes, with the stays and fork doubled either side of the wheels.
+    const t = 0.026 * S;
+    const bb = P(0, 0.3), seatTop = P(-0.14, 0.98), headTop = P(0.4, 0.86), headBot = P(0.37, 0.66);
+    cast.bar(bb, seatTop, t, SILVER);
+    cast.bar(bb, headBot, t * 1.4, SILVER);
+    cast.bar(seatTop, headTop, t, SILVER);
+    cast.bar(headBot, headTop, t * 1.5, SILVER);
     for (const side of [1, -1]) {
-      k.bar(shoulder, P(0.46, 1.17, side * 0.2), 0.07 * S, STEEL_LIGHT); // upper arm
-      k.bar(P(0.46, 1.17, side * 0.2), P(0.6, 0.9, side * 0.17), 0.06 * S, STEEL_LIGHT); // forearm
+      const r = P(-0.55, 0.34, side * 0.05), f = P(0.55, 0.34, side * 0.05);
+      cast.bar(P(-0.14, 0.9), r, t * 0.7, SILVER); // seat stay
+      cast.bar(bb, r, t * 0.8, SILVER); // chain stay
+      cast.bar(headBot, f, t * 0.8, SILVER); // fork leg
     }
-    // Legs: one pedal down, one up. Cranks, thighs, shins.
-    k.bar(bb, P(0, 0.09, 0.14), t * 0.8, STEEL);
-    k.bar(bb, P(0, 0.45, -0.14), t * 0.8, STEEL);
-    k.bar(hip, P(0.11, 0.68, 0.1), 0.1 * S, STEEL_LIGHT);
-    k.bar(P(0.11, 0.68, 0.1), P(0.01, 0.13, 0.12), 0.08 * S, STEEL_LIGHT);
-    k.bar(hip, P(0.24, 0.98, -0.1), 0.1 * S, STEEL_LIGHT);
-    k.bar(P(0.24, 0.98, -0.1), P(0.08, 0.5, -0.12), 0.08 * S, STEEL_LIGHT);
+    cast.ring(0.09 * S, 0.01 * S, bb[0], bb[1], 0.05 * S, SILVER, 10); // chainring
+    cast.bar(seatTop, P(-0.16, 1.05), t * 0.8, SILVER); // seat post
+    cast.bar(P(-0.24, 1.07), P(-0.04, 1.05), t * 1.7, BRONZE); // saddle
+    cast.bar(headTop, P(0.46, 0.95), t * 1.1, SILVER); // stem
+    cast.bar(P(0.46, 0.95, -0.2), P(0.46, 0.95, 0.2), t * 0.9, SILVER); // the bars...
+    for (const side of [1, -1]) {
+      cast.bar(P(0.46, 0.95, side * 0.2), P(0.57, 0.93, side * 0.2), t * 0.8, SILVER); // ...and their drops
+      cast.bar(P(0.57, 0.93, side * 0.2), P(0.55, 0.84, side * 0.2), t * 0.8, SILVER);
+    }
+    // The rider, out of the saddle: hips back over the saddle, back low and long, head up, hands on the hoods.
+    const hip = P(-0.1, 1.1), shoulder = P(0.3, 1.5), head = P(0.45, 1.58);
+    cast.rod(hip, shoulder, 0.072 * S, 0.092 * S, BRONZE, 7); // torso
+    cast.ball(0.085 * S, hip[0], hip[1], 0, BRONZE, 1, 0.9, 1.4); // pelvis
+    cast.rod(P(0.3, 1.5, -0.16), P(0.3, 1.5, 0.16), 0.045 * S, 0.045 * S, BRONZE, 6); // shoulders
+    cast.rod(shoulder, P(0.4, 1.56), 0.045 * S, 0.035 * S, BRONZE, 6); // neck
+    cast.ball(0.072 * S, head[0], head[1], 0, BRONZE_LIGHT, 1.15, 1, 0.9); // head
+    cast.ball(0.08 * S, head[0] - 0.02 * S, head[1] + 0.04 * S, 0, SILVER, 1.4, 0.7, 1.05); // helmet
+    for (const side of [1, -1]) {
+      const sh = P(0.3, 1.5, side * 0.17), elbow = P(0.46, 1.27, side * 0.21), hand = P(0.52, 1.0, side * 0.2);
+      cast.rod(sh, elbow, 0.036 * S, 0.032 * S, BRONZE, 6); // upper arm
+      cast.rod(elbow, hand, 0.032 * S, 0.026 * S, BRONZE, 6); // forearm
+      cast.ball(0.04 * S, hand[0], hand[1], hand[2], BRONZE_LIGHT); // hand
+    }
+    // Legs: the near one (z +) pushing the pedal down and nearly straight, the far one coming up with the knee high.
+    const hipZ = (side: number) => P(-0.1, 1.08, side * 0.09);
+    const legs: [number, [number, number], [number, number]][] = [[1, [0.2, 0.64], [0.05, 0.14]], [-1, [0.32, 0.82], [-0.05, 0.46]]];
+    for (const [side, knee, foot] of legs) {
+      const h = hipZ(side), kn = P(knee[0], knee[1], side * 0.11), ft = P(foot[0], foot[1], side * 0.11);
+      cast.rod(h, kn, 0.06 * S, 0.045 * S, BRONZE_LIGHT, 6); // thigh
+      cast.ball(0.046 * S, kn[0], kn[1], kn[2], BRONZE_LIGHT);
+      cast.rod(kn, ft, 0.042 * S, 0.03 * S, BRONZE_LIGHT, 6); // shin
+      cast.bar(P(foot[0] - 0.04, foot[1] + 0.02, side * 0.11), P(foot[0] + 0.14, foot[1] + 0.03, side * 0.11), 0.05 * S, BRONZE); // shoe
+      cast.bar(bb, P(foot[0], foot[1], side * 0.09), t * 0.7, SILVER); // crank
+    }
   });
-  return finish(k.build());
+  stone.add(...cast.build(castMaterial).children);
+  return finish(stone);
 }
 
 // --------------------------------------------------------------- registry ----

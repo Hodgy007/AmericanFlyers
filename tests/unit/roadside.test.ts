@@ -137,11 +137,11 @@ describe('ground layers', () => {
     expect(sample(ventoux, 1200)[7]).toBeGreaterThan(0);
     for (const s of [alpe, stelvio, stageById('heartland'), stageById('hotw-tour-of-the-moon')]) expect(sample(s, 2200)[7]).toBe(0);
   });
-  it('paint the scree pale', () => {
+  it('paint the scree pale rock, not snow', () => {
     setStage(ventoux);
     const c = new THREE.Color();
     groundColor(1234, 567, 1700, { dist: 40, d: 100 }, c, new Array(8).fill(0));
-    expect(Math.min(c.r, c.g, c.b)).toBeGreaterThan(0.35);
+    expect(Math.min(c.r, c.g, c.b)).toBeGreaterThan(0.2); // pale limestone with darker gaps, well short of black
     expect(c.r).toBeGreaterThanOrEqual(c.b); // warm grey, not blue-white like snow
   });
   it('make the verge dirt, and use sandstone and sand in the desert', () => {

@@ -60,7 +60,7 @@ const WILD = ['#f6f6ee', '#f6f6ee', '#f2cf2e', '#f2cf2e', '#8a56c8']; // white, 
 const ALPINE = ['#f3f3f6', '#f0d447', '#6a7de0', '#e57fb0'];
 const GREY = ['#8d8a82', '#75726b', '#9b968b', '#6f6c66'];
 const PEBBLE = ['#a89f8a', '#b3aa97', '#938b79'];
-const LIMESTONE = ['#cfcabf', '#bdb7aa', '#d9d5cc', '#aaa496']; // Ventoux's pale scree
+const LIMESTONE = ['#b9b3a5', '#9d9686', '#c6c1b4', '#8a8372', '#6d675b']; // Ventoux's pale scree, with a few shadowed dark stones
 const RED = ['#a9482b', '#8c3b25', '#b9643b', '#9a5236'];
 const SAGE = ['#7f8a5e', '#8d9568', '#6c7a52'];
 
@@ -134,8 +134,8 @@ export function pickCover(w: readonly number[], desert: boolean, meadow: number,
   }
   if (x < grass + dry + dirt + rock + scree) {
     // Bare limestone scree: pale broken stones and nothing growing.
-    if (b > 0.6) return null;
-    return { kind: 'stone', color: pick(LIMESTONE, e), small: c < 0.5 };
+    if (b > 0.8) return null; // rubble is thick up there
+    return { kind: 'stone', color: pick(LIMESTONE, e), small: c < 0.45 };
   }
   return null; // snow
 }

@@ -6,6 +6,12 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Ventoux scree, Le Géant, campers on stacked hairpins
+
+- Mont Ventoux's summit scree reads as limestone rubble, not snow: a darker pale-grey base, warm ochre patches, dark streaks and gaps, a stronger grain and normal map for the scree layer (`CONTRAST`, `NORMAL` in `src/world/ground.ts`) and thicker, darker scattered stones on High and Ultra. Other stages are unchanged.
+- Le Géant du Tourmalet is rebuilt: a bronze cyclist (tapered limbs, head and helmet) out of the saddle on a steel bike with spoked wheels, on a stepped plinth with a "Le Géant du Tourmalet" plaque, with its own metallic material. `Kit.rod()` and `Kit.ball()` in `src/world/monumentKit.ts`.
+- Campers (and every other `groundSampler()` user) no longer float or sink on stacked hairpins. Cause: the road centreline is generated lazily, and a sampler only scanned what existed when it was made, so the other leg of a hairpin further up the course was missing from the blend between legs until the road had been extended. `candidatesFor()` in `src/world/terrain.ts` now generates the road to the finish first. The strict test is back: every camper within 0.3 m of the ground (`tests/unit/crowdLife.test.ts`).
+
 ### Auto graphics at a few frames a second
 
 - Auto graphics now steps down on a device managing only a few frames a second (frames of 120–400 ms): the 3 s window never held the 20 frames a verdict needed, so it stayed on Ultra. Six frames are now enough when their median is over 120 ms (`ADAPT.slowFewFrames`, `slowFewMs` in `src/world/adapt.ts`). Unit test in `tests/unit/quality.test.ts`.
