@@ -6,6 +6,7 @@ import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
 import { RIM_ROCK_SECTIONS, makeRoadside } from './world/canyon.js';
 import { summitCone, type SummitCone } from './world/summitCone';
+import { flatironsPlacement, type LonLat } from './world/flatironsPlacement';
 import type { RealRouteData } from './routes/realRoute';
 import { detectHairpins, elevationFrom, mapRoute } from './routes/realStage';
 import alpeRoute from './routes/real/alpe-dhuez';
@@ -33,6 +34,13 @@ interface LandmarkBase {
   clearance: number; // keep trees this far away
   /** Metres of course either side within which it is placed (default: 250 behind, 1,500 ahead). For huge, distant things. */
   reach?: number;
+  /**
+   * Placed in the world instead of along the road, for something whose real position is known (the Flatirons):
+   * metres east (x) and south (z) of the course start, `y` above the start's datum, and `yaw` about the vertical
+   * (three.js `rotation.y`: the model's +z faces (sin yaw, cos yaw)). `side` and `offset` are then ignored;
+   * `first` and `reach` still say when it is in range, by course distance.
+   */
+  world?: { x: number; z: number; y: number; yaw: number };
 }
 
 /**
@@ -155,6 +163,10 @@ const lowlandHills = (x: number, z: number) =>
 /** A code-built landmark standing once at course distance `d` (see world/monuments.ts). `size` is its height in metres. */
 export const monumentAt = (model: MonumentId, d: number, side: -1 | 1, offset: number, size: number, extra: Partial<LandmarkBase> & { options?: MonumentOptions } = {}): LandmarkKind =>
   ({ model, first: d, every: 1e9, side, offset, size, clearance: 8, ...extra });
+
+/** A code-built landmark at a fixed place in the world (see `LandmarkBase.world`), in range the whole stage: `size` is its height in metres. */
+const monumentInWorld = (model: MonumentId, world: NonNullable<LandmarkBase['world']>, size: number, extra: Partial<LandmarkBase> & { options?: MonumentOptions } = {}): LandmarkKind =>
+  ({ model, first: 0, every: 1e9, side: 0, offset: 0, size, clearance: 1, reach: 20000, world, ...extra });
 
 /** The summit board at the top of a European climb, just before the finish line, on the right. */
 const colSign = (finish: number, options: MonumentOptions): LandmarkKind => monumentAt('col-sign', finish - 55, 1, 8.5, 2.6, { yaw: -0.35, clearance: 6, options });
@@ -715,6 +727,11 @@ const mtDiablo = buildClimb({
 // Flagstaff Mountain, Boulder, Colorado: Flagstaff Road from Baseline Road (5,730 ft) round Panorama Point and up
 // the switchbacks to the crest at 7,705 ft. 4.6 miles, 1,975 ft (602 m), 8.1% (pjammcycling.com; the Super Flag
 // climb the locals race). Ponderosa pine and open meadow, sandstone outcrops, and the Flatirons across the valley.
+const FLAGSTAFF_START: LonLat = [-105.2877748, 40.0000659]; // Baseline Road and Flagstaff Road: the point the road is baked from
+const FLAGSTAFF_FLATIRONS_SIZE = 270; // m tall: about 10 degrees of sky from the start, so they read from the road
+const flatirons = flatironsPlacement(FLAGSTAFF_START, [-105.29467, 39.99047], [-105.29281, 39.982], [-105.2, 39.99], FLAGSTAFF_FLATIRONS_SIZE);
+const FLAGSTAFF_FLATIRONS = monumentInWorld('flatirons', { x: flatirons.x, z: flatirons.z, y: 10, yaw: flatirons.yaw }, FLAGSTAFF_FLATIRONS_SIZE);
+
 const flagstaff = buildClimb({
   id: 'flagstaff',
   route: flagstaffRoute,
@@ -739,9 +756,11 @@ const flagstaff = buildClimb({
     road: 'us-highway',
   },
   landmarks: [
-    // The Flatirons stand above Chautauqua, south of the lower road: on the left. The road doubles back on itself
-    // (Panorama Point, the first switchbacks), so they come and go on the left of the first 2.5 km, ahead of you off the start.
-    { ...monumentAt('flatirons', 2500, -1, 1500, 500, { clearance: 1 }), reach: 3000 },
+    // The Flatirons stand where they really do: their slabs run north to south about 1.1 to 2 km south-west of the start
+    // (the First Flatiron at 39°59'25.7"N 105°17'40.8"W, the Fifth at 39°58'55.2"N 105°17'34.1"W, uncovercolorado.com)
+    // and face east, over Boulder. So they are on the left of the lower road and of the first switchbacks, and the road
+    // swings round until they are behind it. See world/flatironsPlacement.ts.
+    FLAGSTAFF_FLATIRONS,
     summitSign(7400, 'FLAGSTAFF MOUNTAIN'),
   ],
 });
