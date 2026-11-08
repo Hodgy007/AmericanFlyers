@@ -1,4 +1,4 @@
-// "Back to the hub?" for a ride in progress: Keep riding, or save it and go. Resolves true to leave.
+// "Back to the hub?" / "End ride?" for a ride in progress: Keep riding, or save it and go. Resolves true to leave.
 
 export interface LeaveInfo {
   signedIn: boolean;
@@ -6,17 +6,21 @@ export interface LeaveInfo {
   time: string;
   /** What is under way besides the ride itself: "a race", "a group ride", "a workout", or empty. */
   also: string;
+  /** "hub" (default): leaving for the hub. "end": the ⏹ End button, which finishes with the ride summary. */
+  purpose?: 'hub' | 'end';
 }
 
 export function askToLeave(info: LeaveInfo): Promise<boolean> {
   const dialog = document.getElementById('hub-leave') as HTMLDialogElement;
   const text = document.getElementById('hub-leave-text')!;
   const go = document.getElementById('hub-leave-go')!;
+  const ending = info.purpose === 'end';
+  document.getElementById('hub-leave-title')!.textContent = ending ? 'End ride?' : 'Back to the hub?';
   const also = info.also ? ` This ends ${info.also}.` : '';
   text.textContent = info.signedIn
-    ? `You’ve ridden ${info.time}. We’ll save this ride to your account before you go.${also}`
+    ? `You’ve ridden ${info.time}. We’ll save this ride to your account${ending ? '' : ' before you go'}.${also}`
     : `You’ve ridden ${info.time}. You’re not signed in, so this ride won’t be saved.${also}`;
-  go.textContent = info.signedIn ? 'Save and go to the hub' : 'End ride and go to the hub';
+  go.textContent = ending ? (info.signedIn ? 'Save and finish' : 'End ride') : info.signedIn ? 'Save and go to the hub' : 'End ride and go to the hub';
   return new Promise((resolve) => {
     dialog.returnValue = 'keep';
     dialog.addEventListener('close', () => resolve(dialog.returnValue === 'leave'), { once: true });

@@ -6,6 +6,12 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### A visible way to end the ride
+
+- A **⏹ End** button sits in the top bar on the ride screen (first in the row on phones, next to ☰ Menu elsewhere). After a minute or more (or in a race or group ride) it asks **End ride?** with **Save and finish** (**End ride** when signed out) or **Keep riding**, then shows the ride summary, which has **Start a new ride** and **Back to the hub**. Under a minute it goes straight to the hub. The old **↺ End / reset ride** menu item is now **⏹ End ride** and does the same.
+- **🏠 Hub** and **⏹ End ride** now sit near the top of the ☰ Menu. The menu also has a `vh` height fallback plus touch scrolling, so on browsers without `dvh` (older Safari) it scrolls instead of running off the screen.
+- `askToLeave()` in `src/hub/leave.ts` serves both questions (`purpose: 'end'`); `finishRide()` in `src/main.ts`. Test: `tests/e2e/endRide.spec.ts`.
+
 ### Four American climbs
 
 - **New stages** on their real roads: **Mount Washington Auto Road** (`mt-washington`, 12.2 km, 1,417 m, pitches to 22%, cloudy and very windy, bare grey rock above the tree line), **Mount Blue Sky** (`mt-blue-sky`, 23.3 km, 1,080 m to 14,130 ft, the continuation of the Echo Lake stage from Echo Lake Lodge, tundra and snow patches above the tree line), **Mount Diablo** (`mt-diablo`, 18 km, 990 m, golden grass and oaks) and **Flagstaff Mountain** (`flagstaff`, 7.4 km, 602 m, with the Flatirons beside the lower switchbacks). Each ends at its summit building or ruin and a brown park sign with the real elevation, and has a finish badge.

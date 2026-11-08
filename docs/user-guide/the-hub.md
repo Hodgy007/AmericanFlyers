@@ -72,7 +72,7 @@ The turntable and the charts load only when you look at them, and your numbers f
 If you've ridden a minute or more, or you're in a race or group ride, you're asked first:
 
 - **Keep riding** closes the question and nothing changes.
-- **Save and go to the hub** saves the ride to your account (as **End / reset ride** does) and shows the hub.
+- **Save and go to the hub** saves the ride to your account (as **⏹ End** does) and shows the hub.
 
 A ride that's already finished needs no question, and neither does one under a minute.
 

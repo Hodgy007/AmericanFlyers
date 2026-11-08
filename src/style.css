@@ -1190,8 +1190,12 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 .actions .menu button .mi-sub { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 1px; }
 .actions .menu button .mi-sub:empty { display: none; }
 /* The menu has grown: let it scroll on short screens instead of running off the bottom. */
-.menu { max-height: calc(100dvh - 76px); overflow-y: auto; }
-@media (max-width: 560px) { .menu { max-height: calc(100dvh - 104px); } }
+.menu { max-height: calc(100vh - 76px); max-height: calc(100dvh - 76px); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; } /* vh first: old WebKit has no dvh */
+@media (max-width: 560px) { .menu { max-height: calc(100vh - 104px); max-height: calc(100dvh - 104px); } }
+/* ⏹ End: always on the ride screen (not the hub or sign-in page). On phones the top bar scrolls sideways, so it goes first. */
+.actions .end-ride { border-color: rgba(230, 57, 70, 0.55); }
+body.at-home .end-ride { display: none; }
+@media (max-width: 560px) { .actions .end-ride { order: -1; } }
 /* Small banner offering one-tap reconnection when a remembered device isn't connected. */
 .device-banner {
   position: fixed; left: 16px; bottom: 96px; z-index: 35; /* bottom left: clear of the data blocks, the menu and the toast */
