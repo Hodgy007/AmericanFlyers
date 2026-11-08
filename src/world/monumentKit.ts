@@ -151,6 +151,23 @@ export class Kit {
     return this.add(new THREE.BoxGeometry(len, t, t), color, shade, local);
   }
 
+  /** A tapering round limb from point a (radius `r0`) to point b (radius `r1`): arms, legs, a torso. */
+  rod(a: [number, number, number], b: [number, number, number], r0: number, r1: number, color: Col, seg = 6, shade = 0.9) {
+    const va = new THREE.Vector3(...a);
+    const vb = new THREE.Vector3(...b);
+    const dir = vb.clone().sub(va);
+    const len = dir.length();
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    const local = new THREE.Matrix4().compose(va.clone().add(vb).multiplyScalar(0.5), q, new THREE.Vector3(1, 1, 1));
+    return this.add(new THREE.CylinderGeometry(r1, r0, len, seg, 1), color, shade, local);
+  }
+
+  /** A faceted ball (a head, a knee, a joint) of radius `r` centred on (x, y, z), optionally squashed by (sx, sy, sz). */
+  ball(r: number, x: number, y: number, z: number, color: Col, sx = 1, sy = 1, sz = 1, shade = 0.9) {
+    const local = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(sx, sy, sz));
+    return this.add(new THREE.IcosahedronGeometry(r, 1), color, shade, local);
+  }
+
   /** A ring (a wheel) in the x–y plane, centred on (x, y, z), `r` to the middle of the tube. */
   ring(r: number, tube: number, x: number, y: number, z: number, color: Col, seg = 16) {
     return this.add(new THREE.TorusGeometry(r, tube, 5, seg).translate(x, y, z), color, 0.9);

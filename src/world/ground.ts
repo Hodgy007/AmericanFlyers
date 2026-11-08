@@ -24,9 +24,9 @@ const FILES = ['grass', 'dry', 'dirt', 'rock', 'snow', 'sandstone', 'sand', 'scr
 /** Metres of ground one repeat of each layer covers. */
 const SCALE = [5, 5, 4, 6, 6, 6, 4, 4];
 /** How much of each layer's grain to keep (snow's trampled dark patches, for one, would read as dirt). */
-const CONTRAST = [1.9, 1.6, 1.4, 1.3, 0.6, 1.3, 1.2, 1];
+const CONTRAST = [1.9, 1.6, 1.4, 1.3, 0.6, 1.3, 1.2, 2.1];
 /** How hard each layer's normal map pushes. */
-const NORMAL = [0.7, 0.6, 0.6, 1, 0.3, 0.8, 0.6, 0.9];
+const NORMAL = [0.7, 0.6, 0.6, 1, 0.3, 0.8, 0.6, 1.7];
 
 interface Decoded {
   rgba: Uint8ClampedArray;
