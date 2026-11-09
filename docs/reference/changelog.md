@@ -36,6 +36,11 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Database.** `segment_efforts` (own rows only), `segment_limits` (a plausibility floor per built-in segment, from the app's own physics) and `segment_leaderboard()`; `delete_my_account()` deletes the efforts by name. Applied to the live database (the SQL is in `db/schema.sql`, "KOM segments").
 - **Achievements.** Hill climber, Beat yourself and Segment collector. **Privacy** text and docs updated; `?komtest` lets a demo ride count for your local times.
 - Tests: `segments`, `segmentLimits`, `segmentStore`, `segmentAchievements` (unit) and `kom.spec.ts` (e2e).
+### Mont Ventoux's summit: modelled mast on the white plateau
+
+- **The summit is modelled** (Higgsfield, `public/models/ventoux-summit.glb`, about 1.1 MB and 21k triangles): the banded red-and-white weather-station mast on its pale concrete block, over the code-built observatory, which stays as the fallback if the file is missing (`MONUMENT_GLB` in `landmarks.ts`). It stands right of the road at 21,300 m, on the level crown of a new **summit cone** (130 m flat, then the ground falls away at 20 degrees), so it reads on the skyline well below the plateau and then sweeps past on the right in the last 130 m. The code-built mast grew to match (banded tower from 9.5 m to 68 m, taller aerial), so the fallback isn't stretched at the landmark's 76 m.
+- **New scree texture** (Higgsfield `gpt_image_2`, through `scripts/prep-terrain.py`): pale limestone rubble with ochre patches and dark stones replaces Poly Haven's *Gray Rocks* in `public/textures/terrain/scree.jpg` and its normal map, so Ventoux's bald white top is limestone, not snow.
+- Tests: `tests/unit/monuments.test.ts` (the observatory's height and place on the summit plateau).
 
 ### Higgsfield graphics
 

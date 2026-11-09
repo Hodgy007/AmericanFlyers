@@ -9,9 +9,9 @@ import { smoothstep } from './noise';
 
 /** Where the cone stands and how it falls away. Heights share the road's datum (metres above the start). */
 export interface SummitCone {
-  /** Course distance and side (-1 left, +1 right, as for a landmark) and offset of the cone's top from the road. */
+  /** Course distance and side (-1 left, +1 right, as for a landmark; 0: on the road) and offset of the cone's top from the road. */
   d: number;
-  side: -1 | 1;
+  side: -1 | 0 | 1;
   offset: number;
   /** Metres the top stands above the road at `d`. */
   rise: number;
@@ -86,3 +86,4 @@ export function basinHeight(b: Basin) {
     return w <= 0 ? wild : wild + (b.floor - wild) * w;
   };
 }
+

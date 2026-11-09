@@ -44,7 +44,7 @@ function roofOver(k: Kit, w: number, d: number, rise: number, over: number, x: n
 
 // ----------------------------------------------------- Ventoux observatory ----
 
-/** The weather station on the summit of Mont Ventoux: a pale concrete building and the red-and-white banded mast (about 50 m). */
+/** The weather station on the summit of Mont Ventoux: a pale concrete building and the red-and-white banded mast (about 75 m). */
 export function buildObservatory(): THREE.Group {
   const k = new Kit();
   const PALE = '#dcd6c7';
@@ -62,8 +62,8 @@ export function buildObservatory(): THREE.Group {
   windows(k, 6, 3.0, 0, 2, 3.2, 2, 2.6, 3.2, 1.3, 1.5);
   k.box(2.4, 2.8, 0.2, -11, 0, 5.55, '#3a3a40', 0, 1); // the door
   // The mast: seven bands of red and white, tapering, with a platform and an aerial on top.
-  const base = 9.5, top = 44, bands = 7;
-  const radius = (y: number) => 1.9 - (1.9 - 0.85) * ((y - base) / (top - base));
+  const base = 9.5, top = 68, bands = 7;
+  const radius = (y: number) => 1.9 - (1.9 - 0.9) * ((y - base) / (top - base));
   for (let i = 0; i < bands; i++) {
     const y0 = base + ((top - base) * i) / bands;
     const y1 = base + ((top - base) * (i + 1)) / bands;
@@ -71,10 +71,10 @@ export function buildObservatory(): THREE.Group {
   }
   k.cyl(1.7, 1.7, 0.4, 6, top, -1, '#9a9a9a', 10, 1); // platform
   k.box(2.2, 1.7, 2.2, 6, top + 0.4, -1, '#e8e5de'); // equipment cabin
-  k.cyl(0.14, 0.05, 5.6, 6, top + 2.1, -1, '#c8281c', 5, 1); // aerial
-  k.bar([4.4, top + 5, -1], [7.6, top + 5, -1], 0.1, '#8a8a8a');
+  k.cyl(0.14, 0.05, 6.6, 6, top + 2.1, -1, '#c8281c', 5, 1); // aerial
+  k.bar([4.4, top + 6, -1], [7.6, top + 6, -1], 0.1, '#8a8a8a');
   for (const [gx, gz] of [[16, -9], [-4, -9], [16, 7], [-4, 7]] as const) {
-    k.bar([6, 38, -1], [gx, 0, gz], 0.08, '#6c6f74', 1); // guy wires
+    k.bar([6, 46, -1], [gx, 0, gz], 0.08, '#6c6f74', 1); // guy wires
   }
   return finish(k.build());
 }

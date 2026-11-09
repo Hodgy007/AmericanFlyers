@@ -56,6 +56,7 @@ When you choose a stage, the app sets `stage` in the address bar to that stage's
 | Key | What it does |
 | --- | --- |
 | **M** | Sound on or off. |
+| **N** | Music on or off. |
 | **F** | Full screen on or off. |
 | **−** or **[** | Easier gear (with virtual shifting on). |
 | **+**, **=** or **]** | Harder gear (with virtual shifting on). |
