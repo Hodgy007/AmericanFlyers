@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildApartments, buildChalet, buildChurch, buildCrestHouseRuins, buildDiabloSummit, buildLogLodge, buildObservatory, buildPassBuildings, buildWashingtonSummit, buildWashingtonTower } from './monumentBuildings';
 import { buildFlatirons } from './flatirons';
+import { buildBixbyBridge, buildCapitol, buildSkyline, buildTerrace } from './monumentCity';
 import { Kit, boardMaterial, finish, fitText } from './monumentKit';
 import type { MonumentId, MonumentOptions } from './monumentTypes';
 
@@ -219,6 +220,10 @@ const BUILDERS: Record<MonumentId, (o: MonumentOptions) => THREE.Group> = {
   'diablo-summit': buildDiabloSummit,
   'crest-house-ruins': buildCrestHouseRuins,
   'summit-sign-us': buildSummitSignUs,
+  'manhattan-skyline': buildSkyline,
+  'virginia-capitol': buildCapitol,
+  terrace: buildTerrace,
+  'bixby-bridge': buildBixbyBridge,
 };
 
 export const MONUMENT_IDS = Object.keys(BUILDERS) as MonumentId[];

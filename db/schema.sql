@@ -438,7 +438,11 @@ insert into public.stage_limits (stage_id, distance_m, min_finish_s, max_avg_kmh
   ('mt-washington', 12200, 2146, 21),
   ('mt-blue-sky', 23300, 2246, 38),
   ('mt-diablo', 18000, 1927, 34),
-  ('flagstaff', 7400, 999, 27)
+  ('flagstaff', 7400, 999, 27),
+  ('richmond-worlds', 32400, 2073, 57),
+  ('central-park', 29400, 1859, 57),
+  ('harrogate-worlds', 27800, 1793, 56),
+  ('pacific-coast', 39100, 2603, 55)
 on conflict (stage_id) do update set distance_m = excluded.distance_m, min_finish_s = excluded.min_finish_s, max_avg_kmh = excluded.max_avg_kmh;
 
 -- Set by the app when a ride used the demo slider or ?timescale: such rides never count for times.
@@ -605,7 +609,11 @@ insert into public.event_stage_pool (stage_id, name, length_m, position) values
   ('mt-washington', 'Mount Washington', 12200, 9),
   ('mt-blue-sky', 'Mount Blue Sky', 23300, 10),
   ('mt-diablo', 'Mount Diablo', 18000, 11),
-  ('flagstaff', 'Flagstaff Mountain', 7400, 12)
+  ('flagstaff', 'Flagstaff Mountain', 7400, 12),
+  ('richmond-worlds', 'Richmond Worlds Circuit', 32400, 13),
+  ('central-park', 'Central Park Loop', 29400, 14),
+  ('harrogate-worlds', 'Harrogate Worlds Circuit', 27800, 15),
+  ('pacific-coast', 'Pacific Coast Highway', 39100, 16)
 on conflict (stage_id) do nothing;
 
 create table if not exists public.events (

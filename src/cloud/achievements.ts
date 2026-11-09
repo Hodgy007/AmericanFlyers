@@ -85,6 +85,10 @@ export function achievements(acts: Activity[], ftp: FtpEntry[], riderKg: number)
   first('🦅', 'Mount Blue Sky', 'Ride to 14,130 feet on the highest paved road in North America.', (a) => a.finished && a.stage_id === 'mt-blue-sky');
   first('🌅', 'Mount Diablo', 'Climb Mount Diablo from Danville to the summit tower.', (a) => a.finished && a.stage_id === 'mt-diablo');
   first('🌲', 'Flagstaff', 'Climb Flagstaff Road above Boulder.', (a) => a.finished && a.stage_id === 'flagstaff');
+  first('🧱', 'Richmond Worlds', 'Finish the 2015 World Championships circuit in Richmond: both laps over the cobbles of Libby Hill and 23rd Street.', (a) => a.finished && a.stage_id === 'richmond-worlds');
+  first('🗽', 'Central Park', 'Ride three laps of Central Park’s Park Drive, up Harlem Hill each time.', (a) => a.finished && a.stage_id === 'central-park');
+  first('🫖', 'Harrogate Worlds', 'Finish the 2019 World Championships circuit in Harrogate, over the Oak Beck climb and up Parliament Street.', (a) => a.finished && a.stage_id === 'harrogate-worlds');
+  first('🌊', 'Pacific Coast', 'Ride California Highway 1 through Big Sur, over Bixby Creek Bridge, to Big Sur village.', (a) => a.finished && a.stage_id === 'pacific-coast');
   first('🧪', 'Tested', 'Complete a ramp FTP test.', (a) => a.workout_name === RAMP_TEST_NAME);
   first('⚡', 'Sprinter', 'Hold 800 W for 5 seconds.', (a) => (a.best_power?.['5'] ?? 0) >= 800);
   first('🔥', 'Four watts', `Hold 4 W/kg for 20 minutes (${Math.round(riderKg * 4)} W at ${riderKg} kg).`, (a) => (a.best_power?.['1200'] ?? 0) >= riderKg * 4);

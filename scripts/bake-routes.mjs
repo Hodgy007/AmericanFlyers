@@ -117,7 +117,7 @@ const ROUTES = {
   // BRouter picks (it rides West Grace Street where the race used Broad Street). The real lap is 16.2 km; the road
   // baked here is 5% shorter and the game stretches it to the published length.
   'richmond-worlds': {
-    lonlats: [[-77.43638, 37.54238], [-77.4502, 37.5463], [-77.4642, 37.5565], [-77.4540, 37.5490], [-77.4338, 37.5352], [-77.4225, 37.5261], [-77.4184, 37.5251], [-77.4173, 37.5272], [-77.4170, 37.5283], [-77.4229, 37.5305], [-77.4229, 37.5322], [-77.4324, 37.5373], [-77.43638, 37.54238]],
+    lonlats: [[-77.43638, 37.54238], [-77.4502, 37.5463], [-77.4642, 37.5565], [-77.4540, 37.5490], [-77.4338, 37.5352], [-77.4225, 37.5261], [-77.4184, 37.5251], [-77.4173, 37.5272], [-77.4170, 37.5283], [-77.4229, 37.5305], [-77.4228, 37.5341], [-77.4324, 37.5373], [-77.43638, 37.54238]],
     length: 16200, start: 60, end: 60, closed: true, smoothing: 1.5,
   },
   // Central Park, New York: the Park Drive loop (West Drive, Center Drive and East Drive, about 6.1 miles) ridden counter-clockwise

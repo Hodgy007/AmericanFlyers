@@ -39,7 +39,8 @@ function sitesBetween(from: number, to: number, widen = false): Site[] {
   currentStage().landmarks.forEach((kind, index) => {
     const lo = widen && kind.reach ? Math.min(from, mid - kind.reach) : from;
     const hi = widen && kind.reach ? Math.max(to, mid + kind.reach) : to;
-    for (let k = Math.max(0, Math.ceil((lo - kind.first) / kind.every)); kind.first + k * kind.every <= hi; k++) {
+    const last = Math.min(hi, kind.until ?? Infinity);
+    for (let k = Math.max(0, Math.ceil((lo - kind.first) / kind.every)); kind.first + k * kind.every <= last; k++) {
       out.push(siteAt(kind, index, kind.first + k * kind.every));
     }
   });
@@ -158,7 +159,7 @@ export class Landmarks {
     if (kind.span === 'along') {
       // Long axis follows the road, pitched to match the grade.
       obj.rotation.set(0, -p.heading, Math.atan(gradeAt(site.d)), 'YXZ');
-      obj.position.y = p.y; // sits on the road, not sunk
+      obj.position.y = p.y + (kind.lift ?? 0); // sits on the road, not sunk
     } else if (kind.side === 0) {
       // Face back down the road towards the approaching rider.
       obj.rotation.y = Math.atan2(-Math.cos(p.heading), -Math.sin(p.heading));

@@ -41,6 +41,10 @@ export const STAGE_WINDS: Record<string, StageWind> = {
   'mt-blue-sky': { ms: 6.5, angle: 190 }, // exposed above the tree line: the westerlies
   'mt-diablo': { ms: 3.5, angle: 100 }, // the evening sea breeze
   flagstaff: { ms: 4, angle: 150 }, // the foothills' westerly
+  'richmond-worlds': { ms: 3, angle: 100 }, // a light south-westerly across the Monument Avenue leg
+  'central-park': { ms: 3.5, angle: 75 }, // a westerly over the park, from the left off the start
+  'harrogate-worlds': { ms: 5.5, angle: 240 }, // the Yorkshire south-westerly: a headwind out along Otley Road
+  'pacific-coast': { ms: 6, angle: 310 }, // the afternoon north-westerly off the ocean: a tailwind with a push from the right
 };
 
 /** Wind speed scale by weather: lighter on clear days, much more when it rains. */

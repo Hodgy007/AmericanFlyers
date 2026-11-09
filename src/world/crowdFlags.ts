@@ -79,6 +79,38 @@ const PAINT: Record<FlagDesign, (ctx: CanvasRenderingContext2D) => void> = {
     dot(ctx, CELL_W * 0.4, CELL_H / 2, 9, '#ffd700');
   },
   nl: (ctx) => bands(ctx, ['#ae1c28', '#ffffff', '#21468b'], false),
+  // The Union Flag: the crosses of St George, St Andrew and St Patrick over blue.
+  gb: (ctx) => {
+    ctx.fillStyle = '#012169';
+    ctx.fillRect(0, 0, CELL_W, CELL_H);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 16;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(CELL_W, CELL_H);
+    ctx.moveTo(CELL_W, 0); ctx.lineTo(0, CELL_H);
+    ctx.stroke();
+    ctx.strokeStyle = '#c8102e';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(CELL_W, CELL_H);
+    ctx.moveTo(CELL_W, 0); ctx.lineTo(0, CELL_H);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, CELL_H / 2 - 13, CELL_W, 26);
+    ctx.fillRect(CELL_W / 2 - 13, 0, 26, CELL_H);
+    ctx.fillStyle = '#c8102e';
+    ctx.fillRect(0, CELL_H / 2 - 8, CELL_W, 16);
+    ctx.fillRect(CELL_W / 2 - 8, 0, 16, CELL_H);
+  },
+  // The flag of Yorkshire: a white rose with a gold heart on blue.
+  yorkshire: (ctx) => {
+    bands(ctx, ['#0b3a8f'], true);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      dot(ctx, CELL_W / 2 + Math.cos(a) * 15, CELL_H / 2 + Math.sin(a) * 15, 12, '#ffffff');
+    }
+    dot(ctx, CELL_W / 2, CELL_H / 2, 8, '#f2c200');
+  },
   // Plain orange with a darker edge: what the Dutch bring when the tricolour is not enough.
   orange: (ctx) => {
     bands(ctx, ['#ff6a00'], true);

@@ -5,11 +5,11 @@ import { signStyleOf } from './milestones';
 // shirts and flags. Pure data and lookups (no WebGL), so the choice is unit-tested;
 // crowds.ts draws the shirts and crowdFlags.ts paints the flag designs.
 
-/** France, Italy, the USA, Colorado (the Hell of the West stages) and the Dutch (the Alpe's Dutch Corner). */
-export type CultureId = 'fr' | 'it' | 'us' | 'co' | 'nl';
+/** France, Italy, the USA, Colorado (the Hell of the West stages), the Dutch (the Alpe's Dutch Corner) and Britain (Yorkshire). */
+export type CultureId = 'fr' | 'it' | 'us' | 'co' | 'nl' | 'gb';
 
 /** Every flag a crowd can wave, in the row order of the flag atlas (crowdFlags.ts). */
-export const FLAG_DESIGNS = ['fr', 'polka', 'bretagne', 'basque', 'it', 'pink', 'us', 'colorado', 'nl', 'orange'] as const;
+export const FLAG_DESIGNS = ['fr', 'polka', 'bretagne', 'basque', 'it', 'pink', 'us', 'colorado', 'nl', 'orange', 'gb', 'yorkshire'] as const;
 export type FlagDesign = (typeof FLAG_DESIGNS)[number];
 
 /** The shirt colour that means "white with red polka dots" (a King of the Mountains jersey); the shader draws the dots. */
@@ -37,11 +37,14 @@ export const CULTURES: Record<CultureId, Culture> = {
   // The Hell of the West stages: the state flag next to the national one.
   co: { shirts: [...MIXED, ['#7a1f2b', 2], ['#f2c200', 2], ['#0b3d91', 1.5]], flags: ['us', 'us', 'us', 'us', 'colorado', 'colorado', 'colorado', 'colorado'] },
   // The Dutch Corner: nearly everyone in orange.
+  // Yorkshire: Union flags and the white rose of Yorkshire, the odd polka-dot jersey, tea-room greens and Dales wool colours.
+  gb: { shirts: [...MIXED, [POLKA, 2], ['#ffffff', 2], ['#1c3f7a', 2], ['#c8102e', 2], ['#2f5d3a', 1.5]], flags: ['gb', 'gb', 'gb', 'yorkshire', 'yorkshire', 'yorkshire', 'polka', 'gb'] },
   nl: { shirts: [['#ff6a00', 14], ['#ff8a1f', 8], ['#f26a1b', 6], ['#ffffff', 1], ['#d4202c', 0.6], ['#1f4ea0', 0.6], ['#2b2d42', 0.4]], flags: ['nl', 'nl', 'nl', 'orange', 'orange', 'nl', 'orange', 'nl'] },
 };
 
-/** The crowd's home culture on a stage, from its hairpin word (so no per-stage list): Virage is France, Tornante Italy, the Hell of the West stages and the Colorado climbs are Colorado, anything else the USA. */
-export function cultureOf(stage: Pick<Stage, 'id' | 'hairpinWord' | 'finish'>): CultureId {
+/** The crowd's home culture on a stage: the stage's own `culture` if it names one, else from its hairpin word (so no per-stage list): Virage is France, Tornante Italy, the Hell of the West stages and the Colorado climbs are Colorado, anything else the USA. */
+export function cultureOf(stage: Pick<Stage, 'id' | 'hairpinWord' | 'finish'> & { culture?: CultureId }): CultureId {
+  if (stage.culture) return stage.culture;
   const sign = signStyleOf(stage);
   if (sign !== 'us') return sign;
   return stage.id.startsWith('hotw-') || ['hell-of-the-west', 'mt-blue-sky', 'flagstaff'].includes(stage.id) ? 'co' : 'us';

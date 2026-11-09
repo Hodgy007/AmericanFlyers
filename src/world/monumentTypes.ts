@@ -16,7 +16,11 @@ export type MonumentId =
   | 'washington-tower'
   | 'diablo-summit'
   | 'crest-house-ruins'
-  | 'summit-sign-us';
+  | 'summit-sign-us'
+  | 'manhattan-skyline'
+  | 'virginia-capitol'
+  | 'terrace'
+  | 'bixby-bridge';
 
 /** Words and looks a monument can be given (signs, plaques, clusters). Which fields matter depends on the monument. */
 export interface MonumentOptions {
@@ -26,4 +30,8 @@ export interface MonumentOptions {
   style?: 'fr' | 'it' | 'us';
   /** Varies a cluster of buildings (how many, how tall); the same seed always builds the same cluster. */
   seed?: number;
+  /** What a row of town houses is built of (default: brick). */
+  material?: 'brick' | 'stone';
+  /** A park's road, as (x east, z south) points from the course start: the Manhattan skyline stands round it. */
+  loop?: [number, number][];
 }

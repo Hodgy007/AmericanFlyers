@@ -39,7 +39,7 @@ export function bendsOf(stage: Stage): Bend[] {
 }
 
 /** Stages with numbered hairpins and a finish: the mountain climbs (and uploaded routes that have them). */
-export const isClimb = (stage: Stage) => stage.signs.length > 0 && stage.finish !== null;
+export const isClimb = (stage: Stage) => stage.climb !== false && stage.signs.length > 0 && stage.finish !== null;
 
 /** Deterministic hash of (a, b) to [0, 1). */
 export function hash01(a: number, b = 0, c = 0): number {
