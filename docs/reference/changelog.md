@@ -6,6 +6,10 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Loose ends from the polish batch
+
+- **autoGraphics e2e no longer flaky.** The race: the test looked at the toast (up for 4.5 s) and at `__afGraphics.change` (overwritten by the next step down) some time after the tier had dropped, and read the tier for the Settings note separately from the note while Auto was still stepping down; the last reload also had no wait for the hub. The test now records toasts and changes as they happen (MutationObserver and a 20 ms sampler), waits until the tier and the note agree, and waits for the hub after every reload. Assertions are unchanged.
+
 ### Stage fixes: Washington, Flagstaff, training plans
 
 - **Stelvio's hairpin numbers were already right.** The detector's 48 match the real plaques (48 and 47 follow Gomagoi below Trafoi, 46 is at the Hotel Bella Vista in Trafoi, the Franzenshöhe is at 22, 4 to 1 come together before the last ~500 m straight); the docs said they might be out by four. Pinned by a test; no detector change.

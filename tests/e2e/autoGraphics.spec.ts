@@ -27,6 +27,21 @@ test('Auto steps down when frames are jerky, says so, and remembers what worked'
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await setup(page);
+  // Record what Auto does as it happens, not just what is showing when the test next looks: the toast stays up for
+  // 4.5 s and `change` is overwritten by the next step down, so on a loaded machine a late look would miss them.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __toasts: string[]; __changes: string[]; __afGraphics?: { change: string } };
+    w.__toasts = [];
+    w.__changes = [];
+    new MutationObserver(() => {
+      const t = document.getElementById('toast')?.textContent?.trim();
+      if (t && w.__toasts[w.__toasts.length - 1] !== t) w.__toasts.push(t);
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+    setInterval(() => {
+      const c = w.__afGraphics?.change;
+      if (c && w.__changes[w.__changes.length - 1] !== c) w.__changes.push(c);
+    }, 20);
+  });
   await page.setViewportSize({ width: 320, height: 200 }); // Ultra in software is slow: keep the canvas small
   await page.goto('/?softgpu=off&jank=80&settle=4000');
   await expect(page.locator('#hub')).toBeVisible();
@@ -40,8 +55,9 @@ test('Auto steps down when frames are jerky, says so, and remembers what worked'
 
   // 80 ms of extra work in every frame: clearly struggling, so a whole tier goes at once, with a note.
   await expect.poll(async () => (await gfx(page)).tier, { timeout: 120_000 }).not.toBe('ultra');
-  expect((await gfx(page)).change).toContain('fast');
-  await expect(page.locator('#toast')).toContainText(/Graphics lowered to \w+ for a smoother ride/);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __changes: string[] }).__changes[0] ?? '')).toContain('fast');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __toasts: string[] }).__toasts.join('|')))
+    .toMatch(/Graphics lowered to \w+ for a smoother ride/);
 
   // Settings names what Auto is running now and explains it.
   await press(page, '#btn-settings');
@@ -52,9 +68,12 @@ test('Auto steps down when frames are jerky, says so, and remembers what worked'
     const t = (await gfx(page)).tier;
     return (await page.locator('#graphics-choice option[value=auto]').textContent()) === `Auto (now: ${cap(t)})`;
   }, { timeout: 15_000 }).toBe(true);
-  const now = (await gfx(page)).tier;
-  await expect(page.locator('#graphics-note')).toContainText('Auto starts on Ultra');
-  await expect(page.locator('#graphics-note')).toContainText(`lowered to ${now[0].toUpperCase()}${now.slice(1)}`);
+  // Auto may still be stepping down under the jank, so read the tier and the note together and wait until they agree.
+  await expect.poll(async () => {
+    const t = (await gfx(page)).tier;
+    const note = (await page.locator('#graphics-note').textContent()) ?? '';
+    return note.includes('Auto starts on Ultra') && note.includes(`lowered to ${cap(t)}`);
+  }, { timeout: 15_000 }).toBe(true);
   await press(page, '#settings button[value=cancel]');
   expect(errors, errors.join('\n')).toEqual([]);
 });
@@ -85,6 +104,7 @@ test('Auto starts from what it remembered, and re-tests one tier higher every th
   expect(await gfx(page)).toMatchObject({ tier: 'high', scale: 1, remembered: 'medium', retest: true });
   expect(JSON.parse((await memory(page))!)).toMatchObject({ tier: 'medium', sessions: 0 });
   await page.reload();
+  await expect(page.locator('#hub')).toBeVisible();
   expect(await gfx(page)).toMatchObject({ tier: 'medium', retest: false }); // and then back to the remembered tier
   expect(errors, errors.join('\n')).toEqual([]);
 });
