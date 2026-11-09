@@ -170,15 +170,14 @@ const kitMats = new Map<string, THREE.Material>();
  */
 export function applyKitStyle(root: THREE.Object3D, kit: [string, string] | null, pattern: PatternStyle, socks: SocksStyle) {
   const sock = SOCK_COLOUR[socks];
-  const plain = !kit && pattern === 'plain' && !sock;
   const colours = kit ?? ORIGINAL_KIT;
+  const stars = kit ? 0 : 1; // the default American Flyers kit: white stars on the navy
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
     // Remember the model's own material so the kit can change (or be taken off) later.
     const src = (mesh.userData.kitSrc ??= mesh.material) as THREE.MeshStandardMaterial;
-    if (plain) { mesh.material = src; return; }
-    const key = `${src.uuid}|${colours.join('|')}|${pattern}|${sock ?? ''}`;
+    const key = `${src.uuid}|${colours.join('|')}|${pattern}|${sock ?? ''}|${stars}`;
     let m = kitMats.get(key);
     if (!m) {
       const mat = src.clone();
@@ -191,16 +190,27 @@ export function applyKitStyle(root: THREE.Object3D, kit: [string, string] | null
         shader.uniforms.kitPattern = { value: PATTERN_INDEX[pattern] };
         shader.uniforms.sockColour = { value: sc };
         shader.uniforms.sockOn = { value: sock ? 1 : 0 };
+        shader.uniforms.navyStars = { value: stars };
         shader.vertexShader = shader.vertexShader
-          .replace('void main() {', 'varying vec3 vKitPos;\nvoid main() {')
-          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvKitPos = position;');
+          .replace('void main() {', 'varying vec3 vKitPos;\nvarying vec3 vKitNormal;\nvoid main() {')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvKitPos = position;\nvKitNormal = normal;');
         shader.fragmentShader = shader.fragmentShader
           .replace('void main() {', `uniform vec3 kitA;
 uniform vec3 kitB;
 uniform float kitPattern;
 uniform vec3 sockColour;
 uniform float sockOn;
+uniform float navyStars;
 varying vec3 vKitPos;
+varying vec3 vKitNormal;
+// 1 inside a five-pointed star on a staggered grid of 'scale' cells a metre, the star 'size' of its cell.
+float starMask( vec2 p, float scale, float size ) {
+  vec2 g = p * scale;
+  g.x += mod( floor( g.y ), 2.0 ) * 0.5;
+  vec2 f = ( fract( g ) - 0.5 ) / size;
+  float ang = atan( f.y, f.x );
+  return 1.0 - step( 0.2 + 0.17 * cos( 5.0 * ( ang - 1.5708 ) ), length( f ) );
+}
 // 1 where the pattern draws the second colour on the jersey. p: x across the body, y up (metres).
 float kitMask( vec3 p, float pat ) {
   float ax = abs( p.x );
@@ -231,6 +241,11 @@ void main() {`)
   float skin = step( 5.5, kitPattern );
   kc = mix( kc, kitA * clamp( klum / 0.03, 0.45, 1.3 ), isNavy );
   kc = mix( kc, kitB * clamp( klum / 0.16, 0.45, 1.3 ), isRed );
+  // The default kit's stars, white on the navy of the shorts: seen from the front or back on the front and back,
+  // from the side on the sides, so they keep their shape.
+  vec2 starAt = abs( vKitNormal.x ) > abs( vKitNormal.z ) ? vKitPos.zy : vKitPos.xy;
+  float onShorts = step( 0.55, vKitPos.y ) * step( vKitPos.y, 0.97 );
+  kc = mix( kc, vec3( 0.92 ) * clamp( klum / 0.03, 0.6, 1.1 ), isNavy * navyStars * onShorts * starMask( starAt, 10.0, 0.6 ) );
   // Pattern on the jersey; a skinsuit is one colour over the shorts and white bands too.
   kc = mix( kc, kitA * clamp( klum / 0.16, 0.5, 1.3 ), isRed * kitMask( vKitPos, kitPattern ) );
   kc = mix( kc, kitB * clamp( klum / 0.03, 0.45, 1.3 ), isNavy * skin );
