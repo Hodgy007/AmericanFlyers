@@ -347,9 +347,9 @@
       </form>
     </dialog>
 
-    <dialog id="settings">
-      <form method="dialog">
-        <h2>Settings</h2>
+    <dialog id="settings" class="settings-dialog">
+      <form method="dialog" class="settings-form">
+        <h2 class="settings-wide">Settings</h2>
         <label>Rider weight (kg) <input name="riderKg" type="number" min="30" max="200" step="0.5" /></label>
         <label>Bike weight (kg) <input name="bikeKg" type="number" min="5" max="30" step="0.5" /></label>
         <label>FTP (watts) <input name="ftp" type="number" min="50" max="600" step="1" /></label>
@@ -376,7 +376,7 @@
           </select>
           <span class="hint" id="graphics-note"></span>
         </label>
-        <div class="dev-box">
+        <div class="dev-box settings-wide">
           <strong>Remembered devices</strong>
           <span class="hint">This browser remembers the trainer and heart rate strap you last connected, so next time they reconnect without searching. Forgetting one only removes it from this browser.</span>
           <div id="settings-devices"></div>
@@ -411,7 +411,7 @@
         <label class="check"><input name="rideTogether" type="checkbox" /> Ride together
           <span class="hint">Show me to other signed-in riders on the same stage, and show them to me.</span>
         </label>
-        <fieldset class="ai-settings">
+        <fieldset class="ai-settings settings-wide">
           <legend>AI coach and rivals</legend>
           <p class="hint">Both are off until you turn them on. When on, your first name, FTP, weight and ride numbers (power, heart rate, cadence, distance, stage and time) are sent to Anthropic, which makes Claude, to write the coach’s tips and debriefs and the rivals’ lines. Never your email address. Under Anthropic’s API terms it isn’t used to train its models. You can turn them off here at any time. <a href="#privacy" data-privacy>More on privacy</a></p>
           <label class="check"><input name="aiCoach" type="checkbox" /> AI coach
@@ -425,8 +425,8 @@
           </label>
           <p id="ai-signin" class="hint" hidden>Sign in to turn on the AI coach or rivals. <button type="button" id="ai-signin-btn" class="link">Sign in</button></p>
         </fieldset>
-        <p class="settings-extra"><button type="button" id="btn-setup-guide" class="link">Run the setup guide again</button></p>
-        <div class="dialog-actions">
+        <p class="settings-extra settings-wide"><button type="button" id="btn-setup-guide" class="link">Run the setup guide again</button></p>
+        <div class="dialog-actions settings-wide">
           <button value="cancel" formnovalidate>Cancel</button>
           <button value="save" class="primary">Save</button>
         </div>
