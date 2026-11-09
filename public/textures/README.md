@@ -33,3 +33,7 @@ Low the 1K diffuse files are shrunk to 512 as they decode, and only three layers
 
 The road's colour texture, generated with Higgsfield for this project (see the changelog).
 (The generated `grass.jpg` that used to sit beside it was replaced by the terrain layers above.)
+
+## `horizon/` (panoramas)
+
+`alps`, `pyrenees`, `rockies`, `desert` and `hills` (`.webp`, 1344x576 RGBA, plus `-low` at half size): far-mountain panoramas with the sky keyed out, generated with Higgsfield for this project and cleaned by `scripts/prep-horizon.py` (alpha eroded and softened, colour flooded under the transparent pixels, lossy WebP q80 with lossless alpha). Used by `src/world/horizon.ts` and `sky.ts`.
