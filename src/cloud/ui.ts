@@ -15,6 +15,7 @@ import { loadDebrief } from './aiApi';
 import { COACH_NAME, debriefBody } from '../ai/coachUi';
 import { sanitizeDebrief } from '../ai/sanitize';
 import { adminCreateEvent, adminDeleteEvent, upcomingEvents } from './events';
+import { myEffortLog } from './segmentApi';
 import { EVENT_STAGE_POOL, GROUP_RIDE_STAGE, type EventKind } from '../schedule';
 import {
   activitySamples, adminDeleteFeedback, adminFeedback, adminOverview, adminSetBan, adminUpdateFeedback, adminUsers,
@@ -312,8 +313,8 @@ export function initAccountDialogs(deps: Deps) {
   // Achievements -------------------------------------------------------
 
   async function achievementsTab() {
-    const [acts, ftp] = await Promise.all([loadActivities(), ftpHistory()]);
-    const list = achievements(acts, ftp, deps.settings().riderKg);
+    const [acts, ftp, efforts] = await Promise.all([loadActivities(), ftpHistory(), myEffortLog().catch(() => [])]);
+    const list = achievements(acts, ftp, deps.settings().riderKg, efforts);
     const done = list.filter((a) => a.done).length;
     const root = h('div');
     root.append(h('p', { class: 'muted', text: `${done} of ${list.length} earned.` }));

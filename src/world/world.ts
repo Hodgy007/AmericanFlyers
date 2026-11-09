@@ -16,6 +16,7 @@ import { Terrain } from './terrain';
 import { updateSway } from './sway';
 import { Monoliths } from './monoliths';
 import { Water } from './water';
+import { horizonFor } from './horizon';
 import type { GroundCover } from './groundCover'; // grass, flowers and stones beside the road: High and Ultra only, a lazily loaded chunk
 
 export interface WorldState {
@@ -43,7 +44,7 @@ export class World {
   private readonly rider = new RiderModel();
   private readonly terrain: Terrain;
   private readonly road: Road;
-  private readonly sky = new Sky(currentStage().scenery.mountainScale);
+  private readonly sky = new Sky(currentStage().scenery.mountainScale, horizonFor(currentStage().scenery), currentStage().id);
   private readonly landmarks = new Landmarks();
   private readonly monoliths = new Monoliths();
   private readonly water = new Water();
@@ -238,7 +239,7 @@ export class World {
     this.landmarks.clear();
     this.monoliths.clear();
     this.road.setMarkers(markers);
-    this.sky.setMountainScale(currentStage().scenery.mountainScale);
+    this.sky.setHorizon(horizonFor(currentStage().scenery), currentStage().scenery.mountainScale, currentStage().id);
     this.water.restage(currentStage());
     this.atmosphere.restage(currentStage());
     this.gfx.pause(2000); // the new stage's terrain and shaders are building: not a verdict on the device

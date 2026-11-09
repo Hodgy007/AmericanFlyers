@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { wind } from './wind';
 import { fbm } from './noise';
 import { CLOUD_CELL, CLOUD_GLSL, CLOUD_HEIGHT } from './fog';
+import { RING_RADIUS, bandOffset, bandShape, horizonUrl, type HorizonChoice, type HorizonKind } from './horizon';
 
 // Live sky state. These start as a clear mid-morning and are changed in place
 // every frame by the Atmosphere (time of day and weather), never replaced, so
@@ -39,6 +40,14 @@ export class Sky {
   readonly group = new THREE.Group();
 
   private ring: THREE.Mesh;
+  /** The stage's panorama on a cylinder, once it has loaded; the procedural ring is hidden behind it. */
+  private band: THREE.Mesh | null = null;
+  private bandTex: THREE.Texture | null = null;
+  private horizon: HorizonChoice = 'none';
+  private horizonStage = '';
+  private mountainScale = 1;
+  private horizonKey = ''; // what is loaded or loading: `${kind}|${low}`
+  private horizonGen = 0;
   private readonly shared = {
     zenith: { value: ZENITH_COLOR },
     horizon: { value: HORIZON_COLOR },
@@ -68,7 +77,10 @@ export class Sky {
   readonly drift = new THREE.Vector2(); // the clouds' drift (cells), also read by the cloud shadows
   private quality = -1;
 
-  constructor(mountainScale = 1) {
+  constructor(mountainScale = 1, horizon: HorizonChoice = 'none', stageId = '') {
+    this.mountainScale = mountainScale;
+    this.horizon = horizon;
+    this.horizonStage = stageId;
     this.dome = this.makeDome();
     this.ring = this.mountains(mountainScale);
     this.group.add(this.dome, this.ring);
@@ -89,6 +101,14 @@ export class Sky {
     const m = this.dome.material as THREE.ShaderMaterial;
     m.defines = { CLOUD_OCT: 3 + q };
     m.needsUpdate = true;
+  }
+
+  /** Per stage: which panorama stands on the horizon and how tall the mountains are. The panorama loads on the next frame; until it has (or if it can't), the procedural ring shows. */
+  setHorizon(horizon: HorizonChoice, mountainScale: number, stageId: string) {
+    this.horizon = horizon;
+    this.horizonStage = stageId;
+    this.mountainScale = mountainScale;
+    this.setMountainScale(mountainScale);
   }
 
   /** Atmosphere: glow around the sun, stars and moon (0..1), how overcast (0..1) and the low-sun horizon band. */
@@ -123,13 +143,107 @@ export class Sky {
 
   /** Rebuilds the distant mountain ring at a new height scale (per stage). */
   setMountainScale(scale: number) {
+    this.mountainScale = scale;
     this.group.remove(this.ring);
     this.ring.geometry.dispose();
     this.ring = this.mountains(scale);
+    this.ring.visible = !this.band;
     this.group.add(this.ring);
+    if (this.band) this.buildBand(); // same panorama, new height
+  }
+
+  /** Fetches the panorama this stage and tier want, once, and swaps it in. A failed or missing file leaves the procedural ring. */
+  private syncHorizon() {
+    const kind = this.horizon === 'none' ? null : this.horizon;
+    const key = kind ? `${kind}|${this.quality === 0}` : 'none';
+    if (key === this.horizonKey) return;
+    this.horizonKey = key;
+    const gen = ++this.horizonGen;
+    this.dropBand(); // the old stage's panorama must not hang on while the new one loads
+    if (!kind) return;
+    new THREE.TextureLoader().loadAsync(horizonUrl(kind, this.quality === 0, import.meta.env.BASE_URL)).then(
+      (tex) => {
+        if (gen !== this.horizonGen) { tex.dispose(); return; }
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.wrapS = THREE.MirroredRepeatWrapping; // mirrored, so the panorama's ends never show a seam
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.anisotropy = 4;
+        this.bandTex = tex;
+        this.buildBand();
+      },
+      () => { if (gen === this.horizonGen) this.horizonKey = ''; }, // offline or missing: keep the ring, try again next stage
+    );
+  }
+
+  private dropBand() {
+    if (this.band) {
+      this.group.remove(this.band);
+      this.band.geometry.dispose();
+      (this.band.material as THREE.Material).dispose();
+      this.band = null;
+    }
+    this.bandTex?.dispose();
+    this.bandTex = null;
+    this.ring.visible = true;
+  }
+
+  /** The panorama on a cylinder at the ring's radius, tall enough that its ridge line sits where the stage's mountain scale puts it. */
+  private buildBand() {
+    if (!this.bandTex || this.horizon === 'none') return;
+    const kind: HorizonKind = this.horizon;
+    const shape = bandShape(kind, this.mountainScale);
+    if (this.band) {
+      this.group.remove(this.band);
+      this.band.geometry.dispose();
+      (this.band.material as THREE.Material).dispose();
+    }
+    const geo = new THREE.CylinderGeometry(RING_RADIUS, RING_RADIUS, shape.height, 160, 1, true);
+    geo.translate(0, shape.bottom + shape.height / 2, 0);
+    const mat = this.bandMaterial(this.bandTex, shape.repeats, bandOffset(this.horizonStage) * 2);
+    this.band = new THREE.Mesh(geo, mat);
+    this.band.renderOrder = -1;
+    this.band.frustumCulled = false;
+    this.group.add(this.band);
+    this.ring.visible = false;
+  }
+
+  private bandMaterial(map: THREE.Texture, reps: number, off: number) {
+    return new THREE.ShaderMaterial({
+      fog: false,
+      side: THREE.DoubleSide,
+      uniforms: { ...this.ringUniforms, map: { value: map }, reps: { value: reps }, uvOff: { value: off } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        varying vec3 vP;
+        void main() {
+          vUv = uv;
+          vP = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        ${SKY_BASE_GLSL}
+        uniform sampler2D map;
+        uniform float reps;
+        uniform float uvOff;
+        uniform vec3 tint;
+        uniform float hazeD;
+        varying vec2 vUv;
+        varying vec3 vP;
+        void main() {
+          vec4 t = texture2D(map, vec2(vUv.x * reps + uvOff, vUv.y));
+          if (t.a < 0.5) discard; // the sky shows through; the silhouette's edge is already softened in the file
+          // The haze at the foot of the range, plus a veil over all of it: the panoramas are saturated and nothing 3.6 km off is that crisp.
+          float haze = 1.0 - (1.0 - 0.3) * exp(-hazeD * exp(-max(vP.y, 0.0) / 150.0));
+          vec3 hz = skyBase(vec3(vP.x, 0.03 * length(vP.xz), vP.z) / length(vP));
+          gl_FragColor = vec4(mix(t.rgb * tint, hz, haze), 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
   }
 
   update(camera: THREE.Camera, dt: number) {
+    this.syncHorizon();
     // Follow the camera, including most of its climb, so the horizon stays put.
     this.group.position.set(camera.position.x, camera.position.y - 60, camera.position.z);
     // Clouds travel with the wind (high winds run faster than the ones on the road), never quite still.
@@ -226,7 +340,7 @@ export class Sky {
   /** A jagged ring of far-off mountains, hazed at their feet towards the horizon colour. */
   private mountains(scale: number) {
     const segs = 160;
-    const radius = 3600;
+    const radius = RING_RADIUS;
     const pos: number[] = [];
     const col: number[] = [];
     const base = new THREE.Color('#7f95b3');

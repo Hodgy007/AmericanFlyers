@@ -78,6 +78,10 @@ A round **mini-map** in the corner shows the shape of the route with you (white 
 
 When a **climb** (steeper than 3% for more than 500 m) starts within 2 km, a card appears under the data blocks: *Next climb in 1.4 km, 3.2 km at 7.1%, max 11%*, with a coloured profile. Once you're on it the card shows the distance to the top and the average grade still to come. The card is part of the same setting.
 
+## KOM segments
+
+On a big climb a second panel under the climb card shows the **KOM leaderboard** and, once you are on the climb, how far ahead or behind your best and last attempts you are, live. At the top a banner gives your time and rank. See [Leaderboards and ghosts](leaderboards-and-ghosts.md#kom-segments). Turn the panel off with **KOM panel** in ⚙ Settings.
+
 ## Data blocks
 
 The row of numbers across the top is made of **data blocks**. The first block is the largest. The **✎** button at the right of the row opens the chooser, where you pick which of the 24 fields to show and in what order. See [Data blocks](data-blocks.md).

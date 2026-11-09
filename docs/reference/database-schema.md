@@ -252,6 +252,41 @@ Indexes on `(to_user, created_at)` and `(from_user, created_at)`.
 | `stage_leaderboard(p_stage, p_since)` | Signed in | Each rider's fastest `finish_s` on the stage (since `p_since` if given), ranked, top 25 plus the caller. Returns rank, activity id, short name, time, average power, date and `is_me`. |
 | `stage_ghost(p_activity)` | Signed in | For a finished whole-stage ride: short name, `finish_s`, the 1 s distance trace (`samples -> 'distance'`) and `is_me`. Nothing else from the ride is returned. |
 
+## KOM segments
+
+A stage's big climbs are segments (`src/segments.ts`; ids like `alpe-dhuez:main`, pinned in `tests/unit/segments.test.ts`). The "KOM segments" section at the end of `db/schema.sql` is idempotent.
+
+### `public.segment_efforts`
+
+One row each time a signed-in rider rides all of a segment at normal speed. Row-level security: a rider can `select`, `insert` and `delete` only their own rows (no update). Shared reads go through `segment_leaderboard()`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key. |
+| `user_id` | `text` | Default `auth.user_id()`. |
+| `activity_id` | `uuid` | Nullable, references `activities` (cascade). The app leaves it empty: the ride may not be saved yet. |
+| `stage_id`, `segment_id` | `text` | The segment id is `<stage id>:<name slug or climb-n>`. |
+| `elapsed_s` | `real` | Moving seconds from the start of the segment to its top; between 0 and 86,400. |
+| `avg_power` | `real` | Nullable, 0 to 3,000 W. |
+| `splits` | `jsonb` | Nullable array of at most 1,000 numbers: the elapsed time in tenths of a second at every 50 m into the segment (the top is `elapsed_s`). Private: never returned by the shared functions. |
+| `demo` | `boolean` | Default false. The app never sends demo or sped-up efforts; the column lets `segment_effort_is_plausible()` ignore any that arrive. |
+| `created_at` | `timestamptz` | When the effort ended. |
+
+Indexes on `(segment_id, elapsed_s)` and `(user_id, segment_id, created_at desc)`. The table has a text `user_id`, so `delete_my_account()` and `my_data_extras()` cover it (`delete_my_account()` also deletes it by name).
+
+### `public.segment_limits`
+
+One row per built-in segment: `segment_id` (primary key), `stage_id`, `length_m`, `min_s` (the fastest believable time) and `max_avg_kmh`. `min_s` is 80% of the time a 60 kg rider on an 8 kg bike (CdA 0.25) takes to ride the segment holding 6.5 W/kg through the whole stage (the faster pass on a circuit); `tests/unit/segmentLimits.test.ts` recomputes it. No grants. Only segments listed here have a shared board.
+
+### Functions
+
+| Function | Who | What it does |
+| --- | --- | --- |
+| `segment_effort_is_plausible(p_segment, p_elapsed_s, p_avg_power, p_demo)` | Internal | True when the segment has limits, the effort isn't a demo, averaged at most 2000 W, is neither under `min_s` nor over `max_avg_kmh`, and (with no power) is at least 1.5 times the floor. Not callable from the browser. |
+| `segment_leaderboard(p_segment, p_since default null)` | Signed in | Each rider's best plausible effort on the segment (since `p_since` if given), ranked: the top 10 plus the caller. Returns `rank`, `short_name`, `elapsed_s`, `avg_power`, `ridden_at`, `is_me` and `riders` (how many are on the board). Banned riders are left out. |
+
+The browser reads its own best and latest effort straight from `segment_efforts` (with the Data API's row-level security) and inserts new efforts there.
+
 ## Trust and safety
 
 ### `public.stage_limits`
@@ -312,7 +347,7 @@ Tables, all with row-level security and **no policies and no grants** (only the 
 | Table | Columns | Notes |
 | --- | --- | --- |
 | `ai_consent` | `user_id` (pk), `coach`, `rivals`, `updated_at` | The rider's opt-in. Both off by default. |
-| `ai_usage` | `user_id`, `day` (UTC), `kind`, `count`; pk `(user_id, day, kind)` | Daily counters. `kind` is one of `coach_debrief`, `coach_plan`, `coach_tip`, `rival_pre`, `rival_post`. |
+| `ai_usage` | `user_id`, `day` (UTC), `kind`, `count`; pk `(user_id, day, kind)` | Daily counters. `kind` is one of `coach_debrief`, `coach_plan`, `coach_tip`, `coach_climb`, `rival_pre`, `rival_post`. |
 | `rival_memory` | `user_id`, `rival_id`, `wins`, `losses`, `rides`, `last_ride`, `notes` (json, at most 8 strings of 140 characters); pk `(user_id, rival_id)` | Wins and losses are the rider's. At most 12 rivals per rider. |
 | `coach_notes` | `user_id`, `activity_id` (references `activities`, on delete cascade), `created_at`, `debrief` (json, at most 6,000 bytes); pk `(user_id, activity_id)` | A debrief kept with its ride. |
 

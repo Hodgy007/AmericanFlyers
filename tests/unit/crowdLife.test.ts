@@ -230,3 +230,31 @@ describe('camper meshes', () => {
     }
   });
 });
+
+describe('modelled camper van', () => {
+  it('is stood on the ground, centred and scaled to a real camper, tinted lighter than the box van', async () => {
+    const { vanFromScene, VAN_MODEL_LENGTH, vanModelTint } = await import('../../src/world/campers');
+    // A stand-in for the GLB: a 1 x 0.46 x 0.43 block centred on the origin, under a node that is moved and turned.
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.46, 0.43), new THREE.MeshStandardMaterial({ metalness: 1 }));
+    const node = new THREE.Group();
+    node.position.set(5, -3, 2);
+    node.add(mesh);
+    const van = vanFromScene(node)!;
+    const b = new THREE.Box3().setFromBufferAttribute(van.geometry.attributes.position as THREE.BufferAttribute);
+    expect(b.min.y).toBeCloseTo(0, 5);
+    expect(b.max.x - b.min.x).toBeCloseTo(VAN_MODEL_LENGTH, 5);
+    expect((b.max.x + b.min.x) / 2).toBeCloseTo(0, 5);
+    expect((b.max.z + b.min.z) / 2).toBeCloseTo(0, 5);
+    expect(b.max.y, 'a camper about 2.9 m tall').toBeGreaterThan(2.5);
+    expect(b.max.y).toBeLessThan(3.3);
+    expect((van.material as THREE.MeshStandardMaterial).metalness).toBe(0);
+    expect(vanFromScene(new THREE.Group())).toBeNull();
+    const c = vanModelTint('#ff7a1a', new THREE.Color());
+    expect(c.g).toBeGreaterThan(new THREE.Color('#ff7a1a').g);
+  });
+
+  it('is used from Medium up, not on Low', async () => {
+    const { SCENERY } = await import('../../src/world/scenery');
+    expect([SCENERY.low.vanModel, SCENERY.medium.vanModel, SCENERY.high.vanModel, SCENERY.ultra.vanModel]).toEqual([false, true, true, true]);
+  });
+});

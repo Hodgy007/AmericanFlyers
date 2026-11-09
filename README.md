@@ -56,9 +56,10 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Pro teams**: five computer-ridden teams with comedic near-miss names ride along two by two at 2.0–4.2 W/kg, in their own kit, when you choose **With pro teams** (the default ride mode is **Solo**; switch any time in ☰ Menu). Join one from 👥 and sit in.
 - **Drafting**: ride close behind someone and you save up to about a third of your air drag (and a smart trainer gets lighter). A slipstream gauge shows the gap to the wheel ahead and the watts you're saving.
 - **Steering**: **←** / **→** (or on-screen ◀ ▶ on touch screens) move you across the road; auto-steer eases you onto the wheel ahead. The draft is lateral, so you need to be on their line.
-- **AI coach and AI rivals** (opt-in, ⚙ Settings): Coach Marty plans your ride, gives a few reactive tips and writes a debrief with a suggested next session; ☰ Menu → 🤺 Rivals has four original rivals (a showboat sprinter, a cold climber, a crafty veteran, a data-obsessed time triallist) who ride at your pace, talk, and remember your rides. Powered by Claude through one Vercel function (`api/ai.ts`); built-in tips and lines when the AI is off or busy. See `docs/developer-guide/ai.md`.
+- **AI coach and AI rivals** (opt-in, ⚙ Settings): Coach Marty plans your ride, gives a few reactive tips and writes a debrief with a suggested next session; ☰ Menu → 🤺 Rivals has four original rivals (a showboat sprinter, a cold climber, a crafty veteran, a data-obsessed time triallist) who ride at your pace, talk, and remember your rides. Powered by Claude through one Vercel function (`api/ai.ts`); built-in tips and lines when the AI is off or busy. The hub's **🧭 Climb guide** (real-road stages) adds short web-sourced answers with source links, through Perplexity Sonar on the Vercel AI Gateway. See `docs/developer-guide/ai.md`.
 - **Time of day and weather** (☰ Menu → 🌤): dawn, day, dusk and night (moon, stars, a front light) and clear, cloudy or rain (streaks, wet glossy road, mist, rain sound), or Auto: stages start at their own time and weather, the light moves on as you ride, and the weather changes now and then.
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
+- **KOM segments**: the big climbs on each stage are timed. A panel shows the leaderboard as a climb approaches and your live gap to your best and last attempts on it, with a result banner at the top.
 - **Training plans** (📅 in Workouts): Get Started, FTP Builder, Hell of the West and American Climbs, with sessions that tick off as you ride.
 - **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
 - **Virtual shifting** (Settings): 24 virtual gears with on-screen −/+ buttons and keys; harder gears push back harder.
@@ -123,6 +124,7 @@ Accounts and data live in Neon (project `americanflyers`, eu-west-2):
 - The **Data API** lets the browser read and write the tables directly; row-level security limits each rider to their own rows, and admin functions check `public.is_admin()`.
 - Riders can download their data and delete their account from the profile (**Privacy & data** tab); `delete_my_account()` removes their rows and their Neon Auth user. A Privacy page is in ☰ Menu.
 - Leaderboards ignore implausible, demo and sped-up rides (`stage_limits`, `ride_is_plausible()`).
+- KOM boards ignore implausible, demo and sped-up efforts too (`segment_limits`, `segment_effort_is_plausible()`).
 - The schema is in `db/schema.sql`. Admins are listed in `public.admins` (by email).
 - The endpoints default to the production project; override with `VITE_NEON_AUTH_URL` and `VITE_NEON_DATA_API_URL`.
 

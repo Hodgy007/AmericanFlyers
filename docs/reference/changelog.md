@@ -9,9 +9,27 @@ The repository has no tags, so each group is named for the pull request that mer
 ### Four road stages: three circuits and the Pacific Coast
 
 - **New stages** on their real roads, with real elevation: **Richmond Worlds Circuit** (`richmond-worlds`, 2 × 16.2 km, Libby Hill and 23rd Street KOMs, finish by the State Capitol), **Central Park Loop** (`central-park`, 3 × 9.8 km counter-clockwise, Cat Hill and Harlem Hill, the Manhattan skyline round the park, the Reservoir), **Harrogate Worlds Circuit** (`harrogate-worlds`, 2 × 13.9 km, dry-stone walls, stone terraces, the Stray at the finish) and **Pacific Coast Highway** (`pacific-coast`, 39.1 km of California 1 through Big Sur, Bixby Creek Bridge, Hurricane Point, the Pacific below the cliffs). Each has wind, a finish badge, a place in the evening race rotation and a `stage_limits` row (SQL in `db/schema.sql`, to be applied by hand).
+- **KOM segments on the new roads:** Libby Hill and 23rd Street (Richmond), Cat Hill and Harlem Hill (Central Park), the Oak Beck climb (Harrogate) and Hurricane Point (Pacific Coast). On a circuit any named climb of 300 m and 12 m or more is a segment, found by walking back from its summit when it is too short for the climb detector. `segment_limits` rows added.
 - **Yorkshire crowds.** A British culture (`gb`): Union flags, the white-rose Yorkshire flag and polka-dot shirts; Harrogate uses it. Culture ids live in `world/cultureTypes.ts`.
 - **Water.** New `Scenery.water` (`world/water.ts`): a sea plane at sea level and ponds (the Reservoir), used by the Pacific Coast and Central Park.
 - **Skyline and bridge.** A procedural city skyline (`world/skyline.ts`) ring of towers outside a loop, a domed Virginia Capitol, brick and stone terraced houses and Bixby Creek Bridge, all landmark models.
+
+### KOM segments on the big climbs
+
+- **Segments.** A stage's big climbs (about a kilometre or more with at least 60 m of climbing, or a categorised summit) are timed segments: `src/segments.ts` derives them from the stage's own elevation, with stable ids (`alpe-dhuez:main`, pinned per built-in stage in `tests/unit/segments.test.ts`). Each mountain stage gets one segment for the whole climb, rolling stages their named climbs (Morgul-Bismark's Wall on each lap, Cold Shivers and the high point on the Tour of the Moon), flat stages none. Uploaded routes keep their segments local.
+- **Efforts.** Each passage is timed in moving time with a split every 50 m; stopping, jumping along the road, opening the hub or resetting voids it. Your best and latest effort per segment are kept in this browser and, signed in, in the new `segment_efforts` table.
+- **In the ride.** A KOM panel under the climb card shows the top 5 and your rank within 2 km of a segment, then a live gap to your best (and a smaller one to your last attempt) on it, and a result banner at the top (*Alpe d'Huez — 52:14 · New PB by 0:41 · #3 of 27*). A ghost of your best effort rides the road. **KOM panel** in Settings hides it.
+- **Hub.** A **⛰ KOM ×n** chip on each route card opens its segments with the king of each climb and your best; each opens a top-10 board (this month or all time).
+- **Database.** `segment_efforts` (own rows only), `segment_limits` (a plausibility floor per built-in segment, from the app's own physics) and `segment_leaderboard()`; `delete_my_account()` deletes the efforts by name. Applied to the live database (the SQL is in `db/schema.sql`, "KOM segments").
+- **Achievements.** Hill climber, Beat yourself and Segment collector. **Privacy** text and docs updated; `?komtest` lets a demo ride count for your local times.
+- Tests: `segments`, `segmentLimits`, `segmentStore`, `segmentAchievements` (unit) and `kom.spec.ts` (e2e).
+
+### Higgsfield graphics
+
+- **Horizon panoramas.** The far mountains are now a panorama of the stage's region (Alps, Pyrenees, Rockies, red-rock desert, rolling hills), generated with Higgsfield, keyed on its sky and wrapped round the sky ring with mirrored repeat. `scenery.horizon` picks it per stage (uploaded routes: alps if `mountainScale` >= 2, else hills). Loaded lazily, one WebP (about 55 to 110 KB, half size on Low); the procedural ring shows until it arrives or if it fails. The ring's haze, tint and per-stage height scale still apply. Files built by `scripts/prep-horizon.py`.
+- **Generated grass and sandstone ground textures** (Higgsfield) replace the Poly Haven ones: clearly more blade and grain detail on slopes and desert ground, no visible tiling at riding distance. Normal maps come from `scripts/prep-terrain.py`. Generated rock and snow were tried and left out: no visible gain.
+- **Le Géant du Tourmalet is a modelled statue** (Higgsfield, 0.86 MB `public/models/geant.glb`), same place, facing and height as the code-built one, which stays as the fallback if the file is missing (`MONUMENT_GLB` in `landmarks.ts`).
+- **Camper vans are a modelled camper** (Higgsfield, 0.4 MB `public/models/camper.glb`, 4.4k triangles) on Medium, High and Ultra, instanced with a lightened random tint and scaled to 6.3 m long; the box vans stay on Low and until the file has loaded (the roadside objects are refitted when it arrives) or if it is missing. A big climb puts 15 to 24 vans in all and a handful in view, so no distance cut-off was needed (`SceneryTier.vanModel`).
 
 ### Loose ends from the polish batch
 

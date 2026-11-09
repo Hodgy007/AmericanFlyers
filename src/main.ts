@@ -43,6 +43,7 @@ import { crowdNear } from './world/crowdZones'; // where crowds line the road (s
 import { initWindUi } from './windUi';
 import { MiniMap } from './miniMap';
 import { initClimbUi } from './climbUi';
+import { initSegmentUi } from './segmentUi'; // KOM segments: the panel, the timing, the result toast
 import { complete, nextSession, planById, sessions as planSessions, type Session } from './plans';
 import { onboarded } from './onboardingState';
 import { workoutById } from './workouts/library';
@@ -331,6 +332,13 @@ const TIME_SCALE = Math.min(20, Math.max(1, Number(new URLSearchParams(location.
 const rideFlags: RideFlags = { usedDemo: false, timeScale: TIME_SCALE };
 let lastFrame = performance.now();
 let lastHud = 0;
+// KOM segments (segments.ts, segmentUi.ts): your time up each big climb, with a live gap to your best and last attempts.
+// `?komtest` lets a demo or sped-up ride count for the times kept on this device (never sent to the account), for tests.
+const komUi = initSegmentUi(
+  { card: $('kom-card'), climbCard: $('climb-card') },
+  { stage: currentStage, toast: (m, ms) => toast(m, ms), eligible: () => leaderboardEligible(rideFlags), testing: new URLSearchParams(location.search).has('komtest') },
+);
+komUi.reset(); // finds the stage's segments now, so timing starts with the first frame
 
 const lateralOf = (id: string) => world.lateralOf(id);
 
@@ -437,6 +445,7 @@ function frame(now: number) {
     ride.movingTime += dt;
     ride.work += live.power * dt;
   }
+  komUi.frame(ride.distance, ride.movingTime, ride.work, ride.speed > 0.3 && !ride.finished && !race?.holding && !eventHolding()); // before the finish check: a climb that tops out at the line still counts
   const finish = currentStage().finish;
   if (finish !== null && !ride.finished && ride.distance >= finish) showFinish();
   const elev = elevationAt(ride.distance);
@@ -469,6 +478,11 @@ function frame(now: number) {
   const others = liveRiders;
   const g = race ? null : ghostRider(); // no ghost in a race
   if (g) others.push(g);
+  else if (settings.ghost && !race) {
+    // No whole-stage ghost: on a KOM segment, your best effort on it rides ahead or behind you.
+    const kg = komUi.ghost();
+    if (kg) others.push({ id: 'ghost', name: 'Your best', distance: kg.distance, speedMs: kg.speedMs, power: 200, cadence: 88, ghost: true });
+  }
   world.setOthers(others);
   world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: drivetrain.crankAngle, rock: drivetrain.rock }, dt);
   noteFirstFrame();
@@ -486,6 +500,7 @@ function frame(now: number) {
     miniMap.setVisible(settings.miniMap && !ride.finished);
     windUi.update(ride.distance, settings.units === 'imperial');
     climbUi.update(ride.distance, settings.miniMap, !ride.finished && $('finish').hidden, settings.units === 'imperial'); // not over the finish card or ride summary
+    komUi.update(ride.distance, settings.komPanel, !ride.finished && $('finish').hidden, settings.units === 'imperial');
     placeBelowHud();
     raceUi.countdown(race?.countText ?? null);
     const panelData = race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null;
@@ -991,6 +1006,7 @@ function resetRide() {
   rideWorkout.started = player ? player.workout.name : null;
   rideWorkout.completed = null;
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
+  komUi.reset(); // no segment effort carries over into a new ride or stage
   leaveRaceAndEvent(); // starting afresh ends a race, and leaves a scheduled event
   drivetrain.reset();
   powerSamples.length = 0;
@@ -1527,6 +1543,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     virtualShifting: data.get('virtualShifting') === 'on',
     wind: data.get('wind') === 'on',
     miniMap: data.get('miniMap') === 'on',
+    komPanel: data.get('komPanel') === 'on',
     commentary: data.get('commentary') === 'on',
     aiCoach: data.get('aiCoach') === 'on',
     aiRivals: data.get('aiRivals') === 'on',
@@ -2124,6 +2141,7 @@ const hub = initHub({
   garage,
   currentStageId: () => currentStage().id,
   onVisibility: (open) => {
+    if (open) komUi.reset(); // the hub pauses the ride: a segment effort in progress doesn't count
     world.setOrbit(open);
     // The "Reconnect <trainer>" banner sits in the hub's Ride panel while it's open, and floats over the ride otherwise.
     const banner = document.getElementById('device-banner');
@@ -2164,6 +2182,19 @@ const hub = initHub({
     stages: openStages,
     kit: () => { void use(kitUi, (k) => k.open()); },
     account: () => $('btn-account').click(),
+  },
+  climbGuide: {
+    signedIn: () => !!account(),
+    coachOn: () => settings.aiCoach,
+    openSignIn: (why) => accountUi.openSignIn(why),
+    enableCoach: async () => {
+      const api = await aiApiLazy.get();
+      const saved = await api.saveConsent({ coach: true, rivals: settings.aiRivals });
+      if (!saved) return false;
+      patchAiSettings({ aiCoach: saved.coach, aiRivals: saved.rivals });
+      return saved.coach;
+    },
+    openSettings,
   },
   night: () => world.nightAmount,
   toast,

@@ -25,7 +25,7 @@
 html[data-start='hub'] #home { display: none; }
 html[data-start='hub'] .hub[hidden] { display: flex; }
 /* The ride's own screens stay out of sight behind it. */
-body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-panel, .draft-panel, .race-panel, .race-count, .event-bar, .minimap, .climb-card, .steer-btn) { visibility: hidden; }
+body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-panel, .draft-panel, .race-panel, .race-count, .event-bar, .minimap, .climb-card, .kom-card, .steer-btn) { visibility: hidden; }
 
 .hub [hidden] { display: none !important; }
 .hub-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent; }
@@ -228,6 +228,29 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-mini.hub-race:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
 .hub-chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2); font-size: 12px; font-weight: 600; color: #dfe5f2; font-variant-numeric: tabular-nums; }
 .hub-chip.gold { border-color: rgba(242, 193, 78, 0.5); color: #f6d58a; background: rgba(242, 193, 78, 0.1); }
+
+/* ------------------------------------------------------- climb guide ---- */
+/* a full-width row under the stage's card (the grid is two cards across on a phone) */
+.hub-climb { grid-column: 1 / -1; border-radius: 16px; padding: 14px 16px 12px; background: linear-gradient(180deg, rgba(20, 31, 62, 0.86), rgba(10, 16, 38, 0.86)); border: 1px solid rgba(143, 184, 255, 0.35); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.3); min-width: 0; }
+.hub-climb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hub-climb-head h4 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; color: #dfe5f2; min-width: 0; overflow-wrap: anywhere; }
+.hub-climb-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+.hub-climb-chip { padding: 5px 13px; font-size: 14px; font-weight: 600; border-radius: 999px; background: transparent; box-shadow: none; border: 1px solid rgba(255, 255, 255, 0.25); color: #dfe5f2; }
+.hub-climb-chip:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.hub-climb-chip[aria-pressed='true'] { background: var(--red); border-color: var(--red-hi); color: #fff; }
+.hub-climb-out { min-height: 56px; font-size: 14.5px; line-height: 1.5; color: #e6ebf7; max-width: 76ch; }
+.hub-climb-out p { margin: 0 0 8px; }
+.hub-climb-hint, .hub-climb-msg, .hub-climb-asof { color: #b9c2d6; font-size: 13.5px; }
+.hub-climb-facts { margin: 0 0 8px; padding-left: 20px; }
+.hub-climb-facts li { margin: 0 0 4px; }
+.hub-climb-sources { margin: 4px 0 4px; padding-left: 24px; font-size: 13.5px; }
+.hub-climb-sources li { margin: 0 0 3px; overflow-wrap: anywhere; }
+.hub-climb-sources a { color: #8fb8ff; }
+.hub-climb-sources a:hover { color: #fff; }
+.hub-climb-host { color: #a9b3c7; font-size: 12.5px; }
+.hub-climb-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.hub-climb-sk { margin: 0 0 8px; }
+.hub-climb-note { margin: 8px 0 0; font-size: 12px; color: #a9b3c7; }
 
 .hub-tour { background: linear-gradient(135deg, rgba(214, 40, 57, 0.4), rgba(61, 123, 247, 0.34)), rgba(10, 16, 38, 0.8); border-color: rgba(255, 255, 255, 0.22); }
 .hub-tour .hub-card-body { padding-top: 16px; }

@@ -153,7 +153,7 @@ export class Road {
     if (this.extras) { this.applyExtras(this.extras); return; }
     this.extrasModule ??= import('./roadExtras');
     void this.extrasModule.then((m) => {
-      this.extras ??= new m.RoadExtras(this.material, this.map, this.maxAniso);
+      this.extras ??= new m.RoadExtras(this.material, this.map, this.maxAniso, () => this.refreshExtras());
       this.extras.setRoadLayout(this.layout);
       this.applyExtras(this.extras);
     }).catch(() => { /* chunk failed to load (offline): the plain road */ });

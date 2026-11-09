@@ -6,6 +6,7 @@ import type { Wallet } from '../garage/progression';
 import type { RideMode } from '../rideMode';
 import type { Settings } from '../settings';
 import type { Stage } from '../stages';
+import type { ClimbGuideHost } from './climbGuide';
 import type { Choice, Summary } from './data';
 
 /** What changed, so a section only redraws when it must. */
@@ -47,6 +48,8 @@ export interface HubDeps {
     kit(): void;
     account(): void;
   };
+  /** What the Climb guide on a stage card needs: sign-in, the AI coach opt-in and Settings. */
+  climbGuide: ClimbGuideHost;
   /** 0..1 darkness for the garage preview's glow. */
   night(): number;
   toast(msg: string, ms?: number): void;

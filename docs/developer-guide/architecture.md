@@ -220,6 +220,7 @@ The first visit downloads only what draws the first frame: the entry chunk (`mai
 | Garage and store, with its 3D turntable | `garage/garageUi.ts`, `garage/preview.ts` | First click on Garage. |
 | Share card | `garage/shareUi.ts`, `shareCard.ts` (buttons in `garage/shareButton.ts`) | First press of a 📤 Share button. |
 | Tour, Events, Leaderboard, Plans, Kit, Time & weather dialogs | `tourUi.ts`, `eventsUi.ts`, `leaderboardUi.ts`, `plansUi.ts`, `kitUi.ts`, `atmosphereUi.ts` | First click on their button. |
+| The hub's KOM segments dialog | `segmentBoardUi.ts` | First click on a route card's ⛰ KOM chip. (The in-ride KOM panel, `segmentUi.ts`, is in the main bundle: it times every ride.) |
 | First-ride guide | `onboarding.ts` (`onboardingState.ts` stays eager) | When it first opens. |
 | Privacy text | `privacyText.ts` (loaded by `privacyUi.ts`) | First time the dialog opens. |
 | Race screens and the commentator | `raceUi.ts`, `commentary.ts` | When a race starts. |

@@ -33,6 +33,7 @@ export interface Settings {
   tour: TourProgress | null; // the Hell of the West tour in progress
   wind: boolean; // wind on the road: headwinds slow you, crosswinds make echelons (world/wind.ts)
   miniMap: boolean; // the route mini-map and climb preview (miniMap.ts, climbUi.ts)
+  komPanel: boolean; // the KOM segment panel: leaderboard and live gap on big climbs (segmentUi.ts)
   commentary: boolean; // the race commentator's voice lines (commentary.ts); also needs sound on
   loadout: Partial<Loadout> | null; // what you ride and wear from the garage (src/garage); null = the starter kit
   // ---- AI coach and rivals (src/ai/): opt-in; the database holds the real consent (ai_consent), these mirror it ----
@@ -66,6 +67,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tour: null,
   wind: true,
   miniMap: true,
+  komPanel: true,
   commentary: true,
   loadout: null,
   aiCoach: false,

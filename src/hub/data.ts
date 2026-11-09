@@ -4,6 +4,7 @@
 
 import { achievements, type Achievement } from '../cloud/achievements';
 import type { EventRow } from '../cloud/events';
+import type { EffortLogRow } from '../cloud/segmentApi';
 import type { Activity, FtpEntry } from '../cloud/sync';
 import { nextSession, sessions, type Plan, type PlanProgress } from '../plans';
 import { dailySchedule, joinState, RACE_MINUTES, RIDE_MINUTES } from '../schedule';
@@ -289,7 +290,7 @@ export interface Summary {
   achievements: Achievement[];
 }
 
-export function buildSummary(input: { acts: Activity[]; ftp: FtpEntry[]; riderKg: number; ftpNow: number; now?: Date }): Summary {
+export function buildSummary(input: { acts: Activity[]; ftp: FtpEntry[]; riderKg: number; ftpNow: number; efforts?: EffortLogRow[]; now?: Date }): Summary {
   const now = input.now ?? new Date();
   const { week, last4 } = periodTotals(input.acts, now);
   return {
@@ -301,6 +302,6 @@ export function buildSummary(input: { acts: Activity[]; ftp: FtpEntry[]; riderKg
     bests: bestTimes(input.acts),
     recent: recentRides(input.acts, 5),
     ftp: ftpSummary(input.ftp, input.ftpNow),
-    achievements: achievements(input.acts, input.ftp, input.riderKg),
+    achievements: achievements(input.acts, input.ftp, input.riderKg, input.efforts),
   };
 }

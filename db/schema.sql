@@ -527,6 +527,7 @@ begin
   delete from public.ride_ons where from_user = me or to_user = me;
   delete from public.feedback where user_id = me;
   delete from public.ftp_history where user_id = me;
+  delete from public.segment_efforts where user_id = me; -- KOM segment efforts (see "KOM segments" at the end of this file)
   delete from public.activities where user_id = me;
   delete from public.routes where user_id = me;
   delete from public.workouts where user_id = me;
@@ -537,7 +538,7 @@ begin
     select c.table_name from information_schema.columns c
     join information_schema.tables tb on tb.table_schema = c.table_schema and tb.table_name = c.table_name and tb.table_type = 'BASE TABLE'
     where c.table_schema = 'public' and c.column_name = 'user_id' and c.data_type = 'text'
-      and c.table_name not in ('live_riders', 'feedback', 'ftp_history', 'activities', 'routes', 'workouts', 'profiles')
+      and c.table_name not in ('live_riders', 'feedback', 'ftp_history', 'activities', 'routes', 'workouts', 'profiles', 'segment_efforts')
   loop
     execute format('delete from public.%I where user_id = $1', t.table_name) using me;
   end loop;
@@ -1042,7 +1043,7 @@ create table if not exists public.ai_consent (
 create table if not exists public.ai_usage (
   user_id text not null default auth.user_id(),
   day date not null,
-  kind text not null check (kind in ('coach_debrief', 'coach_plan', 'coach_tip', 'rival_pre', 'rival_post')),
+  kind text not null check (kind in ('coach_debrief', 'coach_plan', 'coach_tip', 'coach_climb', 'rival_pre', 'rival_post')),
   count integer not null default 0,
   primary key (user_id, day, kind)
 );
@@ -1063,6 +1064,10 @@ create table if not exists public.coach_notes (
   debrief jsonb not null,
   primary key (user_id, activity_id)
 );
+-- 'coach_climb' (the Climb guide, a web-grounded answer from api/ai.ts) joined the kinds later. `create table if not exists`
+-- leaves an older table's check as it was, so the check is replaced by name here (safe to re-run).
+alter table public.ai_usage drop constraint if exists ai_usage_kind_check;
+alter table public.ai_usage add constraint ai_usage_kind_check check (kind in ('coach_debrief', 'coach_plan', 'coach_tip', 'coach_climb', 'rival_pre', 'rival_post'));
 alter table public.ai_consent enable row level security;
 alter table public.ai_usage enable row level security;
 alter table public.rival_memory enable row level security;
@@ -1111,7 +1116,7 @@ declare
   is_adm boolean;
 begin
   if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
-  if p_kind is null or p_kind not in ('coach_debrief', 'coach_plan', 'coach_tip', 'rival_pre', 'rival_post') then
+  if p_kind is null or p_kind not in ('coach_debrief', 'coach_plan', 'coach_tip', 'coach_climb', 'rival_pre', 'rival_post') then
     raise exception 'Unknown AI request' using errcode = '22023';
   end if;
   select u.name as name, coalesce(u.banned, false) as banned into usr from neon_auth."user" u where u.id::text = me;
@@ -1127,7 +1132,7 @@ begin
   is_adm := exists (
     select 1 from neon_auth."user" u join public.admins ad on lower(ad.email) = lower(u.email)
     where u.id::text = me and u."emailVerified");
-  lim := case when is_adm then 100000 else case p_kind when 'coach_debrief' then 10 when 'coach_plan' then 6 when 'coach_tip' then 30 else 10 end end;
+  lim := case when is_adm then 100000 else case p_kind when 'coach_debrief' then 10 when 'coach_plan' then 6 when 'coach_tip' then 30 when 'coach_climb' then 8 else 10 end end;
   insert into public.ai_usage as a (user_id, day, kind, count) values (me, today, p_kind, 1)
   on conflict (user_id, day, kind) do update set count = a.count + 1 where a.count < lim
   returning a.count into used;
@@ -1248,4 +1253,117 @@ grant execute on function
   public.my_ai_consent(), public.set_ai_consent(boolean, boolean), public.ai_claim(text, text), public.rival_record(text, boolean, text),
   public.my_rivals(), public.forget_rival(text), public.save_coach_debrief(uuid, jsonb), public.my_coach_debrief(uuid)
   to authenticated;
+notify pgrst, 'reload schema';
+
+-- ------------------------------------------------------- KOM segments ----
+-- A stage's big climbs are timed as segments (src/segments.ts derives them from the stage's own elevation;
+-- their ids look like 'alpe-dhuez:climb-1' and are pinned in tests/unit/segments.test.ts). Every time a signed-in
+-- rider rides through a whole segment the app stores an effort: the moving time from the start of the segment to its
+-- top, the average power and a split every 50 m (tenths of a second, so the live gap to a previous attempt can be
+-- worked out). A rider reads, writes and deletes only their own efforts; the shared board goes through
+-- segment_leaderboard(), which shows one row per rider (their best, as "First L."), never a banned rider, and only
+-- plausible efforts. Efforts of uploaded routes, and rides made with the demo slider or a sped-up clock, are never
+-- sent. segment_efforts has a text user_id column, so delete_my_account() and my_data_extras() cover it (it is also
+-- deleted by name in delete_my_account() above).
+
+create table if not exists public.segment_efforts (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null default auth.user_id(),
+  activity_id uuid references public.activities (id) on delete cascade, -- the ride it was part of (optional: the ride may not be saved yet)
+  stage_id text not null check (char_length(stage_id) between 1 and 120),
+  segment_id text not null check (char_length(segment_id) between 1 and 160),
+  elapsed_s real not null check (elapsed_s > 0 and elapsed_s < 86400),
+  avg_power real check (avg_power is null or (avg_power >= 0 and avg_power <= 3000)),
+  splits jsonb check (splits is null or (jsonb_typeof(splits) = 'array' and jsonb_array_length(splits) <= 1000)),
+  demo boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists segment_efforts_board_idx on public.segment_efforts (segment_id, elapsed_s);
+create index if not exists segment_efforts_user_idx on public.segment_efforts (user_id, segment_id, created_at desc);
+
+alter table public.segment_efforts enable row level security;
+drop policy if exists segment_efforts_select_own on public.segment_efforts;
+drop policy if exists segment_efforts_insert_own on public.segment_efforts;
+drop policy if exists segment_efforts_delete_own on public.segment_efforts;
+create policy segment_efforts_select_own on public.segment_efforts for select to authenticated using (user_id = (select auth.user_id()));
+create policy segment_efforts_insert_own on public.segment_efforts for insert to authenticated with check (user_id = (select auth.user_id()));
+create policy segment_efforts_delete_own on public.segment_efforts for delete to authenticated using (user_id = (select auth.user_id()));
+revoke all on public.segment_efforts from public, anonymous, authenticated;
+grant select, insert, delete on public.segment_efforts to authenticated;
+
+-- segment_limits: for every built-in segment, its length and the fastest believable effort. min_s is 80% of the time
+-- a 60 kg rider (+8 kg bike, CdA 0.25) takes at a sustained 6.5 W/kg through the app's own physics (riding the whole
+-- stage at that power and timing the segment, the faster pass on a circuit); max_avg_kmh is the same limit as a speed.
+-- tests/unit/segmentLimits.test.ts recomputes these rows. Only segments listed here have a shared board.
+create table if not exists public.segment_limits (
+  segment_id text primary key,
+  stage_id text not null,
+  length_m integer not null,
+  min_s integer not null check (min_s > 0),
+  max_avg_kmh real not null check (max_avg_kmh > 0)
+);
+alter table public.segment_limits enable row level security; -- no grants: only the functions below read it
+revoke all on public.segment_limits from public, anonymous, authenticated;
+
+insert into public.segment_limits (segment_id, stage_id, length_m, min_s, max_avg_kmh) values
+  ('hotw-morgul-bismark:the-wall', 'hotw-morgul-bismark', 956, 131, 27),
+  ('hotw-tour-of-the-moon:cold-shivers', 'hotw-tour-of-the-moon', 4375, 529, 30),
+  ('hotw-tour-of-the-moon:the-high-point', 'hotw-tour-of-the-moon', 750, 84, 33),
+  ('hell-of-the-west:echo-lake', 'hell-of-the-west', 8950, 963, 34),
+  ('alpe-dhuez:main', 'alpe-dhuez', 13975, 1849, 28),
+  ('stelvio:main', 'stelvio', 23975, 3031, 29),
+  ('ventoux:main', 'ventoux', 17950, 2383, 28),
+  ('tourmalet:main', 'tourmalet', 18325, 2300, 29),
+  ('zoncolan:main', 'zoncolan', 10050, 1829, 20),
+  ('mt-washington:main', 'mt-washington', 12075, 2133, 21),
+  ('mt-blue-sky:main', 'mt-blue-sky', 23250, 2239, 38),
+  ('mt-diablo:main', 'mt-diablo', 15850, 1741, 33),
+  ('flagstaff:main', 'flagstaff', 7375, 995, 27),
+  ('richmond-worlds:libby-hill', 'richmond-worlds', 1300, 98, 48),
+  ('richmond-worlds:23rd-street', 'richmond-worlds', 350, 25, 51),
+  ('central-park:cat-hill', 'central-park', 1000, 68, 53),
+  ('central-park:harlem-hill', 'central-park', 700, 55, 46),
+  ('harrogate-worlds:oak-beck-climb', 'harrogate-worlds', 725, 87, 31),
+  ('pacific-coast:hurricane-point', 'pacific-coast', 1425, 151, 34)
+on conflict (segment_id) do update set stage_id = excluded.stage_id, length_m = excluded.length_m, min_s = excluded.min_s, max_avg_kmh = excluded.max_avg_kmh;
+
+-- Same idea as ride_is_plausible(): not a demo or sped-up effort, no average power above 2000 W, not under the floor,
+-- not faster than the speed limit, and (no power recorded) not suspiciously fast either.
+create or replace function public.segment_effort_is_plausible(p_segment text, p_elapsed_s real, p_avg_power real, p_demo boolean)
+returns boolean
+language sql stable security definer set search_path = '' as $$
+  select p_elapsed_s is not null and p_elapsed_s > 0
+    and not coalesce(p_demo, false)
+    and coalesce(p_avg_power, 0) <= 2000
+    and exists (select 1 from public.segment_limits l where l.segment_id = p_segment)
+    and not exists (
+      select 1 from public.segment_limits l
+      where l.segment_id = p_segment
+        and (p_elapsed_s < l.min_s
+          or l.length_m / p_elapsed_s * 3.6 > l.max_avg_kmh
+          or (p_avg_power is null and p_elapsed_s < l.min_s * 1.5)))
+$$;
+revoke execute on function public.segment_effort_is_plausible(text, real, real, boolean) from public, anonymous, authenticated;
+
+-- The board: each rider's best plausible effort (this month or all time: p_since), the top 10 and the caller's own row.
+create or replace function public.segment_leaderboard(p_segment text, p_since timestamptz default null)
+returns table (rank bigint, short_name text, elapsed_s real, avg_power real, ridden_at timestamptz, is_me boolean, riders bigint)
+language sql stable security definer set search_path = '' as $$
+  with best as (
+    select distinct on (e.user_id) e.user_id, e.elapsed_s, e.avg_power, e.created_at
+    from public.segment_efforts e
+    join neon_auth."user" u on u.id::text = e.user_id and not coalesce(u.banned, false)
+    where e.segment_id = p_segment and (p_since is null or e.created_at >= p_since)
+      and public.segment_effort_is_plausible(e.segment_id, e.elapsed_s, e.avg_power, e.demo)
+    order by e.user_id, e.elapsed_s, e.created_at
+  ), ranked as (
+    select rank() over (order by b.elapsed_s) as rank, b.* from best b
+  )
+  select r.rank, public.short_name(u.name), r.elapsed_s, r.avg_power, r.created_at, r.user_id = auth.user_id(), (select count(*) from best)
+  from ranked r join neon_auth."user" u on u.id::text = r.user_id
+  where r.rank <= 10 or r.user_id = auth.user_id()
+  order by r.rank, r.created_at
+$$;
+revoke execute on function public.segment_leaderboard(text, timestamptz) from public, anonymous;
+grant execute on function public.segment_leaderboard(text, timestamptz) to authenticated;
 notify pgrst, 'reload schema';
