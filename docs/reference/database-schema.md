@@ -254,7 +254,7 @@ Indexes on `(to_user, created_at)` and `(from_user, created_at)`.
 
 ## KOM segments
 
-A stage's big climbs are segments (`src/segments.ts`; ids like `alpe-dhuez:climb-1`, pinned in `tests/unit/segments.test.ts`). The "KOM segments" section at the end of `db/schema.sql` is idempotent.
+A stage's big climbs are segments (`src/segments.ts`; ids like `alpe-dhuez:main`, pinned in `tests/unit/segments.test.ts`). The "KOM segments" section at the end of `db/schema.sql` is idempotent.
 
 ### `public.segment_efforts`
 

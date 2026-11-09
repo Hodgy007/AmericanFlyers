@@ -40,7 +40,7 @@ async function startDemo(page: Page, watts: number) {
 test('approaching Alpe d’Huez shows the KOM panel with the board, then the live gap to your best and last attempt', async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 960, height: 720 }); // tall enough for the whole top 5 (a short window shows 3)
-  const errors = await setup(page, { stored: { 'alpe-dhuez:climb-1': { best: steady(13000, 3600, 1), last: steady(13000, 2900, 2) } } });
+  const errors = await setup(page, { stored: { 'alpe-dhuez:main': { best: steady(13975, 3600, 1), last: steady(13975, 2900, 2) } } });
   await page.goto('/?stage=alpe-dhuez&timescale=20&komtest');
   await startDemo(page, 450);
 
@@ -109,30 +109,29 @@ test('without ?komtest a demo ride is timed but never kept: the toast says so an
 
 test('the hub’s KOM chip opens a stage’s segments, with the king and your best, and each one’s full board', async ({ page }) => {
   test.setTimeout(120_000);
-  const errors = await setup(page, { stored: { 'mt-blue-sky:climb-2': { best: steady(5075, 700, 1) } } });
+  const errors = await setup(page, { stored: { 'hotw-tour-of-the-moon:the-high-point': { best: steady(750, 100, 1) } } });
   await page.goto('/');
   await expect(page.locator('#hub')).toBeVisible();
   await expect(page.locator('.hub-chip.gold').first()).toBeVisible(); // your rides have loaded: the route cards are drawn for good
   // A stage with several segments opens a list: the king of each climb and your best.
-  await press(page, '[data-fkey="kom-mt-blue-sky"]');
+  await press(page, '[data-fkey="kom-hotw-tour-of-the-moon"]');
   const dialog = page.locator('#segment-board');
   await expect(dialog).toBeVisible();
-  await expect(page.locator('#sb-title')).toHaveText('Mount Blue Sky');
-  await expect(page.locator('.sb-item')).toHaveCount(4);
-  await expect(page.locator('.sb-item').nth(1)).toContainText('Mount Blue Sky climb');
+  await expect(page.locator('#sb-title')).toHaveText('Hell of the West · Stage 2: Tour of the Moon');
+  await expect(page.locator('.sb-item')).toHaveCount(2);
+  await expect(page.locator('.sb-item').nth(1)).toContainText('The high point');
   await expect(page.locator('.sb-item').nth(1)).toContainText('👑 Alex M. 50:12');
   await expect(page.locator('.sb-item').nth(1)).toContainText('You: #7 of 27 · 54:50');
-  await expect(page.locator('.sb-item').nth(2)).toContainText('Climb 3');
   // Tapping one opens its board: top 5 and you, this month or all time, and a way back.
   await page.locator('.sb-item').nth(1).click();
-  await expect(page.locator('#sb-title')).toHaveText('Mount Blue Sky climb');
+  await expect(page.locator('#sb-title')).toHaveText('The high point');
   await expect(page.locator('#sb-body .lb-table tbody tr')).toHaveCount(6);
   await expect(page.locator('#sb-body .lb-table tbody tr.me')).toContainText('Sam R. (you)');
-  await expect(page.locator('#sb-body')).toContainText('Your best on this device: 11:40');
+  await expect(page.locator('#sb-body')).toContainText('Your best on this device: 1:40');
   await page.locator('#sb-tabs [data-sb-range=month]').click();
   await expect(page.locator('#sb-tabs [data-sb-range=month]')).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('button', { name: '← All segments on this stage' }).click();
-  await expect(page.locator('.sb-item')).toHaveCount(4);
+  await expect(page.locator('.sb-item')).toHaveCount(2);
   await press(page, '#segment-board button[value=cancel]');
   await expect(dialog).toBeHidden();
   // A stage with a single segment goes straight to its board; flat stages have no chip.

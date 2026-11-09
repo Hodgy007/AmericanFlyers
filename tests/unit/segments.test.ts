@@ -16,25 +16,16 @@ const PINNED: Record<string, [string, string, number, number][]> = {
     ['hotw-tour-of-the-moon:cold-shivers', 'Cold Shivers', 2425, 6800],
     ['hotw-tour-of-the-moon:the-high-point', 'The high point', 12400, 13150],
   ],
-  'hell-of-the-west': [['hell-of-the-west:climb-1', 'Echo Lake', 11850, 19200]],
-  'alpe-dhuez': [['alpe-dhuez:climb-1', 'Alpe d\'Huez', 25, 13025]],
-  'stelvio': [['stelvio:climb-1', 'Climb 1', 525, 6850], ['stelvio:climb-2', 'Stelvio Pass climb', 7225, 24500]],
-  'ventoux': [['ventoux:climb-1', 'Mont Ventoux', 3450, 21350]],
-  'tourmalet': [['tourmalet:climb-1', 'Col du Tourmalet', 675, 19000]],
-  'zoncolan': [['zoncolan:climb-1', 'Climb 1', 50, 1425], ['zoncolan:climb-2', 'Monte Zoncolan climb', 1800, 10100]],
-  'mt-washington': [['mt-washington:climb-1', 'Mount Washington Auto Road', 125, 12200]],
-  'mt-blue-sky': [
-    ['mt-blue-sky:climb-1', 'Climb 1', 50, 3425],
-    ['mt-blue-sky:climb-2', 'Mount Blue Sky climb', 3700, 8775],
-    ['mt-blue-sky:climb-3', 'Climb 3', 15025, 17150],
-    ['mt-blue-sky:climb-4', 'Climb 4', 19075, 23275],
-  ],
-  'mt-diablo': [
-    ['mt-diablo:climb-1', 'Climb 1', 2150, 5225],
-    ['mt-diablo:climb-2', 'Climb 2', 8775, 11300],
-    ['mt-diablo:climb-3', 'Mount Diablo climb', 12725, 17975],
-  ],
-  'flagstaff': [['flagstaff:climb-1', 'Flagstaff Mountain', 25, 7400]],
+  'hell-of-the-west': [['hell-of-the-west:echo-lake', 'Echo Lake', 11850, 20800]],
+  'alpe-dhuez': [['alpe-dhuez:main', 'Alpe d\'Huez', 25, 14000]],
+  'stelvio': [['stelvio:main', 'Stelvio Pass', 525, 24500]],
+  'ventoux': [['ventoux:main', 'Mont Ventoux', 3450, 21400]],
+  'tourmalet': [['tourmalet:main', 'Col du Tourmalet', 675, 19000]],
+  'zoncolan': [['zoncolan:main', 'Monte Zoncolan', 50, 10100]],
+  'mt-washington': [['mt-washington:main', 'Mount Washington', 125, 12200]],
+  'mt-blue-sky': [['mt-blue-sky:main', 'Mount Blue Sky', 50, 23300]],
+  'mt-diablo': [['mt-diablo:main', 'Mount Diablo', 2150, 18000]],
+  'flagstaff': [['flagstaff:main', 'Flagstaff Mountain', 25, 7400]],
 };
 
 describe('segment detection on the built-in stages', () => {
@@ -47,14 +38,15 @@ describe('segment detection on the built-in stages', () => {
     }
   });
 
-  it('gives the mountain stages their main climb, rolling stages their named climbs and flat stages none', () => {
+  it('gives each single-climb stage exactly one main segment, and rolling stages their named climbs', () => {
     for (const id of ['alpe-dhuez', 'ventoux', 'tourmalet', 'mt-washington', 'flagstaff', 'stelvio', 'zoncolan', 'mt-diablo', 'mt-blue-sky']) {
-      const s = stageById(id);
-      const biggest = segmentsFor(s).reduce((a, b) => (b.gain > a.gain ? b : a));
-      expect(biggest.gain, id).toBeGreaterThan(0.25 * (s.elevationAt(s.finish!) - s.elevationAt(0)));
+      const segs = segmentsFor(stageById(id));
+      expect(segs.map((g) => g.id), id).toEqual([`${id}:main`]);
     }
     expect(segmentsFor(stageById('hotw-morgul-bismark')).map((g) => g.name)).toEqual(['The Wall']);
     expect(segmentsFor(stageById('hotw-tour-of-the-moon')).map((g) => g.name)).toEqual(['Cold Shivers', 'The high point']);
+    expect(segmentsFor(stageById('hell-of-the-west')).map((g) => g.name)).toEqual(['Echo Lake']);
+    expect(segmentsFor(stageById('hell-of-the-west'))[0].end).toBe(stageById('hell-of-the-west').finish); // runs to the line at Echo Lake
     expect(segmentsFor(stageById('heartland'))).toEqual([]);
     expect(segmentsFor(stageById('route66'))).toEqual([]);
   });

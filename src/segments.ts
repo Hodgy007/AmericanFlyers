@@ -6,6 +6,7 @@
 
 import { findClimbs, type Climb } from './climb';
 import type { Stage } from './stages';
+import { isClimb } from './world/roadside';
 
 export interface Segment {
   /** Stable across builds: `<stageId>:<slug of the summit's name>` or `<stageId>:climb-<n>`. Pinned per built-in stage in tests/unit/segments.test.ts. */
@@ -58,6 +59,9 @@ function steepest(elevationAt: (d: number) => number, s: number, e: number, fall
   return Math.max(max, fallback);
 }
 
+/** The climb's own name where the stage's name says more ("Mount Washington Auto Road"). */
+const MAIN_NAMES: Record<string, string> = { 'mt-washington': 'Mount Washington' };
+
 const cache = new WeakMap<Stage, Segment[]>();
 
 /** The segments of a stage, in order of distance. Cached per stage: call it freely. Endless stages have none. */
@@ -97,6 +101,39 @@ function findSegments(stage: Stage): Segment[] {
     }
     return best;
   };
+  // Single-climb stages (the mountain climbs): one main segment, from the first big climb to the summit.
+  if (isClimb(stage) && !stage.uploaded && stage.tourStage === undefined) {
+    const first = climbs.find((c) => c.length >= SEGMENT_MIN_LENGTH && c.gain >= SEGMENT_MIN_GAIN) ?? climbs[0];
+    if (!first) return [];
+    let end = finish;
+    let top = el(finish);
+    for (let d = first.start; d <= finish; d += 25) if (el(d) > top + 3) { top = el(d); end = d; } // the highest point when it isn't the finish
+    const gain = el(end) - el(first.start);
+    const length = end - first.start;
+    if (length < SEGMENT_MIN_LENGTH || gain < SEGMENT_MIN_GAIN) return [];
+    return [{
+      id: `${stage.id}:main`, stageId: stage.id, name: MAIN_NAMES[stage.id] ?? shortStageName(stage.name),
+      start: first.start, end, length, gain, avg: gain / length, max: steepest(el, first.start, end, gain / length),
+      passes: 1, shared: true,
+    }];
+  }
+  // A rolling stage that finishes on a named summit (Echo Lake): its last climb runs on to the line across the small dips.
+  const atFinish = named.find((s) => s.d === finish && s.cat <= 1);
+  const lastClimb = climbs[climbs.length - 1];
+  if (atFinish && !lap && lastClimb && finish - lastClimb.end <= 2000 && lastClimb.end < finish) {
+    const gain = el(finish) - el(lastClimb.start);
+    climbs[climbs.length - 1] = { ...lastClimb, end: finish, length: finish - lastClimb.start, gain, avg: gain / (finish - lastClimb.start), max: steepest(el, lastClimb.start, finish, 0) };
+  }
+  if (atFinish && !lap && climbs.length > 1) {
+    // ...and it joins the climb before it across a small dip (up to 400 m), so the whole climb to Echo Lake is one segment.
+    const prev = climbs[climbs.length - 2];
+    const last = climbs[climbs.length - 1];
+    if (last.start - prev.end <= 400 && el(prev.end) - el(last.start) <= 15) {
+      const length = last.end - prev.start;
+      const gain = el(last.end) - el(prev.start);
+      climbs.splice(climbs.length - 2, 2, { start: prev.start, end: last.end, length, gain, avg: gain / length, max: steepest(el, prev.start, last.end, gain / length) });
+    }
+  }
   const picked: { c: Climb; name: string | null }[] = [];
   for (const raw of climbs) {
     // The top of a circuit's climb is the lap line.
@@ -106,7 +143,9 @@ function findSegments(stage: Stage): Segment[] {
     const big = c.length >= SEGMENT_MIN_LENGTH && c.gain >= SEGMENT_MIN_GAIN;
     const summit = summitFor(c);
     const important = summitFor(c, summits) !== null && c.length >= SUMMIT_MIN_LENGTH && c.gain >= SUMMIT_MIN_GAIN;
-    if (big || important) picked.push({ c, name: summit?.name ?? null });
+    // Unnamed climbs on a rolling stage are kept only if they are really big.
+    const bigUnnamed = c.length >= 2000 && c.gain >= 100;
+    if ((big || important) && (summit || important || bigUnnamed)) picked.push({ c, name: summit?.name ?? null });
   }
   // Names: the summit's, else "<Stage> climb" for the biggest, "Climb N" for the rest. Ids follow the name.
   const short = shortStageName(stage.name);
