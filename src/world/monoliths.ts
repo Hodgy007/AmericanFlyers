@@ -45,7 +45,9 @@ const BEHIND = 1500;
 // ---------------------------------------------------------------- geometry ----
 
 const BAND_COLORS = ['#9c4a2b', '#c4693a', '#d98f58', '#e3b98a', '#b05030', '#8a3d26'].map((c) => new THREE.Color(c));
-const TALUS = new THREE.Color('#c99a74');
+/** The Coke Ovens are Wingate sandstone: an even red-brown with only faint banding, not the striped Entrada colours above. */
+const COKE_COLORS = ['#a24d2c', '#b25630', '#bb6035', '#a85330', '#9c4a2b', '#b9693f'].map((c) => new THREE.Color(c));
+const TALUS = new THREE.Color('#a26a48');
 
 interface Lathe {
   height: number;
@@ -58,6 +60,8 @@ interface Lathe {
   cap?: number;
   /** Extra radius at the foot as a share of the radius, the talus skirt. */
   skirt?: number;
+  /** Band colours (default BAND_COLORS). */
+  colors?: THREE.Color[];
 }
 
 /** A solid of revolution with ledges between its bands, ragged outline and banded colours; flat-shaded when drawn. */
@@ -106,7 +110,7 @@ export function lathe(spec: Lathe): THREE.BufferGeometry {
   };
   const bandColor = (band: number, s: number) => {
     const streak = 0.88 + 0.18 * hash2(s * 5 + 1, spec.seed); // desert varnish: darker vertical streaks
-    return band < 0 ? TALUS : c2.copy(BAND_COLORS[Math.floor(hash2(band * 3 + 1, spec.seed) * BAND_COLORS.length)]).multiplyScalar(streak);
+    return band < 0 ? TALUS : c2.copy((spec.colors ?? BAND_COLORS)[Math.floor(hash2(band * 3 + 1, spec.seed) * (spec.colors ?? BAND_COLORS).length)]).multiplyScalar(streak);
   };
   const c2 = new THREE.Color();
   for (let ri = 0; ri < rings.length - 1; ri++) {
@@ -158,11 +162,15 @@ export function kissingGeometry(): THREE.BufferGeometry {
   return merge([a, b]);
 }
 
-/** The Coke Ovens: a row of four beehive domes. */
+/**
+ * The Coke Ovens: a row of four beehive domes, each taller than it is wide, with near-vertical banded
+ * sides, a rounded top and a small talus apron (the real ones are a line of rounded sandstone knobs standing
+ * on the floor of Monument Canyon).
+ */
 export function cokeGeometry(): THREE.BufferGeometry {
   const dome = (h: number, r: number, seed: number, x: number, z: number) =>
-    lathe({ height: h, radius: (t) => r * Math.sqrt(Math.max(0.0, 1 - Math.pow(t, 2.4))) + 0.5, bands: 6, seed, segs: 22, skirt: 0.5 }).translate(x, 0, z);
-  return merge([dome(58, 40, 5, -90, 4), dome(74, 48, 17, -12, -6), dome(64, 42, 29, 70, 8), dome(50, 34, 41, 140, -3)]);
+    lathe({ height: h, radius: (t) => r * Math.pow(Math.max(0.0, 1 - Math.pow(t, 5)), 0.5) + 0.5, bands: 7, seed, segs: 22, skirt: 0.18, colors: COKE_COLORS }).translate(x, 0, z);
+  return merge([dome(78, 30, 5, -100, 4), dome(96, 35, 17, -30, -6), dome(84, 31, 29, 38, 8), dome(66, 26, 41, 98, -3)]);
 }
 
 function merge(list: THREE.BufferGeometry[]): THREE.BufferGeometry {

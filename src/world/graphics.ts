@@ -312,6 +312,7 @@ export class Graphics {
   render(dt: number) {
     const t0 = performance.now();
     if (this.env && this.atmosphere && this.env.maintain(t0, this.atmosphere.skyKey, this.tier === 'ultra' ? 256 : 128, this.p.scene, this.p.sky)) this.atmosphere.hemiScale = 0.4; // the sky lights things now; keep a little of the hemisphere's ground bounce
+    if (this.env && this.atmosphere && this.p.scene.environment) { const v = 0.75 * this.atmosphere.skyLight; if (this.p.scene.environmentIntensity !== v) this.p.scene.environmentIntensity = v; }
     if (this.post) this.post.render(dt);
     else this.p.renderer.render(this.p.scene, this.p.camera);
     if (this.jank && ++this.jankFrame % this.jank.every === 0) { const end = performance.now() + this.jank.ms; while (performance.now() < end) { /* busy: a slow or hitchy device, for testing */ } }

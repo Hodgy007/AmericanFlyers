@@ -13,6 +13,7 @@ export type MonumentId =
   | 'log-lodge'
   | 'flatirons'
   | 'washington-summit'
+  | 'washington-tower'
   | 'diablo-summit'
   | 'crest-house-ruins'
   | 'summit-sign-us';

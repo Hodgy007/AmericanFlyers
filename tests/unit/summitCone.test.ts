@@ -52,6 +52,14 @@ describe('Mount Washington summit', () => {
     return { x: p.x - Math.sin(p.heading) * offset * side, z: p.z + Math.cos(p.heading) * offset * side };
   };
 
+  /** Angle in degrees between the chase camera's heading `out` metres before the finish and the direction to the point `at`. */
+  const bearing = (at: { x: number; z: number }, out: number) => {
+    const p = roadPoint(s.finish! - out);
+    let b = Math.atan2(at.z - p.z, at.x - p.x) - p.heading;
+    b = ((b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+    return Math.abs(b) * (180 / Math.PI);
+  };
+
   it('has an unguarded road', () => {
     expect(s.scenery.barrier).toBe('none');
   });
@@ -67,15 +75,33 @@ describe('Mount Washington summit', () => {
       expect(s.scenery.wildHeight(at.x, at.z)).toBeLessThan(s.elevationAt(s.finish! - 200) - 40);
     }
   });
+  it('keeps the buildings and their knoll (26 m deep from the centre) off the road', () => {
+    const at = place(site.first, site.side, site.offset);
+    for (let d = s.finish! - 300; d <= s.finish! + 100; d += 5) {
+      const r = roadPoint(d);
+      expect(Math.hypot(at.x - r.x, at.z - r.z), `road at ${d}`).toBeGreaterThan(26 + 10);
+    }
+  });
   it('is ahead of a rider in the last bend, and in the last 100 m', () => {
     // Bearing of the building from the rider relative to his heading: within the camera's view (about +-43 degrees) at 50 and 100 m out.
     const at = place(site.first, site.side, site.offset);
-    for (const out of [50, 100]) {
-      const p = roadPoint(s.finish! - out);
-      let b = Math.atan2(at.z - p.z, at.x - p.x) - p.heading;
-      b = ((b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
-      expect(Math.abs(b) * (180 / Math.PI), `${out} m out`).toBeLessThan(43);
+    for (const out of [50, 100, 400]) expect(bearing(at, out), `${out} m out`).toBeLessThan(43);
+  });
+  // The road wraps right round the summit, so the buildings are more than 50 degrees off the chase camera's heading at 200 m out
+  // (no placement near the finish fixes that: the camera swings 100 degrees between 200 and 50 m). The broadcast tower
+  // stands apart, on the outside of the bend and straight ahead of the last straight, so something is in frame at every distance.
+  it('has the broadcast tower in frame at 400, 200 and 100 m out, off the road and in line with the last straight', () => {
+    const tower = s.landmarks.find((k) => k.model === 'washington-tower')!;
+    const at = place(tower.first, tower.side, tower.offset);
+    for (const out of [400, 200, 100]) expect(bearing(at, out), `${out} m out`).toBeLessThan(43);
+    for (let d = s.finish! - 500; d <= s.finish! + 100; d += 10) {
+      const r = roadPoint(d);
+      expect(Math.hypot(at.x - r.x, at.z - r.z), `road at ${d}`).toBeGreaterThan(30);
     }
+  });
+  it('has something of the summit in frame at every one of 400, 200, 100 and 50 m out', () => {
+    const sites = s.landmarks.filter((k) => k.model === 'washington-summit' || k.model === 'washington-tower').map((k) => place(k.first, k.side, k.offset));
+    for (const out of [400, 200, 100, 50]) expect(Math.min(...sites.map((a) => bearing(a, out))), `${out} m out`).toBeLessThan(43);
   });
 });
 

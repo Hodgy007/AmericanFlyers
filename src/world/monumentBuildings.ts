@@ -249,9 +249,10 @@ export function buildLogLodge(o: MonumentOptions = {}): THREE.Group {
 
 /**
  * Mount Washington's summit, built to be read from half a kilometre: the long low grey Sherman Adams building
- * (about 64 m), the weather observatory tower with its guyed instrument mast, a lattice broadcast tower with
- * a red-and-white top, a small stone hut and antenna masts, all on a mound of bare grey rock and rimed with ice.
- * The building's long side faces the road (+z); its natural height is the broadcast tower's, 57 m, on an 11 m knoll.
+ * (about 64 m), the weather observatory tower with its guyed instrument mast, a small stone hut and antenna masts,
+ * all on a mound of bare grey rock and rimed with ice. (The lattice broadcast tower is its own landmark,
+ * `buildWashingtonTower`.) The building's long side faces the road (+z); its natural height is the observatory
+ * mast's, 38 m, on an 11 m knoll.
  */
 export function buildWashingtonSummit(): THREE.Group {
   const k = new Kit();
@@ -295,32 +296,54 @@ export function buildWashingtonSummit(): THREE.Group {
   k.bar([35.8, 27.2, -4], [35.8, 28.4, -4], 0.6, RIME, 1);
   k.box(1, 0.55, 1, 33, 33, -4, '#d8d8d8', 0, 1);
   for (const [gx, gz] of [[42, 4], [24, 4], [42, -12], [24, -12]] as const) k.bar([33, 24, -4], [gx, 0, gz], 0.12, '#6c6f74', 1);
-  // The broadcast tower: a tapering lattice of four legs, banded red and white at the top, with guy wires.
-  const TX = -52;
-  const TZ = -6;
-  const H = 40;
-  const half = (y: number) => 1.7 - (1.2 * y) / H;
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) k.bar([TX + sx * half(0), 0, TZ + sz * half(0)], [TX + sx * half(H), H, TZ + sz * half(H)], 0.3, STEEL, 1);
-  }
-  for (let y = 0; y < H; y += 5) {
-    const y2 = y + 5;
-    const a = half(y);
-    const b = half(y2);
-    k.bar([TX - a, y, TZ + a], [TX + a, y, TZ + a], 0.16, STEEL, 1); // a ring (front and back faces)
-    k.bar([TX - a, y, TZ - a], [TX + a, y, TZ - a], 0.16, STEEL, 1);
-    k.bar([TX - a, y, TZ + a], [TX + b, y2, TZ + b], 0.14, STEEL, 1); // a diagonal on the front and a side
-    k.bar([TX + a, y, TZ - a], [TX + b, y2, TZ + b], 0.14, STEEL, 1);
-  }
-  k.bar([TX, H, TZ], [TX, H + 12, TZ], 0.5, '#d8453a', 1);
-  k.bar([TX, H + 4, TZ], [TX, H + 8, TZ], 0.52, '#f3f3f3', 1);
-  for (const [gx, gz] of [[8, 8], [-8, 8], [8, -8], [-8, -8]] as const) k.bar([TX, 30, TZ], [TX + gx * 1.6, 0, TZ + gz * 1.6], 0.1, '#6c6f74', 1);
   // The old Tip-Top House: a small stone hut with a gabled roof, and two thin antenna masts.
   k.box(11, 3.8, 7, 20, 0, 9, mix(STONE, '#847f75', 0.6));
   k.gable(12.4, 8.2, 2.4, 20, 3.8, 9, '#5b564f', mix(STONE, '#847f75', 0.6));
   k.bar([-24, 7.3, -3], [-24, 17, -3], 0.2, STEEL, 1);
   k.bar([-30, 7.3, -3], [-30, 14, -3], 0.2, STEEL, 1);
   k.bar([-24, 15.5, -3], [-24, 15.5, -4.4], 0.3, '#d8d8d8', 1);
+  });
+  return finish(k.build());
+}
+
+/**
+ * The broadcast tower on Mount Washington's summit, standing apart from the buildings on a rock pile: a tapering
+ * lattice of four legs (40 m, with a 12 m mast banded red and white) with guy wires. It is a landmark of its own
+ * so it can stand in line with the last straight of the road, where the buildings are still behind the bend.
+ * Its natural height is 57 m, on a 5 m pile.
+ */
+export function buildWashingtonTower(): THREE.Group {
+  const k = new Kit();
+  const STEEL = '#82868c';
+  const TOP = 5;
+  k.taper(34, 30, 9, 0.5, 0, -4, 0, '#6b6760', 0.7);
+  for (let i = 0; i < 9; i++) {
+    const r = (j: number) => rnd(23, i * 5 + j);
+    const bs = 1.5 + r(0) * 2.6;
+    const a = (i / 9) * Math.PI * 2 + r(1);
+    k.box(bs, bs * (0.5 + r(2) * 0.4), bs * (0.7 + r(3) * 0.4), Math.cos(a) * (10 + r(4) * 6), -1 + r(5) * 2, Math.sin(a) * (9 + r(6) * 5), mix('#5f5b55', '#85817a', r(7)), r(1) * 3);
+  }
+  k.within([0, TOP, 0], [0, 0, 0], () => {
+    // The broadcast tower: a tapering lattice of four legs, banded red and white at the top, with guy wires.
+    const TX = 0;
+    const TZ = 0;
+    const H = 40;
+    const half = (y: number) => 1.7 - (1.2 * y) / H;
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) k.bar([TX + sx * half(0), 0, TZ + sz * half(0)], [TX + sx * half(H), H, TZ + sz * half(H)], 0.3, STEEL, 1);
+    }
+    for (let y = 0; y < H; y += 5) {
+      const y2 = y + 5;
+      const a = half(y);
+      const b = half(y2);
+      k.bar([TX - a, y, TZ + a], [TX + a, y, TZ + a], 0.16, STEEL, 1); // a ring (front and back faces)
+      k.bar([TX - a, y, TZ - a], [TX + a, y, TZ - a], 0.16, STEEL, 1);
+      k.bar([TX - a, y, TZ + a], [TX + b, y2, TZ + b], 0.14, STEEL, 1); // a diagonal on the front and a side
+      k.bar([TX + a, y, TZ - a], [TX + b, y2, TZ + b], 0.14, STEEL, 1);
+    }
+    k.bar([TX, H, TZ], [TX, H + 12, TZ], 0.5, '#d8453a', 1);
+    k.bar([TX, H + 4, TZ], [TX, H + 8, TZ], 0.52, '#f3f3f3', 1);
+    for (const [gx, gz] of [[8, 8], [-8, 8], [8, -8], [-8, -8]] as const) k.bar([TX, 30, TZ], [TX + gx * 1.6, 0, TZ + gz * 1.6], 0.1, '#6c6f74', 1);
   });
   return finish(k.build());
 }

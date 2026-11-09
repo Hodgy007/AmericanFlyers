@@ -83,6 +83,10 @@ export interface Scenery {
   roadside?(d: number, lateral: number, plain: number): number | null;
   /** How much clearer than the usual the air is: the haze distance is multiplied by this (default 1). Dry Colorado air lets a canyon's far wall and floor read. */
   clearAir?: number;
+  /** On High and Ultra (the post chain) blend the haze as Low does, in display colour with Low's thickness, so the distance is not paler there. Off by default: other stages keep the post chain's own look. */
+  directHaze?: boolean;
+  /** Scales the sky's ambient and reflected light (the environment map, High and Ultra only; default 1). Lower on a stage where it pales sunlit rock. */
+  skyLight?: number;
 }
 
 /** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
@@ -654,9 +658,10 @@ const mtWashington = buildClimb({
   },
   // The ground falls away from a bare cone at the summit, so the buildings stand against the sky and are in view from
   // the last 500 m (the generic wild ground climbs hundreds of metres within a kilometre of the road and hid them).
-  summit: { d: 12225, side: 1, offset: 32, rise: 3, flat: 60, slope: 0.5, fadeFrom: 380, fadeTo: 1200 },
+  summit: { d: 12225, side: 1, offset: 40, rise: 3, flat: 60, slope: 0.5, fadeFrom: 380, fadeTo: 1200 },
   landmarks: [
-    monumentAt('washington-summit', 12225, 1, 32, 57, { yaw: -0.12, clearance: 40 }), // inside the last bend, just past the finish: the road wraps round it, so it is ahead on the right from 500 m out and again in the last 100 m
+    monumentAt('washington-summit', 12225, 1, 40, 38.5, { yaw: -0.12, clearance: 40 }), // the buildings: inside the last bend, just past the finish, so they are ahead on the right from 500 m out, off the right edge at 200 m (the camera swings 100 degrees by 50 m out), and ahead again in the last 100 m
+    monumentAt('washington-tower', 12200, -1, 60, 57, { clearance: 20 }), // the broadcast tower, apart from them on the outside of the bend, straight ahead of the last straight: it is what the camera sees at 200 m
     summitSign(12200, 'MOUNT WASHINGTON', 'ELEV. 6,288 FT'),
   ],
 });
@@ -1009,6 +1014,8 @@ const tourOfTheMoon: Stage = {
     barrier: 'stone',
     roadside: makeRoadside(RIM_ROCK_SECTIONS), // the rims of Monument Canyon and its neighbours
     clearAir: 3.2, // dry plateau air: the canyon floors and the monoliths stay readable
+    directHaze: true, // and the same on Medium and up as on Low
+    skyLight: 0.3, // High and Ultra's sky ambient would pale the red rock
   },
   landmarks: [startArch, finishArch(TM_FINISH), finishArch(TM_VISITOR_CENTER)],
   signs: [],

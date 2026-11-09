@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildApartments, buildChalet, buildChurch, buildCrestHouseRuins, buildDiabloSummit, buildLogLodge, buildObservatory, buildPassBuildings, buildWashingtonSummit } from './monumentBuildings';
+import { buildApartments, buildChalet, buildChurch, buildCrestHouseRuins, buildDiabloSummit, buildLogLodge, buildObservatory, buildPassBuildings, buildWashingtonSummit, buildWashingtonTower } from './monumentBuildings';
 import { buildFlatirons } from './flatirons';
 import { Kit, boardMaterial, finish, fitText } from './monumentKit';
 import type { MonumentId, MonumentOptions } from './monumentTypes';
@@ -215,6 +215,7 @@ const BUILDERS: Record<MonumentId, (o: MonumentOptions) => THREE.Group> = {
   'log-lodge': buildLogLodge,
   flatirons: (o) => buildFlatirons(o),
   'washington-summit': buildWashingtonSummit,
+  'washington-tower': buildWashingtonTower,
   'diablo-summit': buildDiabloSummit,
   'crest-house-ruins': buildCrestHouseRuins,
   'summit-sign-us': buildSummitSignUs,
