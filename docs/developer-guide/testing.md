@@ -7,7 +7,7 @@ This page covers what the repository checks automatically (the type check, the b
 Every pull request and every push to `main` runs [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) on GitHub Actions:
 
 1. `npm ci`.
-2. **`npm run build`.** This runs `tsc --noEmit` on everything under `src/` (strict mode, unused-variable checks, the Web Bluetooth types) and then `vite build`.
+2. **`npm run build`.** This type-checks the app (`tsc --noEmit` on everything under `src/`: strict mode, unused-variable checks, the Web Bluetooth types), the serverless functions (`tsc -p api --noEmit`) and the tests (`tsc -p tsconfig.test.json --noEmit`), then runs `vite build`.
 3. **`npm test`.** The unit tests (Vitest), below.
 4. **The smoke test.** `npx playwright install --with-deps chromium`, then `npx playwright test`: the built app in headless Chromium, below. On failure the workflow uploads the Playwright report and traces.
 
@@ -21,7 +21,7 @@ npm run build && npm test
 
 ## Unit tests (Vitest)
 
-`npm test` runs `vitest run`; `npm run test:watch` re-runs on save. The tests are in `tests/unit/` and cover the pure logic, with no browser and no WebGL:
+`npm test` runs `vitest run`; `npm run test:watch` re-runs on save, and `npm run typecheck:tests` type-checks the tests alone. The tests are every `*.test.ts` file under [`tests/unit/`](../../tests/unit/): one module per file mostly, covering the pure logic, with no browser and no WebGL. The larger suites are listed here:
 
 | File | Covers |
 | --- | --- |
@@ -45,6 +45,10 @@ npm run build && npm test
 | `aiLogic.test.ts` | the AI coach and rivals: text trimming, reply sanitizers, canned text for every moment and trigger, the coach moments and their rate limits, the plan runner, rival triggers and line limiter, the rival bot (pace, styles, result) |
 | `aiApi.test.ts` | `api/ai.ts` with the Anthropic client and the Data API injected: 401/403/429/503 mapping, the rider's token reaching `ai_claim`, refusal and unusable replies falling back to canned text, the exact Claude request, prompt contents and injection hygiene |
 | `challenges.test.ts` | ISO weeks and the weekly challenge pick (pinned to the database for several weeks) |
+| `trainer.test.ts` | `src/ble/trainer.ts`: FTMS and Cycling Power parsing, and the crank cadence it derives |
+| `stats.test.ts` | `src/stats.ts`: averages, normalized power, TSS, best efforts and time in zone |
+| `steering.test.ts` | `src/steering.ts`: lane clamping and steps, key hold-to-repeat, and auto-steer into the draft |
+| `zones.test.ts` | `src/zones.ts`: heart-rate and power zone boundaries, lookup and the zone bar |
 
 Conventions:
 

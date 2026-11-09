@@ -75,12 +75,14 @@ describe('request building', () => {
     expect(pickModel('sonar')).toBe('perplexity/sonar');
     expect(pickModel('perplexity/sonar; drop table')).toBe('perplexity/sonar');
   });
-  it('takes the token from AI_GATEWAY_API_KEY, then the request header, then VERCEL_OIDC_TOKEN, else none', () => {
+  it('takes the token from AI_GATEWAY_API_KEY, then the request header (on Vercel only), then VERCEL_OIDC_TOKEN, else none', () => {
     const h = new Headers({ 'x-vercel-oidc-token': 'from-header' });
     expect(pickToken({ AI_GATEWAY_API_KEY: 'key', VERCEL_OIDC_TOKEN: 'oidc' }, h)).toBe('key');
-    expect(pickToken({ VERCEL_OIDC_TOKEN: 'oidc' }, h)).toBe('from-header'); // the per-invocation header is fresher
+    expect(pickToken({ VERCEL: '1', VERCEL_OIDC_TOKEN: 'oidc' }, h)).toBe('from-header'); // the per-invocation header is fresher
+    expect(pickToken({ VERCEL_OIDC_TOKEN: 'oidc' }, h)).toBe('oidc'); // off Vercel the header is client-supplied, so ignored
     expect(pickToken({ VERCEL_OIDC_TOKEN: 'oidc' }, new Headers())).toBe('oidc');
-    expect(pickToken({}, h)).toBe('from-header');
+    expect(pickToken({ VERCEL: '1' }, h)).toBe('from-header');
+    expect(pickToken({}, h)).toBeNull();
     expect(pickToken({ AI_GATEWAY_API_KEY: ' ' }, new Headers())).toBeNull();
   });
 });

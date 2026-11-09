@@ -124,7 +124,6 @@ describe('RaceCommentary', () => {
     a.advance(30);
     a.rc.update(snap({ t: 140, groups: [{ label: 'Bunch', size: 30, gapSec: 0, you: true }] }));
     a.advance(5);
-    a.rc.tick?.call(a.rc);
     expect(a.played.some((u) => /you_back-/.test(u))).toBe(true);
   });
 

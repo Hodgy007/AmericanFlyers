@@ -209,6 +209,7 @@ export function initHub(deps: HubDeps) {
       slot.loading = false;
       slot.body.replaceChildren();
       slot.view = m.mount(slot.body, ctx);
+      wasActive.delete(id); // a section that mounts later starts with no state: updateActive must tell it
       updateActive();
     }).catch((e) => {
       slot.loading = false;
@@ -320,11 +321,25 @@ export function initHub(deps: HubDeps) {
     if (choice.workoutId && !workoutById(choice.workoutId)) choice = { ...choice, workoutId: null };
   }
 
+  // While the hub is hidden it is inert (not focusable, not tabbable), so closing must move focus back to the ride.
+  // On `open()` the `inert` goes first and `hidden` second: a `hidden` subtree cannot take focus, so reversing
+  // them would leave the hub's own Ride button unfocusable.
+  let focusBeforeClose: HTMLElement | null = null;
+  function setHidden(hidden: boolean) {
+    if (hidden) {
+      root.hidden = true;
+      root.setAttribute('inert', '');
+    } else {
+      root.removeAttribute('inert');
+      root.hidden = false;
+    }
+  }
+
   function open() {
     if (isOpen) return;
     isOpen = true;
     syncChoiceWithApp();
-    root.hidden = false;
+    setHidden(false);
     document.documentElement.removeAttribute('data-start');
     document.body.classList.add('at-home', 'at-hub'); // at-home: the ride's own panels, presence and ride-ons stand down
     deps.onVisibility(true);
@@ -336,7 +351,13 @@ export function initHub(deps: HubDeps) {
     void deps.garage.refresh();
     if (account()) void loadSummary();
     root.querySelector<HTMLElement>('.hub-scroll')!.scrollTop = 0;
-    window.setTimeout(() => header.focusRide(), 0);
+    // Back where the rider was when the hub was last closed (usually the ride's Ride button).
+    const back = focusBeforeClose;
+    focusBeforeClose = null;
+    window.setTimeout(() => {
+      if (back?.isConnected && !root.contains(back)) back.focus({ preventScroll: true });
+      else header.focusRide();
+    }, 0);
     updateActive();
     // Warm the other sections' code while the browser has nothing better to do, so switching tabs is instant.
     const idle = (window as unknown as { requestIdleCallback?: (fn: () => void) => void }).requestIdleCallback ?? ((fn: () => void) => window.setTimeout(fn, 600));
@@ -347,7 +368,14 @@ export function initHub(deps: HubDeps) {
     if (!isOpen) return;
     isOpen = false;
     appStageAtClose = deps.currentStageId();
-    root.hidden = true;
+    const active = document.activeElement;
+    focusBeforeClose = active instanceof HTMLElement && root.contains(active) ? active : null;
+    // Hide (and make inert) first: a hidden, inert root cannot hold focus, so it moves to the ride behind.
+    setHidden(true);
+    // A canvas is not focusable without a tabindex (it is not added here: that would make the 3D view a tab stop).
+    const rideTarget = document.getElementById('scene') ?? document.getElementById('btn-trainer');
+    if (rideTarget?.tabIndex !== undefined && rideTarget.tabIndex >= 0) rideTarget.focus({ preventScroll: true });
+    if (!rideTarget || document.activeElement !== rideTarget) document.body.focus({ preventScroll: true });
     document.body.classList.remove('at-home', 'at-hub');
     deps.onVisibility(false);
     updateActive();

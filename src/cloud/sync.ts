@@ -79,6 +79,9 @@ export function pushSettings(s: Settings) {
   if (!userId) return;
   clearTimeout(settingsTimer);
   settingsTimer = window.setTimeout(() => {
+    // The rider may have signed out (or in as someone else) during the debounce: never write this browser's
+    // settings into another account.
+    if (account()?.id !== userId) return;
     check(neon.from('profiles').upsert({ user_id: userId, settings: s, updated_at: new Date().toISOString() })).catch(fail('settings'));
   }, 800);
 }
@@ -147,7 +150,9 @@ const SUMMARY_COLUMNS = 'id, started_at, title, stage_id, stage_name, finished, 
 export async function saveActivity(a: Activity) {
   const userId = account()?.id;
   if (!userId) throw new Error('Not signed in');
-  await check(neon.from('activities').upsert({ ...a, user_id: userId }));
+  // user_id is never client-supplied: the column default auth.user_id() fills it, and the upsert conflicts on id.
+  const { user_id: _ignored, ...row } = a as Activity & { user_id?: string };
+  await check(neon.from('activities').upsert(row));
 }
 
 export async function listActivities(): Promise<Activity[]> {
@@ -240,6 +245,16 @@ export async function myFeedback(): Promise<Feedback[]> {
 // Every admin call is checked in the database (public.is_admin()), so these
 // fail for anyone who isn't on the admin list.
 
+/** An admin-check error that waiting won't fix: no session, or the database said no. Network faults and 5xx retry. */
+function adminCheckFinal(e: unknown) {
+  const err = e as { status?: unknown; code?: unknown; message?: unknown } | null;
+  const status = Number(err?.status ?? (err as { statusCode?: unknown })?.statusCode);
+  if (status === 401 || status === 403) return true;
+  const code = String(err?.code ?? '');
+  if (code === 'PGRST301' || code === '42501') return true;
+  return /not authed|jwt|row-level security|permission denied|signed in/i.test(String(err?.message ?? e));
+}
+
 /**
  * Whether the signed-in rider is an admin. Retries a few times, because
  * right after returning from Google the session can still be settling.
@@ -251,6 +266,7 @@ export async function isAdmin(): Promise<boolean> {
       return (await check(neon.rpc('is_admin'))) === true;
     } catch (e) {
       console.warn('Admin check failed', attempt + 1, e);
+      if (adminCheckFinal(e)) return false; // a session or permission answer: retrying only delays it
       await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
     }
   }

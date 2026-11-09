@@ -119,7 +119,7 @@ describe('basinHeight', () => {
     const s = stageById('flagstaff');
     const b = s.scenery.wildHeight;
     // At the middle of the slab line the ground is at the basin's floor; far on the other side of the road it is the usual hills.
-    expect(s.scenery.basin).toBeUndefined(); // the basin is a build option, not part of the finished scenery
+    expect((s.scenery as { basin?: unknown }).basin).toBeUndefined(); // the basin is a build option, not part of the finished scenery
     expect(b(-510, 1536)).toBeCloseTo(0, 6);
     expect(b(-6000, -4000)).toBeGreaterThan(-40);
   });

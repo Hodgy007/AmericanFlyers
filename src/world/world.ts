@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { currentStage, ensureRoad, roadPoint, gradeAt } from '../course';
+import { currentStage, ensureRoad, roadPoint, gradeAt, type RoadPoint } from '../course';
 import { Landmarks } from './landmarks';
 import { OtherRiders, type OtherRider } from './others';
 import { RiderModel, updateGlow } from './rider';
@@ -35,6 +35,15 @@ const BUILD_SPIKE_MS = 8;
 
 /** Camera layer of the ground cover: the camera sees it, the ambient-occlusion pass's own camera does not (it would only redraw thousands of blades for their normals). */
 const COVER_LAYER = 1;
+
+// Per-frame scratch (as in graphics.ts), so the frame loop allocates nothing.
+const _p: RoadPoint = { x: 0, y: 0, z: 0, heading: 0 };
+const _ahead: RoadPoint = { x: 0, y: 0, z: 0, heading: 0 };
+const _right = new THREE.Vector3();
+const _forward = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _riderPos = new THREE.Vector3();
+const _look = new THREE.Vector3();
 
 export class World {
   private readonly renderer: THREE.WebGLRenderer;
@@ -106,7 +115,12 @@ export class World {
     this.applyScenery();
 
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    // A drag-resize fires many events a frame: coalesce them into one resize on the next frame.
+    let resizeFrame = 0;
+    window.addEventListener('resize', () => {
+      if (resizeFrame) return;
+      resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; this.resize(); });
+    });
   }
 
   /**
@@ -196,15 +210,20 @@ export class World {
     if (this.orbiting === on) return;
     this.orbiting = on;
     this.gfx.setOrbiting(on);
-    this.rider.setPersonVisible(on ? true : this.mode !== 'rider');
+    this.syncPersonVisible();
     this.firstFrame = true;
   }
 
   cycleCamera(): CameraMode {
     this.mode = CAMERA_MODES[(CAMERA_MODES.indexOf(this.mode) + 1) % CAMERA_MODES.length];
-    this.rider.setPersonVisible(this.mode !== 'rider');
+    this.syncPersonVisible();
     this.firstFrame = true;
     return this.mode;
+  }
+
+  /** One rule for whether your rider is drawn: the hub's orbit always shows them, otherwise every camera but the rider's own. */
+  private syncPersonVisible() {
+    this.rider.setPersonVisible(this.orbiting || this.mode !== 'rider');
   }
 
   /** Call after the rider teleports (e.g. reset) so the view is rebuilt at once. */
@@ -271,10 +290,10 @@ export class World {
     this.lane += (this.laneTarget - this.lane) * (1 - Math.exp(-dt / LANE_EASE_S));
 
     // Place the bike: yaw follows the road, pitch follows the grade.
-    const p = roadPoint(state.distance);
-    const right = new THREE.Vector3(-Math.sin(p.heading), 0, Math.cos(p.heading));
-    const forward = new THREE.Vector3(Math.cos(p.heading), 0, Math.sin(p.heading));
-    const riderPos = new THREE.Vector3(p.x, p.y + 0.02, p.z).addScaledVector(right, this.lane);
+    const p = roadPoint(state.distance, _p);
+    const right = _right.set(-Math.sin(p.heading), 0, Math.cos(p.heading));
+    const forward = _forward.set(Math.cos(p.heading), 0, Math.sin(p.heading));
+    const riderPos = _riderPos.set(p.x, p.y + 0.02, p.z).addScaledVector(right, this.lane);
     this.rider.group.position.copy(riderPos);
     this.rider.group.rotation.y = -p.heading;
     this.rider.body.rotation.z = Math.atan(gradeAt(state.distance));
@@ -294,8 +313,8 @@ export class World {
     this.terrainReady = true;
 
     // Camera.
-    const ahead = roadPoint(state.distance + 12);
-    const up = new THREE.Vector3(0, 1, 0);
+    const ahead = roadPoint(state.distance + 12, _ahead);
+    const up = _up;
     if (this.orbiting) {
       // Hub: round the rider at head height, a little above.
       this.orbitAngle += dt * 0.12;
@@ -305,7 +324,7 @@ export class World {
       case 'chase':
         this.camTarget.copy(riderPos).addScaledVector(forward, -5.2).addScaledVector(up, 2.1).addScaledVector(right, 0.5);
         this.lookTarget.set(ahead.x, ahead.y + 0.9, ahead.z).addScaledVector(right, this.lane * 0.6);
-        this.lookTarget.lerp(riderPos.clone().addScaledVector(up, 1), 0.55);
+        this.lookTarget.lerp(_look.copy(riderPos).addScaledVector(up, 1), 0.55);
         break;
       case 'side':
         this.camTarget.copy(riderPos).addScaledVector(right, 4.2).addScaledVector(up, 1.1).addScaledVector(forward, 0.6);

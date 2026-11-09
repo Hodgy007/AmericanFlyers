@@ -11,8 +11,8 @@ import { groundProbe, groundSampler } from '../../src/world/terrain';
 
 // A straight road along +x with flat ground whose make-up the test chooses.
 const straight = (d: number) => ({ x: d, z: 0, heading: 0 });
-const flat = (layer: number, h = 0): GroundAt => (x, z, w) => { w.fill(0); w[layer] = 1; return { h, roadDist: Math.abs(z) }; };
-const mixed = (weights: Record<number, number>): GroundAt => (x, z, w) => { w.fill(0); for (const [k, v] of Object.entries(weights)) w[Number(k)] = v; return { h: 0, roadDist: Math.abs(z) }; };
+const flat = (layer: number, h = 0): GroundAt => (_x, z, w) => { w.fill(0); w[layer] = 1; return { h, roadDist: Math.abs(z) }; };
+const mixed = (weights: Record<number, number>): GroundAt => (_x, z, w) => { w.fill(0); for (const [k, v] of Object.entries(weights)) w[Number(k)] = v; return { h: 0, roadDist: Math.abs(z) }; };
 const opts = { share: 1, seed: 7, desert: false };
 
 const count = (items: CoverItem[]) => {
@@ -92,9 +92,9 @@ describe('planning a cell', () => {
     }
   });
   it('skips ground that is really the road, or nearer another stretch of road', () => {
-    const onRoad: GroundAt = (x, z, w) => { w.fill(0); w[LAYER.grass] = 1; return { h: 0, roadDist: 3 }; };
+    const onRoad: GroundAt = (_x, _z, w) => { w.fill(0); w[LAYER.grass] = 1; return { h: 0, roadDist: 3 }; };
     expect(planCell(cell, opts, straight, onRoad)).toEqual([]);
-    const otherLeg: GroundAt = (x, z, w) => { w.fill(0); w[LAYER.grass] = 1; return { h: 0, roadDist: 7 }; };
+    const otherLeg: GroundAt = (_x, _z, w) => { w.fill(0); w[LAYER.grass] = 1; return { h: 0, roadDist: 7 }; };
     expect(planCell({ k: 1, side: 1, band: 2 }, opts, straight, otherLeg)).toEqual([]); // 14 to 22 m out but 7 m from another road
   });
 });

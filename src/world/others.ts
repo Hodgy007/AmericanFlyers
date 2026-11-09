@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { gradeAt, roadPoint } from '../course';
+import { gradeAt, roadPoint, type RoadPoint } from '../course';
 import { Drivetrain } from '../drivetrain';
 import { RiderModel } from './rider';
 import { DEFAULT_LANE } from '../steering';
@@ -54,9 +54,22 @@ function lookOf(o: OtherRider) {
     jersey: o.jersey ?? JERSEYS[(h >>> 3) % JERSEYS.length],
     // Pro teams: [jersey, frame] in the navy and red slots. Live riders with a kit: jersey on the torso.
     kit: o.jersey && o.frame ? (o.accent ? modelKit(o.jersey, o.accent) : ([o.jersey, o.frame] as [string, string])) : null,
-    style: o.style,
+    style: o.style ? o.style : undefined,
   };
 }
+
+/** A rider's look, compared field by field between frames (their kit as last applied, to notice changes). */
+type Look = ReturnType<typeof lookOf>;
+
+function sameLook(a: Look, b: Look) {
+  return a.frame === b.frame && a.jersey === b.jersey && a.style === b.style;
+}
+
+// Per-frame scratch: the road point and the list of riders near you, reused so update() allocates nothing.
+const _p: RoadPoint = { x: 0, y: 0, z: 0, heading: 0 };
+const _cands: OtherRider[] = [];
+const _near: OtherRider[] = [];
+
 
 const emojiTextures = new Map<string, THREE.CanvasTexture>();
 /** One shared texture per emoji, drawn with the system's emoji font. */
@@ -113,10 +126,14 @@ function label(text: string, ghost: boolean, accent?: string) {
   return sprite;
 }
 
+/** Shared 2D context for measuring speech-bubble text: one canvas for the whole session. */
+const measureCanvas = document.createElement('canvas');
+const measureCtx = measureCanvas.getContext('2d')!;
+
 /** A speech bubble above a rider (an AI rival's line, src/ai/): white, wrapped to a few short lines. */
 function speechBubble(text: string) {
   const font = '600 34px Inter, system-ui, sans-serif';
-  const measure = document.createElement('canvas').getContext('2d')!;
+  const measure = measureCtx;
   measure.font = font;
   const lines: string[] = [];
   let cur = '';
@@ -162,7 +179,7 @@ interface Shown {
   lane: number;
   lateral: number;
   seen: number; // performance.now() when last in the list
-  look: string; // their kit as last applied, to notice changes
+  look: Look; // their kit as last applied, to notice changes
   emotes: { sprite: THREE.Sprite; age: number }[]; // floating ride-on emoji (age in seconds)
   bubble?: { sprite: THREE.Sprite; text: string }; // the line they are saying (OtherRider.speech)
 }
@@ -215,34 +232,39 @@ export class OtherRiders {
   update(playerDistance: number, dt: number, camera: THREE.Camera, playerLane = DEFAULT_LANE) {
     const now = performance.now();
     // In a crosswind a rider you're tucked behind sits upwind of you, so the line-up is on the diagonal.
-    const shift = draftShift(wind.at(roadPoint(playerDistance).heading).cross);
-    const near = this.list
-      .filter((o) => o.distance > playerDistance - SHOW_BEHIND && o.distance < playerDistance + SHOW_AHEAD)
-      .sort((a, b) => Math.abs(a.distance - playerDistance) - Math.abs(b.distance - playerDistance))
-      .slice(0, MAX_SHOWN);
+    const shift = draftShift(wind.at(roadPoint(playerDistance, _p).heading).cross);
+    // Scratch lists, reused each frame: the nearest MAX_SHOWN riders.
+    _cands.length = 0;
+    for (const o of this.list) {
+      if (o.distance > playerDistance - SHOW_BEHIND && o.distance < playerDistance + SHOW_AHEAD) _cands.push(o);
+    }
+    _cands.sort((a, b) => Math.abs(a.distance - playerDistance) - Math.abs(b.distance - playerDistance));
+    const near = _near;
+    near.length = Math.min(_cands.length, MAX_SHOWN);
+    for (let i = 0; i < near.length; i++) near[i] = _cands[i];
 
     for (const o of near) {
       let s = this.shown.get(o.id);
       if (!s) {
         const h = hash(o.id);
         const look = lookOf(o);
+        // TODO: pool these models (geometry and materials per rider): riders joining and leaving rebuild a whole RiderModel, deferred as a larger change.
         const model = new RiderModel(o.ghost ? { ghost: true } : { frame: look.frame, jersey: look.jersey, kit: look.kit ?? undefined, style: look.style });
         const text = o.tag ?? o.name;
         const tag = label(text || ' ', !!o.ghost, o.jersey);
-        tag.visible = !!text;
         if (text) model.group.add(tag);
         const lane = o.lane ?? (o.ghost ? DEFAULT_LANE - 1.1 : 0.9 + ((h >>> 6) % 5) * 0.6);
-        s = { model, drivetrain: new Drivetrain(), tag, distance: o.distance, lane, lateral: lane, seen: now, look: JSON.stringify(lookOf(o)), emotes: [] };
+        s = { model, drivetrain: new Drivetrain(), tag, distance: o.distance, lane, lateral: lane, seen: now, look, emotes: [] };
         this.shown.set(o.id, s);
         this.group.add(model.group);
       }
       s.seen = now;
       if (!o.ghost) {
         // A rider who changes their kit mid-ride.
-        const key = JSON.stringify(lookOf(o));
-        if (key !== s.look) {
-          s.look = key;
-          s.model.setLook({ ...lookOf(o), style: o.style ?? DEFAULT_STYLE });
+        const look = lookOf(o);
+        if (!sameLook(look, s.look)) {
+          s.look = look;
+          s.model.setLook({ ...look, style: o.style ?? DEFAULT_STYLE });
         }
       }
 
@@ -263,7 +285,7 @@ export class OtherRiders {
       s.lateral += (target - s.lateral) * (1 - Math.exp(-dt / 0.6));
 
       s.drivetrain.update(dt, o.speedMs, o.cadence, o.power);
-      const p = roadPoint(s.distance);
+      const p = roadPoint(s.distance, _p);
       const g = s.model.group;
       g.position.set(p.x - Math.sin(p.heading) * s.lateral, p.y + 0.02, p.z + Math.cos(p.heading) * s.lateral);
       g.rotation.y = -p.heading;
@@ -273,7 +295,7 @@ export class OtherRiders {
       g.updateMatrixWorld(true);
       // Posing the rigged rider is the costly part: skip it when they're a speck.
       if (Math.abs(gap) < 220) s.model.poseRider();
-      // Name tags: hidden right by the camera and far up the road.
+      // Name tags: one place sets visibility: hidden right by the camera and far up the road, or with no text.
       const fromCam = g.position.distanceTo(camera.position);
       s.tag.visible = !!(o.tag ?? o.name) && fromCam > 3.5 && fromCam < 260;
       if (s.emotes.length) this.tickEmotes(s, dt);

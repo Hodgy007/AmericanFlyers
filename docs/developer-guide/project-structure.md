@@ -7,9 +7,17 @@ This page lists every file and folder in the repository, with a one-line summary
 | Path | Purpose |
 | --- | --- |
 | `index.html` | The page markup: home page, the hub's header and containers, top bar and ☰ menu, data blocks, workout, gear, draft and demo panels, status line, every dialog. |
-| `package.json` | Scripts (`dev`, `build`, `preview`) and dependencies. |
-| `vite.config.ts` | Vite config: relative base (`./`), the `vendor-three`, `vendor-neon` and `vendor-sentry` chunks, and Sentry source-map upload. |
-| `tsconfig.json` | TypeScript config: strict mode, `noUnusedLocals`, and the `web-bluetooth` and `vite/client` types. |
+| `package.json` | Scripts (`dev`, `build`, `preview`, `test`, `typecheck:tests`, `test:watch`, `test:e2e`) and dependencies. |
+| `vite.config.ts` | Vite config: relative base (`./`), the `vendor-three`, `vendor-three-post`, `vendor-neon` and `vendor-sentry` chunks, the service worker's build-time version stamp, and Sentry source-map upload. |
+| `vitest.config.ts` | Vitest config for the unit tests: the `tests/unit/` include, empty `__SENTRY_DSN__` / `__RELEASE__` defines. |
+| `playwright.config.ts` | Playwright config for the end-to-end tests in `tests/e2e/`. |
+| `tsconfig.json` | TypeScript config for the app: strict mode, `noUnusedLocals`, and the `web-bluetooth` and `vite/client` types. |
+| `tsconfig.test.json` | TypeScript config for the tests: extends `tsconfig.json`, adds the node types, and includes `tests/**/*.ts` and the root `*.config.ts` files. |
+| `vercel.json` | Vercel settings: the functions' durations, the `/api/auth` rewrite to `api/auth-proxy.ts`, and the security headers. |
+| `api/` | The Vercel serverless functions: `ai.ts` (the AI coach's Claude and gateway calls) and `auth-proxy.ts` (Neon Auth behind `/api/auth`), plus their shared modules in `api/_lib/`. See below. |
+| `tests/` | Vitest unit tests (`unit/`) and Playwright end-to-end tests (`e2e/`). See [Testing](testing.md). |
+| `scripts/` | One-off tools: `bake-routes.mjs` (baked real roads), `gen-store-sql.mjs` (the store seed SQL), the terrain and horizon prep scripts, and `climb-guide-smoke.sh`. |
+| `.github/` | `workflows/ci.yml`: the GitHub Actions checks on every pull request. |
 | `README.md` | Features, browser support, local run instructions and the backend overview. |
 | `CLAUDE.md` | Project notes for AI coding assistants: commands, preferences, deployment and the backend. |
 | `db/schema.sql` | The database schema, policies, triggers, admin functions, and the riding-together, leaderboard and ghost functions. |
@@ -34,7 +42,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `public/icons/` | App icons (192, 512, maskable 512, Apple touch icon, favicon). |
 | `public/audio/commentary/*.mp3` | The race commentator's 39 voice lines (generated with Higgsfield; `CLIPS` in `src/commentary.ts` says what each one says). |
 | `public/manifest.webmanifest` | Makes the app installable: name, icons, full-screen display, colours. |
-| `public/sw.js` | Service worker: network-first pages, cached build files, models and textures. Never caches Neon. |
+| `public/sw.js` | Service worker: network-first pages, cached build files, models and textures. Never caches Neon. The build replaces its `__AF_VERSION__` placeholder with the commit sha, so each deploy gets a fresh cache. |
 
 ## `src/`
 
@@ -163,9 +171,19 @@ This page lists every file and folder in the repository, with a one-line summary
 | `cloud/codeEntry.ts`, `cloud/verifyBanner.ts` | The 6-digit code box (used in the email form and the profile banner). |
 | `cloud/privacy.ts`, `cloud/accountTab.ts` | "Download my data" and "Delete my account", and the profile tab that offers them. |
 | `privacyUi.ts`, `privacyText.ts`, `rideIntegrity.ts` | The Privacy dialog (any `data-privacy` element opens it; the text is lazy); which rides may be on leaderboards. |
+| `resultsTable.ts` | Caps the results and leaderboard tables: the first `MAX_ROWS` riders plus a "+N more" row. |
 | `cloud/accountBar.ts` | The 👤 button and admin button in the top bar, and the entry points that load `cloud/ui.ts`. |
 | `cloud/ui.ts` | The sign-in and password-reset dialogs, the profile tabs, the feedback dialog, and the admin dashboard (lazy). |
 
 ## Tests and tooling
 
-The repository has no linter configuration. `tests/unit/` holds the Vitest unit tests (`hub.test.ts` covers the hub's logic), `tests/e2e/` the Playwright tests (`smoke.spec.ts`, `home.spec.ts` for the no-account home page, and others) and `mockNeon.ts` (a no-account or signed-in Neon for tests), and `.github/workflows/ci.yml` runs them with the build on every pull request. See [Testing](testing.md).
+The repository has no linter configuration. `tests/unit/` holds the Vitest unit tests (the hub's logic in `hub.test.ts`, plus others), `tests/e2e/` the Playwright tests (`smoke.spec.ts`, `home.spec.ts` for the no-account home page, and others) and `mockNeon.ts` (a no-account or signed-in Neon for tests), and `.github/workflows/ci.yml` runs them with the build on every pull request. See [Testing](testing.md).
+
+## `api/`
+
+| Path | Purpose |
+| --- | --- |
+| `api/ai.ts` | The AI function behind `/api/ai`: the coach, rivals and Climb guide, gated by `ai_claim()`. |
+| `api/auth-proxy.ts` | Passes `/api/auth/*` to Neon Auth, so its cookie is first-party. |
+| `api/_lib/*.ts` | Shared modules: the request handler, the Claude and gateway clients, the rider lookup, the response schemas and the prompts. |
+| `api/tsconfig.json` | TypeScript config for the functions (`tsc -p api`). |

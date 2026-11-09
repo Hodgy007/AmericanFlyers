@@ -66,16 +66,16 @@ export interface RoadPoint {
   heading: number;
 }
 
-/** Position, elevation and heading of the road centre at distance `d`. */
-export function roadPoint(d: number): RoadPoint {
+/** Position, elevation and heading of the road centre at distance `d`. Pass `out` to fill a reused object in a hot path. */
+export function roadPoint(d: number, out?: RoadPoint): RoadPoint {
   ensureRoad(d);
   const f = (Math.max(d, ROAD_ORIGIN) - ROAD_ORIGIN) / ROAD_STEP;
   const i = Math.floor(f);
   const t = f - i;
-  return {
-    x: roadX[i] + (roadX[i + 1] - roadX[i]) * t,
-    z: roadZ[i] + (roadZ[i + 1] - roadZ[i]) * t,
-    y: elevationAt(d),
-    heading: headingAt(d),
-  };
+  const p = out ?? ({} as RoadPoint);
+  p.x = roadX[i] + (roadX[i + 1] - roadX[i]) * t;
+  p.z = roadZ[i] + (roadZ[i + 1] - roadZ[i]) * t;
+  p.y = elevationAt(d);
+  p.heading = headingAt(d);
+  return p;
 }

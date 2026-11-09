@@ -46,7 +46,7 @@ describe('POST /api/ai: request checks', () => {
   });
   it('401 without a bearer token, and never calls the database or Claude', async () => {
     const { deps, calls } = setup();
-    for (const h of [{}, { authorization: 'Bearer short' }, { authorization: 'Basic abc' }, { authorization: 'Bearer not.three-part-with spaces' }]) {
+    for (const h of [{}, { authorization: 'Bearer short' }, { authorization: 'Basic abc' }, { authorization: 'Bearer not.three-part-with spaces' }] as Record<string, string>[]) {
       const res = await handleAi(post({ kind: 'coach_tip', payload: tip }, h), deps);
       expect(res.status).toBe(401);
     }

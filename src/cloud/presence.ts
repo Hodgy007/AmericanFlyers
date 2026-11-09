@@ -7,6 +7,11 @@ import type { OtherRider } from '../world/others';
 import { account, onAccountChange } from './account';
 import { neon } from './client';
 import { parseKitString, parseKitStyle } from '../kit';
+import type { BikeStyle } from '../garage/style';
+
+/** A kit string parsed once: null when it carries no colours (the default kit). */
+interface Look { jersey: string; accent: string; frame: string; style: BikeStyle | null }
+interface Out extends OtherRider { hasJersey: boolean; hasAccent: boolean; hasFrame: boolean; hasStyle: boolean }
 
 const INTERVAL_MS = 2000;
 const MAX_EXTRAPOLATE_S = 6;
@@ -30,6 +35,10 @@ export class Presence {
   private busy = false;
   private failures = 0;
   private timer = 0;
+  /** Parsed kits, keyed by the kit string: parseKitString/parseKitStyle are regex-based, so each string is parsed once. */
+  private readonly looks = new Map<string, Look | null>();
+  /** Riders rebuilt when new data arrives (see riders()); their `distance` is updated in place each call. */
+  private out: Out[] = [];
   /** Called when the list of riders on this stage changes (joins and leaves). */
   onChange: (riders: { id: string; name: string }[]) => void = () => {};
 
@@ -46,20 +55,62 @@ export class Presence {
     });
   }
 
-  /** Everyone else on this stage, with positions predicted for now. */
+  private look(kit: string | null | undefined): Look | null | undefined {
+    if (kit == null) return null;
+    if (!this.looks.has(kit)) {
+      const k = parseKitString(kit);
+      this.looks.set(kit, k ? { jersey: k.jersey, accent: k.accent, frame: k.frame, style: parseKitStyle(kit) } : null);
+    }
+    return this.looks.get(kit);
+  }
+
+  /**
+   * Rebuilds the rider objects from `known`, reusing the previous objects where a rider's kit is
+   * unchanged. Only optional fields that really have a value are set, as riders() used to do with
+   * spread: consumers that test a field with `??` or truthiness keep seeing the same thing.
+   */
+  private build() {
+    const prev = new Map(this.out.map((o) => [o.id, o]));
+    const out: Out[] = new Array(this.known.length);
+    for (let i = 0; i < this.known.length; i++) {
+      const k = this.known[i];
+      const look = this.look(k.kit);
+      const jersey = look?.jersey, accent = look?.accent, frame = look?.frame, style = look?.style ?? null;
+      let o = prev.get(k.id);
+      if (!o || o.hasJersey !== !!jersey || o.hasAccent !== !!accent || o.hasFrame !== !!frame || o.hasStyle !== !!style) {
+        o = { id: k.id, name: k.name, distance: 0, speedMs: 0, power: 0, cadence: 0, hasJersey: false, hasAccent: false, hasFrame: false, hasStyle: false };
+      }
+      o.name = k.name;
+      o.speedMs = k.speed;
+      o.power = k.power;
+      o.cadence = k.cadence;
+      if (jersey) { o.jersey = jersey; o.hasJersey = true; } else if (o.hasJersey) { o.jersey = undefined; o.hasJersey = false; }
+      if (accent) { o.accent = accent; o.hasAccent = true; } else if (o.hasAccent) { o.accent = undefined; o.hasAccent = false; }
+      if (frame) { o.frame = frame; o.hasFrame = true; } else if (o.hasFrame) { o.frame = undefined; o.hasFrame = false; }
+      if (style) { o.style = style; o.hasStyle = true; } else if (o.hasStyle) { o.style = undefined; o.hasStyle = false; }
+      out[i] = o;
+    }
+    this.out = out;
+  }
+
+  /**
+   * Everyone else on this stage, with positions predicted for now.
+   *
+   * The array and its rider objects are reused: the call updates `distance` in place and returns the
+   * same array (a rebuilt one after tick() gets new data, or a new rider's kit first appears).
+   * Consumers may read it freely for the frame, but anything kept beyond that must be copied
+   * (e.g. `.slice()`) and treated as a snapshot.
+   */
   riders(): OtherRider[] {
     const now = performance.now();
-    return this.known.map((k) => {
+    const out = this.out;
+    for (let i = 0; i < out.length; i++) {
+      const o = out[i];
+      const k = this.known[i];
       const t = Math.min(MAX_EXTRAPOLATE_S, (now - k.at + k.age_ms) / 1000);
-      // Their kit, if they've designed one (colours only from a valid kit string).
-      const kit = parseKitString(k.kit);
-      const style = parseKitStyle(k.kit); // their bike and clothes, after the colours
-      return {
-        id: k.id, name: k.name, distance: k.distance + k.speed * t, speedMs: k.speed, power: k.power, cadence: k.cadence,
-        ...(kit ? { jersey: kit.jersey, accent: kit.accent, frame: kit.frame } : {}),
-        ...(style ? { style } : {}),
-      };
-    });
+      o.distance = k.distance + k.speed * t;
+    }
+    return out;
   }
 
   get count() {
@@ -75,6 +126,7 @@ export class Presence {
   private clear() {
     if (this.known.length) {
       this.known = [];
+      this.out = [];
       this.onChange([]);
     }
   }
@@ -104,6 +156,10 @@ export class Presence {
       const at = performance.now();
       const before = this.known.map((k) => k.id).join();
       this.known = ((data ?? []) as Row[]).map((r) => ({ ...r, at }));
+      // Parse each new kit once, then keep that parse for as long as it is in use.
+      for (const k of this.known) if (k.kit != null) this.look(k.kit);
+      if (this.looks.size > 64) for (const kit of this.looks.keys()) if (!this.known.some((k) => k.kit === kit)) this.looks.delete(kit);
+      this.build();
       if (this.known.map((k) => k.id).join() !== before) this.onChange(this.known.map(({ id, name }) => ({ id, name })));
       this.failures = 0;
     } catch (e) {

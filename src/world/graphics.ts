@@ -87,6 +87,9 @@ const name = (t: Tier) => t[0].toUpperCase() + t.slice(1);
 const _r = new THREE.Vector3();
 const _u = new THREE.Vector3();
 
+/** Auto's settled answer is written to localStorage at most this often, plus once when the page goes away. */
+const SAVE_EVERY_MS = 60_000;
+
 export class Graphics {
   private choice: GraphicsChoice;
   private autoTier: Tier; // where Auto starts this session, and the most it climbs back to
@@ -118,6 +121,8 @@ export class Graphics {
   private dialogCheckedAt = 0;
   private readonly jank = parseJank();
   private jankFrame = 0;
+  private lastSaved = -Infinity; // performance.now() of the last saveAutoMemory
+  private dirty = false; // a save the throttle has held back
 
   constructor(private readonly p: GraphicsParts, signals: Signals) {
     this.signals = signals;
@@ -129,6 +134,8 @@ export class Graphics {
     this.tier = this.choice === 'auto' ? this.autoTier : this.choice;
     this.makeAdapter();
     document.addEventListener('visibilitychange', () => this.adapter?.hold(performance.now(), 1500)); // the frames after a tab switch are slow and say nothing
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') this.flushMemory(); });
+    window.addEventListener('pagehide', () => this.flushMemory());
     Object.defineProperty(window, '__afGraphics', { configurable: true, get: () => this.info() });
   }
 
@@ -302,7 +309,20 @@ export class Graphics {
     if (this.choice !== 'auto' || this.frozen || isSoftwareGpu(this.signals.gpu)) return;
     const st = this.adapter?.takeSettled();
     if (!st || st.noShadows) return;
-    this.memory = settledMemory(this.memory, st.tier, st.scaleIdx, this.signals.gpu ?? '', Date.now());
+    // The in-memory memory is always current; the localStorage write is throttled (a settled answer rarely changes).
+    const memory = this.memory = settledMemory(this.memory, st.tier, st.scaleIdx, this.signals.gpu ?? '', Date.now());
+    const now = performance.now();
+    if (now - this.lastSaved < SAVE_EVERY_MS) { this.dirty = true; return; }
+    this.lastSaved = now;
+    this.dirty = false;
+    saveAutoMemory(memory);
+  }
+
+  /** Writes a save the throttle held back (page gone or hidden). */
+  private flushMemory() {
+    if (!this.dirty || !this.memory) return;
+    this.lastSaved = performance.now();
+    this.dirty = false;
     saveAutoMemory(this.memory);
   }
 

@@ -32,7 +32,13 @@ Web Bluetooth only works on `http://localhost` and on `https://` pages. Use `loc
 npm run build
 ```
 
-This runs `tsc --noEmit`, which type-checks everything under `src/`, and then `vite build`, which writes `dist/`.
+This runs three type checks and then the bundle: `tsc --noEmit` checks everything under `src/` and the root config, `tsc -p api --noEmit` checks the serverless functions in `api/`, and `tsc -p tsconfig.test.json --noEmit` checks the tests in `tests/`. Then `vite build` writes `dist/`, with the service worker's cache version stamped from the git commit.
+
+To check only the tests, run:
+
+```bash
+npm run typecheck:tests
+```
 
 To check the production build locally:
 
@@ -81,4 +87,4 @@ The scene's assets load from `public/`. The app uses `import.meta.env.BASE_URL` 
 
 ## Editor and checks
 
-The repository doesn't include an editor configuration, a linter or formatter. Follow the style of the file you're editing. Before committing, run `npm run build`. See [Testing](testing.md).
+The repository doesn't include an editor configuration, a linter or formatter. Follow the style of the file you're editing. Before committing, run `npm run build` (which includes the test type check) and `npm test`. See [Testing](testing.md).

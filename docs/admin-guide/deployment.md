@@ -7,10 +7,16 @@ This page covers how the app is deployed: the Vercel project and automatic deplo
 The live site is built and hosted by a Vercel project called `americanflyers`, in the team "hodgy007's projects".
 
 - **Trigger:** every push to `main` builds and deploys the app automatically.
-- **Build:** `npm run build`, which type-checks with `tsc --noEmit` and then runs `vite build` to produce `dist/`. See [Local development](../developer-guide/local-development.md#build).
+- **Build:** `npm run build`, which type-checks the app, the API functions and the tests, then runs `vite build` to produce `dist/`. See [Local development](../developer-guide/local-development.md#build).
 - **Live address:** https://americanflyers.vercel.app
 
-The repository has no `vercel.json`, so the project's settings live in the Vercel dashboard.
+`vercel.json` holds the project settings the repository does control:
+
+- **Function durations:** `api/ai.ts` gets a 40-second limit (the AI calls are slow) and `api/auth-proxy.ts` 15 seconds.
+- **Auth rewrite:** `/api/auth/:path*` is rewritten to `/api/auth-proxy?__path=:path*`, so Neon Auth is served from our own origin (the function passes it on; a plain rewrite won't do, because Neon rejects its `X-Forwarded-Host`).
+- **Security headers**, on every path: `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, a restrictive `Permissions-Policy`, and `Strict-Transport-Security` (one year, including subdomains).
+
+Everything else lives in the Vercel dashboard.
 
 ### Preview deployments
 
@@ -24,28 +30,43 @@ Vercel is the only deploy target. (An earlier GitHub Pages workflow was removed.
 
 ## Environment variables
 
-The app reads two Vite variables. Both are optional, because each has a default that points to the production Neon project.
+These are every variable the app and its functions read. Those other than `VITE_`-prefixed and the build-time Sentry ones are **secrets**: set them in Vercel's environment settings for the project, or in a local `.env` file, and never commit them.
+
+### Build time (Sentry)
+
+`vite.config.ts` reads these when it builds:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VITE_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN` | none (reporting is off) | The Sentry DSN, taken from the first one that's set. The Vercel Sentry integration normally sets one. The DSN is public by design; see [Error reporting](#error-reporting-sentry). |
+| `SENTRY_AUTH_TOKEN` | none | When set, source maps are uploaded to Sentry, then deleted from the build. |
+| `SENTRY_ORG`, `SENTRY_PROJECT` | `hodgy007`, `sentry-byzantium-car` | The Sentry organisation and project for the upload. |
+
+### Runtime functions
+
+`api/` is the one piece of server code; these stay on the server:
+
+| Variable | Function | Default | Purpose |
+| --- | --- | --- | --- |
+| `ANTHROPIC_API_KEY` | `api/ai.ts` | none (required) | Lets the function call Claude. Without it the AI answers `503 not_configured` and riders see the built-in tips and lines. Removing it turns the AI off for everyone. |
+| `AI_MODEL` | `api/ai.ts` | `claude-opus-5-5` | The Claude model. `claude-haiku-5-5` is a much cheaper choice. |
+| `AI_GATEWAY_API_KEY` | `api/ai.ts` | none (optional) | For the hub's Climb guide, which calls Perplexity Sonar through the Vercel AI Gateway. On Vercel nothing needs setting: the function's own OIDC token is used (the `x-vercel-oidc-token` header Vercel sets on each invocation, or `VERCEL_OIDC_TOKEN`). Set a key only to override it. With neither, the Climb guide answers `503 not_configured` (riders see a line from the stage's own figures). |
+| `CLIMB_GUIDE_MODEL` | `api/ai.ts` | `perplexity/sonar` | The gateway model for the Climb guide, for example `perplexity/sonar-pro`. |
+| `VITE_NEON_DATA_API_URL` / `NEON_DATA_API_URL` | `api/ai.ts` | The production Data API | The function reads the rider's data through the same Data API as the app. |
+| `NEON_AUTH_URL` | `api/auth-proxy.ts` | The production Neon Auth endpoint in `api/_lib/authProxy.ts` | The Neon Auth base URL the proxy forwards `/api/auth` to. |
+
+### Client (browser)
+
+Both are optional, because each has a default that points to the production Neon project. Vite only exposes variables that start with `VITE_`.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `VITE_NEON_AUTH_URL` | The production Neon Auth endpoint in `src/cloud/client.ts` | Sign-in endpoint. |
 | `VITE_NEON_DATA_API_URL` | The production Neon Data API endpoint in `src/cloud/client.ts` | Data API endpoint for the browser. |
 
-Set them in Vercel's environment settings for the project, or in a local `.env` file, if you want a different Neon project or branch. Vite only exposes variables that start with `VITE_`.
+Set them if you want a different Neon project or branch.
 
 The app also reads `VITE_VERCEL_GIT_COMMIT_SHA` to show the version in feedback reports. The repository doesn't set it. Vercel's built-in commit variable is `VERCEL_GIT_COMMIT_SHA`, without the `VITE_` prefix, so reports show `dev` unless you provide a `VITE_` copy.
-
-### The AI function (server-side)
-
-`api/ai.ts` is a Vercel serverless function (the one piece of server code). It reads these variables from the Vercel project's environment (they are **secrets, not `VITE_`**, and never reach the browser):
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | none (required) | Lets the function call Claude. Without it the AI answers `503 not_configured` and riders see the built-in tips and lines. Removing it turns the AI off for everyone. |
-| `AI_MODEL` | `claude-opus-5-5` | The Claude model. `claude-haiku-5-5` is a much cheaper choice. |
-| `AI_GATEWAY_API_KEY` | none (optional) | For the hub's Climb guide, which calls Perplexity Sonar through the Vercel AI Gateway. On Vercel nothing needs setting: the function's own OIDC token is used (the `x-vercel-oidc-token` header Vercel sets on each invocation, or `VERCEL_OIDC_TOKEN`). Set a key only to override it. With neither, the Climb guide answers `503 not_configured` (riders see a line from the stage's own figures). |
-| `CLIMB_GUIDE_MODEL` | `perplexity/sonar` | The gateway model for the Climb guide, for example `perplexity/sonar-pro`. |
-| `VITE_NEON_DATA_API_URL` | The production Data API | The function uses the same Data API URL as the app. |
 
 After changing a variable, redeploy. Riders have daily limits per kind of AI message (see [AI coach and rivals](../developer-guide/ai.md)), enforced in the database. Each call logs one line with token counts in the Vercel function logs.
 
@@ -64,7 +85,7 @@ The endpoints are public. They're not secrets, because row-level security protec
 The app reports crashes to Sentry (organisation `hodgy007`, project `sentry-byzantium-car`) using `@sentry/browser` ([`src/monitoring.ts`](../../src/monitoring.ts)).
 
 - **It's off unless the build has a DSN.** `vite.config.ts` reads it at build time from `VITE_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` or `SENTRY_DSN`; the Vercel Sentry integration normally sets one of these on the project. The DSN is public by design: it only lets the browser send reports.
-- **Source maps** upload automatically when `SENTRY_AUTH_TOKEN` is set (also from the integration), so stack traces show the TypeScript. They're deleted from the build afterwards, so they aren't published.
+- **Source maps** upload automatically when `SENTRY_AUTH_TOKEN` is set (also from the integration; `SENTRY_ORG` and `SENTRY_PROJECT` override the defaults), so stack traces show the TypeScript. They're deleted from the build afterwards, so they aren't published.
 - **What's sent:** the error and stack trace, the stage, the release (git commit) and, for signed-in riders, their account id only. No names, emails, cookies, headers, request bodies or URL query strings (a password reset token is scrubbed), and no session replays. 10% of page loads send a performance trace.
 - **Ignored:** closing the Bluetooth device chooser, and browsers blocking autoplay or audio.
 - To check it's working, open the site, then in the browser console run `setTimeout(() => { throw new Error('Sentry test') })` and look for the issue in Sentry.

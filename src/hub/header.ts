@@ -32,7 +32,8 @@ export function mountHeader(ctx: HubCtx) {
   const levelChip = h('span', { class: 'hub-lv' });
   const levelTitleEl = h('span', { class: 'hub-lv-title' });
   const credits = h('strong', { class: 'hub-credits' });
-  const levelRow = h('div', { class: 'hub-level-row' }, levelChip, levelTitleEl, credits);
+  const creditsWord = h('span', { class: 'hub-sr', text: ' credits' });
+  const levelRow = h('div', { class: 'hub-level-row' }, levelChip, levelTitleEl, h('span', { class: 'hub-credits-wrap' }, credits, creditsWord));
   const xpFill = h('i');
   const xpBar = h('div', { class: 'hub-xp', role: 'img' }, xpFill);
   const xpText = h('div', { class: 'hub-xp-text' });
@@ -89,12 +90,23 @@ export function mountHeader(ctx: HubCtx) {
   // ------------------------------------------------------------------ dock ----
   // On phones the Ride button scrolls away with the header: a bar at the bottom keeps it in reach.
   const dockTitle = h('strong');
-  const dockMeta = h('span');
+  const dockMeta = h('span', {}, h('span', { class: 'hub-sr', text: 'Ride mode: ' }), h('span', {}));
   const dockBtn = button('Ride', () => ctx.go(), 'primary hub-dock-btn');
   const dock = document.getElementById('hub-dock')!;
   dock.replaceChildren(h('div', { class: 'hub-dock-text' }, dockTitle, dockMeta), dockBtn);
+  // Hidden off screen the dock is a second, invisible Ride button: keep it out of the tab order and the
+  // accessibility tree until it slides in (it is only ever shown by the class below).
+  const dockShown = (on: boolean) => {
+    dock.classList.toggle('show', on);
+    dock.setAttribute('aria-hidden', String(!on));
+    for (const b of dock.querySelectorAll('button')) {
+      if (on) { b.removeAttribute('aria-hidden'); b.removeAttribute('tabindex'); }
+      else { b.setAttribute('aria-hidden', 'true'); b.setAttribute('tabindex', '-1'); }
+    }
+  };
+  dockShown(false);
   if (typeof IntersectionObserver !== 'undefined') {
-    new IntersectionObserver(([e]) => { dock.classList.toggle('show', !e.isIntersecting); }, { threshold: 0 }).observe(rideBtn);
+    new IntersectionObserver(([e]) => dockShown(!e.isIntersecting), { threshold: 0 }).observe(rideBtn);
   }
 
   // ------------------------------------------------------------- rendering ----
@@ -111,6 +123,7 @@ export function mountHeader(ctx: HubCtx) {
       levelChip.replaceChildren(skeleton('', '64px', '18px'));
       levelTitleEl.replaceChildren(skeleton('', '90px', '18px'));
       credits.replaceChildren(skeleton('', '70px', '18px'));
+      creditsWord.textContent = '';
       xpFill.style.width = '0%';
       xpBar.removeAttribute('aria-label');
       xpText.replaceChildren(skeleton('', '180px', '14px'));
@@ -121,6 +134,7 @@ export function mountHeader(ctx: HubCtx) {
     levelChip.textContent = `Level ${w.level}`;
     levelTitleEl.textContent = levelTitle(w.level);
     credits.textContent = `🪙 ${fmt(w.balance)}`;
+    creditsWord.textContent = ' credits'; // the screen reader says "1,234 credits", the eye just sees the coin
     credits.title = `${fmt(w.creditsEarned)} credits earned, ${fmt(w.creditsSpent)} spent`;
     xpFill.style.width = `${Math.round(frac * 100)}%`;
     xpBar.setAttribute('aria-label', `${Math.round(frac * 100)}% of the way to the next level`);
@@ -177,7 +191,7 @@ export function mountHeader(ctx: HubCtx) {
     const racing = mode === 'race';
     rideLabel.textContent = racing ? 'Race' : 'Ride';
     dockBtn.textContent = racing ? 'Race' : 'Ride';
-    dockMeta.textContent = `${MODE_LABEL[mode]} · ${rideMeta}`;
+    (dockMeta.lastElementChild as HTMLElement).textContent = `${MODE_LABEL[mode]} · ${rideMeta}`;
     if (racing) rideBtn.setAttribute('aria-label', 'Race the pro teams'); else rideBtn.removeAttribute('aria-label');
   }
 

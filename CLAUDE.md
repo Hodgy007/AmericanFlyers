@@ -10,7 +10,7 @@ Browser-based 3D indoor cycling app (Vite + TypeScript + Three.js) that connects
 ## Commands
 
 - `npm run dev` — local dev server (Chrome on http://localhost:5173; Web Bluetooth needs localhost or https)
-- `npm run build` — type-check and build to `dist/`
+- `npm run build` — type-check the app, `api/` and the tests, then build to `dist/` (`npm run typecheck:tests` checks the tests alone)
 
 ## Deployment
 
@@ -19,5 +19,5 @@ Browser-based 3D indoor cycling app (Vite + TypeScript + Three.js) that connects
 
 ## Backend
 
-- Neon project `americanflyers` (`quiet-morning-27044210`, branch `br-wandering-queen-zaoadzw1`, db `neondb`): Neon Auth (Google, and email and password sign-in) and the Data API, called from the browser via `@neon/neon-js` (`src/cloud/`). Auth is reached through our own origin at `/api/auth` (passed to Neon Auth by the `api/auth-proxy.ts` function in production — a plain rewrite won't do, Neon rejects its `X-Forwarded-Host` — and by `vite.config.ts` locally) so its cookie is first-party for Safari; don't point the client at Neon's auth domain directly.
-- Every table has row-level security; admin-only data goes through security-definer functions that check `public.is_admin()`. Keep `db/schema.sql` in step with any database change.
+- Neon project `americanflyers` (`quiet-morning-27044210`, branch `br-wandering-queen-zaoadzw1`, db `neondb`): Neon Auth (Google, and email and password sign-in) and the Data API, called from the browser via `@neon/neon-js` (`src/cloud/`). The branch is the project's default branch: don't assume the id fixed. Auth is reached through our own origin at `/api/auth` (passed to Neon Auth by the `api/auth-proxy.ts` function in production — a plain rewrite won't do, Neon rejects its `X-Forwarded-Host` — and by `vite.config.ts` locally) so its cookie is first-party for Safari; don't point the client at Neon's auth domain directly.
+- Every table has row-level security; admin-only data goes through security-definer functions that check `public.is_admin()`. Keep `db/schema.sql` in step with any database change (its header carries a schema version; the file is re-runnable).

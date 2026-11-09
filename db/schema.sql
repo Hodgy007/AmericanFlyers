@@ -4,6 +4,11 @@
 -- neon_auth."user" and auth.user_id() returns the signed-in user's id.
 -- The browser talks to these tables through the Neon Data API as the
 -- "authenticated" role; row-level security keeps each rider to their own rows.
+--
+-- Schema version: 2026-11-09 rev-1
+-- db/schema.sql is the source of truth for the database and is re-runnable:
+-- every change is written with "if not exists" / "create or replace" / guarded
+-- "do" blocks so applying it again on an existing branch is safe.
 
 -- ------------------------------------------------------------ riders ----
 
@@ -80,6 +85,25 @@ begin
     execute format('revoke all on public.%I from anonymous', t);
   end loop;
 end $$;
+
+-- Riders' saved blobs are written straight from the browser, so cap their size: 64 KB
+-- per workout and per profile's settings, 512 KB per route (GPX-derived routes are big).
+-- Added not valid, then validated, so re-running the file is safe and doesn't rescan the tables.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'workouts_data_size' and conrelid = 'public.workouts'::regclass) then
+    alter table public.workouts add constraint workouts_data_size check (octet_length(data::text) < 65536) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'routes_data_size' and conrelid = 'public.routes'::regclass) then
+    alter table public.routes add constraint routes_data_size check (octet_length(data::text) < 524288) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'profiles_settings_size' and conrelid = 'public.profiles'::regclass) then
+    alter table public.profiles add constraint profiles_settings_size check (octet_length(settings::text) < 65536) not valid;
+  end if;
+end $$;
+alter table public.workouts validate constraint workouts_data_size;
+alter table public.routes validate constraint routes_data_size;
+alter table public.profiles validate constraint profiles_settings_size;
 
 -- ------------------------------------------------------------- admin ----
 
@@ -261,6 +285,9 @@ language sql immutable set search_path = '' as $$
 $$;
 
 -- p_kit is optional, so clients from before kits existed (six arguments) still work.
+-- Riders on that stage see each other by a stage-scoped id, md5(user_id || ':' || stage_id),
+-- rather than md5(user_id): the same rider shows up under a different id on every stage, so
+-- ids seen in one stage's presence list can't be used to follow a rider to another stage.
 create or replace function public.ride_presence(p_stage text, p_distance real, p_speed real, p_power integer, p_cadence integer, p_visible boolean default true, p_kit text default null)
 returns table (id text, name text, distance real, speed real, power integer, cadence integer, age_ms integer, kit text)
 language plpgsql security definer set search_path = '' as $$
@@ -282,7 +309,7 @@ begin
   -- Riders who closed the tab without saying goodbye.
   delete from public.live_riders where updated_at < now() - interval '10 minutes';
   return query
-    select md5(l.user_id), public.short_name(u.name), l.distance, l.speed, l.power::integer, l.cadence::integer,
+    select md5(l.user_id || ':' || l.stage_id), public.short_name(u.name), l.distance, l.speed, l.power::integer, l.cadence::integer,
            (extract(epoch from now() - l.updated_at) * 1000)::integer, l.kit
     from public.live_riders l
     join neon_auth."user" u on u.id::text = l.user_id
@@ -303,8 +330,9 @@ grant execute on function public.ride_presence(text, real, real, integer, intege
 
 -- ---------------------------------------------------------- ride-ons ----
 -- A quick 👍 🔥 💪 👋 sent to another rider on the road (no free text). The
--- target is named by the md5 id that ride_presence() returns, and must have
--- been seen in the last 15 s. Limits: one per target per 20 s, 20 a minute.
+-- target is named by the md5 id that ride_presence() returns — md5(user_id || ':'
+-- || stage_id), so it only resolves on the stage the caller is riding (and only
+-- among riders seen in the last 15 s). Limits: one per target per 20 s, 20 a minute.
 -- No direct table access; my_ride_ons() also clears rows older than a day.
 
 create table public.ride_ons (
@@ -324,14 +352,19 @@ create or replace function public.send_ride_on(p_to text, p_emote text) returns 
 language plpgsql security definer set search_path = '' as $$
 declare
   me text := auth.user_id();
+  my_stage text;
   target text;
 begin
   if me is null then raise exception 'Sign in to send ride-ons' using errcode = '42501'; end if;
   if p_emote is null or p_emote not in ('👍','🔥','💪','👋') then raise exception 'Unknown ride-on'; end if;
+  -- Presence ids are stage-scoped: resolve the target only on the stage the caller is on.
+  select l.stage_id into my_stage from public.live_riders l where l.user_id = me;
+  if my_stage is null then raise exception 'That rider isn''t riding right now'; end if;
   select l.user_id into target
   from public.live_riders l
   left join neon_auth."user" u on u.id::text = l.user_id
-  where md5(l.user_id) = p_to and l.updated_at > now() - interval '15 seconds' and not coalesce(u.banned, false)
+  where md5(l.user_id || ':' || l.stage_id) = p_to and l.stage_id = my_stage
+    and l.updated_at > now() - interval '15 seconds' and not coalesce(u.banned, false)
   limit 1;
   if target is null then raise exception 'That rider isn''t riding right now'; end if;
   if target = me then raise exception 'You can''t send a ride-on to yourself'; end if;
@@ -447,6 +480,29 @@ on conflict (stage_id) do update set distance_m = excluded.distance_m, min_finis
 
 -- Set by the app when a ride used the demo slider or ?timescale: such rides never count for times.
 alter table public.activities add column if not exists demo boolean default false;
+
+-- race_place, race_size and pro_m are written by the browser and feed the weekly
+-- challenges (race wins/podiums, "ride with a pro team for 20 km"), so they are clamped
+-- on the way in instead of trusted: a place must fit the field size, and pro metres
+-- can't exceed the ride's distance. Anything out of range is nulled.
+create or replace function public.activities_sanitize() returns trigger
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+begin
+  if new.race_size is null or new.race_size < 1 or new.race_size > 200 then
+    new.race_size := null;
+    new.race_place := null;
+  elsif new.race_place is null or new.race_place < 1 or new.race_place > new.race_size then
+    new.race_place := null;
+  end if;
+  if new.pro_m is not null and (new.pro_m < 0 or new.pro_m > coalesce(new.distance_m, 0)) then
+    new.pro_m := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists activities_sanitize on public.activities;
+create trigger activities_sanitize before insert or update on public.activities
+  for each row execute function public.activities_sanitize();
 
 create or replace function public.ride_is_plausible(p_stage text, p_finish_s integer, p_avg_power real, p_demo boolean)
 returns boolean
@@ -1128,10 +1184,9 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'no_consent');
   end if;
 
-  -- Today's quota (UTC day). Admins are unlimited. One atomic upsert: the WHERE stops the count at the limit.
-  is_adm := exists (
-    select 1 from neon_auth."user" u join public.admins ad on lower(ad.email) = lower(u.email)
-    where u.id::text = me and u."emailVerified");
+  -- Today's quota (UTC day). Admins are unlimited, and banned admins are not admins:
+  -- public.is_admin() is the one place that definition lives.
+  is_adm := public.is_admin();
   lim := case when is_adm then 100000 else case p_kind when 'coach_debrief' then 10 when 'coach_plan' then 6 when 'coach_tip' then 30 when 'coach_climb' then 8 else 10 end end;
   insert into public.ai_usage as a (user_id, day, kind, count) values (me, today, p_kind, 1)
   on conflict (user_id, day, kind) do update set count = a.count + 1 where a.count < lim
@@ -1152,7 +1207,12 @@ begin
     'tss', round(coalesce(sum(a.tss), 0)::numeric, 0))
     into wk from public.activities a where a.user_id = me and a.started_at > now() - interval '28 days';
   if left(p_kind, 5) = 'rival' then
-    select coalesce(jsonb_agg(jsonb_build_object('rival', m.rival_id, 'wins', m.wins, 'losses', m.losses, 'rides', m.rides, 'last_ride', m.last_ride, 'notes', m.notes)), '[]'::jsonb)
+    -- Notes come from the model and are replayed into the rival prompt, so they are sanitised
+    -- on the way in (rival_record_for) and again on the way out here.
+    select coalesce(jsonb_agg(jsonb_build_object('rival', m.rival_id, 'wins', m.wins, 'losses', m.losses, 'rides', m.rides, 'last_ride', m.last_ride,
+      'notes', (select coalesce(jsonb_agg(public.sanitize_prompt_text(n) order by o), '[]'::jsonb)
+                from jsonb_array_elements_text(m.notes) with ordinality as e(n, o)
+                where jsonb_typeof(m.notes) = 'array'))), '[]'::jsonb)
       into mem from public.rival_memory m where m.user_id = me and (p_rival is null or m.rival_id = p_rival);
   end if;
   return jsonb_build_object(
@@ -1164,12 +1224,23 @@ begin
 end $$;
 
 -- Rival memory --------------------------------------------------------------
+-- Notes are written by the model and later replayed into the rival prompt, so they are
+-- stripped of anything that could act as prompt text: control characters, unusual
+-- whitespace and symbols/emoji other than basic punctuation all go, and the result is
+-- capped at 160 characters. Applied on the way in (rival_record_for) and on the way out
+-- (ai_claim_for), so notes stored before this helper existed are cleaned too.
+create or replace function public.sanitize_prompt_text(t text) returns text
+language sql immutable set search_path = '' as $$
+  select left(regexp_replace(regexp_replace(trim(regexp_replace(regexp_replace(coalesce(t, ''), '[[:cntrl:]]', ' ', 'g'), '\s+', ' ', 'g')), '[^[:alnum:] ''\-.,!?()&+/:%]', '', 'g'), '\s+', ' ', 'g'), 160)
+$$;
+
+-- Rival memory --------------------------------------------------------------
 create or replace function public.rival_record_for(me text, p_rival text, p_won boolean, p_note text default null) returns void
 language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_column
 declare
   cur jsonb;
-  note text := left(trim(regexp_replace(coalesce(p_note, ''), '[[:cntrl:]]+', ' ', 'g')), 140);
+  note text := public.sanitize_prompt_text(p_note);
   merged jsonb;
   kept jsonb;
 begin
@@ -1241,6 +1312,7 @@ create or replace function public.save_coach_debrief(p_activity uuid, p_debrief 
 create or replace function public.my_coach_debrief(p_activity uuid) returns jsonb language sql stable security definer set search_path = '' as $$ select public.my_coach_debrief_for(auth.user_id(), p_activity) $$;
 
 revoke execute on function
+  public.sanitize_prompt_text(text),
   public.my_ai_consent_for(text), public.set_ai_consent_for(text, boolean, boolean), public.ai_claim_for(text, text, text),
   public.rival_record_for(text, text, boolean, text), public.my_rivals_for(text), public.forget_rival_for(text, text),
   public.save_coach_debrief_for(text, uuid, jsonb), public.my_coach_debrief_for(text, uuid)

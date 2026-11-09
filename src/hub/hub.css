@@ -1,4 +1,4 @@
-/* =====================================================================
+﻿/* =====================================================================
    The Hub (src/hub): the screen before you ride.
    Same look as the home page and the dialogs: Barlow Condensed display type, navy glass,
    the red-white-blue stripe, and the buttons and tokens from style.css (--stripe, --red-hi,
@@ -6,6 +6,11 @@
    ===================================================================== */
 
 .hub {
+  /* Hub text on the translucent panel, in three steps: body copy, secondary copy, and the quietest labels.
+     Raised so the two quietest still clear 4.5:1 over the navy glass (they were #b9c2d6, #a9b3c7). */
+  --hub-text-1: #dfe5f2;
+  --hub-text-2: #c3cbdc;
+  --hub-text-3: #c3cbdc;
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -36,6 +41,7 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
 }
 .hub-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
@@ -77,32 +83,34 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-stat-box { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 .hub-level-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 28px; }
 .hub-lv { padding: 2px 12px; border-radius: 999px; background: linear-gradient(180deg, var(--red-hi), #b51b2b); font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; }
-.hub-lv-title { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: 0.04em; text-transform: uppercase; color: #dfe5f2; }
+.hub-lv-title { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--hub-text-1); }
 .hub-credits { margin-left: auto; font-family: var(--font-display); font-weight: 800; font-size: 28px; letter-spacing: 0.02em; color: #f2c14e; font-variant-numeric: tabular-nums; }
+.hub-credits-wrap { margin-left: auto; display: inline-flex; align-items: baseline; }
+.hub-credits-wrap .hub-credits { margin-left: 0; }
 .hub-xp { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .hub-xp i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--red-hi), var(--blue)); transition: width 0.5s ease; }
-.hub-xp-text, .hub-rider-totals { font-size: 13px; color: #c3cbdc; min-height: 16px; }
+.hub-xp-text, .hub-rider-totals { font-size: 13px; color: var(--hub-text-2); min-height: 16px; }
 
 /* ride panel */
 .hub-ride { display: flex; flex-direction: column; gap: 12px; }
 .hub-ride .hub-eyebrow { margin: 0; }
 .hub-ride-head { display: flex; flex-direction: column; gap: 4px; }
 .hub-ride-title { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 2.6vw, 40px); line-height: 1; letter-spacing: 0.02em; text-transform: uppercase; overflow-wrap: anywhere; }
-.hub-ride-meta { margin: 0; font-size: 14px; color: #dfe5f2; line-height: 1.4; min-height: 20px; }
+.hub-ride-meta { margin: 0; font-size: 14px; color: var(--hub-text-1); line-height: 1.4; min-height: 20px; }
 .hub-ride-chart { display: block; width: 100%; height: 64px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
 .hub-ride-btn { display: flex; align-items: center; justify-content: center; gap: 14px; width: 100%; padding: 14px 20px; border-radius: 14px; font-size: 34px; letter-spacing: 0.1em; line-height: 1; }
 .hub-ride-arrow { font-size: 22px; }
 .hub-ride-quick { display: flex; gap: 8px; flex-wrap: wrap; }
 .hub-ride-quick button { padding: 7px 16px; font-size: 14px; }
 .hub-ride-quick [hidden] { display: none; }
-/* ride mode: Solo · With pro teams · Race */
+/* ride mode: Solo Â· With pro teams Â· Race */
 .hub-mode-box { display: flex; flex-direction: column; gap: 6px; }
 .hub-mode { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: rgba(5, 9, 22, 0.55); border: 1px solid var(--line); }
 .hub-mode-opt {
   flex: 1 1 0; min-width: 0;
   padding: 8px 6px;
   border-radius: 9px; border: 1px solid transparent;
-  background: transparent; box-shadow: none; color: #c3cbdc;
+  background: transparent; box-shadow: none; color: var(--hub-text-2);
   font-family: var(--font-display); font-weight: 700; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: background 0.15s ease, color 0.15s ease;
@@ -111,14 +119,14 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-mode-opt[aria-checked='true'] { background: linear-gradient(180deg, #5b92f9, #2c63d1); border-color: rgba(150, 190, 255, 0.55); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 3px 10px rgba(61, 123, 247, 0.3); }
 .hub-mode-opt[data-mode='race'][aria-checked='true'] { background: linear-gradient(180deg, var(--red-hi), #b51b2b); border-color: rgba(255, 120, 132, 0.5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 3px 10px rgba(214, 40, 57, 0.3); }
 .hub-mode-opt[aria-disabled='true'] { opacity: 0.4; cursor: not-allowed; }
-.hub-mode-help { margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.35; color: #c3cbdc; min-height: 35px; }
+.hub-mode-help { margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.35; color: var(--hub-text-2); min-height: 35px; }
 /* iPhone / iPad without Web Bluetooth: a link to the Bluefy browser */
 .bluefy-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: rgba(5, 9, 22, 0.55); border: 1px solid var(--line); }
 .bluefy-card[hidden] { display: none; }
 .bluefy-icon { flex: none; width: 48px; height: 48px; border-radius: 22%; }
 .bluefy-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .bluefy-title { font-size: 15px; line-height: 1.2; }
-.bluefy-text { margin: 0; font-size: 13px; line-height: 1.35; color: #c3cbdc; }
+.bluefy-text { margin: 0; font-size: 13px; line-height: 1.35; color: var(--hub-text-2); }
 .bluefy-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
 .bluefy-actions a, .bluefy-actions button { padding: 7px 14px; font-size: 14px; text-decoration: none; text-align: center; }
 .bluefy-link { color: var(--text); border-radius: 999px; font-weight: 600; background: linear-gradient(180deg, var(--red-hi), #b51b2b); border: 1px solid rgba(255, 120, 132, 0.45); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 14px rgba(214, 40, 57, 0.35); }
@@ -127,7 +135,7 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-plan-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
 .hub-plan-row[hidden] { display: none; }
 .hub-plan-text { display: flex; flex-direction: column; min-width: 0; }
-.hub-plan-text small { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #a9b3c7; }
+.hub-plan-text small { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--hub-text-3); }
 .hub-plan-text strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-plan-go { flex: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08)); }
 
@@ -169,12 +177,12 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub[data-layout='stacked'] .hub-section + .hub-section { margin-top: 18px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
 .hub-section-head { margin-bottom: 16px; }
 .hub-section-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 34px; letter-spacing: 0.03em; text-transform: uppercase; line-height: 1; }
-.hub-section-head p { margin: 4px 0 0; color: #c3cbdc; font-size: 14.5px; }
-.hub-sub { margin: 22px 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; color: #dfe5f2; }
-.hub-note { margin: 8px 0 14px; font-size: 14px; line-height: 1.5; color: #b9c2d6; max-width: 70ch; }
+.hub-section-head p { margin: 4px 0 0; color: var(--hub-text-2); font-size: 14.5px; }
+.hub-sub { margin: 22px 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hub-text-1); }
+.hub-note { margin: 8px 0 14px; font-size: 14px; line-height: 1.5; color: var(--hub-text-2); max-width: 70ch; }
 .hub-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
-.hub-meta { margin: 0; font-size: 13px; color: #dfe5f2; font-variant-numeric: tabular-nums; }
-.hub-desc { margin: 0; font-size: 12.5px; line-height: 1.45; color: #a9b3c7; }
+.hub-meta { margin: 0; font-size: 13px; color: var(--hub-text-1); font-variant-numeric: tabular-nums; }
+.hub-desc { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--hub-text-3); }
 .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(262px, 1fr)); gap: 14px; }
 .hub-one { grid-template-columns: 1fr; }
 
@@ -224,33 +232,33 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-card-foot button, .hub-card-foot .hub-chip { position: relative; z-index: 1; }
 .hub-mini { padding: 4px 11px; font-size: 13px; }
 /* the Race chip is a shortcut, quieter than the route it sits on */
-.hub-mini.hub-race { padding: 2px 9px; font-size: 12px; font-weight: 600; background: transparent; box-shadow: none; border-color: rgba(255, 255, 255, 0.2); color: #c3cbdc; }
+.hub-mini.hub-race { padding: 2px 9px; font-size: 12px; font-weight: 600; background: transparent; box-shadow: none; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); color: var(--hub-text-2); }
 .hub-mini.hub-race:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-.hub-chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2); font-size: 12px; font-weight: 600; color: #dfe5f2; font-variant-numeric: tabular-nums; }
+.hub-chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2); font-size: 12px; font-weight: 600; color: var(--hub-text-1); font-variant-numeric: tabular-nums; }
 .hub-chip.gold { border-color: rgba(242, 193, 78, 0.5); color: #f6d58a; background: rgba(242, 193, 78, 0.1); }
 
 /* ------------------------------------------------------- climb guide ---- */
 /* a full-width row under the stage's card (the grid is two cards across on a phone) */
 .hub-climb { grid-column: 1 / -1; border-radius: 16px; padding: 14px 16px 12px; background: linear-gradient(180deg, rgba(20, 31, 62, 0.86), rgba(10, 16, 38, 0.86)); border: 1px solid rgba(143, 184, 255, 0.35); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.3); min-width: 0; }
 .hub-climb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.hub-climb-head h4 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; color: #dfe5f2; min-width: 0; overflow-wrap: anywhere; }
+.hub-climb-head h4 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hub-text-1); min-width: 0; overflow-wrap: anywhere; }
 .hub-climb-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
-.hub-climb-chip { padding: 5px 13px; font-size: 14px; font-weight: 600; border-radius: 999px; background: transparent; box-shadow: none; border: 1px solid rgba(255, 255, 255, 0.25); color: #dfe5f2; }
+.hub-climb-chip { padding: 5px 13px; font-size: 14px; font-weight: 600; border-radius: 999px; background: transparent; box-shadow: none; border: 1px solid rgba(255, 255, 255, 0.25); color: var(--hub-text-1); }
 .hub-climb-chip:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
 .hub-climb-chip[aria-pressed='true'] { background: var(--red); border-color: var(--red-hi); color: #fff; }
 .hub-climb-out { min-height: 56px; font-size: 14.5px; line-height: 1.5; color: #e6ebf7; max-width: 76ch; }
 .hub-climb-out p { margin: 0 0 8px; }
-.hub-climb-hint, .hub-climb-msg, .hub-climb-asof { color: #b9c2d6; font-size: 13.5px; }
+.hub-climb-hint, .hub-climb-msg, .hub-climb-asof { color: var(--hub-text-2); font-size: 13.5px; }
 .hub-climb-facts { margin: 0 0 8px; padding-left: 20px; }
 .hub-climb-facts li { margin: 0 0 4px; }
 .hub-climb-sources { margin: 4px 0 4px; padding-left: 24px; font-size: 13.5px; }
 .hub-climb-sources li { margin: 0 0 3px; overflow-wrap: anywhere; }
 .hub-climb-sources a { color: #8fb8ff; }
 .hub-climb-sources a:hover { color: #fff; }
-.hub-climb-host { color: #a9b3c7; font-size: 12.5px; }
+.hub-climb-host { color: var(--hub-text-3); font-size: 12.5px; }
 .hub-climb-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
 .hub-climb-sk { margin: 0 0 8px; }
-.hub-climb-note { margin: 8px 0 0; font-size: 12px; color: #a9b3c7; }
+.hub-climb-note { margin: 8px 0 0; font-size: 12px; color: var(--hub-text-3); }
 
 .hub-tour { background: linear-gradient(135deg, rgba(214, 40, 57, 0.4), rgba(61, 123, 247, 0.34)), rgba(10, 16, 38, 0.8); border-color: rgba(255, 255, 255, 0.22); }
 .hub-tour .hub-card-body { padding-top: 16px; }
@@ -281,14 +289,14 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-plan-ride { padding: 10px 28px; font-size: 20px; }
 .hub-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .hub-list li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(10, 16, 38, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); }
-.hub-list-meta { color: #a9b3c7; font-size: 13px; white-space: nowrap; }
+.hub-list-meta { color: var(--hub-text-3); font-size: 13px; white-space: nowrap; }
 
 /* ----------------------------------------------------- achievements ---- */
 .hub-ach-head { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
 .hub-ach-head .hub-bar { flex: 1 1 200px; max-width: 460px; height: 12px; }
 .hub-bignum { display: flex; align-items: baseline; gap: 10px; }
 .hub-bignum strong { font-family: var(--font-display); font-weight: 800; font-size: 64px; line-height: 0.9; font-variant-numeric: tabular-nums; }
-.hub-bignum span { font-size: 15px; color: #c3cbdc; }
+.hub-bignum span { font-size: 15px; color: var(--hub-text-2); }
 .hub-badges { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .hub-badge { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: rgba(10, 16, 38, 0.62); border: 1px solid rgba(255, 255, 255, 0.1); }
 .hub-badge.done { border-color: rgba(242, 193, 78, 0.55); box-shadow: inset 0 0 0 1px rgba(242, 193, 78, 0.25); background: linear-gradient(180deg, rgba(242, 193, 78, 0.12), rgba(10, 16, 38, 0.62)); }
@@ -296,20 +304,20 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-badge-icon { flex: none; width: 44px; height: 44px; display: grid; place-items: center; font-size: 26px; border-radius: 12px; background: rgba(255, 255, 255, 0.08); }
 .hub-badge-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .hub-badge-body strong { font-size: 15px; }
-.hub-badge-detail { font-size: 12px; color: #dfe5f2; font-variant-numeric: tabular-nums; }
+.hub-badge-detail { font-size: 12px; color: var(--hub-text-1); font-variant-numeric: tabular-nums; }
 
 /* ------------------------------------------------------------ garage ---- */
 .hub-garage { display: grid; grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr); gap: 22px; align-items: start; }
 .hub-garage-stage { position: relative; aspect-ratio: 4 / 3; min-height: 260px; border-radius: 18px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.14); background: radial-gradient(ellipse at 50% 85%, rgba(61, 123, 247, 0.28), transparent 65%), rgba(10, 16, 38, 0.62); }
 .hub-garage-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: grab; }
 .hub-garage-fallback { position: absolute; inset: auto 0 40% 0; text-align: center; margin: 0; }
-.hub-garage-hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: #a9b3c7; pointer-events: none; }
+.hub-garage-hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--hub-text-3); pointer-events: none; }
 .hub-garage-side { min-width: 0; }
 .hub-garage-level { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: rgba(10, 16, 38, 0.62); border: 1px solid rgba(255, 255, 255, 0.1); min-height: 92px; }
 .hub-garage-level .hub-desc { font-size: 14px; }
 .hub-wear { list-style: none; margin: 0 0 4px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 14px; }
 .hub-wear li { display: flex; flex-direction: column; padding: 8px 12px; border-radius: 10px; background: rgba(10, 16, 38, 0.5); border: 1px solid rgba(255, 255, 255, 0.07); }
-.hub-wear span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #a9b3c7; }
+.hub-wear span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--hub-text-3); }
 .hub-wear strong { font-size: 14px; }
 .hub-challenges { display: grid; gap: 8px; margin-bottom: 18px; min-height: 96px; }
 .hub-challenge { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: 12px; background: rgba(10, 16, 38, 0.62); border: 1px solid rgba(255, 255, 255, 0.1); }
@@ -317,7 +325,7 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-challenge.claimed { opacity: 0.7; }
 .hub-challenge-top, .hub-challenge-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; }
 .hub-challenge-top strong { font-size: 14.5px; }
-.hub-challenge-foot { color: #c3cbdc; font-variant-numeric: tabular-nums; }
+.hub-challenge-foot { color: var(--hub-text-2); font-variant-numeric: tabular-nums; }
 .hub-challenge-state { color: #f6d58a; font-weight: 700; }
 
 /* ------------------------------------------------------------- stats ---- */
@@ -327,9 +335,9 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-stat-block .hub-sub { margin-top: 12px; }
 .hub-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .hub-kpi { padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.06); min-width: 0; }
-.hub-kpi span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #a9b3c7; }
+.hub-kpi span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--hub-text-3); }
 .hub-kpi strong { display: block; font-size: 22px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hub-kpi small { display: block; font-size: 10.5px; color: #a9b3c7; }
+.hub-kpi small { display: block; font-size: 10.5px; color: var(--hub-text-3); }
 .hub-ftp-main { margin-bottom: 8px; }
 .hub-ftp .hub-bignum strong { font-size: 56px; }
 .hub-spark { display: block; width: 100%; height: 64px; margin: 8px 0 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
@@ -338,12 +346,12 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-week-bar { position: relative; flex: 1; border-radius: 6px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
 .hub-week-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, #6ea2ff, var(--blue)); }
 .hub-weeks li:last-child .hub-week-bar i { background: linear-gradient(180deg, var(--red-hi), #b51b2b); }
-.hub-week-label { font-size: 10.5px; color: #a9b3c7; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.hub-week-label { font-size: 10.5px; color: var(--hub-text-3); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .hub-rides { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .hub-ride-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; text-align: left; font-weight: 500; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
 .hub-ride-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.hub-ride-date { font-size: 12px; color: #a9b3c7; }
-.hub-ride-stats { font-size: 12.5px; color: #dfe5f2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hub-ride-date { font-size: 12px; color: var(--hub-text-3); }
+.hub-ride-stats { font-size: 12.5px; color: var(--hub-text-1); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ------------------------------------------------------------ events ---- */
 .hub-events { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
@@ -354,7 +362,7 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-grid + .hub-actions { margin-top: 18px; }
 .hub-event-count { font-family: var(--font-display); font-weight: 800; font-size: 40px; letter-spacing: 0.02em; color: #f4f6fb; font-variant-numeric: tabular-nums; line-height: 1.1; margin-top: 6px; }
 .hub-event .hub-card-foot { padding-top: 14px; }
-.hub-event-wait { color: #c3cbdc; }
+.hub-event-wait { color: var(--hub-text-2); }
 
 /* -------------------------------------------------------------- dock ---- */
 .hub-dock {
@@ -380,7 +388,7 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-dock.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; visibility: visible; transition: transform 0.25s ease, opacity 0.2s; }
 .hub-dock-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .hub-dock-text strong { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: 0.03em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hub-dock-text span { font-size: 12px; color: #c3cbdc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-dock-text span { font-size: 12px; color: var(--hub-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-dock-btn { flex: none; padding: 8px 28px; font-size: 22px; letter-spacing: 0.1em; }
 .hub[hidden] .hub-dock { display: none; }
 

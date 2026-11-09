@@ -4,7 +4,9 @@
 // textures are cached after first use. Sign-in and the database are never
 // cached.
 
-const VERSION = 'af-v2';
+// The build (vite.config.ts) replaces this with the deploy's version, so each
+// deploy gets a fresh cache; in dev the placeholder is left alone.
+const VERSION = '__AF_VERSION__';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

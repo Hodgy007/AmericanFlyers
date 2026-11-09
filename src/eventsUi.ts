@@ -6,6 +6,7 @@ import { account } from './cloud/account';
 import { eventResults, serverNow, upcomingEvents, type EventRow, type EventResultRow } from './cloud/events';
 import type { MergedResult } from './eventSession';
 import { raceTime } from './ghost';
+import { MAX_ROWS, moreRow } from './resultsTable';
 import { TEAMS } from './peloton';
 import { RACE_MINUTES, RIDE_MINUTES, countdownLabel, dailySchedule, joinState, type EventKind } from './schedule';
 
@@ -142,7 +143,11 @@ export function initEventsUi(o: Options) {
     t.innerHTML = '<thead><tr><th>#</th><th>Rider</th><th class="num">Time</th><th class="num">Avg</th></tr></thead>';
     const tb = document.createElement('tbody');
     const lead = res[0].finish_s;
-    for (const r of res) {
+    // At most MAX_ROWS riders, with you always among them (even below the cap), then a note for the rest.
+    const shown = res.slice(0, MAX_ROWS);
+    const me = res.findIndex((r) => r.is_me);
+    if (me >= MAX_ROWS) shown.push(res[me]);
+    for (const r of shown) {
       const tr = document.createElement('tr');
       if (r.is_me) tr.className = 'me';
       tr.innerHTML = '<td class="rank"></td><td class="who"></td><td class="num time"></td><td class="num"></td>';
@@ -152,6 +157,7 @@ export function initEventsUi(o: Options) {
       tr.children[3].textContent = r.avg_power ? `${Math.round(r.avg_power)} W` : '';
       tb.append(tr);
     }
+    if (res.length > MAX_ROWS) tb.append(moreRow(res.length - MAX_ROWS, 4));
     t.append(tb);
     wrap.append(t);
     return wrap;
@@ -213,7 +219,7 @@ export function eventResultsNode(rows: MergedResult[], realCount: number): HTMLE
   t.innerHTML = '<thead><tr><th>#</th><th>Rider</th><th class="num">Time</th></tr></thead>';
   const tb = document.createElement('tbody');
   const lead = rows[0]?.time ?? 0;
-  // The top 12, then you if you are lower down.
+  // The top 12, then you if you are lower down: this table is already windowed, so it is not capped again.
   const shown = rows.slice(0, 12);
   const me = rows.findIndex((r) => r.kind === 'you');
   const idx = shown.map((_, i) => i);
