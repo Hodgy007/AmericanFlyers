@@ -19,6 +19,22 @@ const DROP_REQUEST = new Set([
 // Response headers not passed back: hop-by-hop, and the encoding/length of a body fetch already decoded.
 const DROP_RESPONSE = new Set(['connection', 'keep-alive', 'transfer-encoding', 'content-encoding', 'content-length', 'set-cookie']);
 
+const QUERY_NAME = /^[a-zA-Z0-9_]{1,32}$/;
+const MAX_QUERY_VALUE = 512;
+
+/** The query parameters we pass on: plain names with short values. */
+export function filterQuery(params: URLSearchParams): URLSearchParams {
+  // Sign-in flows never need a redirect parameter: the callback lives in our own origin, so any
+  // redirect/callback parameter is an open-redirect attempt and is dropped.
+  const out = new URLSearchParams();
+  params.forEach((value, name) => {
+    if (!QUERY_NAME.test(name) || value.length > MAX_QUERY_VALUE) return;
+    if (/redirect|callback/i.test(name)) return;
+    out.append(name, value);
+  });
+  return out;
+}
+
 /** Where a proxied request goes: Neon Auth plus the sub-path and the original query (minus our path parameter). */
 export function targetUrl(requestUrl: string, base = DEFAULT_NEON_AUTH_URL): URL | null {
   const url = new URL(requestUrl);
@@ -26,7 +42,7 @@ export function targetUrl(requestUrl: string, base = DEFAULT_NEON_AUTH_URL): URL
   url.searchParams.delete(PATH_PARAM);
   if (!/^[A-Za-z0-9._~\-/]*$/.test(sub) || sub.split('/').some((p) => p === '..' || p === '.')) return null;
   const target = new URL(`${base.replace(/\/+$/, '')}/${sub.replace(/^\/+/, '')}`);
-  target.search = url.search;
+  target.search = filterQuery(url.searchParams).toString();
   return target;
 }
 

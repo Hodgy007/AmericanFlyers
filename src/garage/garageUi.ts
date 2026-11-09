@@ -85,16 +85,38 @@ export function initGarageUi(o: Options) {
   }
 
   function renderTabs() {
-    tabsEl.replaceChildren(...[...TABS.map((t) => ({ id: t.id as TabId, label: t.label })), { id: 'week' as TabId, label: 'This week' }].map((t) => {
+    const tabs: { id: TabId; label: string }[] = [...TABS.map((t) => ({ id: t.id as TabId, label: t.label })), { id: 'week' as TabId, label: 'This week' }];
+    tabsEl.replaceChildren(...tabs.map((t, i) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.role = 'tab';
+      b.id = `garage-tab-${t.id}`;
       b.textContent = t.label;
       b.className = t.id === tab ? 'selected' : '';
       b.setAttribute('aria-selected', String(t.id === tab));
+      b.setAttribute('aria-controls', body.id);
+      b.tabIndex = t.id === tab ? 0 : -1;
       b.addEventListener('click', () => { tab = t.id; tried = null; render(); if (tab === 'week') loadWeek(); });
+      b.addEventListener('keydown', (e) => tabKeys(e, tabs, i));
       return b;
     }));
+    body.setAttribute('role', 'tabpanel');
+    body.setAttribute('aria-labelledby', `garage-tab-${tab}`);
+  }
+
+  /** Left/Right (and Home/End) between the tabs: the same behaviour as the hub's section tabs. */
+  function tabKeys(e: KeyboardEvent, tabs: { id: TabId }[], i: number) {
+    if (e.key === 'ArrowRight') i = (i + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') i = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') i = 0;
+    else if (e.key === 'End') i = tabs.length - 1;
+    else return;
+    e.preventDefault();
+    tab = tabs[i].id;
+    tried = null;
+    render();
+    if (tab === 'week') loadWeek();
+    document.getElementById(`garage-tab-${tab}`)?.focus();
   }
 
   // ------------------------------------------------------------- store ----

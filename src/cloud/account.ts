@@ -46,7 +46,8 @@ export async function restoreSession() {
 }
 
 export async function signInWith(provider: 'google') {
-  const here = `${location.origin}${location.pathname}${location.search}`;
+  // No query string: a shared link's parameters must not follow the rider back to the app after sign-in.
+  const here = `${location.origin}${location.pathname}`;
   const { error } = await neon.auth.signIn.social({ provider, callbackURL: here, errorCallbackURL: here });
   if (error) throw new Error(error.message || `Couldn't start ${provider} sign-in`);
 }

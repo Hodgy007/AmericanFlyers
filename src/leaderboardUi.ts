@@ -4,6 +4,7 @@
 import { account } from './cloud/account';
 import { stageLeaderboard, type LeaderboardRow } from './cloud/sync';
 import { raceTime } from './ghost';
+import { MAX_ROWS, moreRow } from './resultsTable';
 import type { Stage } from './stages';
 
 interface Options {
@@ -13,6 +14,7 @@ interface Options {
   ghostName: () => string | null;
   openSignIn: (why: string) => void;
 }
+
 
 function weekStart() {
   const d = new Date();
@@ -69,7 +71,11 @@ export function initLeaderboardUi(o: Options) {
     table.innerHTML = '<thead><tr><th>#</th><th>Rider</th><th class="num">Time</th><th class="num">Avg</th><th></th></tr></thead>';
     const tb = document.createElement('tbody');
     const leader = rows[0].finish_s;
-    for (const r of rows) {
+    // At most MAX_ROWS riders, with you always among them (even below the cap), then a note for the rest.
+    const shown = rows.slice(0, MAX_ROWS);
+    const me = rows.findIndex((r) => r.is_me);
+    if (me >= MAX_ROWS) shown.push(rows[me]);
+    for (const r of shown) {
       const tr = document.createElement('tr');
       if (r.is_me) tr.className = 'me';
       const gap = r.finish_s - leader;
@@ -87,6 +93,7 @@ export function initLeaderboardUi(o: Options) {
       c[4].append(race);
       tb.append(tr);
     }
+    if (rows.length > MAX_ROWS) tb.append(moreRow(rows.length - MAX_ROWS, 5));
     table.append(tb);
     body.replaceChildren(table, p('Whole-stage rides only: start on the start line and ride to the finish. Times are moving time.'));
   }

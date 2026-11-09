@@ -25,9 +25,13 @@ export function pickModel(env: string | undefined): string {
   return /^[a-z0-9][a-z0-9._-]{0,40}\/[A-Za-z0-9][A-Za-z0-9._:-]{0,60}$/.test(v) ? v : DEFAULT_MODEL;
 }
 
-/** The first non-empty of: AI_GATEWAY_API_KEY, the request's x-vercel-oidc-token header (fresh per invocation), VERCEL_OIDC_TOKEN. */
+/**
+ * The first non-empty of: AI_GATEWAY_API_KEY, the request's x-vercel-oidc-token header (fresh per invocation), VERCEL_OIDC_TOKEN.
+ * The header is only honoured on Vercel (which sets VERCEL in production); elsewhere it would be client-supplied.
+ */
 export function pickToken(env: Record<string, string | undefined>, headers: Headers): string | null {
-  return env.AI_GATEWAY_API_KEY?.trim() || headers.get('x-vercel-oidc-token')?.trim() || env.VERCEL_OIDC_TOKEN?.trim() || null;
+  const fromHeader = env.VERCEL ? headers.get('x-vercel-oidc-token')?.trim() : null;
+  return env.AI_GATEWAY_API_KEY?.trim() || fromHeader || env.VERCEL_OIDC_TOKEN?.trim() || null;
 }
 
 export interface GatewayRequest {

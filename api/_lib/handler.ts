@@ -43,11 +43,71 @@ const json = (status: number, body: AiReply | AiError | Record<string, unknown>)
 
 const fail = (status: number, error: AiError['error'], message: string) => json(status, { ok: false, error, message } satisfies AiError);
 
+// ---------------------------------------------------------- rate limit ----
+
+/**
+ * Best-effort fixed-window limiter in memory: at most `limit` hits per `windowMs` per key.
+ * Per instance only (Vercel may run several functions in parallel), so it complements, not
+ * replaces, the database-side quota.
+ */
+export class WindowLimiter {
+  private readonly hits = new Map<string, number[]>();
+  constructor(readonly limit = 30, readonly windowMs = 60_000) {}
+
+  /** Records a hit; returns 0 when allowed, else the seconds to wait. */
+  take(key: string, now = Date.now()): number {
+    const since = now - this.windowMs;
+    const times = (this.hits.get(key) ?? []).filter((t) => t > since);
+    if (times.length >= this.limit) {
+      this.hits.set(key, times);
+      return Math.max(1, Math.ceil((times[0] + this.windowMs - now) / 1000));
+    }
+    times.push(now);
+    this.hits.set(key, times);
+    if (this.hits.size > 10_000) for (const [k, ts] of this.hits) if (!ts.some((t) => t > since)) this.hits.delete(k);
+    return 0;
+  }
+}
+
+const limiter = new WindowLimiter();
+
+const clientKey = (req: Request) => (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown';
+
+/** Reads the body as text, aborting (null) as soon as it would pass `cap` bytes. */
+async function readCapped(req: Request, cap: number): Promise<string | null> {
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > cap) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) { all.set(c, at); at += c.byteLength; }
+  return new TextDecoder().decode(all);
+}
+
 
 export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
   const log = deps.log ?? (() => {});
   const started = Date.now();
   if (req.method !== 'POST') return fail(405, 'bad_request', 'Use POST.');
+
+  const ip = clientKey(req);
+  const wait = limiter.take(ip);
+  if (wait) {
+    const tooMany = fail(429, 'unavailable', 'Too many requests. Try again in a minute.');
+    tooMany.headers.set('retry-after', String(wait));
+    return tooMany;
+  }
 
   const auth = req.headers.get('authorization') ?? '';
   const token = /^Bearer ([A-Za-z0-9._-]{20,4096})$/.exec(auth)?.[1];
@@ -55,8 +115,8 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
 
   const declared = Number(req.headers.get('content-length') ?? 0);
   if (declared > MAX_BODY_BYTES) return fail(413, 'bad_request', 'That request is too big.');
-  const text = await req.text();
-  if (text.length > MAX_BODY_BYTES) return fail(413, 'bad_request', 'That request is too big.');
+  const text = await readCapped(req, MAX_BODY_BYTES);
+  if (text === null) return fail(413, 'bad_request', 'That request is too big.');
 
   let raw: unknown;
   try { raw = JSON.parse(text); } catch { return fail(400, 'bad_request', 'That request wasn’t valid.'); }

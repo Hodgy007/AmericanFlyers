@@ -2,7 +2,7 @@
 
 This page covers how the browser talks to Neon: the Auth and Data API clients, the tables and what they hold, row-level security, triggers, the admin functions, the sync rules between the browser and the account, the shape of saved activities, and the `.tcx` export.
 
-For column-by-column detail, see [Database schema](../reference/database-schema.md). The source of truth is [`db/schema.sql`](../../db/schema.sql).
+For column-by-column detail, see [Database schema](../reference/database-schema.md). The source of truth is [`db/schema.sql`](../../db/schema.sql). Its header records a schema version (`-- Schema version: YYYY-MM-DD rev-N`), and the file is re-runnable: every statement uses `if not exists` or `create or replace`, or sits in a guarded `do` block, so applying it again to an existing branch is safe.
 
 ## The Neon project
 
@@ -52,6 +52,10 @@ Two `BEFORE` triggers keep feedback honest:
 - **`feedback_on_insert`** sets `user_id` to the signed-in user, sets `status` to `new`, clears `admin_reply`, and sets `created_at` and `updated_at` to now. A rider can't choose any of these.
 - **`feedback_on_update`** keeps `user_id`, `message`, `category` and `created_at` as they were, and sets `updated_at`. An admin can change the status and the reply, but not the message.
 
+## Trigger on activities
+
+`activities_sanitize` (a `BEFORE` trigger on insert and update) clamps the values the browser writes for the weekly challenges: `race_size` must be 1 to 200 (otherwise it and `race_place` are nulled), `race_place` must be 1 to `race_size` (otherwise nulled), and `pro_m` must be between 0 and `distance_m` (otherwise nulled).
+
 ## Admin functions
 
 These are `security definer` functions with `search_path = ''`. Each one checks `public.is_admin()` first, except `is_admin()` itself. Execute is revoked from `public` and `anonymous`, and granted to `authenticated`.
@@ -85,7 +89,7 @@ The browser predicts each rider's position between updates as `distance + speed 
 
 Neon Realtime (live queries) isn't available in the project's region (`eu-west-2`) and doesn't yet support row-level security, so riding together polls the Data API instead. Each rider makes one small call every 2 seconds, plus one every 4 seconds to look for ride-ons.
 
-The browser passes the sender's hashed id through unchanged, so a ride-on received from the rider with id `x` can be drawn over `x`'s rider in the world. `ride_presence()` once took six arguments; the old call still works because `p_kit` defaults to null.
+The browser passes the sender's hashed id through unchanged, so a ride-on received from the rider with id `x` can be drawn over `x`'s rider in the world. Presence ids are stage-scoped: `md5(user_id || ':' || stage_id)`, so the same rider has a different id on every stage and an id seen in one stage's presence list can't be used to follow a rider to another. `ride_presence()` once took six arguments; the old call still works because `p_kit` defaults to null.
 
 ## AI coach and rivals
 

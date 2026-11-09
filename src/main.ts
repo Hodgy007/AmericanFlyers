@@ -84,12 +84,25 @@ let demoPower = 150;
 const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
 const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 };
 const drivetrain = new Drivetrain(); // keeps the legs in step with the wheels
-const powerSamples: { t: number; p: number }[] = [];
+/** The last few seconds of power for the 3 s average: a fixed-size ring, oldest first (no shift() per frame). */
+const POWER_SAMPLES = 3000;
+const powerRing: { t: number; p: number }[] = Array.from({ length: POWER_SAMPLES }, () => ({ t: -Infinity, p: 0 }));
+let powerHead = 0; // where the next sample goes
+let powerCount = 0; // how many of the ring's slots hold a sample
+
+/** Callbacks over the live power samples, oldest first (the same order a plain growing array had). */
+function eachPowerSample(fn: (s: { t: number; p: number }) => void) {
+  const start = (powerHead - powerCount + POWER_SAMPLES) % POWER_SAMPLES;
+  for (let i = 0; i < powerCount; i++) fn(powerRing[(start + i) % POWER_SAMPLES]);
+}
 const zoneRefs = () => settings;
 let stats = new RideStats(zoneRefs); // whole ride
 let player: WorkoutPlayer | null = null;
 let workoutStats = new RideStats(zoneRefs); // just the current workout
 let recorder = new RideRecorder(); // second-by-second samples for the saved ride
+// The workout owns its own recorder while one is on: the ride's recorder (and the ride-wide `stats`) keep going
+// untouched, so the workout's save uses a fresh id that the ride's later autosaves, endRide or showFinish can't overwrite.
+let workoutRecorder: RideRecorder | null = null;
 const sound = new Sound(settings.sound);
 const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
@@ -444,8 +457,16 @@ function frame(now: number) {
   ride.lastElev = elev;
   drivetrain.update(dt, ride.speed, live.cadence, live.power);
 
-  powerSamples.push({ t: now, p: live.power });
-  while (powerSamples.length && now - powerSamples[0].t > 3000) powerSamples.shift();
+  const ps = powerRing[powerHead];
+  ps.t = now;
+  ps.p = live.power;
+  powerHead = (powerHead + 1) % POWER_SAMPLES;
+  if (powerCount < POWER_SAMPLES) powerCount++;
+  let oldest = (powerHead - powerCount + POWER_SAMPLES) % POWER_SAMPLES;
+  while (powerCount && now - powerRing[oldest].t > 3000) {
+    powerCount--;
+    oldest = (oldest + 1) % POWER_SAMPLES;
+  }
 
   const moving = ride.speed > 0.3 || live.power > 0;
   stats.add(dt, live.power, live.cadence, currentHr(), moving);
@@ -460,6 +481,12 @@ function frame(now: number) {
       player.tick(dt, pedalling, live.power);
       if (pedalling && !player.paused) workoutStats.add(dt, live.power, live.cadence, currentHr(), true);
     }
+    // The workout's own sample window (see startWorkout): same numbers as the ride's, from the workout onwards.
+    workoutRecorder?.tick(dt, moving, {
+      power: live.power, cadence: live.cadence, hr: currentHr(), speedMs: ride.speed,
+      distance: ride.distance - ride.startDistance,
+      elevation: (currentStage().baseAltitude ?? 0) + elev,
+    });
     if (player.done) finishWorkout(); // reached the end, or skipped past the last step
     else if (!player.paused) intervalBeeps();
   }
@@ -554,7 +581,9 @@ document.querySelectorAll<HTMLButtonElement>('[data-hud-pos]').forEach((b) => b.
 }));
 
 function updateHud(grade: number) {
-  const power3s = powerSamples.reduce((a, s) => a + s.p, 0) / Math.max(1, powerSamples.length);
+  let powerSum = 0;
+  eachPowerSample((s) => { powerSum += s.p; });
+  const power3s = powerSum / Math.max(1, powerCount);
   const finish = currentStage().finish;
   $('stage-name').textContent = stageProgress();
   hud.update({
@@ -644,6 +673,9 @@ function startWorkout(w: Workout) {
   ai?.workoutStarted();
   beeps.step = undefined;
   workoutStats = new RideStats(zoneRefs);
+  // The workout's activity has its own id and an empty sample window, so saving it never overwrites the ride's
+  // rows (the ride's recorder and ride-wide stats carry on for the ride saved later by endRide or showFinish).
+  workoutRecorder = new RideRecorder();
   rideWorkout.started = w.name;
   lastSentWatts = NaN;
   $('workout-panel').hidden = false;
@@ -710,7 +742,9 @@ function finishWorkout() {
   stopWorkout();
   showSummary('💪', `${w.name}: complete!`, items, actions, [...(coach ? [coach.node] : []), ...zones]);
   const rideId = recorder.id;
-  saveRide().then((saved) => coach?.rideSaved(saved ? rideId : null));
+  const workoutId = workoutRecorder?.id ?? rideId;
+  saveRide({ recursive: 'workout' }).then((saved) => coach?.rideSaved(saved ? workoutId : null));
+  workoutRecorder = null; // the workout is saved: the ride's recorder goes on alone
 }
 
 interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
@@ -768,41 +802,50 @@ function setFtp(ftp: number, source: 'manual' | 'ramp_test') {
 const MIN_RIDE_S = 60; // shorter rides aren't saved
 const OLD_PENDING_KEY = 'americanflyers.pendingRide'; // a ride kept for sign-in by the guest flow this app used to have (see savePendingRide)
 
-function buildActivity(): Activity {
+/**
+ * How a ride is saved: `workout` is the workout's activity — its own id and sample window (see startWorkout),
+ * and the workout's numbers in place of the ride-wide ones.
+ */
+interface SaveOpts { quiet?: boolean; recursive?: 'workout' }
+
+function buildActivity(opts: SaveOpts = {}): Activity {
   const st = currentStage();
+  const workout = opts.recursive === 'workout' && workoutRecorder ? workoutRecorder : null;
+  const rec = workout ?? recorder;
+  const st8 = workout ? workoutStats : stats;
   const round = (v: number) => (v > 0 ? Math.round(v) : null);
   const zones = (z: number[]) => (z.some((v) => v > 0) ? z.map((v) => Math.round(v)) : null);
-  const best = Object.fromEntries(Object.entries(stats.best).filter(([, v]) => v > 0).map(([k, v]) => [k, Math.round(v)]));
+  const best = Object.fromEntries(Object.entries(st8.best).filter(([, v]) => v > 0).map(([k, v]) => [k, Math.round(v)]));
   return {
-    id: recorder.id,
-    started_at: (recorder.startedAt ?? new Date()).toISOString(),
+    id: rec.id,
+    started_at: (rec.startedAt ?? new Date()).toISOString(),
     title: rideWorkout.started ? `${rideWorkout.started} · ${st.name}` : st.name,
     stage_id: st.id,
     stage_name: st.name,
-    finished: ride.finished,
+    finished: workout ? false : ride.finished,
     workout_name: rideWorkout.completed,
-    duration_s: Math.round(stats.seconds),
+    duration_s: Math.round(st8.seconds),
     distance_m: Math.round(ride.distance - ride.startDistance),
     climbed_m: Math.round(ride.climbed),
-    avg_power: round(stats.avgPower),
-    np: round(stats.np),
-    max_power: round(stats.maxPower),
-    avg_hr: round(stats.avgHr),
-    max_hr: round(stats.maxHr),
-    avg_cadence: round(stats.avgCadence),
-    kj: round(stats.work / 1000),
-    tss: stats.seconds ? Math.round(stats.tss(settings.ftp) * 10) / 10 : null,
+    avg_power: round(st8.avgPower),
+    np: round(st8.np),
+    max_power: round(st8.maxPower),
+    avg_hr: round(st8.avgHr),
+    max_hr: round(st8.maxHr),
+    avg_cadence: round(st8.avgCadence),
+    kj: round(st8.work / 1000),
+    tss: st8.seconds ? Math.round(st8.tss(settings.ftp) * 10) / 10 : null,
     ftp: settings.ftp,
     best_power: Object.keys(best).length ? best : null,
-    hr_zones: zones(stats.hrZones),
-    power_zones: zones(stats.powerZones),
+    hr_zones: zones(st8.hrZones),
+    power_zones: zones(st8.powerZones),
     max_hr_setting: settings.maxHr,
-    finish_s: ride.finished && ride.finishTime > 0 && leaderboardEligible(rideFlags) ? Math.round(ride.finishTime) : null,
+    finish_s: !workout && ride.finished && ride.finishTime > 0 && leaderboardEligible(rideFlags) ? Math.round(ride.finishTime) : null,
     demo: !leaderboardEligible(rideFlags), // the database also ignores these rides for leaderboards
     race_place: ride.racePlace > 0 ? ride.racePlace : null, // weekly challenges: race wins and podiums
     race_size: ride.raceSize > 0 ? ride.raceSize : null,
     pro_m: ride.proM > 0 ? Math.round(ride.proM) : null, // metres ridden with a pro team
-    samples: recorder.samples,
+    samples: rec.samples,
   };
 }
 
@@ -812,14 +855,14 @@ let lastSavedSeconds = 0;
  * Saves the current ride to the rider's account (the same ride is updated
  * on later saves). Updates the note on the summary card if it's showing.
  */
-async function saveRide(opts: { quiet?: boolean } = {}): Promise<boolean> {
+async function saveRide(opts: SaveOpts = {}): Promise<boolean> {
   const note = $('finish-note');
   const showNote = !opts.quiet && !$('finish').hidden;
   if (stats.seconds < MIN_RIDE_S) return false;
   if (!account()) return false; // an account is required to ride, so this is only a ride that outlived its session
   if (showNote) note.textContent = 'Saving to your rides…';
   try {
-    await saveActivity(buildActivity());
+    await saveActivity(buildActivity(opts));
     lastSavedSeconds = stats.seconds;
     accountUi.invalidate();
     hubNotify('ride');
@@ -835,7 +878,7 @@ async function saveRide(opts: { quiet?: boolean } = {}): Promise<boolean> {
   } catch (e) {
     // No connection (or the server didn't answer): keep it on this device and upload it later (src/rideQueue.ts).
     const me = account()?.id;
-    const activity = buildActivity();
+    const activity = buildActivity(opts);
     const alreadyQueued = rideQueue.list().some((r) => r.activity.id === activity.id);
     const kept = me ? rideQueue.add(me, activity) : 'failed';
     if (kept !== 'failed') {
@@ -986,6 +1029,7 @@ function resetRide() {
   ensureAi();
   if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) saveRide({ quiet: true });
   recorder = new RideRecorder();
+  workoutRecorder = null; // a new ride: any workout started on the last one is not part of this
   rideFlags.usedDemo = false;
   lastSavedSeconds = 0;
   rideWorkout.started = player ? player.workout.name : null;
@@ -993,7 +1037,8 @@ function resetRide() {
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
   leaveRaceAndEvent(); // starting afresh ends a race, and leaves a scheduled event
   drivetrain.reset();
-  powerSamples.length = 0;
+  powerHead = 0;
+  powerCount = 0;
   stats = new RideStats(zoneRefs);
   lastSentGrade = NaN;
   $('finish').hidden = true;
@@ -1498,6 +1543,7 @@ async function openSettings() {
   // if it can't load (a toast says so) the rest of Settings still opens.
   for (const n of ['aiCoach', 'aiRivals']) (form.elements.namedItem(n) as HTMLInputElement).disabled = true;
   await use(aiConsentUi, (ui) => ui.syncAiSettingsForm(form, !!account(), () => accountUi.openSignIn('Sign in to turn on the AI coach and rivals.')), $('btn-settings'));
+  dialog.returnValue = ''; // a stale 'save' from an earlier close mustn't re-apply this form on a later one
   if (!dialog.open) dialog.showModal();
 }
 
@@ -1685,6 +1731,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
+  if ((e.target as HTMLElement).closest('dialog')) return;
   if (e.key === 'ArrowLeft') steering.release(-1);
   if (e.key === 'ArrowRight') steering.release(1);
 });
@@ -1922,6 +1969,7 @@ async function setGhostFrom(activityId: string) {
   const mine = ++ghostSeq;
   const stageId = currentStage().id;
   const trace = await stageGhost(activityId);
+  // Checked again after the await: a clearGhost (or a newer load) while the trace was in flight wins.
   if (mine !== ghostSeq || stageId !== currentStage().id) return null;
   ghost = trace ? new Ghost(trace) : null;
   return ghost;
@@ -1930,17 +1978,23 @@ async function setGhostFrom(activityId: string) {
 /** Loads the ghost of your fastest ride on this stage, if you have one. */
 async function loadMyGhost() {
   if (!account() || !settings.ghost || currentStage().finish === null) return;
+  const mine = ++ghostSeq;
+  const stageId = currentStage().id;
   try {
     const me = (await stageLeaderboard(currentStage().id)).find((r) => r.is_me);
+    // Same check after this await: the stage may have changed (or the ghost been cleared) while it loaded.
+    if (mine !== ghostSeq || stageId !== currentStage().id) return;
     if (me && (!ghost || ghost.isMe)) await setGhostFrom(me.activity_id);
   } catch { /* no ghost this time */ }
 }
 
 async function raceGhost(row: LeaderboardRow) {
+  const mine = ++ghostSeq;
+  const stageId = currentStage().id;
   try {
     const g = await setGhostFrom(row.activity_id);
     if (!g) return toast('That ride can’t be raced any more.');
-    resetRide();
+    if (mine === ghostSeq && stageId === currentStage().id) resetRide(); // only if nothing cleared or replaced the ghost meanwhile
     toast(`Racing ${g.isMe ? 'your best' : `${g.name}’s`} ghost (${raceTime(g.finishS)}). Go!`, 5000);
   } catch (e) {
     toast(`Couldn’t load that ghost: ${(e as Error).message}`);
@@ -2004,7 +2058,11 @@ initRidersUi({
   toast,
 });
 
+// Bumped by every account change: a handler that was waiting on the network when a newer change arrived stops rather
+// than applying the older account's sync over the newer one.
+let signInGen = 0;
 onAccountChange(async (a) => {
+  const gen = ++signInGen;
   setMonitoringUser(a?.id ?? null);
   world.setRiderName(a?.name); // painted on the road on the big climbs ("ALLEZ SAM")
   if (!a) {
@@ -2017,6 +2075,7 @@ onAccountChange(async (a) => {
   garage.refresh(); // level, credits and what you own (this also applies your loadout)
   try {
     const remote = await syncOnSignIn(settings);
+    if (gen !== signInGen) return;
     if (remote) {
       const migrated = migrateSettings(remote); // an account saved before the ride-mode choice moves to Solo once, too
       settings = { ...settings, ...migrated };
@@ -2043,7 +2102,9 @@ onAccountChange(async (a) => {
       if (ob.open) ob.close();
     }
     await savePendingRide();
+    if (gen !== signInGen) return;
     await uploadQueuedRides(); // rides saved on this device while offline
+    if (gen !== signInGen) return;
     garage.refresh(); // a ride saved just now may have earned credits
     accountUi.checkAdmin(); // the session is settled now
     loadMyGhost();
@@ -2221,7 +2282,7 @@ requestAnimationFrame(frame);
 
 // Installable app: register the service worker (production builds only).
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  window.addEventListener('load', () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {}));
 }
 
 // "Install app" button where the browser offers it (Chrome, Edge, Android).

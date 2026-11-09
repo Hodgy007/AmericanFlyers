@@ -10,7 +10,7 @@ This page explains how the modules fit together: the frame loop, the trainer and
 | Page markup | **HTML** | `index.html`: the home page, the hub's header and containers, top bar, panels and every dialog. |
 | Styles | **CSS** | `src/style.css`, plain CSS with custom properties (no preprocessor or framework). |
 | Database | **SQL** (PostgreSQL, PL/pgSQL functions) | `db/schema.sql`: tables, row-level security policies and security-definer functions, run on Neon. |
-| Service worker | **JavaScript** | `public/sw.js`, served as-is (not bundled). |
+| Service worker | **JavaScript** | `public/sw.js`, served as-is (not bundled). The build stamps its cache version (`__AF_VERSION__`) with the commit sha, so each deploy gets a fresh cache. |
 | App manifest | **JSON** | `public/manifest.webmanifest`. |
 | Workout files | **XML** | Zwift `.zwo` import and export; `.erg` and `.mrc` are plain-text formats. Rides export as `.tcx` (XML). |
 | Routes | **XML** | `.gpx` uploads. |

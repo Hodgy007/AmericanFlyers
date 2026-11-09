@@ -1,4 +1,7 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import { execSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
 // Sentry: the DSN is public (it only lets the browser send error reports).
@@ -25,6 +28,38 @@ const authProxy = {
     cookieDomainRewrite: '',
   },
 };
+
+// public/sw.js carries `const VERSION = '__AF_VERSION__';` so a new deploy gets
+// a new cache; put the commit (or, failing that, the build time) in place of the
+// placeholder in the copy written to dist/. In dev the file is served as-is.
+// (public/ is copied outside the Rollup bundle, so generateBundle never sees it.)
+function serviceWorkerVersion(): Plugin {
+  let outDir = 'dist';
+  return {
+    name: 'af-service-worker-version',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
+    closeBundle() {
+      const file = path.join(outDir, 'sw.js');
+      if (!existsSync(file)) return;
+      const source = readFileSync(file, 'utf8');
+      const version = env.VERCEL_GIT_COMMIT_SHA || shortCommit() || String(Date.now());
+      const stamped = source.replace('__AF_VERSION__', version);
+      if (stamped === source) this.warn(`${file} has no __AF_VERSION__ placeholder to replace`);
+      else writeFileSync(file, stamped);
+    },
+  };
+}
+
+function shortCommit(): string | null {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
+  } catch {
+    return null; // no git, or not a checkout: the build time will do
+  }
+}
 
 export default defineConfig({
   base: './',
@@ -53,16 +88,19 @@ export default defineConfig({
       },
     },
   },
-  plugins: uploadMaps
-    ? [
-        sentryVitePlugin({
-          org: env.SENTRY_ORG ?? 'hodgy007',
-          project: env.SENTRY_PROJECT ?? 'sentry-byzantium-car',
-          authToken: env.SENTRY_AUTH_TOKEN,
-          release: release ? { name: release } : undefined,
-          sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
-          telemetry: false,
-        }),
-      ]
-    : [],
+  plugins: [
+    serviceWorkerVersion(),
+    ...(uploadMaps
+      ? [
+          sentryVitePlugin({
+            org: env.SENTRY_ORG ?? 'hodgy007',
+            project: env.SENTRY_PROJECT ?? 'sentry-byzantium-car',
+            authToken: env.SENTRY_AUTH_TOKEN,
+            release: release ? { name: release } : undefined,
+            sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+            telemetry: false,
+          }),
+        ]
+      : []),
+  ],
 });
