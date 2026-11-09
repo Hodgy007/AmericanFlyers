@@ -4,7 +4,7 @@
 // cache stays warm. Pure: only data modules.
 
 import { BUILTIN_WORKOUTS, expand, totalDuration } from '../workouts/model.js';
-import { STAGES } from '../stages.js';
+import { STAGE_SUGGESTIONS } from './stageSuggestions.js';
 
 export interface Suggestion {
   id: string;
@@ -21,13 +21,8 @@ const workouts: Suggestion[] = BUILTIN_WORKOUTS.map((w) => ({
   about: `${Math.round(totalDuration(expand(w.blocks)) / 60)} min. ${w.description}`.slice(0, 140),
 }));
 
-// Whole stages with a finish line, not the tour's linked stages (they have their own flow).
-const stages: Suggestion[] = STAGES.filter((s) => s.finish !== null && !s.tourStage).map((s) => ({
-  id: s.id,
-  kind: 'stage',
-  name: s.name,
-  about: `${((s.finish ?? 0) / 1000).toFixed(1)} km. ${s.tagline}`.slice(0, 140),
-}));
+// Whole stages with a finish line, not the tour's linked stages (they have their own flow): see stageSuggestions.ts.
+const stages: Suggestion[] = STAGE_SUGGESTIONS.map((s) => ({ ...s, kind: 'stage' }));
 
 export const SUGGESTIONS: Suggestion[] = [...workouts, ...stages];
 export const SUGGESTION_IDS = SUGGESTIONS.map((s) => s.id) as [string, ...string[]];
