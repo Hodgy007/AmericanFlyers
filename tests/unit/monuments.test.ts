@@ -199,3 +199,14 @@ describe('where the stages put monuments', () => {
     expect(modelsOn('alpe-dhuez', 'ski-apartments').length).toBeGreaterThan(0);
   });
 });
+
+describe('monuments with a modelled version', () => {
+  it('points at GLB files that ship, for monuments that exist', async () => {
+    const { existsSync } = await import('node:fs');
+    const { MONUMENT_GLB } = await import('../../src/world/landmarks');
+    for (const [id, m] of Object.entries(MONUMENT_GLB)) {
+      expect(MONUMENT_IDS, id).toContain(id);
+      expect(existsSync(`public/models/${m!.file}`), m!.file).toBe(true);
+    }
+  });
+});

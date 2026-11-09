@@ -3,11 +3,21 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { currentStage, gradeAt, roadPoint } from '../course';
 import type { LandmarkKind } from '../stages';
 import { heightAt } from './terrain';
+import type { MonumentId } from './monumentTypes';
 
 // Roadside landmarks: GLB models from public/models/, or monuments built in code
 // (monuments.ts, a lazy chunk fetched the first time a stage needs one). Each
 // stage lists the kinds it uses; each kind repeats along the course at a fixed
 // spacing. A missing model file is skipped quietly.
+
+/**
+ * Code-built monuments that have a modelled version in public/models/: the GLB is used once it has
+ * loaded; if the file is missing the code-built one stands in. `yaw` turns the model to the monument's
+ * convention (the builders face +z and ride or look towards -x; the Géant GLB's rider faces +z).
+ */
+export const MONUMENT_GLB: Partial<Record<MonumentId, { file: string; yaw: number }>> = {
+  'geant-tourmalet': { file: 'geant.glb', yaw: -Math.PI / 2 },
+};
 
 const BEHIND = 250;
 const AHEAD = 1500;
@@ -103,6 +113,23 @@ export class Landmarks {
   private model(kind: LandmarkKind) {
     let m = this.prepared.get(kind);
     if (!m) {
+      const glb = kind.model ? MONUMENT_GLB[kind.model] : undefined;
+      if (glb) {
+        // Wait for the file's verdict (a stage's landmarks are asked for 1.5 km ahead, minutes of riding): then the model, or the code-built one if the file is missing.
+        this.request(glb.file);
+        if (!this.sources.has(glb.file)) return null;
+        const src = this.sources.get(glb.file);
+        if (src) {
+          const turn = new THREE.Group();
+          turn.rotation.y = glb.yaw;
+          turn.add(normalise(src.clone(true), kind));
+          const holder = new THREE.Group();
+          holder.add(turn);
+          m = holder;
+          this.prepared.set(kind, m);
+          return m;
+        }
+      }
       if (kind.model) {
         this.requestMonuments();
         if (!this.monuments) return null; // still loading

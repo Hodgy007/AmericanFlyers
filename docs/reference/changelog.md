@@ -10,6 +10,7 @@ The repository has no tags, so each group is named for the pull request that mer
 
 - **Horizon panoramas.** The far mountains are now a panorama of the stage's region (Alps, Pyrenees, Rockies, red-rock desert, rolling hills), generated with Higgsfield, keyed on its sky and wrapped round the sky ring with mirrored repeat. `scenery.horizon` picks it per stage (uploaded routes: alps if `mountainScale` >= 2, else hills). Loaded lazily, one WebP (about 55 to 110 KB, half size on Low); the procedural ring shows until it arrives or if it fails. The ring's haze, tint and per-stage height scale still apply. Files built by `scripts/prep-horizon.py`.
 - **Generated grass and sandstone ground textures** (Higgsfield) replace the Poly Haven ones: clearly more blade and grain detail on slopes and desert ground, no visible tiling at riding distance. Normal maps come from `scripts/prep-terrain.py`. Generated rock and snow were tried and left out: no visible gain.
+- **Le Géant du Tourmalet is a modelled statue** (Higgsfield, 0.86 MB `public/models/geant.glb`), same place, facing and height as the code-built one, which stays as the fallback if the file is missing (`MONUMENT_GLB` in `landmarks.ts`).
 
 ### Loose ends from the polish batch
 
