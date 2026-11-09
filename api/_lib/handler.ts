@@ -16,9 +16,11 @@ import { claim, recordRival, type Claim, type DataApi } from './rider.js';
 import { DEFAULT_MODEL, isAnthropicError, type ClaudeOutcome, type ClaudeRunner } from './claude.js';
 import { COACH_SYSTEM, debriefUser, planUser, tipUser } from './prompts/coach.js';
 import { RIVAL_SYSTEM, rivalPostUser, rivalPreUser } from './prompts/rivals.js';
-import { cannedDebrief, cannedPlan, cannedRivalLines, cannedRivalPost, cannedTip } from '../../src/ai/canned.js';
-import { sanitizeDebrief, sanitizePlan, sanitizeRivalLines, sanitizeRivalPost, sanitizeTip } from '../../src/ai/sanitize.js';
+import { cannedClimb, cannedDebrief, cannedPlan, cannedRivalLines, cannedRivalPost, cannedTip } from '../../src/ai/canned.js';
+import { sanitizeClimbGuide, sanitizeDebrief, sanitizePlan, sanitizeRivalLines, sanitizeRivalPost, sanitizeTip } from '../../src/ai/sanitize.js';
+import { climbById, type ClimbTopic } from '../../src/ai/climbs.js';
 import type { AiError, AiKind, AiReply, AiResults } from '../../src/ai/types.js';
+import { buildClimbRaw, buildClimbRequest, classifyError, DEFAULT_MODEL as DEFAULT_CLIMB_MODEL, type PerplexityRunner } from './perplexity.js';
 
 export const MAX_BODY_BYTES = 24_000;
 
@@ -26,6 +28,11 @@ export interface AiDeps {
   /** Null when ANTHROPIC_API_KEY isn't set. */
   runner: ClaudeRunner | null;
   model?: string;
+  /** The Climb guide's web-search runner; null when there is no AI Gateway token (see api/ai.ts). */
+  perplexity?: PerplexityRunner | null;
+
+  /** CLIMB_GUIDE_MODEL, already checked (see pickModel). */
+  climbModel?: string;
   dataApi: DataApi;
   now?: () => Date;
   log?: (line: string) => void;
@@ -60,7 +67,7 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
   if (!parsed.success) return fail(400, 'bad_request', 'The ride details weren’t valid.');
   const payload = parsed.data as never as Record<string, any>;
 
-  if (!deps.runner) return fail(503, 'not_configured', 'The AI isn’t set up on this server yet.');
+  if (kind === 'coach_climb' ? !deps.perplexity : !deps.runner) return fail(503, 'not_configured', 'The AI isn’t set up on this server yet.');
 
   // The gate: sign-in, opt-in, ban and quota, all decided by the database with the rider's own token.
   const rival: string | null = kind === 'rival_pre' || kind === 'rival_post' ? payload.rival : null;
@@ -76,9 +83,11 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
   const today = (deps.now?.() ?? new Date()).toISOString().slice(0, 10);
   const model = deps.model || DEFAULT_MODEL;
 
+  if (kind === 'coach_climb') return climbGuide(deps, payload as ClimbPayload, c, today, started);
+
   let outcome: ClaudeOutcome<unknown>;
   try {
-    outcome = await run(kind, payload, c, today, model, deps.runner);
+    outcome = await run(kind, payload, c, today, model, deps.runner as ClaudeRunner);
   } catch (e) {
     log(JSON.stringify({ ai: true, kind, error: isAnthropicError(e) ? (e as Error).name : 'unexpected', status: (e as { status?: number }).status ?? null, ms: Date.now() - started }));
     return fail(503, 'unavailable', 'The AI is busy right now. Your ride carries on with the built-in tips.');
@@ -98,6 +107,35 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
   return json(200, { ok: true, kind, source, data, remaining: Math.max(0, c.limit - c.used) } as AiReply);
 }
 
+type ClimbPayload = { stageId: string; topic: ClimbTopic };
+
+/**
+ * The Climb guide: one Perplexity Sonar call (web search) through the Vercel AI Gateway. The question is built from our own stage table, so
+ * the body only chooses a stage and a topic. Failures are logged without the key, the prompt or the provider's message.
+ */
+async function climbGuide(deps: AiDeps, p: ClimbPayload, c: Claim, today: string, started: number): Promise<Response> {
+  const log = deps.log ?? (() => {});
+  const climb = climbById(p.stageId);
+  if (!climb || !deps.perplexity) return fail(400, 'bad_request', 'The ride details weren’t valid.');
+  const climbModel = deps.climbModel || DEFAULT_CLIMB_MODEL;
+  const remaining = Math.max(0, c.limit - c.used);
+  let answer;
+  try {
+    answer = await deps.perplexity(buildClimbRequest(climb, p.topic, today, climbModel));
+  } catch (e) {
+    const f = classifyError(e);
+    log(JSON.stringify({ ai: true, kind: 'coach_climb', provider: 'perplexity-gateway', model: climbModel, error: f.kind, status: f.status, ...(f.retryAfter ? { retryAfter: f.retryAfter } : {}), ms: Date.now() - started }));
+    return f.kind === 'timeout'
+      ? fail(504, 'unavailable', 'The climb guide took too long. Try again in a bit.')
+      : fail(503, 'unavailable', 'The climb guide is taking a break. Try again in a bit.');
+  }
+  const raw = buildClimbRaw(answer);
+  const data = raw ? sanitizeClimbGuide(raw, p.stageId, p.topic, today) : null;
+  log(JSON.stringify({ ai: true, kind: 'coach_climb', provider: 'perplexity-gateway', model: answer.model ?? climbModel, outcome: data ? 'ok' : 'unusable', sources: answer.sourcesFrom, n_sources: data?.sources.length ?? 0, ms: Date.now() - started, ...answer.usage }));
+  if (!data) return json(200, { ok: true, kind: 'coach_climb', source: 'canned', data: cannedClimb(p, false, today), remaining } as AiReply);
+  return json(200, { ok: true, kind: 'coach_climb', source: 'web', data, remaining } as AiReply);
+}
+
 async function run(kind: AiKind, p: Record<string, any>, c: Claim, today: string, model: string, runner: ClaudeRunner): Promise<ClaudeOutcome<unknown>> {
   switch (kind) {
     case 'coach_plan': return runner({ model, system: COACH_SYSTEM, user: planUser(p as never, c, today), schema: S.PlanOut });
@@ -105,6 +143,7 @@ async function run(kind: AiKind, p: Record<string, any>, c: Claim, today: string
     case 'coach_debrief': return runner({ model, system: COACH_SYSTEM, user: debriefUser(p as never, c, today), schema: S.DebriefOut });
     case 'rival_pre': return runner({ model, system: RIVAL_SYSTEM, user: rivalPreUser(p as never, c, today), schema: S.RivalPreOut });
     case 'rival_post': return runner({ model, system: RIVAL_SYSTEM, user: rivalPostUser(p as never, c, today), schema: S.RivalPostOut });
+    case 'coach_climb': throw new Error('coach_climb is not a Claude request');
   }
 }
 
@@ -115,6 +154,7 @@ function finish(kind: AiKind, raw: unknown, p: Record<string, any>): AiResults[A
     case 'coach_debrief': return sanitizeDebrief(raw);
     case 'rival_pre': return sanitizeRivalLines(raw, p.rival);
     case 'rival_post': return sanitizeRivalPost(raw);
+    case 'coach_climb': return null;
   }
 }
 
@@ -125,6 +165,7 @@ function canned(kind: AiKind, p: Record<string, any>): AiResults[AiKind] {
     case 'coach_debrief': return cannedDebrief(p as never);
     case 'rival_pre': return { lines: cannedRivalLines(p.rival) };
     case 'rival_post': return cannedRivalPost(p as never);
+    case 'coach_climb': return cannedClimb(p as never);
   }
 }
 

@@ -2,6 +2,7 @@
 // elevation profile, length, climbing and your best time. Choosing one sets what Ride starts (the ride mode,
 // solo, with pro teams or a race, is chosen beside the Ride button; a card's small Race chip is a shortcut).
 
+import { climbById } from '../../ai/climbs';
 import { raceTime } from '../../ghost';
 import { drawProfile } from '../../profile';
 import { allStages } from '../../routes/library';
@@ -27,6 +28,36 @@ export const mount: SectionMount = (root, ctx) => {
   const cards = new Map<string, HTMLElement>();
   const canvases: HTMLCanvasElement[] = [];
 
+  // The Climb guide: one panel at a time, shown as a full-width row under the stage's card. Its module loads on the first click.
+  let guide: { id: string; el: HTMLElement; dispose(): void } | null = null;
+  let guideSeq = 0;
+  function closeGuide() {
+    guideSeq++;
+    if (!guide) return;
+    const { id, el, dispose } = guide;
+    guide = null;
+    dispose();
+    el.remove();
+    const b = cards.get(id)?.querySelector('[data-guide]');
+    b?.setAttribute('aria-expanded', 'false');
+    (b as HTMLElement | null)?.focus();
+  }
+  async function toggleGuide(stage: Stage) {
+    const climb = climbById(stage.id);
+    if (!climb) return;
+    if (guide?.id === stage.id) return closeGuide();
+    closeGuide();
+    const seq = guideSeq;
+    const { mountClimbGuide } = await import('../climbGuide');
+    if (seq !== guideSeq || !cards.has(stage.id)) return; // closed or redrawn while the module loaded
+    const g = mountClimbGuide({ climb, stageName: stage.name, host: ctx.deps.climbGuide, imperial: () => ctx.imperial(), onClose: closeGuide });
+    guide = { id: stage.id, el: g.el, dispose: g.dispose };
+    cards.get(stage.id)!.after(g.el);
+    cards.get(stage.id)!.querySelector('[data-guide]')?.setAttribute('aria-expanded', 'true');
+    g.focus();
+    g.el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }
+
   function card(stage: Stage): HTMLElement {
     const fig = stageFigures(stage);
     const best = ctx.summary()?.bests[stage.id];
@@ -38,6 +69,7 @@ export const mount: SectionMount = (root, ctx) => {
     const meta = h('p', { class: 'hub-meta', id: metaId, text: `${fig.lengthM === null ? 'Endless' : distanceText(fig.lengthM, imp())} · ${climbText(fig.climbM, imp())} climbing${fig.lengthM === null ? ' per 20 km' : ''}` });
     const foot = h('div', { class: 'hub-card-foot' });
     if (best) foot.append(h('span', { class: 'hub-chip gold', title: 'Your best whole-stage time', text: `🏆 ${raceTime(best.finishS)}` }));
+    if (climbById(stage.id)) foot.append(button('🧭 Climb guide', () => { void toggleGuide(stage); }, 'hub-mini hub-race', { title: `Current, web-sourced facts about ${stage.name}: history, records, road conditions, riding it for real`, 'aria-label': `Climb guide for ${stage.name}`, 'aria-expanded': 'false', 'data-guide': stage.id, 'data-fkey': `guide-${stage.id}` }));
     if (stage.finish !== null) foot.append(button('🏁 Race it', () => ctx.deps.race(stage), 'hub-mini hub-race', { title: `Skip the ride mode and race the pro teams over ${stage.name} now`, 'aria-label': `Race the pro teams over ${stage.name}`, 'data-fkey': `race-${stage.id}` }));
     const segs = segmentsFor(stage);
     if (segs.length) {
@@ -69,12 +101,18 @@ export const mount: SectionMount = (root, ctx) => {
     for (const c of canvases) forgetCanvas(c);
     canvases.length = 0;
     cards.clear();
+    const open = guide;
     const stages = allStages();
     grid.replaceChildren(tourCard(), ...stages.filter((s) => !s.uploaded).map(card));
     const own = stages.filter((s) => s.uploaded);
     mine.replaceChildren(...own.map(card));
     if (!own.length) mine.append(h('p', { class: 'hub-note', text: 'Upload a .gpx file from Strava, Komoot, RideWithGPS or Garmin and ride it here. Routes are kept in this browser, and in your account when you’re signed in.' }));
     updateSelection();
+    if (open) {
+      // A redraw (new rides loaded, units changed) keeps an open guide in place under its card.
+      const at = cards.get(open.id);
+      if (at) { at.after(open.el); at.querySelector('[data-guide]')?.setAttribute('aria-expanded', 'true'); } else closeGuide();
+    }
   }
 
   function updateSelection() {
@@ -94,6 +132,9 @@ export const mount: SectionMount = (root, ctx) => {
     },
     dispose() {
       for (const c of canvases) forgetCanvas(c);
+      guideSeq++;
+      guide?.dispose();
+      guide = null;
     },
   };
 };

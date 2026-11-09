@@ -2183,6 +2183,19 @@ const hub = initHub({
     kit: () => { void use(kitUi, (k) => k.open()); },
     account: () => $('btn-account').click(),
   },
+  climbGuide: {
+    signedIn: () => !!account(),
+    coachOn: () => settings.aiCoach,
+    openSignIn: (why) => accountUi.openSignIn(why),
+    enableCoach: async () => {
+      const api = await aiApiLazy.get();
+      const saved = await api.saveConsent({ coach: true, rivals: settings.aiRivals });
+      if (!saved) return false;
+      patchAiSettings({ aiCoach: saved.coach, aiRivals: saved.rivals });
+      return saved.coach;
+    },
+    openSettings,
+  },
   night: () => world.nightAmount,
   toast,
 });

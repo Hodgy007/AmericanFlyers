@@ -347,7 +347,7 @@ Tables, all with row-level security and **no policies and no grants** (only the 
 | Table | Columns | Notes |
 | --- | --- | --- |
 | `ai_consent` | `user_id` (pk), `coach`, `rivals`, `updated_at` | The rider's opt-in. Both off by default. |
-| `ai_usage` | `user_id`, `day` (UTC), `kind`, `count`; pk `(user_id, day, kind)` | Daily counters. `kind` is one of `coach_debrief`, `coach_plan`, `coach_tip`, `rival_pre`, `rival_post`. |
+| `ai_usage` | `user_id`, `day` (UTC), `kind`, `count`; pk `(user_id, day, kind)` | Daily counters. `kind` is one of `coach_debrief`, `coach_plan`, `coach_tip`, `coach_climb`, `rival_pre`, `rival_post`. |
 | `rival_memory` | `user_id`, `rival_id`, `wins`, `losses`, `rides`, `last_ride`, `notes` (json, at most 8 strings of 140 characters); pk `(user_id, rival_id)` | Wins and losses are the rider's. At most 12 rivals per rider. |
 | `coach_notes` | `user_id`, `activity_id` (references `activities`, on delete cascade), `created_at`, `debrief` (json, at most 6,000 bytes); pk `(user_id, activity_id)` | A debrief kept with its ride. |
 

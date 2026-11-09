@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { roadPoint } from '../course';
 import type { Stage } from '../stages';
@@ -228,6 +229,59 @@ export function parasolGeometry(): THREE.BufferGeometry {
   return mergeGeometries(parts)!;
 }
 
+// ---------------------------------------------------------- modelled van ----
+
+/** A real camper from public/models/camper.glb, ready to instance: geometry standing on y = 0, centred, cab at +x like the code-built one. */
+export interface VanModel {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+}
+
+/** Length of the modelled van, m (a Fiat-based compact motorhome; its width comes out about 2.7 m with the mirrors, its height 2.9). */
+export const VAN_MODEL_LENGTH = 6.3;
+
+/**
+ * Takes the first mesh of a loaded scene: bakes its node transforms in, centres it on x and z, stands it
+ * on y = 0 and scales it to VAN_MODEL_LENGTH along x. Paint reads flat under the app's light, so the
+ * material is made non-metallic. Null if the scene has no mesh.
+ */
+export function vanFromScene(scene: THREE.Object3D): VanModel | null {
+  scene.updateMatrixWorld(true);
+  let mesh: THREE.Mesh | null = null;
+  scene.traverse((o) => { if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh; });
+  if (!mesh) return null;
+  const m = mesh as THREE.Mesh;
+  const geometry = m.geometry.clone().applyMatrix4(m.matrixWorld);
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox!;
+  const k = VAN_MODEL_LENGTH / Math.max(box.max.x - box.min.x, 1e-6);
+  geometry.translate(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+  geometry.scale(k, k, k);
+  geometry.computeBoundingSphere();
+  const material = (Array.isArray(m.material) ? m.material[0] : m.material).clone();
+  const std = material as THREE.MeshStandardMaterial;
+  if (std.isMeshStandardMaterial) {
+    std.metalness = 0;
+    std.metalnessMap = null;
+    std.roughness = 0.75;
+  }
+  return { geometry, material };
+}
+
+let vanPromise: Promise<VanModel | null> | null = null;
+
+/** Fetches camper.glb once. Null if it is missing or broken (the code-built vans stay). */
+export function loadVanModel(): Promise<VanModel | null> {
+  vanPromise ??= new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/camper.glb`).then(
+    (g) => vanFromScene(g.scene),
+    () => { console.info('Camper model not found: models/camper.glb (box vans kept)'); return null; },
+  );
+  return vanPromise;
+}
+
+/** The tint on a modelled van: lightened, since the instance colour multiplies the whole texture (windows and wheels too). */
+export const vanModelTint = (tint: string, out: THREE.Color) => out.set(tint).lerp(new THREE.Color(1, 1, 1), 0.55);
+
 export interface CamperGeometries {
   van: THREE.BufferGeometry;
   tent: THREE.BufferGeometry;
@@ -238,8 +292,8 @@ export const camperGeometries = (): CamperGeometries => ({ van: vanGeometry(), t
 
 export const camperMaterial = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true });
 
-/** One instanced mesh per kind present in `spots`, positioned relative to `origin` (the chunk group's world position). */
-export function buildCampers(spots: Camper[], geos: CamperGeometries, mat: THREE.Material, origin: { x: number; z: number }, shadows: boolean): THREE.InstancedMesh[] {
+/** One instanced mesh per kind present in `spots` (the vans from the modelled `van` if given), positioned relative to `origin` (the chunk group's world position). */
+export function buildCampers(spots: Camper[], geos: CamperGeometries, mat: THREE.Material, origin: { x: number; z: number }, shadows: boolean, van: VanModel | null = null): THREE.InstancedMesh[] {
   const out: THREE.InstancedMesh[] = [];
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -250,12 +304,13 @@ export function buildCampers(spots: Camper[], geos: CamperGeometries, mat: THREE
   for (const kind of ['van', 'tent', 'parasol'] as const) {
     const list = spots.filter((s) => s.kind === kind);
     if (!list.length) continue;
-    const mesh = new THREE.InstancedMesh(geos[kind], mat, list.length);
+    const modelled = kind === 'van' && van;
+    const mesh = new THREE.InstancedMesh(modelled ? van.geometry : geos[kind], modelled ? van.material : mat, list.length);
     list.forEach((s, i) => {
       pos.set(s.x - origin.x, s.y, s.z - origin.z);
       q.setFromAxisAngle(up, s.yaw);
       mesh.setMatrixAt(i, m.compose(pos, q, one));
-      mesh.setColorAt(i, col.set(s.tint));
+      mesh.setColorAt(i, modelled ? vanModelTint(s.tint, col) : col.set(s.tint));
     });
     mesh.castShadow = shadows;
     mesh.receiveShadow = false;

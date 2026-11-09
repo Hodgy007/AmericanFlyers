@@ -1,0 +1,40 @@
+{
+  "id": "gen_01JD8K3Q9Z",
+  "object": "chat.completion",
+  "created": 1783468800,
+  "model": "perplexity/sonar",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "{\"summary\":\"Alpe d'Huez first hosted a Tour de France stage finish in 1952, won by Fausto Coppi.[1][2] The 21 numbered hairpins and the Dutch corner at number 7 made it a fixture of the race.[3]\",\"facts\":[\"The climb is about 13.8 km at an average of 8.1% [2].\",\"The Tour has finished here more than 30 times [4].\",\"**Pantani** set the fastest known Tour time in 1997 [6][99].\"]}"
+      }
+    }
+  ],
+  "citations": [
+    "https://en.wikipedia.org/wiki/Alpe_d%27Huez",
+    "https://www.letour.fr/en/alpe-dhuez",
+    "http://insecure.example.com/dutch-corner",
+    "https://www.cyclingnews.com/features/alpe-dhuez/#history",
+    "https://en.wikipedia.org/wiki/Alpe_d%27Huez",
+    "https://www.cyclingweekly.com/news/pantani-alpe",
+    "https://www.visit-alpe-dhuez.example/ride"
+  ],
+  "search_results": [
+    { "title": "Alpe d'Huez - Wikipedia", "url": "https://en.wikipedia.org/wiki/Alpe_d%27Huez", "date": "2024-05-02" },
+    { "title": "Alpe d'Huez | Tour de France", "url": "https://www.letour.fr/en/alpe-dhuez", "date": null },
+    { "title": "Dutch Corner - a fan guide", "url": "http://insecure.example.com/dutch-corner", "date": "2022-07-01" },
+    { "title": "", "url": "https://www.cyclingnews.com/features/alpe-dhuez/#history", "date": "2023-07-20" },
+    { "title": "Alpe d'Huez - Wikipedia (mobile)", "url": "https://en.wikipedia.org/wiki/Alpe_d%27Huez", "date": null },
+    { "title": "Pantani's Alpe d'Huez record", "url": "https://www.cyclingweekly.com/news/pantani-alpe", "date": "2020-04-10" },
+    { "title": "Riding Alpe d'Huez", "url": "https://www.visit-alpe-dhuez.example/ride", "date": null }
+  ],
+  "usage": {
+    "prompt_tokens": 412,
+    "completion_tokens": 196,
+    "total_tokens": 608,
+    "cost": 0.0079
+  }
+}
