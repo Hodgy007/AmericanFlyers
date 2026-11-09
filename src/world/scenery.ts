@@ -32,13 +32,15 @@ export interface SceneryTier {
   nearTrees: boolean;
   /** Ground cover beside the road (grass tufts, wildflowers, stones; groundCover.ts): the share of full density, 0 off. The module is only fetched when this is above 0. */
   groundCover: 0 | 0.5 | 1;
+  /** The roadside camper vans are the modelled camper.glb (about 4.4k triangles each, a handful in view); off, they are the boxy code-built ones. */
+  vanModel: boolean;
 }
 
 export const SCENERY: Record<'low' | 'medium' | 'high' | 'ultra', SceneryTier> = {
-  low: { terrainLayers: 3, terrainTexSize: 512, detailNormals: false, roadDetail: false, triplanar: false, anisotropy: 2, crowd: 0.35, crowdFlags: false, crowdShadows: false, crowdDetail: false, barriers: true, roadPaint: true, nearTrees: false, groundCover: 0 },
-  medium: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: false, roadDetail: true, triplanar: true, anisotropy: 4, crowd: 0.7, crowdFlags: true, crowdShadows: false, crowdDetail: false, barriers: true, roadPaint: true, nearTrees: true, groundCover: 0 },
-  high: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 8, crowd: 1, crowdFlags: true, crowdShadows: true, crowdDetail: true, barriers: true, roadPaint: true, nearTrees: true, groundCover: 0.5 },
-  ultra: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 16, crowd: 1, crowdFlags: true, crowdShadows: true, crowdDetail: true, barriers: true, roadPaint: true, nearTrees: true, groundCover: 1 },
+  low: { terrainLayers: 3, terrainTexSize: 512, detailNormals: false, roadDetail: false, triplanar: false, anisotropy: 2, crowd: 0.35, crowdFlags: false, crowdShadows: false, crowdDetail: false, barriers: true, roadPaint: true, nearTrees: false, groundCover: 0, vanModel: false },
+  medium: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: false, roadDetail: true, triplanar: true, anisotropy: 4, crowd: 0.7, crowdFlags: true, crowdShadows: false, crowdDetail: false, barriers: true, roadPaint: true, nearTrees: true, groundCover: 0, vanModel: true },
+  high: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 8, crowd: 1, crowdFlags: true, crowdShadows: true, crowdDetail: true, barriers: true, roadPaint: true, nearTrees: true, groundCover: 0.5, vanModel: true },
+  ultra: { terrainLayers: 8, terrainTexSize: 1024, detailNormals: true, roadDetail: true, triplanar: true, anisotropy: 16, crowd: 1, crowdFlags: true, crowdShadows: true, crowdDetail: true, barriers: true, roadPaint: true, nearTrees: true, groundCover: 1, vanModel: true },
 };
 
 // The eight ground layers (terrain.ts gives each point a weight per layer; ground.ts draws them).
