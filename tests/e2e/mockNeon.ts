@@ -61,7 +61,13 @@ export function sampleRides(now = Date.now()) {
   ];
 }
 
-export async function mockNeon(page: Page, opts: { signedIn?: boolean } = {}) {
+/** KOM segment boards (rpc/segment_leaderboard): the same rows for every segment, like the real function's shape. */
+export function sampleSegmentBoard(now = Date.now()) {
+  const row = (rank: number, name: string, s: number, me = false) => ({ rank, short_name: name, elapsed_s: s, avg_power: 300 - rank * 6, ridden_at: new Date(now - rank * DAY).toISOString(), is_me: me, riders: 27 });
+  return [row(1, 'Alex M.', 3012), row(2, 'Jo K.', 3077), row(3, 'Priya S.', 3140), row(4, 'Tom H.', 3201), row(5, 'Lena B.', 3255), row(7, 'Sam R.', 3290, true)];
+}
+
+export async function mockNeon(page: Page, opts: { signedIn?: boolean; segmentBoard?: unknown[] } = {}) {
   const signedIn = !!opts.signedIn;
   const now = Date.now();
   const startsAt = (hours: number) => new Date(now + hours * 3600000).toISOString();
@@ -123,6 +129,8 @@ export async function mockNeon(page: Page, opts: { signedIn?: boolean } = {}) {
         ]);
       case 'rpc/is_admin':
         return json(false);
+      case 'rpc/segment_leaderboard':
+        return json(opts.segmentBoard ?? sampleSegmentBoard(now));
       default:
         return json(table.startsWith('rpc/') ? null : []);
     }

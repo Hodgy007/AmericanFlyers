@@ -29,6 +29,9 @@ Achievements aren't stored separately. They're recalculated from your rides, so 
 | 📆 | Three in a row | Ride on three days in a row. |
 | 🗓 | Consistency | Ride in each of four weeks in a row. Weeks start on Monday. |
 | 📈 | Getting stronger | Raise your FTP by 10 W from your first recorded value. |
+| ⛰ | Hill climber | Ride all of a KOM segment, a big climb timed from its start to its top. |
+| 📈 | Beat yourself | Set a personal best on a KOM segment you have ridden before. |
+| 🗻 | Segment collector | Ride 5 different KOM segments. |
 
 ## Notes
 
@@ -36,5 +39,6 @@ Achievements aren't stored separately. They're recalculated from your rides, so 
 - **Tested** matches the workout name *Ramp FTP Test*, so it counts the built-in ramp test.
 - **Workout regular** counts workouts you completed, not separate workouts. Riding the same one ten times counts ten times.
 - **Four watts** uses your current rider weight in Settings. Changing your weight changes the target.
+- **KOM achievements** come from your segment efforts in your account (demo and sped-up rides don't count). Taking a KOM isn't a badge, because the board changes.
 - **Getting stronger** needs at least two FTP entries in your history. See [Zones and FTP](zones-and-ftp.md#ftp-history).
 - Totals use your most recent 1,000 rides. Rides beyond that aren't counted. See [Accounts and profile](accounts-and-profile.md).

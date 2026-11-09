@@ -80,6 +80,7 @@ Also `security definer` with `search_path = ''`, for signed-in riders only.
 | `leave_ride()` | When the tab is hidden or closed, and when *Ride together* is switched off | Deletes the caller's row. |
 | `stage_leaderboard(p_stage, p_since)` | `src/leaderboardUi.ts`, and after a whole-stage finish | Each rider's fastest `finish_s`, ranked; top 25 plus the caller. |
 | `stage_ghost(p_activity)` | Racing a ghost | The distance trace (`samples -> 'distance'`) and time of one finished ride. Nothing else from it. |
+| `segment_leaderboard(p_segment, p_since)` | `src/cloud/segmentApi.ts`, from the KOM panel and the segments dialog | Each rider's best plausible effort on a KOM segment: top 10 plus the caller, and how many riders there are. Efforts are inserted into `segment_efforts` directly (own rows only). See [KOM segments](kom-segments.md). |
 
 The browser predicts each rider's position between updates as `distance + speed × (time since received + age)`, capped at 6 s, and the world eases the drawn rider onto it. Drafting is worked out in the browser from these positions; see [Physics and stats](physics-and-stats.md#drafting).
 

@@ -6,6 +6,16 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### KOM segments on the big climbs
+
+- **Segments.** A stage's big climbs (about a kilometre or more with at least 60 m of climbing, or a categorised summit) are timed segments: `src/segments.ts` derives them from the stage's own elevation, with stable ids (`alpe-dhuez:climb-1`, pinned per built-in stage in `tests/unit/segments.test.ts`). Mountain stages get their main climb, rolling stages their named climbs (Morgul-Bismark's Wall on each lap, Cold Shivers and the high point on the Tour of the Moon), flat stages none. Uploaded routes keep their segments local.
+- **Efforts.** Each passage is timed in moving time with a split every 50 m; stopping, jumping along the road, opening the hub or resetting voids it. Your best and latest effort per segment are kept in this browser and, signed in, in the new `segment_efforts` table.
+- **In the ride.** A KOM panel under the climb card shows the top 5 and your rank within 2 km of a segment, then a live gap to your best (and a smaller one to your last attempt) on it, and a result banner at the top (*Alpe d'Huez — 52:14 · New PB by 0:41 · #3 of 27*). A ghost of your best effort rides the road. **KOM panel** in Settings hides it.
+- **Hub.** A **⛰ KOM ×n** chip on each route card opens its segments with the king of each climb and your best; each opens a top-10 board (this month or all time).
+- **Database.** `segment_efforts` (own rows only), `segment_limits` (a plausibility floor per built-in segment, from the app's own physics) and `segment_leaderboard()`; `delete_my_account()` deletes the efforts by name. Not applied to the live database yet: see the SQL in `db/schema.sql` ("KOM segments").
+- **Achievements.** Hill climber, Beat yourself and Segment collector. **Privacy** text and docs updated; `?komtest` lets a demo ride count for your local times.
+- Tests: `segments`, `segmentLimits`, `segmentStore`, `segmentAchievements` (unit) and `kom.spec.ts` (e2e).
+
 ### Loose ends from the polish batch
 
 - **Mount Washington summit in frame at 400, 200, 100 and 50 m.** At 200 m the buildings were 53 degrees right of the chase camera's heading (the half-view is 43). A search over every position and rotation within about 100 m of the finish found none that keeps one group in view at all four distances, because the road wraps round the summit and the camera turns 100 degrees between 200 and 50 m. So the lattice broadcast tower is now its own landmark (`washington-tower`, with its own rock pile) on the outside of the bend, 60 m left of the road at 12,200 m and dead ahead of the last straight (23 degrees at 200 m, 13 at 400 m, 19 at 100 m), and the buildings stay inside the bend, where they are in frame at 400, 100 and 50 m. The summit group's size is now 38.5 m (its height without the tower), and it (and the summit cone) moved from 32 m to 40 m beside the road: its knoll's lower step reached to about 3 m from the road centre and showed as a grey wall across the right lane 25 m before the finish. Shots at 400, 200, 100, 50, 30 and 10 m checked. Tests in `summitCone.test.ts`.

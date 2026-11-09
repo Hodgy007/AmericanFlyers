@@ -57,6 +57,12 @@ export class SegmentStore {
     return { previousBest, isBest };
   }
 
+  /** Forgets everything (signing out: the next rider on this browser starts clean). */
+  clear() {
+    this.data = {};
+    this.save();
+  }
+
   /** Folds in what the account has (after signing in on another device): a faster best wins, and a newer latest. */
   merge(id: string, best: Effort | null | undefined, last: Effort | null | undefined) {
     let changed = false;
@@ -77,6 +83,13 @@ export class SegmentStore {
       this.storage?.setItem(KEY, JSON.stringify(this.data));
     } catch { /* full or blocked: it still works for this session */ }
   }
+}
+
+let shared: SegmentStore | null = null;
+
+/** The one store the ride, the hub and sign-out all use. */
+export function sharedSegmentStore(): SegmentStore {
+  return (shared ??= new SegmentStore());
 }
 
 function defaultStorage(): Storage_ | null {

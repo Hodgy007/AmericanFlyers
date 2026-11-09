@@ -563,6 +563,22 @@
       </form>
     </dialog>
 
+    <dialog id="segment-board" class="riders-dialog lb-dialog sb-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>KOM segments</h2>
+          <button value="cancel" class="icon" aria-label="Close">✕</button>
+        </div>
+        <p class="lb-sub"><strong id="sb-title"></strong></p>
+        <div id="sb-tabs" class="lb-tabs" role="tablist" hidden>
+          <button type="button" role="tab" data-sb-range="month">This month</button>
+          <button type="button" role="tab" data-sb-range="all">All time</button>
+        </div>
+        <div id="sb-body"></div>
+        <p id="sb-foot" class="muted small"></p>
+      </form>
+    </dialog>
+
     <dialog id="events" class="riders-dialog events-dialog">
       <form method="dialog">
         <div class="dialog-head">

@@ -162,6 +162,16 @@ export function timeAt(e: Pick<Effort, 't' | 's'>, length: number, x: number): n
   return d1 > d0 ? t0 + ((t1 - t0) * (x - d0)) / (d1 - d0) : t1;
 }
 
+/** The parts of a leaderboard row the views need (cloud/segmentApi.ts `SegmentRow` has them all). */
+export interface BoardRowLike { rank: number; short_name: string; elapsed_s: number; is_me: boolean; riders?: number }
+
+/** The king of the climb (rank 1), your own row if you are on the board, and how many riders there are. */
+export function boardSummary<T extends BoardRowLike>(rows: T[]): { king: T | null; me: T | null; riders: number } {
+  const king = rows.find((r) => r.rank === 1) ?? null;
+  const me = rows.find((r) => r.is_me) ?? null;
+  return { king, me, riders: rows.reduce((n, r) => Math.max(n, r.riders ?? 0, r.rank), 0) };
+}
+
 /** Metres from the segment's start where an effort was after `t` elapsed seconds (the inverse of `timeAt`): for the ghost. */
 export function distanceAt(e: Pick<Effort, 't' | 's'>, length: number, t: number): number {
   if (t <= 0) return 0;

@@ -97,6 +97,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `cloud/aiApi.ts`, `cloud/token.ts` | `/api/ai` calls, consent, rival memory, saved debriefs, and the Data API JWT. |
 | `world/bikeParts.ts` | Wheels, the Tron glow (`updateGlow`), helmets, and the jersey pattern and sock shader. |
 | `leaderboardUi.ts` | The 🏆 leaderboard dialog and *Race* buttons. |
+| `segments.ts`, `segmentStore.ts`, `segmentUi.ts`, `segmentBoardUi.ts` | KOM segments: finding a stage's big climbs, timing efforts and the live gap; your best and last attempt in `localStorage`; the in-ride KOM panel and result banner; the hub's segments dialog. See [KOM segments](kom-segments.md). |
 | `style.css` | All styles, including the layout for phones. |
 | `hud.ts` | The 24 data-block fields, the HUD tiles, and the data-block chooser dialog. |
 | `settings.ts` | The `Settings` type, its defaults, and loading and saving to `localStorage`. |
@@ -153,6 +154,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `cloud/emailAuth.ts` | The email form: *Create account* (name, email, password, weight, optional FTP), *Sign in* and *Forgot password*. |
 | `cloud/presence.ts` | Riding together: sends your position and kit every 2 s and predicts the other riders' positions. |
 | `cloud/rideOns.ts` | Ride-ons: `send_ride_on()` and the 4 s poll of `my_ride_ons()`. |
+| `cloud/segmentApi.ts` | KOM segment efforts and boards: save an effort (queued while offline), the shared leaderboard, your own best and latest, the effort log for achievements. |
 | `cloud/sync.ts` | Syncs settings, workouts and routes; saves and reads rides and FTP history; feedback; leaderboards and ghosts; and the admin calls. |
 | `cloud/recorder.ts` | Records one sample per second while moving, and writes `.tcx` files. |
 | `cloud/achievements.ts` | Works out the 17 achievements from rides and FTP history. |

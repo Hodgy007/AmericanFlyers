@@ -1116,10 +1116,23 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 .kom-note { margin: 2px 0 0; }
 .kom-me { margin: 4px 0 0; padding-top: 4px; border-top: 1px solid var(--glass-border); color: var(--text); font-weight: 700; }
 body.at-home .kom-card { display: none; }
+/* Wide screens: beside the climb card, so the rider in the middle of the road stays clear. Left of it by default; right of it where the
+   left is taken (the race panel, the data blocks in a left column, the mini-map in demo) unless a workout panel holds the right. */
+@media (min-width: 561px) {
+  .kom-card { left: auto; right: calc(50% + 160px); transform: none; width: min(290px, calc(50vw - 175px)); }
+  body.hud-left .kom-card, body:has(#race-panel:not([hidden])) .kom-card, body:has(#demo-panel:not([hidden])) .kom-card { right: auto; left: calc(50% + 160px); }
+  body:has(#workout-panel:not([hidden])) .kom-card { left: auto; right: calc(50% + 160px); }
+}
+@media (max-height: 640px) {
+  .kom-gap-main { font-size: 34px; }
+  .kom-board li:nth-child(n + 4) { display: none; }
+  .kom-card[data-state='on'] .kom-me { display: none; }
+}
 @media (max-width: 560px) {
   .kom-card { left: 12px; right: 128px; width: auto; transform: none; padding: 6px 9px 7px; }
   .kom-head strong { font-size: 13px; }
   .kom-gap-main { font-size: 34px; }
+  .kom-board li:nth-child(n + 5) { display: none; }
   .kom-card[data-state='on'] .kom-board li:nth-child(n + 4) { display: none; }
 }
 
@@ -1311,3 +1324,12 @@ body.at-home .end-ride { display: none; }
 .rival-actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
 .rivals-note { min-height: 1.2em; }
 .rival-closing { margin-top: 6px; }
+
+/* ---- KOM segments dialog (segmentBoardUi.ts) ---- */
+.sb-dialog .lb-tabs[hidden] { display: none; }
+.sb-item { display: grid; grid-template-columns: 1fr auto; gap: 1px 12px; width: 100%; margin: 0 0 8px; padding: 9px 12px; text-align: left; border-radius: 12px; }
+.sb-item .sb-name { font-weight: 700; color: var(--text); }
+.sb-item .sb-meta, .sb-item .sb-you { font-size: 12px; color: var(--muted); }
+.sb-item .sb-king { grid-column: 1; font-size: 13px; color: #f6d58a; }
+.sb-item .sb-meta { grid-column: 1; }
+.sb-item .sb-you { grid-column: 2; grid-row: 1 / span 3; align-self: center; text-align: right; }

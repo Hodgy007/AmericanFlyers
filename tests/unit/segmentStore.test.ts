@@ -57,6 +57,15 @@ describe('SegmentStore', () => {
     expect(store.get('s129').best?.t).toBe(100);
   });
 
+  it('forgets everything on clear (signing out)', () => {
+    const mem = new Mem();
+    const store = new SegmentStore(mem);
+    store.record('s', effort(100));
+    store.clear();
+    expect(store.ids()).toEqual([]);
+    expect(new SegmentStore(mem).ids()).toEqual([]);
+  });
+
   it('queues efforts that could not be sent', () => {
     const mem = new Mem();
     expect(pendingEfforts(mem)).toEqual([]);

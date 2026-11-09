@@ -6,7 +6,7 @@
 import { account } from './cloud/account';
 import { flushPendingEfforts, myEfforts, saveSegmentEffort, segmentLeaderboard, type SegmentRow } from './cloud/segmentApi';
 import { PREVIEW_RANGE } from './climb';
-import { SegmentStore } from './segmentStore';
+import { sharedSegmentStore, type SegmentStore } from './segmentStore';
 import {
   SegmentTracker, distanceAt, gapSeconds, gapText, judgeEffort, resultText, segmentStatus, segmentTime, segmentsFor,
   type Effort, type Segment,
@@ -57,7 +57,7 @@ export function initSegmentUi(els: { card: HTMLElement; climbCard: HTMLElement }
     return li;
   });
 
-  const store = deps.store ?? new SegmentStore();
+  const store = deps.store ?? sharedSegmentStore();
   const tracker = new SegmentTracker({ finish: (seg, pass, effort) => { void finished(seg, pass, effort); } });
   const boards = new Map<string, Board>();
   let version = 0; // bumped when a board arrives, so the rows are redrawn
@@ -67,6 +67,7 @@ export function initSegmentUi(els: { card: HTMLElement; climbCard: HTMLElement }
   let drawnKey = '';
   let lastSecond = -1;
   const cache = new Map<HTMLElement, string>();
+  const narrow = matchMedia('(max-width: 560px)');
 
   const set = (el: HTMLElement, text: string) => {
     if (cache.get(el) !== text) { cache.set(el, text); el.textContent = text; }
@@ -215,8 +216,8 @@ export function initSegmentUi(els: { card: HTMLElement; climbCard: HTMLElement }
       const seg = status.segment;
       load(seg);
       const board = boards.get(seg.id);
-      // Under the climb card when that is showing.
-      const below = els.climbCard.hidden ? null : els.climbCard.getBoundingClientRect().bottom + 6;
+      // On a phone the two cards stack: under the climb card when that is showing (on wider screens they sit side by side).
+      const below = els.climbCard.hidden || !narrow.matches ? null : els.climbCard.getBoundingClientRect().bottom + 6;
       els.card.style.top = below === null ? '' : `${Math.round(below)}px`;
       const key = `${seg.id}|${status.state}|${version}|${board?.state}|${account() ? 1 : 0}`;
       if (key !== drawnKey) {

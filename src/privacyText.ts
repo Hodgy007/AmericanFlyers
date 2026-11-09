@@ -8,7 +8,7 @@
 // docs/user-guide/privacy-and-your-data.md when the app collects something new.
 
 export const PRIVACY_HTML = `
-  <p class="muted small">Last updated 1 November 2026.</p>
+  <p class="muted small">Last updated 9 November 2026.</p>
   <p>American Flyers is a free, hobby-built indoor cycling app. We collect only what the ride needs. We don’t sell your data, show ads, or share it with advertisers.</p>
 
   <h3>What we collect</h3>
@@ -16,6 +16,7 @@ export const PRIVACY_HTML = `
     <li><strong>Your account:</strong> your name and email address, and a password if you use email sign-in. Passwords are handled by Neon Auth (our sign-in provider) and are stored hashed; we never see them. If you use Google, we receive your name, email and picture from Google, and nothing else.</li>
     <li><strong>Your rider details:</strong> weight, FTP, heart-rate settings and your app settings (units, kit colours, camera, sound and so on).</li>
     <li><strong>Your rides:</strong> each saved ride, with a power, cadence, heart-rate, speed, distance and height reading every second, plus totals such as time, climbing and energy. Your workouts, routes and FTP history.</li>
+    <li><strong>Climb segment times:</strong> when you ride all of a big climb on a built-in stage (a KOM segment), the time, your average power and a split time every 50 m, so the app can show how far ahead or behind your earlier attempts you are. Your best and latest effort on each segment are also kept in this browser, which works signed out and offline. Rides made with the demo slider or on a sped-up clock are never sent.</li>
     <li><strong>Live position while you ride together:</strong> which stage you are on, how far along, speed, power and cadence, and your kit colours. It is replaced every few seconds and removed after about 10 minutes of silence.</li>
     <li><strong>Ride-ons:</strong> the thumbs-up, flame and other cheers riders send each other. They are cleared after a day.</li>
     <li><strong>AI coach and rivals:</strong> your on/off choice, how many AI messages you used each day (a counter, no content), your rivals’ memory of you and any coach debrief kept with a ride.</li>
@@ -31,6 +32,7 @@ export const PRIVACY_HTML = `
   <ul>
     <li>Your <strong>first name and last initial</strong> (for example “Alex M.”), your position on the road, your speed and your kit, while you ride on the same stage.</li>
     <li>Your first name and initial and your <strong>finish times</strong> on a stage’s leaderboard, and the ghost of your ride if someone races it. Ghosts show distance over time only, not your power or heart rate.</li>
+    <li>Your first name and initial, your best <strong>time</strong> and your <strong>average power</strong> on a climb’s KOM leaderboard. Your split times and your other efforts on it stay private.</li>
     <li>When you send or receive a ride-on, the sender’s first name and initial.</li>
   </ul>
   <p>Nobody sees your email, weight, FTP, heart rate, or your other rides. The people who run the app can see accounts and feedback in an admin dashboard so they can help and keep it fair.</p>
@@ -51,7 +53,7 @@ export const PRIVACY_HTML = `
   <ul>
     <li><strong>Download my data</strong> gives you everything we store about you as a file.</li>
     <li><strong>Delete my account</strong> permanently removes your account and all of the above. Both are in your profile, under “Privacy &amp; data”.</li>
-    <li>You can delete single rides, workouts and routes at any time.</li>
+    <li>You can delete single rides, workouts and routes at any time. Your climb segment times go with your account (they are part of “Download my data” and “Delete my account”).</li>
     <li>Questions or requests: use “Ideas &amp; bug reports” in the menu, or ask the person who runs your copy of the app.</li>
   </ul>
   <p class="muted small">This page describes the app in good faith and is not legal advice.</p>`;

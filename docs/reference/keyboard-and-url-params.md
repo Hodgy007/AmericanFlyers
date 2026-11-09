@@ -24,6 +24,7 @@ The app reads these parameters when it loads.
 | --- | --- | --- |
 | `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `hotw-morgul-bismark`, `hotw-tour-of-the-moon`, `hell-of-the-west`, `alpe-dhuez`, `stelvio`, `ventoux`, `tourmalet`, `zoncolan`, `mt-washington`, `mt-blue-sky`, `mt-diablo` and `flagstaff`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
 | `start` | `?start=6` | Starts the ride this many kilometers into the stage. Decimal values work, for example `6.5`. Values of zero or less are ignored. |
+| `komtest` | `?komtest` | For testing: a demo or sped-up ride still counts for your KOM segment times on this device (never sent to your account). Without it such rides are timed but not kept. |
 | `timescale` | `?timescale=8` | Runs the ride clock this many times faster (1 to 20), for testing whole races quickly. Not for normal riding: the physics and the field step in bigger jumps. |
 | `wind` | `?wind=8,90` | Forces the wind, for testing: speed in m/s on a cloudy day (clear days are 60% of it, rain 150%), then the degrees it blows towards, turning right from the direction the stage starts off in (90 = a crosswind from the left, 180 = a headwind off the start). |
 | `graphics` | `?graphics=high` | Uses this graphics tier (`low`, `medium`, `high`, `ultra` or `auto`) for this visit instead of the device's saved choice. See [Settings](../user-guide/settings.md#graphics). |
