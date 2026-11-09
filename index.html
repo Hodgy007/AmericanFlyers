@@ -233,6 +233,17 @@
       <div class="cc-head"><strong id="cc-title"></strong><span id="cc-sub"></span></div>
       <canvas id="cc-profile"></canvas>
     </aside>
+    <!-- KOM panel (segmentUi.ts): the board for the segment ahead, and your live gap on it -->
+    <aside id="kom-card" class="kom-card" hidden aria-live="off">
+      <div class="kom-head"><strong id="kom-title"></strong><span id="kom-sub"></span></div>
+      <div id="kom-gap" class="kom-gap" hidden>
+        <strong id="kom-gap-main" class="kom-gap-main"></strong>
+        <span class="kom-gap-lines"><span id="kom-gap-text"></span><span id="kom-gap-last" class="kom-gap-last"></span></span>
+      </div>
+      <ol id="kom-board" class="kom-board"></ol>
+      <p id="kom-note" class="kom-note" hidden></p>
+      <p id="kom-me" class="kom-me"></p>
+    </aside>
 
     <div id="toast" class="toast" role="status"></div>
 
@@ -385,6 +396,9 @@
         </label>
         <label class="check"><input name="miniMap" type="checkbox" /> Mini-map and climb preview
           <span class="hint">A small map of the route with riders on it, and a card for the next climb when it is within 2 km.</span>
+        </label>
+        <label class="check"><input name="komPanel" type="checkbox" /> KOM panel
+          <span class="hint">On the big climbs: the leaderboard, and how far ahead or behind your best and last attempts you are as you climb. Your times are still recorded when it is off.</span>
         </label>
         <label class="check"><input name="commentary" type="checkbox" /> Race commentary
           <span class="hint">A commentator calls the action in races: the start, attacks, the break, sprints and how you are doing. Needs sound on.</span>

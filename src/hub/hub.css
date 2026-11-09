@@ -25,7 +25,7 @@
 html[data-start='hub'] #home { display: none; }
 html[data-start='hub'] .hub[hidden] { display: flex; }
 /* The ride's own screens stay out of sight behind it. */
-body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-panel, .draft-panel, .race-panel, .race-count, .event-bar, .minimap, .climb-card, .steer-btn) { visibility: hidden; }
+body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-panel, .draft-panel, .race-panel, .race-count, .event-bar, .minimap, .climb-card, .kom-card, .steer-btn) { visibility: hidden; }
 
 .hub [hidden] { display: none !important; }
 .hub-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent; }
