@@ -144,8 +144,10 @@ describe('roadside camp', () => {
     expect(camp('alpe-dhuez', 0).all).toEqual([]);
   });
 
+  // Every corner of every camper's footprint is checked against every stretch of road within 200 m (2 m steps),
+  // so this is seconds of work per stage: comfortably over vitest's 5 s default on a slower CI runner.
   for (const id of stages) {
-    it(`${id}: parks only where the crowds are, off the road, off the rails and out of the finish`, () => {
+    it(`${id}: parks only where the crowds are, off the road, off the rails and out of the finish`, { timeout: 30_000 }, () => {
       const { stage, all } = camp(id);
       expect(all.length, 'some camp').toBeGreaterThan(6);
       expect(new Set(all.map((c) => c.kind)).size, 'a mix of vans, tents and parasols').toBeGreaterThanOrEqual(2);
