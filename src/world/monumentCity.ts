@@ -21,7 +21,11 @@ export function buildSkyline(o: MonumentOptions = {}): THREE.Group {
   for (const t of skylineTowers(o.loop ?? DEFAULT_LOOP, o.seed ?? 1)) {
     const col = FACADES[Math.min(FACADES.length - 1, Math.floor(t.tone * FACADES.length))];
     k.box(t.w, t.h + SKYLINE_SINK, t.d, t.x, -SKYLINE_SINK, t.z, col, t.ry, 0.8);
-    if (t.crown) k.box(t.w * 0.6, t.h * 0.22, t.d * 0.6, t.x, t.h, t.z, mix(col, '#ffffff', 0.18), t.ry, 1);
+    if (t.crown) {
+      // Setbacks: the tall ones step in twice, like the prewar towers they stand for.
+      k.box(t.w * 0.72, t.h * 0.12, t.d * 0.72, t.x, t.h, t.z, mix(col, '#ffffff', 0.12), t.ry, 1);
+      k.box(t.w * 0.45, t.h * 0.1, t.d * 0.45, t.x, t.h * 1.12, t.z, mix(col, '#ffffff', 0.24), t.ry, 1);
+    }
   }
   return finish(k.build(farMaterial), false);
 }

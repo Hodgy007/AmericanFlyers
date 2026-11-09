@@ -2,7 +2,7 @@
 // bends, scenery style, roadside landmarks and signs.
 
 import type { MonumentId, MonumentOptions } from './world/monumentTypes';
-import type { CultureId } from './world/crowdCulture';
+import type { CultureId } from './world/cultureTypes';
 import type { WaterBody } from './world/waterTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
@@ -1148,7 +1148,7 @@ const perLap = (kinds: LandmarkKind[], lap: number, laps: number): LandmarkKind[
 /** A street of terraced houses along one side of the road from lap metre `from` to `to`: `seeds` alternate along it, so it is not one house repeated. */
 function terraceRow(from: number, to: number, side: -1 | 1, material: 'brick' | 'stone', seeds: number[], spacing = 44): LandmarkKind[] {
   return seeds.map((seed, i) => ({
-    ...monumentAt('terrace', from + i * spacing, side, 17, TERRACE_HEIGHT, { options: { seed, material }, clearance: 16 }),
+    ...monumentAt('terrace', from + i * spacing, side, 21, TERRACE_HEIGHT, { options: { seed, material }, clearance: 16 }),
     every: spacing * seeds.length,
     until: to,
   }));
@@ -1190,6 +1190,9 @@ const RW_HILLS = (x: number, z: number) => RW_GROUND + fbm(x / 600 + 11, z / 600
 // KOMs and places, in lap metres (the baked profile's tops: Libby Hill 12,240; 23rd Street 13,440).
 const RW_LIBBY = 12240;
 const RW_23RD = 13440;
+/** Lap metres (multiples of the 44 m row spacing) where a row of houses fits beside the road, on the left and on the right. */
+const RW_LEFT: [number, number][] = [[0, 484], [836, 1804], [2068, 2948], [4708, 5060], [5368, 5764], [5852, 6600], [6688, 7084], [7172, 8140], [8228, 9500], [12364, 12804], [13552, 14564], [14960, 15400]];
+const RW_RIGHT: [number, number][] = [[0, 748], [968, 1672], [2024, 2992], [3916, 5016], [5456, 5764], [5852, 6600], [6908, 8140], [8272, 9500], [12276, 12804], [13420, 14740], [15180, 15664], [15752, 16192]];
 const RW_PLACES: [number, string][] = [[3400, 'Monument Avenue'], [8100, 'Shockoe Slip'], [10300, 'Great Shiplock Park'], [11000, 'Libby Hill'], [12950, '23rd Street'], [14100, 'Governor Street']];
 
 const richmondWorlds: Stage = {
@@ -1223,9 +1226,9 @@ const richmondWorlds: Stage = {
     ...perLap([
       // The Capitol, on the left of Broad Street just before the line (the real one stands a few blocks east, by Governor Street).
       monumentAt('virginia-capitol', rw.lap - 330, -1, 78, CAPITOL_HEIGHT, { yaw: 0, clearance: 50 }),
-      // Church Hill's brick rowhouses and the streets round Monument Avenue and VCU, where the road has no other leg within a block.
-      ...[[400, 3000], [4700, 6500], [11800, 12800], [14700, 15500]].flatMap(([a, b]) => [...terraceRow(a, b, -1, 'brick', [1, 2, 3]), ...terraceRow(a + 20, b, 1, 'brick', [4, 5, 6])]),
-      ...terraceRow(15500, 16100, 1, 'brick', [7, 8]),
+      // Brick rowhouses along the streets where the whole row clears the road's other legs and the river (found from the stage's own road).
+      ...RW_LEFT.flatMap(([a, b]) => terraceRow(a, b, -1, 'brick', [1, 2])),
+      ...RW_RIGHT.flatMap(([a, b]) => terraceRow(a, b, 1, 'brick', [3, 4])),
     ], rw.lap, rw.laps),
   ],
   signs: namedPlaces(RW_PLACES, rw.lap, rw.laps),
@@ -1351,11 +1354,12 @@ const harrogateWorlds: Stage = {
   },
   landmarks: [
     startArch, finishArch(hw.lap), finishArch(hw.finish),
-    // Stone terraces in the town stretches: West Park, the Duchy Estate's Cornwall Road and the finish straight.
+    // Stone terraces in the town stretches: West Park (the Stray is on the left), the Duchy Estate's Cornwall Road and the finish straight.
     ...perLap([
-      ...terraceRow(150, 800, 1, 'stone', [1, 2, 3]),
-      ...terraceRow(10500, 13500, 1, 'stone', [4, 5, 6]),
-      ...terraceRow(11700, 13500, -1, 'stone', [7, 8, 9]),
+      ...terraceRow(220, 1320, 1, 'stone', [1, 2]),
+      ...terraceRow(9328, 11572, 1, 'stone', [3, 4]),
+      ...terraceRow(11660, 13024, -1, 'stone', [5, 6]),
+      ...terraceRow(12452, 12848, 1, 'stone', [7, 8]),
     ], hw.lap, hw.laps),
   ],
   signs: namedPlaces(HW_PLACES, hw.lap, hw.laps),

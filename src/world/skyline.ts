@@ -84,7 +84,7 @@ export function skylineTowers(loop: readonly [number, number][], seed = 1): Towe
 /** The tallest tower's top, m (the landmark's `size`: a monument is scaled so its height is its size). */
 export function skylineHeight(towers: readonly Tower[]): number {
   let top = 1;
-  for (const t of towers) top = Math.max(top, t.h + (t.crown ? t.h * 0.22 : 0));
+  for (const t of towers) top = Math.max(top, t.crown ? t.h * 1.22 : t.h);
   return top;
 }
 

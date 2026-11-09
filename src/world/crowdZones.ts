@@ -71,9 +71,12 @@ export function hotspotAt(stage: Stage, d: number): { hotspot: CrowdHotspot; wei
  */
 export function crowdAt(stage: Stage, d: number): number {
   let c = 0;
-  for (const sign of stage.signs) {
-    const k = 1 - Math.abs(d - sign.d - 10) / 110;
-    if (k > c) c = k;
+  // Named places on a circuit or a coast road (`climb: false`) are only announced: the crowds gather at its `crowdSpots`.
+  if (stage.climb !== false) {
+    for (const sign of stage.signs) {
+      const k = 1 - Math.abs(d - sign.d - 10) / 110;
+      if (k > c) c = k;
+    }
   }
   for (const spot of stage.crowdSpots ?? []) {
     // The same spots every lap of a circuit.

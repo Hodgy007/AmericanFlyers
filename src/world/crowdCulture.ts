@@ -5,8 +5,9 @@ import { signStyleOf } from './milestones';
 // shirts and flags. Pure data and lookups (no WebGL), so the choice is unit-tested;
 // crowds.ts draws the shirts and crowdFlags.ts paints the flag designs.
 
-/** France, Italy, the USA, Colorado (the Hell of the West stages), the Dutch (the Alpe's Dutch Corner) and Britain (Yorkshire). */
-export type CultureId = 'fr' | 'it' | 'us' | 'co' | 'nl' | 'gb';
+import type { CultureId } from './cultureTypes';
+
+export type { CultureId } from './cultureTypes';
 
 /** Every flag a crowd can wave, in the row order of the flag atlas (crowdFlags.ts). */
 export const FLAG_DESIGNS = ['fr', 'polka', 'bretagne', 'basque', 'it', 'pink', 'us', 'colorado', 'nl', 'orange', 'gb', 'yorkshire'] as const;

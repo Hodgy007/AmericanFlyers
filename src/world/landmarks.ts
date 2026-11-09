@@ -39,6 +39,7 @@ function sitesBetween(from: number, to: number, widen = false): Site[] {
   currentStage().landmarks.forEach((kind, index) => {
     const lo = widen && kind.reach ? Math.min(from, mid - kind.reach) : from;
     const hi = widen && kind.reach ? Math.max(to, mid + kind.reach) : to;
+    if (kind.first > hi || (kind.until ?? Infinity) < lo) return;
     const last = Math.min(hi, kind.until ?? Infinity);
     for (let k = Math.max(0, Math.ceil((lo - kind.first) / kind.every)); kind.first + k * kind.every <= last; k++) {
       out.push(siteAt(kind, index, kind.first + k * kind.every));
