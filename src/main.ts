@@ -378,6 +378,7 @@ function hubFrame(now: number) {
 
 function frame(now: number) {
   if (hub.isOpen()) {
+    syncMusic(); // the theme in the hub (a no-op while it plays)
     hubFrame(now);
     noteFirstFrame(); // the hub is usually the first screen: sign-in and prefetching hang off its first frame too
     requestAnimationFrame(frame);
@@ -434,7 +435,7 @@ function frame(now: number) {
   }
   // ---- end of AI ----
   roadRiders = liveRiders;
-  steering.update(dt, { autoSteer: settings.autoSteer, distance: ride.distance, riders: liveRiders, lateralOf: lateralOf, shift: crossShift });
+  steering.update(dt, { autoSteer: settings.autoSteer, distance: ride.distance, riders: liveRiders, lateralOf: lateralOf, shift: crossShift, headingAt });
   world.setLane(steering.target);
   draft = draftFrom(ride.distance, liveRiders, 60, { lane: world.currentLane, lateralOf, shift: crossShift });
   draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
@@ -501,6 +502,7 @@ function frame(now: number) {
   }
   sound.setRain(world.rainLevel);
   sound.update(dt, { speedMs: ride.speed, pedalling: live.power > 0 || live.cadence > 0, crowd: crowdNear(ride.distance), cassetteRevs: drivetrain.crankRate * drivetrain.ratio });
+  updateMusic(); // the riding score follows the speed and the road
 
   const others = liveRiders;
   const g = race ? null : ghostRider(); // no ghost in a race
@@ -1591,6 +1593,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     miniMap: data.get('miniMap') === 'on',
     komPanel: data.get('komPanel') === 'on',
     commentary: data.get('commentary') === 'on',
+    music: data.get('music') === 'on',
     aiCoach: data.get('aiCoach') === 'on',
     aiRivals: data.get('aiRivals') === 'on',
     coachVoice: data.get('coachVoice') === 'on',
@@ -1606,6 +1609,9 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
   updateGearPanel();
   updateMapMenu();
   applyProTeams(settings.proTeams, wasProTeams);
+  sound.setMusic(settings.music); // the Music switch, like the ☰ Menu's
+  updateMusicMenu();
+  syncMusic();
   if (!settings.rideTogether) presence.leave();
   if (!settings.ghost) ghost = null;
   else if (!ghost) loadMyGhost();
@@ -1677,15 +1683,74 @@ $('btn-settings').addEventListener('click', openSettings);
 $('btn-camera').addEventListener('click', cycleCamera);
 function setSound(on: boolean) {
   sound.setEnabled(on);
+  sound.setMusic(settings.music); // sound on again restores the music unless it's off itself
   $('btn-sound').textContent = on ? '🔊 Sound on' : '🔇 Sound off';
   if (on !== settings.sound) {
     settings = { ...settings, sound: on };
     saveSettings(settings);
     pushSettings(settings);
   }
+  syncMusic();
 }
 setSound(settings.sound);
 $('btn-sound').addEventListener('click', () => setSound(!settings.sound));
+/** ☰ Menu → 🎵 Music on/off, and the music control beside the ride. Mirrors Settings. */
+function updateMusicMenu() {
+  $('btn-music').textContent = settings.music ? '🎵 Music on' : '🔇 Music off';
+  $('btn-ride-music').textContent = settings.music ? '🎵 Music on' : '🔇 Music off';
+  $('btn-music').setAttribute('aria-checked', String(settings.music));
+}
+function setMusic(on: boolean) {
+  if (on === settings.music) return;
+  settings = { ...settings, music: on };
+  saveSettings(settings);
+  pushSettings(settings);
+  sound.setMusic(on);
+  updateMusicMenu();
+  syncMusic();
+}
+$('btn-music').addEventListener('click', () => setMusic(!settings.music));
+$('btn-ride-music').addEventListener('click', () => setMusic(!settings.music));
+updateMusicMenu();
+
+// ---------------------------------------------------------------- music ----
+// The theme tune plays at home and in the hub; a ride gets the riding score (which
+// follows speed and grade), and the finish card plays the theme's close. The score
+// takes over once music is on; see src/music.ts.
+let musicTimer = 0;
+function syncMusic() {
+  const m = sound.music;
+  if (!m) return;
+  if (!(settings.sound && settings.music) || ride.finished) {
+    m.stop();
+    return;
+  }
+  const over = !$('finish').hidden; // the ride's summary card is up
+  const racing = (!!race && race.phase !== 'countdown') || !!eventState;
+  m.intensity = over ? 0.15 : racing ? 0.8 : Math.min(1, 0.15 + ride.speed / 11 + (live.power > settings.ftp ? 0.2 : 0));
+  // Make the score follow the effort: speed sets the pace, the road's grade the mood.
+  const grade = over || racing ? 0 : gradeAt(ride.distance);
+  m.climb = Math.min(1, Math.max(0, grade / 7));
+  const theme = over || hub.isOpen() || document.body.classList.contains('at-home');
+  if (theme !== (m.current === 'theme') || !m.current) m.play(theme ? 'theme' : 'ride');
+}
+/** Sets the riding score's mood from the ride, at most every 400 ms. */
+function updateMusic() {
+  if (musicTimer) return;
+  musicTimer = window.setTimeout(() => {
+    musicTimer = 0;
+    const m = sound.music;
+    if (!m || m.current !== 'ride') return;
+    m.intensity = Math.min(1, 0.15 + ride.speed / 11 + (live.power > settings.ftp ? 0.2 : 0));
+    m.climb = Math.min(1, Math.max(0, gradeAt(ride.distance) / 7));
+  }, 400);
+}
+document.addEventListener('visibilitychange', () => {
+  const m = sound.music;
+  if (!m) return;
+  if (document.visibilityState === 'hidden') m.stop(); // a hidden tab's AudioContext can't be heard anyway
+  else syncMusic();
+});
 function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   else document.documentElement.requestFullscreen?.().catch(() => toast('Full screen isn’t available in this browser.'));
@@ -1736,15 +1801,17 @@ window.addEventListener('keydown', (e) => {
   if (hub.isOpen()) return; // the hub has its own keys (Tab, arrows on the section tabs, Enter, Escape)
   if (e.key === 'c' || e.key === 'C') cycleCamera();
   if (e.key === 'm' || e.key === 'M') setSound(!settings.sound);
+  if (e.key === 'n' || e.key === 'N') setMusic(!settings.music); // N: music, M: the ride sounds
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
   if (e.key === 'ArrowLeft') { steering.press(-1); e.preventDefault(); }
   if (e.key === 'ArrowRight') { steering.press(1); e.preventDefault(); }
+  if (e.key === 'ArrowUp' && !e.repeat) { if (steering.backToRacingLine()) toast('Racing line', 1200); e.preventDefault(); }
   if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) rideOnsUi.thumbsUpAhead();
   if (e.key === '=' || e.key === '+' || e.key === ']') shift(1);
   if (e.key === '-' || e.key === '_' || e.key === '[') shift(-1);
   if (!demo) return;
-  if (e.key === 'ArrowUp') { setDemoPower(demoPower + 10); e.preventDefault(); }
-  if (e.key === 'ArrowDown') { setDemoPower(demoPower - 10); e.preventDefault(); }
+  if (e.key === 'PageUp') { setDemoPower(demoPower + 10); e.preventDefault(); }
+  if (e.key === 'PageDown') { setDemoPower(demoPower - 10); e.preventDefault(); }
 });
 
 window.addEventListener('keyup', (e) => {
@@ -2113,6 +2180,7 @@ onAccountChange(async (a) => {
       applyHudPosition(settings.hudPosition);
       world.setAtmosphere(settings.timeOfDay, settings.weather);
       hubNotify('plan'); // the account's plan, FTP and units reach the hub
+      hubNotify('mode'); // the ☰ Menu's music entry follows the account's setting
       // A returning rider on a new device: they've done the setup before.
       try { localStorage.setItem('americanflyers.onboarded', '1'); } catch { /* fine */ }
       const ob = $<HTMLDialogElement>('onboarding');
