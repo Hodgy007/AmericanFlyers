@@ -338,6 +338,7 @@ const komUi = initSegmentUi(
   { card: $('kom-card'), climbCard: $('climb-card') },
   { stage: currentStage, toast: (m, ms) => toast(m, ms), eligible: () => leaderboardEligible(rideFlags), testing: new URLSearchParams(location.search).has('komtest') },
 );
+komUi.reset(); // finds the stage's segments now, so timing starts with the first frame
 
 const lateralOf = (id: string) => world.lateralOf(id);
 

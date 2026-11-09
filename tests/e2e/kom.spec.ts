@@ -39,6 +39,7 @@ async function startDemo(page: Page, watts: number) {
 
 test('approaching Alpe d’Huez shows the KOM panel with the board, then the live gap to your best and last attempt', async ({ page }) => {
   test.setTimeout(180_000);
+  await page.setViewportSize({ width: 960, height: 720 }); // tall enough for the whole top 5 (a short window shows 3)
   const errors = await setup(page, { stored: { 'alpe-dhuez:climb-1': { best: steady(13000, 3600, 1), last: steady(13000, 2900, 2) } } });
   await page.goto('/?stage=alpe-dhuez&timescale=20&komtest');
   await startDemo(page, 450);
@@ -121,7 +122,7 @@ test('the hub’s KOM chip opens a stage’s segments, with the king and your be
   await expect(page.locator('.sb-item').nth(1)).toContainText('Mount Blue Sky climb');
   await expect(page.locator('.sb-item').nth(1)).toContainText('👑 Alex M. 50:12');
   await expect(page.locator('.sb-item').nth(1)).toContainText('You: #7 of 27 · 54:50');
-  await expect(page.locator('.sb-item').nth(2)).toContainText('Not ridden yet');
+  await expect(page.locator('.sb-item').nth(2)).toContainText('Climb 3');
   // Tapping one opens its board: top 5 and you, this month or all time, and a way back.
   await page.locator('.sb-item').nth(1).click();
   await expect(page.locator('#sb-title')).toHaveText('Mount Blue Sky climb');

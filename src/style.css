@@ -1125,7 +1125,7 @@ body.at-home .kom-card { display: none; }
 }
 @media (max-height: 640px) {
   .kom-gap-main { font-size: 34px; }
-  .kom-board li:nth-child(n + 4) { display: none; }
+  .kom-card[data-state='on'] .kom-board li:nth-child(n + 4) { display: none; } /* on the climb the gap matters more than the list */
   .kom-card[data-state='on'] .kom-me { display: none; }
 }
 @media (max-width: 560px) {

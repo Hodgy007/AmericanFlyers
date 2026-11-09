@@ -58,6 +58,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **AI coach and AI rivals** (opt-in, ⚙ Settings): Coach Marty plans your ride, gives a few reactive tips and writes a debrief with a suggested next session; ☰ Menu → 🤺 Rivals has four original rivals (a showboat sprinter, a cold climber, a crafty veteran, a data-obsessed time triallist) who ride at your pace, talk, and remember your rides. Powered by Claude through one Vercel function (`api/ai.ts`); built-in tips and lines when the AI is off or busy. See `docs/developer-guide/ai.md`.
 - **Time of day and weather** (☰ Menu → 🌤): dawn, day, dusk and night (moon, stars, a front light) and clear, cloudy or rain (streaks, wet glossy road, mist, rain sound), or Auto: stages start at their own time and weather, the light moves on as you ride, and the weather changes now and then.
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
+- **KOM segments**: the big climbs on each stage are timed. A panel shows the leaderboard as a climb approaches and your live gap to your best and last attempts on it, with a result banner at the top.
 - **Training plans** (📅 in Workouts): Get Started, FTP Builder, Hell of the West and American Climbs, with sessions that tick off as you ride.
 - **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
 - **Virtual shifting** (Settings): 24 virtual gears with on-screen −/+ buttons and keys; harder gears push back harder.
@@ -122,6 +123,7 @@ Accounts and data live in Neon (project `americanflyers`, eu-west-2):
 - The **Data API** lets the browser read and write the tables directly; row-level security limits each rider to their own rows, and admin functions check `public.is_admin()`.
 - Riders can download their data and delete their account from the profile (**Privacy & data** tab); `delete_my_account()` removes their rows and their Neon Auth user. A Privacy page is in ☰ Menu.
 - Leaderboards ignore implausible, demo and sped-up rides (`stage_limits`, `ride_is_plausible()`).
+- KOM boards ignore implausible, demo and sped-up efforts too (`segment_limits`, `segment_effort_is_plausible()`).
 - The schema is in `db/schema.sql`. Admins are listed in `public.admins` (by email).
 - The endpoints default to the production project; override with `VITE_NEON_AUTH_URL` and `VITE_NEON_DATA_API_URL`.
 
