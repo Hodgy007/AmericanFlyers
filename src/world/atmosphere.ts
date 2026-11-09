@@ -258,6 +258,9 @@ export class Atmosphere {
 
   private choice = { time: 'auto' as TimeOfDay, weather: 'auto' as Weather };
   private heightK = 1 / 110; // how fast the fog thins with height, per metre
+  /** The stage's Scenery.skyLight: scales the sky's ambient and reflected light on High and Ultra (the environment map). */
+  skyLight = 1;
+  private directHaze = false; // the stage's Scenery.directHaze: the post chain blends the haze as the direct path does
   private clearAir = 1; // the stage's air clarity: the haze distance is multiplied by it
   private stageTime: Phase = 'day';
   private stageWeather: Climate = 'clear';
@@ -304,6 +307,8 @@ export class Atmosphere {
   restage(stage: Stage) {
     this.heightK = stage.scenery.roadside ? 1 / 500 : 1 / 110; // a stage with canyons beside the road must not fog its depths white
     this.clearAir = stage.scenery.clearAir ?? 1;
+    this.directHaze = !!stage.scenery.directHaze;
+    this.skyLight = stage.scenery.skyLight ?? 1;
     this.stageTime = stage.timeOfDay ?? 'day';
     this.stageWeather = stage.weather ?? 'clear';
     this.hour = PHASE_HOUR[this.stageTime];
@@ -374,7 +379,7 @@ export class Atmosphere {
     const up = THREE.MathUtils.smoothstep(sunY, -0.06, 0.06);
     const shade = this.cloudShadows ? 0.6 * (1 - 0.6 * l.overcast) * THREE.MathUtils.smoothstep(sunY, 0.05, 0.25) : 0;
     setFog(density, this.heightK, riderPos.y - 28, l.fogFar, l.sunDir, 0.12 * l.glow * up, l.sunColor, band,
-      sky.cloudThreshold, sky.drift.x, sky.drift.y, shade);
+      sky.cloudThreshold, sky.drift.x, sky.drift.y, shade, this.directHaze);
     // Grade by how dark it is (the sun's height, so night under cloud still grades as night).
     const dark = 1 - THREE.MathUtils.smoothstep(sunY, -0.1, 0.12);
     gradeFor({ night: dark, overcast: l.overcast, wet: l.wet, sunY }, this.grade);
@@ -389,7 +394,8 @@ export class Atmosphere {
     sun.intensity = l.sunIntensity;
     hemi.color.copy(l.hemiSky);
     hemi.groundColor.copy(l.hemiGround);
-    hemi.intensity = l.hemiIntensity * (this.hemiScale + (1 - this.hemiScale) * dark); // (after dark the sky is too dim to light things: keep the hemisphere)
+    const hs = this.hemiScale + (1 - this.hemiScale) * (1 - this.skyLight); // a dimmed sky environment gives the hemisphere's ambient back
+    hemi.intensity = l.hemiIntensity * (hs + (1 - hs) * dark); // (after dark the sky is too dim to light things: keep the hemisphere)
     renderer.toneMappingExposure = l.exposure;
 
     // The rider's front light: a soft pool on the road ahead, only once it's dim.

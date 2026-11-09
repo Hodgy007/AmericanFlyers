@@ -83,6 +83,10 @@ export interface Scenery {
   roadside?(d: number, lateral: number, plain: number): number | null;
   /** How much clearer than the usual the air is: the haze distance is multiplied by this (default 1). Dry Colorado air lets a canyon's far wall and floor read. */
   clearAir?: number;
+  /** On High and Ultra (the post chain) blend the haze as Low does, in display colour with Low's thickness, so the distance is not paler there. Off by default: other stages keep the post chain's own look. */
+  directHaze?: boolean;
+  /** Scales the sky's ambient and reflected light (the environment map, High and Ultra only; default 1). Lower on a stage where it pales sunlit rock. */
+  skyLight?: number;
 }
 
 /** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
@@ -1009,6 +1013,8 @@ const tourOfTheMoon: Stage = {
     barrier: 'stone',
     roadside: makeRoadside(RIM_ROCK_SECTIONS), // the rims of Monument Canyon and its neighbours
     clearAir: 3.2, // dry plateau air: the canyon floors and the monoliths stay readable
+    directHaze: true, // and the same on Medium and up as on Low
+    skyLight: 0.3, // High and Ultra's sky ambient would pale the red rock
   },
   landmarks: [startArch, finishArch(TM_FINISH), finishArch(TM_VISITOR_CENTER)],
   signs: [],

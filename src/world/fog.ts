@@ -12,7 +12,7 @@ import * as THREE from 'three';
 //  - Cloud shadows: the sun's light on lit surfaces is dimmed where a cloud sits
 //    between them and the sun. Same noise as the sky's clouds (CLOUD_GLSL), High and up.
 //
-// The per-frame numbers live in one shared Float32Array (vec4 afFog[4]) that is
+// The per-frame numbers live in one shared Float32Array (vec4 afFog[5]) that is
 // added to every built-in shader's uniforms; UniformsUtils.clone() passes typed
 // arrays by reference, so one write per frame reaches every material.
 //
@@ -20,8 +20,9 @@ import * as THREE from 'three';
 //   [1] sun direction xyz, forward-scatter amount
 //   [2] sun colour rgb, horizon band amount
 //   [3] cloud threshold, cloud drift x, drift z (cells), cloud-shadow strength
+//   [4] direct haze (1: on the post-processed path, blend the haze as the direct path does), 0, 0, 0
 
-export const FOG_UNIFORM = new Float32Array(16);
+export const FOG_UNIFORM = new Float32Array(20);
 
 export const CLOUD_CELL = 650; // metres across the biggest cloud shapes
 export const CLOUD_HEIGHT = 1500; // metres above the camera
@@ -50,7 +51,7 @@ float afCloud( vec2 q, int octaves ) {
 }`;
 
 const FOG_PARS_FRAGMENT = /* glsl */ `
-uniform vec4 afFog[4];
+uniform vec4 afFog[5];
 varying vec3 vFogRel;
 #ifdef USE_FOG
   uniform vec3 fogColor;
@@ -76,8 +77,14 @@ const FOG_FRAGMENT = /* glsl */ `
   float x = clamp( k * rel.y, -30.0, 30.0 );
   float mean = abs( x ) < 0.001 ? 1.0 - 0.5 * x : ( 1.0 - exp( -x ) ) / x;
   float tau = afFog[0].x * max( dist - 70.0, 0.0 ) * exp( clamp( -k * ( cameraPosition.y - afFog[0].z ), -8.0, 8.0 ) ) * mean;
+  // The direct path (Low) tone-maps each surface and blends the haze in display colour. The post chain blends in
+  // linear HDR and tone-maps afterwards, where the same haze reads about twice as thick over dark surfaces.
+  // direct (a stage Scenery.directHaze) makes the post chain blend as the direct path does.
+  bool direct = afFog[4].x > 0.5;
   #ifdef TONE_MAPPING
     tau *= 1.3;
+  #else
+    if ( direct ) tau *= 1.3;
   #endif
   float fogFactor = max( 1.0 - exp( -tau ), smoothstep( afFog[0].w * 0.8, afFog[0].w, dist ) );
   float side = max( dot( normalize( vdir.xz + 1e-4 ), normalize( afFog[1].xz + 1e-4 ) ), 0.0 );
@@ -85,12 +92,21 @@ const FOG_FRAGMENT = /* glsl */ `
   vec3 fc = fogColor;
   #ifdef TONE_MAPPING
     fc = sRGBTransferEOTF( vec4( fc, 1.0 ) ).rgb;
+  #else
+    if ( direct ) fc = sRGBTransferEOTF( vec4( fc, 1.0 ) ).rgb;
   #endif
   fc += afFog[2].rgb * ( afFog[2].w * pow( side, 4.0 ) * exp( -max( vdir.y, 0.0 ) * 5.0 ) + afFog[1].w * pow( toSun, 8.0 ) );
   #ifdef TONE_MAPPING
     fc = sRGBTransferOETF( vec4( toneMapping( fc ), 1.0 ) ).rgb;
+    gl_FragColor.rgb = mix( gl_FragColor.rgb, fc, fogFactor );
+  #else
+    if ( direct ) {
+      // Blend in a gamma-2.2 space, close to the display colour the direct path blends in.
+      vec3 a = pow( max( gl_FragColor.rgb, vec3( 0.0 ) ), vec3( 1.0 / 2.2 ) );
+      vec3 b = pow( max( fc, vec3( 0.0 ) ), vec3( 1.0 / 2.2 ) );
+      gl_FragColor.rgb = pow( mix( a, b, fogFactor ), vec3( 2.2 ) );
+    } else gl_FragColor.rgb = mix( gl_FragColor.rgb, fc, fogFactor );
   #endif
-  gl_FragColor.rgb = mix( gl_FragColor.rgb, fc, fogFactor );
 }
 #endif`;
 
@@ -124,11 +140,12 @@ export function installFog() {
 export function setFog(
   density: number, heightK: number, baseY: number, far: number,
   sunDir: THREE.Vector3, forward: number, sunColor: THREE.Color, band: number,
-  cloudThreshold: number, driftX: number, driftZ: number, cloudShadow: number,
+  cloudThreshold: number, driftX: number, driftZ: number, cloudShadow: number, directHaze = false,
 ) {
   const f = FOG_UNIFORM;
   f[0] = density; f[1] = heightK; f[2] = baseY; f[3] = far;
   f[4] = sunDir.x; f[5] = sunDir.y; f[6] = sunDir.z; f[7] = forward;
   f[8] = sunColor.r; f[9] = sunColor.g; f[10] = sunColor.b; f[11] = band;
   f[12] = cloudThreshold; f[13] = driftX; f[14] = driftZ; f[15] = cloudShadow;
+  f[16] = directHaze ? 1 : 0;
 }
