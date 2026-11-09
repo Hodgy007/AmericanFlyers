@@ -64,7 +64,9 @@ describe('circuits', () => {
     const summits = s.race!.summits!;
     expect(summits.map((k) => k.name).sort()).toEqual(['23rd Street', '23rd Street', 'Libby Hill', 'Libby Hill']);
     for (const k of summits) {
-      expect(s.elevationAt(k.d) - s.elevationAt(k.d - 400), k.name).toBeGreaterThan(5);
+      // 23rd Street is short and steep, Libby Hill longer and steadier: climbed over the last 300 m or the last 800 m.
+      const rise = Math.max(s.elevationAt(k.d) - s.elevationAt(k.d - 300), s.elevationAt(k.d) - s.elevationAt(k.d - 800));
+      expect(rise, k.name).toBeGreaterThan(8);
       expect(s.elevationAt(k.d + 100) - s.elevationAt(k.d), k.name).toBeLessThan(1);
     }
     expect(summits.some((k) => k.d > lap)).toBe(true);

@@ -30,7 +30,7 @@ Choosing a stage resets the ride. If your current ride is at least a minute long
 | **Richmond Worlds Circuit** | 2 × 16.2 km | Richmond, Virginia: the 2015 World Championships road-race circuit, twice round. Rolling city streets, then the cobbled Libby Hill and the very steep 23rd Street, and the drag up Governor Street to the finish by the State Capitol. KOMs on both climbs and a sprint at the line each lap. |
 | **Central Park Loop** | 3 × 9.8 km | New York: Park Drive counter-clockwise, three laps, with Cat Hill, the Reservoir and Harlem Hill, and the Manhattan skyline all round the park. |
 | **Harrogate Worlds Circuit** | 2 × 13.9 km | North Yorkshire: the 2019 World Championships finishing circuit, twice round. Green fields and dry-stone walls, the climb out of the Oak Beck valley (KOM), and the drag up Parliament Street to the finish by The Stray. British and Yorkshire crowds. |
-| **Pacific Coast Highway** | 39 km | California Highway 1 through Big Sur: rolling cliff road above the Pacific, Bixby Creek Bridge and Hurricane Point, in the morning fog. A point-to-point stage, 710 m of climbing. |
+| **Pacific Coast Highway** | 39 km | California Highway 1 through Big Sur: rolling cliff road above the Pacific, Bixby Creek Bridge and Hurricane Point, in the morning fog. A point-to-point stage, about 580 m of climbing. |
 
 Each stage also has its own light and weather when **Time & weather** is on Auto: Route 66 Flats and Hell of the West start at dusk (and it goes dark as you ride), the Tourmalet and Mount Washington are cloudy. See [Riding](riding.md#time-of-day-and-weather).
 

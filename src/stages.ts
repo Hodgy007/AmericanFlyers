@@ -1077,11 +1077,18 @@ interface CircuitGeometry {
   mean: number;
 }
 
-function circuitGeometry(route: RealRouteData, lap: number, laps: number, maxGrade: number): CircuitGeometry {
+function circuitGeometry(route: RealRouteData, lap: number, laps: number, maxGrade: number, smooth?: number, lapGain?: number): CircuitGeometry {
   const geo = mapRoute(route, lap);
-  let high = 0;
-  for (const v of geo.rise) if (v > high) high = v;
-  const rise = elevationFrom(geo, lap, { peak: high, maxGrade });
+  // lapGain: the published climbing per lap. SRTM reads a town's roofs and a park's trees as extra ups and downs, so the
+  // (smoothed) profile is scaled about the start until a lap climbs that much, before the gradient cap.
+  let peak: number | undefined;
+  if (lapGain) {
+    const raw = elevationFrom(geo, lap, { maxGrade: 1, smooth });
+    let high = 0, gain = 0;
+    for (let u = 0; u < lap; u += 10) { const a = raw(u), b = raw(u + 10); high = Math.max(high, a); if (b > a) gain += b - a; }
+    if (high > 0 && gain > 0) peak = (high * lapGain) / gain;
+  }
+  const rise = elevationFrom(geo, lap, { maxGrade, smooth, peak });
   // The baked road ends a metre or two off the altitude it started at: spread that over the lap, so the lap is periodic.
   const closing = rise(lap);
   const lapElevation = (u: number) => rise(u) - (closing * u) / lap;
@@ -1175,7 +1182,7 @@ const namedPlaces = (places: [number, string][], lap: number, laps: number): Sta
 const CAPITOL_HEIGHT = 34.4;
 const RW_LAP = 16200;
 const RW_LAPS = 2;
-const rw = circuitGeometry(richmondRoute, RW_LAP, RW_LAPS, 0.2);
+const rw = circuitGeometry(richmondRoute, RW_LAP, RW_LAPS, 0.2, 40, 127);
 const RW_START: LonLat = [-77.43638, 37.54238]; // the baked road's first point: the finish line
 const RW_ALTITUDE = 64; // m above sea level at the line
 const RW_GROUND = rw.mean + 4; // the wild ground: the plateau the city stands on, a little above the road's mean
@@ -1249,7 +1256,7 @@ const richmondWorlds: Stage = {
 // procedural (world/skyline.ts): a band outside the drive, taller to the south.
 const CP_LAP = 9800;
 const CP_LAPS = 3;
-const cp = circuitGeometry(centralParkRoute, CP_LAP, CP_LAPS, 0.2);
+const cp = circuitGeometry(centralParkRoute, CP_LAP, CP_LAPS, 0.07, 250, 88);
 const CP_START: LonLat = [-73.97293, 40.76885];
 const CP_ALTITUDE = 28;
 const cpAt = (p: LonLat): { x: number; z: number } => { const e = eastSouth(CP_START, p); return { x: e.x / cp.scale, z: e.z / cp.scale }; };
@@ -1315,7 +1322,7 @@ const centralPark: Stage = {
 // the published lap. Two laps.
 const HW_LAP = 13900;
 const HW_LAPS = 2;
-const hw = circuitGeometry(harrogateRoute, HW_LAP, HW_LAPS, 0.2);
+const hw = circuitGeometry(harrogateRoute, HW_LAP, HW_LAPS, 0.12, 100, 245);
 const HW_ALTITUDE = 120;
 const HW_KOM = 10600; // the top of the Oak Beck climb
 const HW_PLACES: [number, string][] = [[1500, 'Otley Road'], [9650, 'Oak Beck'], [10900, 'Cornwall Road'], [12500, 'Royal Pump Room'], [13300, 'Parliament Street']];
@@ -1384,9 +1391,7 @@ const pcGeo = mapRoute(pacificRoute, PC_LENGTH);
 const PC_ALTITUDE = 6; // m above sea level at the start (the Carmel River bridge)
 const PC_FLOOR = -1.5; // the lowest the road runs, in the datum: the baked profile dips to the sea's level at the river mouth, the highway does not
 const pcElevation = (() => {
-  let high = 0;
-  for (const v of pcGeo.rise) if (v > high) high = v;
-  const f = elevationFrom(pcGeo, PC_LENGTH, { peak: high, maxGrade: 0.12 });
+  const f = elevationFrom(pcGeo, PC_LENGTH, { maxGrade: 0.09, smooth: 250 });
   return (d: number) => Math.max(PC_FLOOR, f(d));
 })();
 const PC_BIXBY = 21850;

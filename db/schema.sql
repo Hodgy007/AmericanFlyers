@@ -439,10 +439,10 @@ insert into public.stage_limits (stage_id, distance_m, min_finish_s, max_avg_kmh
   ('mt-blue-sky', 23300, 2246, 38),
   ('mt-diablo', 18000, 1927, 34),
   ('flagstaff', 7400, 999, 27),
-  ('richmond-worlds', 32400, 2073, 57),
-  ('central-park', 29400, 1859, 57),
-  ('harrogate-worlds', 27800, 1793, 56),
-  ('pacific-coast', 39100, 2603, 55)
+  ('richmond-worlds', 32400, 2021, 58),
+  ('central-park', 29400, 1831, 58),
+  ('harrogate-worlds', 27800, 1858, 54),
+  ('pacific-coast', 39100, 2563, 55)
 on conflict (stage_id) do update set distance_m = excluded.distance_m, min_finish_s = excluded.min_finish_s, max_avg_kmh = excluded.max_avg_kmh;
 
 -- Set by the app when a ride used the demo slider or ?timescale: such rides never count for times.
