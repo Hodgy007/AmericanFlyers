@@ -604,6 +604,20 @@ button.icon { border-radius: 8px; }
 .actions button.active { background: linear-gradient(180deg, #4b88ff, #2a5fd1); }
 .hud-edit { border-radius: 50%; }
 
+/* Inline icons in buttons: stroked line art in the button's own text colour, so they stay bright and match
+   the label (emoji glyphs render dark purple on some systems and disappear on the dark bar). */
+.ico {
+  width: 17px; height: 17px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.9;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.actions button:has(> .ico), #btn-account { display: inline-flex; align-items: center; gap: 7px; }
+#btn-riders { padding: 7px 9px; color: #eaf1ff; }
+#btn-riders.live { color: #4ade80; }
+/* How many other riders are here, in a small bright pill beside the icon. */
+.riders-count { min-width: 16px; padding: 0 4px; border-radius: 999px; background: #4ade80; color: #0b1020; font-size: 11px; font-weight: 800; line-height: 16px; text-align: center; }
+.riders-count[hidden] { display: none; }
+
 /* Fields */
 dialog input[type='number'], dialog input[type='search'], dialog select, dialog textarea, .creator-meta input, dialog .block-field input[type] {
   background: var(--field);
