@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { roadPoint } from '../course';
 import { currentStage } from '../course';
 import { barrierKind, hasBarriers, barrierSections, buildBarriers, railGeometry, stoneGeometry } from './barriers';
-import { buildCampers, camperGeometries, camperMaterial, planCampers, type CamperGeometries } from './campers';
+import { buildCampers, camperGeometries, camperMaterial, loadVanModel, planCampers, type CamperGeometries, type VanModel } from './campers';
 import { CULTURES, type CultureId } from './crowdCulture';
 import { buildCrowd, crowdMaterial, crowdUniforms, planCrowd, spectatorGeometry } from './crowds';
 import { buildPaint, drawAtlas, paintName, planPaint, type PaintSpot } from './roadPaint';
@@ -37,7 +37,11 @@ export class RoadExtras {
   private readonly flagMats = new Map<CultureId, THREE.MeshStandardMaterial>();
   private camp: { geos: CamperGeometries; mat: THREE.MeshStandardMaterial } | null = null; // only the climbs need these
 
-  constructor(private readonly roadMaterial: THREE.MeshStandardMaterial, map: THREE.Texture, maxAniso: number) {
+  private vanModel: VanModel | null = null; // camper.glb once it has loaded; the box vans stand in until then (and where it is missing)
+  private vanRequested = false;
+
+  /** `onVanModel`: called when the camper model arrives, so the roadside objects can be fitted out again with it. */
+  constructor(private readonly roadMaterial: THREE.MeshStandardMaterial, map: THREE.Texture, maxAniso: number, private readonly onVanModel: () => void = () => {}) {
     this.surface = new RoadSurface(roadMaterial, map, maxAniso);
   }
 
@@ -117,7 +121,11 @@ export class RoadExtras {
         const spots = planCampers(stage, d0, d1, spec.crowd, ground, barrierSections(stage, d0 - 20, d1 + 20, ground));
         if (spots.length) {
           this.camp ??= { geos: camperGeometries(), mat: camperMaterial() };
-          objects.push(...buildCampers(spots, this.camp.geos, this.camp.mat, origin, spec.crowdShadows));
+          if (spec.vanModel && !this.vanRequested) {
+            this.vanRequested = true;
+            void loadVanModel().then((v) => { if (v) { this.vanModel = v; this.onVanModel(); } });
+          }
+          objects.push(...buildCampers(spots, this.camp.geos, this.camp.mat, origin, spec.crowdShadows, spec.vanModel ? this.vanModel : null));
         }
       }
       if (spec.crowd > 0 && stage.finish !== null) {

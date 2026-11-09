@@ -4,6 +4,7 @@
 import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
+import type { HorizonChoice } from './world/horizon';
 import { RIM_ROCK_SECTIONS, makeRoadside } from './world/canyon.js';
 import { basinHeight, summitCone, type Basin, type SummitCone } from './world/summitCone';
 import { eastSouth, flatironsPlacement, type LonLat } from './world/flatironsPlacement';
@@ -65,6 +66,8 @@ export interface Scenery {
   trees?: TreeMix;
   fields: boolean; // patches of farmland
   mountainScale: number; // height of the distant mountain ring
+  /** Which panorama stands on the horizon (world/horizon.ts): the Alps, Pyrenees, Rockies, red-rock desert or rolling hills, or none for the procedural ring alone. Omitted: found from `mountainScale`. */
+  horizon?: HorizonChoice;
   /** 'desert': red and orange rock, sparse junipers instead of forest (Colorado's red-rock country). */
   palette?: 'desert';
   /** How the road looks: its paint and surface (see world/roadStyle.ts). Left out: 'us-highway'. */
@@ -213,6 +216,7 @@ const heartland: Stage = {
     trees: { oak: 0.4, beech: 0.3, cottonwood: 0.15, shrub: 0.15 },
     fields: true,
     mountainScale: 1,
+    horizon: 'hills',
   },
   landmarks: [
     GANTRY,
@@ -259,6 +263,7 @@ const route66: Stage = {
     trees: { oak: 0.3, cottonwood: 0.3, beech: 0.2, shrub: 0.2 },
     fields: true,
     mountainScale: 0.8,
+    horizon: 'hills',
   },
   landmarks: [
     startArch,
@@ -422,6 +427,7 @@ const alpe = buildClimb({
     trees: { spruce: 0.5, larch: 0.25, beech: 0.25 },
     fields: false,
     mountainScale: 2.6,
+    horizon: 'alps',
     road: 'alpine',
   },
   landmarks: (at) => {
@@ -461,6 +467,7 @@ const stelvio = buildClimb({
     trees: { spruce: 0.45, larch: 0.3, pine: 0.25 },
     fields: false,
     mountainScale: 3.4,
+    horizon: 'alps',
     road: 'alpine',
     barrier: 'stone',
   },
@@ -499,6 +506,7 @@ const hellOfTheWestClimb = buildClimb({
     trees: { pine: 0.5, spruce: 0.35, aspen: 0.15 },
     fields: false,
     mountainScale: 3.2,
+    horizon: 'rockies',
   },
   landmarks: [monumentAt('log-lodge', 20720, 1, 30, 8.1, { yaw: -0.4, clearance: 22 })],
 });
@@ -537,6 +545,7 @@ const ventoux = buildClimb({
     trees: { oak: 0.3, pine: 0.4, beech: 0.3 },
     fields: false,
     mountainScale: 1.6,
+    horizon: 'hills',
     road: 'alpine',
     barrier: 'stone',
   },
@@ -575,6 +584,7 @@ const tourmalet = buildClimb({
     trees: { beech: 0.45, pine: 0.3, shrub: 0.25 },
     fields: false,
     mountainScale: 3.0,
+    horizon: 'pyrenees',
     road: 'alpine',
     barrier: 'stone',
   },
@@ -612,6 +622,7 @@ const zoncolan = buildClimb({
     trees: { beech: 0.55, spruce: 0.45 },
     fields: false,
     mountainScale: 2.8,
+    horizon: 'alps',
     road: 'lane',
   },
   landmarks: [colSign(10100, { style: 'it', lines: ['MONTE ZONCOLAN', '1750 m'] })],
@@ -653,6 +664,7 @@ const mtWashington = buildClimb({
     trees: { beech: 0.3, spruce: 0.5, aspen: 0.12, shrub: 0.08 },
     fields: false,
     mountainScale: 3.0,
+    horizon: 'hills',
     road: 'lane',
     barrier: 'none', // the Auto Road is unguarded over most of its length: steep drops, no rails
   },
@@ -691,6 +703,7 @@ const mtBlueSky = buildClimb({
     trees: { spruce: 0.55, pine: 0.45 },
     fields: false,
     mountainScale: 3.6,
+    horizon: 'rockies',
     road: 'park',
   },
   landmarks: [
@@ -726,6 +739,7 @@ const mtDiablo = buildClimb({
     trees: { oak: 0.5, pine: 0.2, shrub: 0.3 },
     fields: false,
     mountainScale: 1.8,
+    horizon: 'hills',
     road: 'park',
   },
   landmarks: [
@@ -766,6 +780,7 @@ const flagstaff = buildClimb({
     trees: { pine: 0.75, spruce: 0.1, shrub: 0.15 },
     fields: false,
     mountainScale: 2.4,
+    horizon: 'rockies',
     road: 'us-highway',
   },
   // Boulder lies in a basin below the road and the Flatirons rise from its edge: sink the wild ground towards them so the road
@@ -933,6 +948,7 @@ const morgulBismark: Stage = {
     trees: { cottonwood: 0.3, pine: 0.35, shrub: 0.35 },
     fields: true,
     mountainScale: 1.7, // the Front Range and the Flatirons to the west
+    horizon: 'rockies',
   },
   landmarks: [
     startArch, finishArch(MB_LAP), finishArch(MB_FINISH), finishArch(MB_SPRINT), finishArch(MB_LAP + MB_SPRINT), ...lapFarm,
@@ -1009,6 +1025,7 @@ const tourOfTheMoon: Stage = {
     trees: { juniper: 0.75, shrub: 0.25 },
     fields: false,
     mountainScale: 1.3, // the Book Cliffs
+    horizon: 'desert',
     palette: 'desert',
     road: 'park',
     barrier: 'stone',
