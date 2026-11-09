@@ -129,7 +129,7 @@ export function sanitizeClimbGuide(raw: unknown, stageId: string, topic: ClimbRe
     const n = sources.length + 1;
     const was = typeof s.n === 'number' && Number.isInteger(s.n) ? s.n : i + 1;
     remap.set(was, n);
-    sources.push({ n, title: cleanLine(s.title, 14, 90) || host, host, url: s.url });
+    sources.push({ n, title: cleanProse(s.title, 90, new Map()) || host, host, url: s.url });
   }
   const summary = cleanProse(raw.summary, CLIMB_SUMMARY_CHARS, remap);
   const facts = (Array.isArray(raw.facts) ? raw.facts : []).map((f) => cleanProse(f, CLIMB_FACT_CHARS, remap)).filter(Boolean).slice(0, CLIMB_MAX_FACTS);

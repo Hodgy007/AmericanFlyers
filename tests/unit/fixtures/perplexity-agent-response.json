@@ -1,0 +1,46 @@
+{
+  "id": "resp_6f1c2a7e-0d52-4c1e-9c6e-3b7a1d9f0a11",
+  "object": "response",
+  "created_at": 1783468800,
+  "model": "openai/gpt-6-luna",
+  "effort": "low@2026-10-16.0",
+  "status": "completed",
+  "error": null,
+  "output": [
+    {
+      "type": "search_results",
+      "queries": ["Alpe d'Huez history Tour de France", "Alpe d'Huez first Tour stage finish 1952"],
+      "results": [
+        { "id": 1, "snippet": "Fausto Coppi won the first Tour de France stage to finish at Alpe d'Huez in 1952.", "title": "Alpe d'Huez - Wikipedia", "url": "https://en.wikipedia.org/wiki/Alpe_d%27Huez", "date": "2024-05-02", "last_updated": "2026-09-01", "source": "web" },
+        { "id": 2, "snippet": "The climb is 13.8 km at an average of 8.1%, with 21 numbered hairpin bends.", "title": "Alpe d'Huez | Tour de France", "url": "https://www.letour.fr/en/alpe-dhuez", "date": null, "last_updated": "2026-07-14", "source": "web" },
+        { "id": 3, "snippet": "Dutch corner 7 is known for its crowds.", "title": "Dutch Corner - a fan guide", "url": "http://insecure.example.com/dutch-corner", "date": "2022-07-01", "last_updated": "2025-01-01", "source": "web" },
+        { "id": 4, "snippet": "Alpe d'Huez has hosted the Tour more than 30 times.", "title": "", "url": "https://www.cyclingnews.com/features/alpe-dhuez/#history", "date": "2023-07-20", "last_updated": "2026-02-02", "source": "web" },
+        { "id": 5, "snippet": "Same page, listed twice.", "title": "Alpe d'Huez - Wikipedia (mobile)", "url": "https://en.wikipedia.org/wiki/Alpe_d%27Huez", "date": null, "last_updated": "2026-09-01", "source": "web" },
+        { "id": 6, "snippet": "Marco Pantani set the record in 1997.", "title": "Pantani's Alpe d'Huez record", "url": "https://www.cyclingweekly.com/news/pantani-alpe", "date": "2020-04-10", "last_updated": "2026-01-12", "source": "web" },
+        { "id": 7, "snippet": "Ride guide.", "title": "Riding Alpe d'Huez", "url": "https://www.visit-alpe-dhuez.example/ride", "date": null, "last_updated": "2026-03-03", "source": "web" }
+      ]
+    },
+    {
+      "type": "message",
+      "id": "msg_41254287-8054-4973-a3a4-7e5fb617eea4",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "{\"summary\":\"Alpe d'Huez first hosted a Tour de France stage finish in 1952, won by Fausto Coppi.[1][web:2] The 21 numbered hairpins and the Dutch corner at number 7 made it a fixture of the race.[3]\",\"facts\":[\"The climb is about 13.8 km at an average of 8.1% [2].\",\"The Tour has finished here more than 30 times [4].\",\"**Pantani** set the fastest known Tour time in 1997 [6][99].\"]}",
+          "annotations": [],
+          "logprobs": []
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 6852,
+    "output_tokens": 316,
+    "total_tokens": 7168,
+    "cost": { "currency": "USD", "input_cost": 0.01307, "output_cost": 0.00632, "total_cost": 0.02189, "cache_creation_cost": null, "cache_read_cost": 0.00143, "tool_calls_cost": 0.0025 },
+    "input_tokens_details": { "cache_creation_input_tokens": 0, "cache_read_input_tokens": 3584, "cached_tokens": 3584 },
+    "tool_calls_details": { "search_web": { "invocation": 1 } }
+  }
+}
