@@ -1034,7 +1034,7 @@ create table if not exists public.ai_consent (
 create table if not exists public.ai_usage (
   user_id text not null default auth.user_id(),
   day date not null,
-  kind text not null check (kind in ('coach_debrief', 'coach_plan', 'coach_tip', 'rival_pre', 'rival_post')),
+  kind text not null check (kind in ('coach_debrief', 'coach_plan', 'coach_tip', 'coach_climb', 'rival_pre', 'rival_post')),
   count integer not null default 0,
   primary key (user_id, day, kind)
 );
@@ -1055,6 +1055,10 @@ create table if not exists public.coach_notes (
   debrief jsonb not null,
   primary key (user_id, activity_id)
 );
+-- 'coach_climb' (the Climb guide, a web-grounded answer from api/ai.ts) joined the kinds later. `create table if not exists`
+-- leaves an older table's check as it was, so the check is replaced by name here (safe to re-run).
+alter table public.ai_usage drop constraint if exists ai_usage_kind_check;
+alter table public.ai_usage add constraint ai_usage_kind_check check (kind in ('coach_debrief', 'coach_plan', 'coach_tip', 'coach_climb', 'rival_pre', 'rival_post'));
 alter table public.ai_consent enable row level security;
 alter table public.ai_usage enable row level security;
 alter table public.rival_memory enable row level security;
@@ -1103,7 +1107,7 @@ declare
   is_adm boolean;
 begin
   if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
-  if p_kind is null or p_kind not in ('coach_debrief', 'coach_plan', 'coach_tip', 'rival_pre', 'rival_post') then
+  if p_kind is null or p_kind not in ('coach_debrief', 'coach_plan', 'coach_tip', 'coach_climb', 'rival_pre', 'rival_post') then
     raise exception 'Unknown AI request' using errcode = '22023';
   end if;
   select u.name as name, coalesce(u.banned, false) as banned into usr from neon_auth."user" u where u.id::text = me;
@@ -1119,7 +1123,7 @@ begin
   is_adm := exists (
     select 1 from neon_auth."user" u join public.admins ad on lower(ad.email) = lower(u.email)
     where u.id::text = me and u."emailVerified");
-  lim := case when is_adm then 100000 else case p_kind when 'coach_debrief' then 10 when 'coach_plan' then 6 when 'coach_tip' then 30 else 10 end end;
+  lim := case when is_adm then 100000 else case p_kind when 'coach_debrief' then 10 when 'coach_plan' then 6 when 'coach_tip' then 30 when 'coach_climb' then 8 else 10 end end;
   insert into public.ai_usage as a (user_id, day, kind, count) values (me, today, p_kind, 1)
   on conflict (user_id, day, kind) do update set count = a.count + 1 where a.count < lim
   returning a.count into used;

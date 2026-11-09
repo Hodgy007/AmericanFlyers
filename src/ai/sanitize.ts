@@ -9,7 +9,7 @@ import { cannedRivalLines } from './canned.js';
 import { SUGGESTION_IDS } from './catalogue.js';
 import {
   RIVAL_TRIGGERS,
-  type CoachTip, type DebriefResult, type PlanResult, type RivalLines, type RivalPostResult, type TipResult,
+  type ClimbResult, type ClimbSource, type CoachTip, type DebriefResult, type PlanResult, type RivalLines, type RivalPostResult, type TipResult,
 } from './types.js';
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -71,4 +71,68 @@ export function sanitizeRivalPost(raw: unknown): RivalPostResult | null {
   const line = cleanLine(raw.line, RIVAL_WORDS);
   if (!line) return null;
   return { line, note: cleanLine(raw.note, 24, 140) };
+}
+
+// ------------------------------------------------------- climb guide ----
+
+export const CLIMB_SUMMARY_CHARS = 520;
+export const CLIMB_FACT_CHARS = 240;
+export const CLIMB_MAX_FACTS = 5;
+export const CLIMB_MAX_SOURCES = 5;
+
+/**
+ * Plain text for the screen: no HTML or markdown, one paragraph, at most `max` characters, and a
+ * citation marker like [2] kept only when `remap` has a source for it (renumbered through `remap`).
+ */
+export function cleanProse(text: unknown, max: number, remap: ReadonlyMap<number, number>): string {
+  if (typeof text !== 'string') return '';
+  let s = text
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\[([^\]\d][^\]]*)\]\([^)]*\)/g, '$1') // [label](url) becomes label
+    .replace(/\[(?:web:)?(\d{1,3})\]/g, (_m, n: string) => { const to = remap.get(Number(n)); return to ? `[${to}]` : ''; })
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/[*_`#>~|\\]/g, '')
+    .replace(/^\s*[-•]\s+/, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([.,;:!?])/g, '$1')
+    .trim();
+  if (s.length > max) {
+    s = s.slice(0, max).replace(/\s+\S*$/, '').replace(/\[\d*$/, '').trim();
+    if (!/[.!?]$/.test(s)) s += '…';
+  }
+  return s;
+}
+
+const hostOf = (url: string): string | null => {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.hostname.includes('.') ? u.hostname.replace(/^www\./, '').toLowerCase() : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Checks a web answer ({summary, facts, sources}) before it is shown: https sources only (deduplicated, at most five,
+ * renumbered from 1 with the markers in the text following them), plain text, length caps. Null when nothing usable is left.
+ */
+export function sanitizeClimbGuide(raw: unknown, stageId: string, topic: ClimbResult['topic'], asOf: string): ClimbResult | null {
+  if (!isObj(raw)) return null;
+  const sources: ClimbSource[] = [];
+  const remap = new Map<number, number>();
+  const seen = new Set<string>();
+  for (const [i, s] of (Array.isArray(raw.sources) ? raw.sources : []).entries()) {
+    if (!isObj(s) || typeof s.url !== 'string' || sources.length >= CLIMB_MAX_SOURCES) continue;
+    const host = hostOf(s.url);
+    if (!host || seen.has(s.url)) continue;
+    seen.add(s.url);
+    const n = sources.length + 1;
+    const was = typeof s.n === 'number' && Number.isInteger(s.n) ? s.n : i + 1;
+    remap.set(was, n);
+    sources.push({ n, title: cleanLine(s.title, 14, 90) || host, host, url: s.url });
+  }
+  const summary = cleanProse(raw.summary, CLIMB_SUMMARY_CHARS, remap);
+  const facts = (Array.isArray(raw.facts) ? raw.facts : []).map((f) => cleanProse(f, CLIMB_FACT_CHARS, remap)).filter(Boolean).slice(0, CLIMB_MAX_FACTS);
+  if (!summary && !facts.length) return null;
+  return { stageId, topic, summary, facts, sources, asOf };
 }
