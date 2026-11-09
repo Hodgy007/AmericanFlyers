@@ -43,6 +43,8 @@ The app also reads `VITE_VERCEL_GIT_COMMIT_SHA` to show the version in feedback 
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | none (required) | Lets the function call Claude. Without it the AI answers `503 not_configured` and riders see the built-in tips and lines. Removing it turns the AI off for everyone. |
 | `AI_MODEL` | `claude-opus-5-5` | The Claude model. `claude-haiku-5-5` is a much cheaper choice. |
+| `AI_GATEWAY_API_KEY` | none (optional) | For the hub's Climb guide, which calls Perplexity Sonar through the Vercel AI Gateway. On Vercel nothing needs setting: the function's own OIDC token is used (`VERCEL_OIDC_TOKEN`, or the `x-vercel-oidc-token` request header). Set a key only to override it. With neither, the Climb guide answers `503 not_configured` (riders see a line from the stage's own figures). |
+| `CLIMB_GUIDE_MODEL` | `perplexity/sonar` | The gateway model for the Climb guide, for example `perplexity/sonar-pro`. |
 | `VITE_NEON_DATA_API_URL` | The production Data API | The function uses the same Data API URL as the app. |
 
 After changing a variable, redeploy. Riders have daily limits per kind of AI message (see [AI coach and rivals](../developer-guide/ai.md)), enforced in the database. Each call logs one line with token counts in the Vercel function logs.

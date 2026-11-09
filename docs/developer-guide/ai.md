@@ -43,11 +43,32 @@ For `rival_post` on a ride that counts, the function then calls `rival_record(p_
 
 A typical opted-in ride: 1 plan, up to a couple of tips, 1 debrief, and with a rival 1 pre plus 1 post, so roughly 8,000 to 10,000 input and 2,000 to 4,000 output tokens (about 5 calls). Check the logged counts in Vercel and the Anthropic console for real numbers.
 
+## Climb guide (`coach_climb`)
+
+A web-grounded answer for a built-in stage on a real road, on the hub's route cards.
+
+- **Request.** `{ kind: 'coach_climb', payload: { stageId, topic } }`. `stageId` is an enum of `CLIMB_IDS` and `topic` one of `history | records | conditions | visit` (`src/ai/climbs.ts`); the schema is `.strict()`, so the body can't carry a name or a question. The server builds the question itself (`api/_lib/prompts/climb.ts`) from the table's place, region, start, length and climbing, so the prompt only contains our own data. A unit test keeps the table's lengths and climbing in step with `src/stages.ts` (the table doesn't import it: it is heavy and shared with the function).
+- **Gate.** The same `ai_claim()` as the other kinds. The `coach` prefix means it uses the AI coach opt-in; the limit is 8 a day.
+- **Provider.** `api/_lib/perplexity.ts` POSTs a Chat Completions request to `https://ai-gateway.vercel.sh/v1/chat/completions` with `model` (`perplexity/sonar`, or `CLIMB_GUIDE_MODEL`), a system and a user message, and `max_tokens: 900`, using plain `fetch` with a 25 s timeout and no retries. The Bearer token is `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN`, else the request's `x-vercel-oidc-token` header (`pickToken`); none means `503 not_configured` before the database is touched. The runner is injected into `handleAi` as `perplexity`, like the Claude one.
+- **Reading the answer.** Text from `choices[0].message.content` (a JSON object `{summary, facts[]}` as asked, or plain text split into a paragraph and bullets). Sources, in the order the `[n]` markers count from, come from top-level `citations` (urls) with titles from `search_results`, else `search_results`, else `message.annotations` (`url_citation`); `parseGatewayResponse` also looks inside `provider_metadata`. `buildClimbRaw` keeps https sources only, dedupes by URL, caps at five, puts the cited ones first and renumbers the markers (markers with no source are dropped). `sanitizeClimbGuide` (`src/ai/sanitize.ts`) then strips markdown and HTML, caps lengths and checks the sources again; the browser runs it once more.
+- **Errors.** 401/403 from the gateway: logged, `503 unavailable`, no details sent to the rider. 429: `503 unavailable`, `retryAfter` logged. Timeout: `504 unavailable`. Anything else: `503 unavailable`. An answer with nothing usable is `200` with `source: 'canned'` and the canned line (the stage's length, climbing and average grade plus "Live climb guide unavailable right now."). A call counts against the quota once the gate passes, even if the provider then fails.
+- **Log.** One JSON line: `provider: 'perplexity-gateway'`, `model`, `outcome`, `sources` (where the sources were: `citations`, `search_results`, `annotations` or `none`, to confirm the real shape on a deployment), `n_sources`, `ms`, and the token counts and `cost_usd` if present. The token and the prompt are never logged.
+- **Client.** `src/hub/climbGuide.ts` (loaded on the first click of 🧭 Climb guide) shows the four chips, a loading state, the answer with numbered `target=_blank rel="noopener noreferrer"` source links and the "AI-generated from web sources, may be wrong" note. Signed out: the sign-in prompt. AI coach off: an opt-in button (`set_ai_consent`) and a link to Settings. `src/ai/climbCache.ts` keeps answers in `localStorage` for 24 h per stage and topic (every access in try/catch; entries are sanitized again when read). `scripts/climb-guide-smoke.sh` makes one real gateway call and prints only the response's shape (`AI_GATEWAY_API_KEY`, or `VERCEL_OIDC_TOKEN` from `vercel env pull`).
+- **Tests.** `tests/unit/climbGuide.test.ts` (request building, two recorded gateway response shapes in `tests/unit/fixtures/`, sources, sanitizer, canned line, payload validation, handler routing with a fake runner, the fetch runner), `tests/unit/climbCache.test.ts`, `tests/e2e/climbGuide.spec.ts`.
+
+To apply the database change to an existing database, run `db/schema.sql` (safe to re-run) or:
+
+```sql
+alter table public.ai_usage drop constraint if exists ai_usage_kind_check;
+alter table public.ai_usage add constraint ai_usage_kind_check check (kind in ('coach_debrief', 'coach_plan', 'coach_tip', 'coach_climb', 'rival_pre', 'rival_post'));
+-- then re-create public.ai_claim_for(text, text, text) from db/schema.sql (it now accepts 'coach_climb' with a limit of 8)
+```
+
 ## Database
 
 Tables `ai_consent`, `ai_usage`, `rival_memory`, `coach_notes` (row-level security, no grants) and the functions in [Database schema](../reference/database-schema.md#ai-coach-and-rivals). Every public function is a one-line wrapper over an internal `*_for(me, ...)` version, so the logic can be tested with a made-up rider. All four tables have a text `user_id`, so `delete_my_account()` and `my_data_extras()` cover them without changes.
 
-Quotas per UTC day (admins unlimited): `coach_debrief` 10, `coach_plan` 6, `coach_tip` 30, `rival_pre` 10, `rival_post` 10. A call counts when the gate passes, even if Claude then fails.
+Quotas per UTC day (admins unlimited): `coach_debrief` 10, `coach_plan` 6, `coach_tip` 30, `coach_climb` 8, `rival_pre` 10, `rival_post` 10. A call counts when the gate passes, even if Claude then fails.
 
 ## In the app
 
@@ -60,7 +81,8 @@ Quotas per UTC day (admins unlimited): `coach_debrief` 10, `coach_plan` 6, `coac
 2. `vercel.json` raises the function's `maxDuration` to 40 s.
 3. `npm run build` also type-checks `api/` (`tsc -p api`).
 4. Check: `curl -i -X POST https://<site>/api/ai` answers **401** without a token. Without `ANTHROPIC_API_KEY` a signed-in, opted-in request gets **503** `not_configured`.
-5. To turn the AI off for everyone, remove `ANTHROPIC_API_KEY` (riders get the built-in tips and lines).
+5. The Climb guide needs no new secret on Vercel (the function's OIDC token reaches the AI Gateway); optional `AI_GATEWAY_API_KEY` and `CLIMB_GUIDE_MODEL` (see the table in the admin guide).
+6. To turn the AI off for everyone, remove `ANTHROPIC_API_KEY` (riders get the built-in tips and lines).
 
 ## Testing
 

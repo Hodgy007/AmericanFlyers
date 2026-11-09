@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import fixture from './fixtures/perplexity-agent-response.json';
+import fixture from './fixtures/gateway-sonar-response.json';
+import annotated from './fixtures/gateway-annotations-response.json';
 import { handleAi } from '../../api/_lib/handler';
 import {
-  buildClimbRaw, buildClimbRequest, CALL_TIMEOUT_MS, classifyError, DEFAULT_EFFORT, MAX_OUTPUT_TOKENS, makeRunner,
-  parseAgentResponse, pickEffort, PerplexityFailure, readSummaryFacts, type PerplexityAnswer, type PerplexityRunner,
+  buildClimbRaw, buildClimbRequest, CALL_TIMEOUT_MS, classifyError, DEFAULT_MODEL, GATEWAY_URL, MAX_TOKENS, makeRunner,
+  parseGatewayResponse as parseAgentResponse, pickModel, pickToken, PerplexityFailure, readSummaryFacts, type PerplexityAnswer, type PerplexityRunner,
 } from '../../api/_lib/perplexity';
 import { CLIMB_SYSTEM, climbQuestion } from '../../api/_lib/prompts/climb';
 import { PAYLOADS } from '../../api/_lib/schemas';
@@ -38,29 +39,26 @@ describe('the climb table', () => {
 });
 
 describe('request building', () => {
-  const req = buildClimbRequest(alpe, 'records', '2026-11-09', 'medium');
-  it('uses the effort, our instructions, a bounded output and no storage', () => {
-    expect(req.effort).toBe('medium');
-    expect(req.instructions).toBe(CLIMB_SYSTEM);
-    expect(req.max_output_tokens).toBe(MAX_OUTPUT_TOKENS);
-    expect(req.store).toBe(false);
-    expect(req).not.toHaveProperty('tools'); // the effort level brings web_search
-    expect(req).not.toHaveProperty('preset');
-    expect(req.response_format.type).toBe('json_schema');
-    expect(req.response_format.json_schema.name).toMatch(/^[A-Za-z0-9_]{1,64}$/);
-    expect(req.response_format.json_schema.schema.required).toEqual(['summary', 'facts']);
+  const req = buildClimbRequest(alpe, 'records', '2026-11-09', 'perplexity/sonar-pro');
+  it('is a Chat Completions body: model, a system and a user message, bounded tokens', () => {
+    expect(req.model).toBe('perplexity/sonar-pro');
+    expect(req.max_tokens).toBe(MAX_TOKENS);
+    expect(req.messages.map((m) => m.role)).toEqual(['system', 'user']);
+    expect(req.messages[0].content).toBe(CLIMB_SYSTEM);
+    expect(Object.keys(req).sort()).toEqual(['max_tokens', 'messages', 'model']);
   });
-  it('defaults to the low effort', () => {
-    expect(buildClimbRequest(alpe, 'history', '2026-11-09').effort).toBe(DEFAULT_EFFORT);
-    expect(DEFAULT_EFFORT).toBe('low');
+  it('defaults to perplexity/sonar', () => {
+    expect(buildClimbRequest(alpe, 'history', '2026-11-09').model).toBe(DEFAULT_MODEL);
+    expect(DEFAULT_MODEL).toBe('perplexity/sonar');
   });
   it('builds the question from the stage table and the topic only', () => {
-    expect(req.input).toContain('Today\'s date is 2026-11-09.');
-    expect(req.input).toContain('Alpe d’Huez, Isère, French Alps, France');
-    expect(req.input).toContain('14.0 km');
-    expect(req.input).toContain('1118 m of climbing');
-    expect(req.input).toContain('8.0% on average');
-    expect(req.input).toMatch(/fastest known ascents/);
+    const q = req.messages[1].content;
+    expect(q).toContain('Today\'s date is 2026-11-09.');
+    expect(q).toContain('Alpe d’Huez, Isère, French Alps, France');
+    expect(q).toContain('14.0 km');
+    expect(q).toContain('1118 m of climbing');
+    expect(q).toContain('8.0% on average');
+    expect(q).toMatch(/fastest known ascents/);
     expect(climbQuestion(alpe, 'conditions', '2026-11-09')).toMatch(/open or closed/);
     expect(climbQuestion(alpe, 'visit', '2026-11-09')).toMatch(/practical tips/);
     expect(climbQuestion(alpe, 'history', '2026-11-09')).toMatch(/history/);
@@ -70,38 +68,71 @@ describe('request building', () => {
     expect(CLIMB_SYSTEM).toMatch(/numbered brackets/);
     expect(CLIMB_SYSTEM).toMatch(/Never guess or invent/);
   });
-  it('accepts only known effort names from the environment', () => {
-    expect(pickEffort(undefined)).toBe('low');
-    expect(pickEffort('')).toBe('low');
-    expect(pickEffort('high')).toBe('high');
-    expect(pickEffort('fast@2026-10-16.0')).toBe('fast@2026-10-16.0');
-    expect(pickEffort('turbo')).toBe('low');
-    expect(pickEffort('low; drop table')).toBe('low');
+  it('accepts only gateway model ids from the environment', () => {
+    expect(pickModel(undefined)).toBe('perplexity/sonar');
+    expect(pickModel('')).toBe('perplexity/sonar');
+    expect(pickModel('perplexity/sonar-pro')).toBe('perplexity/sonar-pro');
+    expect(pickModel('sonar')).toBe('perplexity/sonar');
+    expect(pickModel('perplexity/sonar; drop table')).toBe('perplexity/sonar');
+  });
+  it('takes the token from AI_GATEWAY_API_KEY, then VERCEL_OIDC_TOKEN, then the request header, else none', () => {
+    const h = new Headers({ 'x-vercel-oidc-token': 'from-header' });
+    expect(pickToken({ AI_GATEWAY_API_KEY: 'key', VERCEL_OIDC_TOKEN: 'oidc' }, h)).toBe('key');
+    expect(pickToken({ VERCEL_OIDC_TOKEN: 'oidc' }, h)).toBe('oidc');
+    expect(pickToken({}, h)).toBe('from-header');
+    expect(pickToken({ AI_GATEWAY_API_KEY: ' ' }, new Headers())).toBeNull();
   });
 });
 
-describe('reading a recorded Agent API response', () => {
+describe('reading a recorded gateway response (Sonar: citations + search_results)', () => {
   const answer = parseAgentResponse(fixture);
-  it('walks output[]: message text, search results and usage', () => {
+  it('reads the content, the sources in order, the model and the usage', () => {
     expect(answer.text).toContain('Fausto Coppi');
+    expect(answer.sourcesFrom).toBe('citations');
     expect(answer.results).toHaveLength(7);
-    expect(answer.results[0]).toMatchObject({ id: 1, url: 'https://en.wikipedia.org/wiki/Alpe_d%27Huez' });
+    expect(answer.results[0]).toEqual({ id: 1, url: 'https://en.wikipedia.org/wiki/Alpe_d%27Huez', title: 'Alpe d\'Huez - Wikipedia' });
+    expect(answer.results[3].title).toBe(''); // search_results had no title for this one
     expect(answer.cited).toEqual([]);
-    expect(answer.model).toBe('openai/gpt-6-luna');
-    expect(answer.effort).toBe('low@2026-10-16.0');
-    expect(answer.usage).toEqual({ input_tokens: 6852, output_tokens: 316, total_tokens: 7168, cost_usd: 0.02189 });
+    expect(answer.model).toBe('perplexity/sonar');
+    expect(answer.usage).toEqual({ input_tokens: 412, output_tokens: 196, total_tokens: 608, cost_usd: 0.0079 });
   });
-  it('prefers output_text when the SDK object has it', () => {
-    expect(parseAgentResponse({ ...fixture, output_text: 'From the SDK' }).text).toBe('From the SDK');
+  it('uses search_results when there are no citations', () => {
+    const { citations: _c, ...rest } = fixture;
+    const a = parseAgentResponse(rest);
+    expect(a.sourcesFrom).toBe('search_results');
+    expect(a.results).toHaveLength(7);
+    expect(a.results[1].title).toBe('Alpe d\'Huez | Tour de France');
   });
-  it('reads url_citation annotations', () => {
-    const body = { output: [{ type: 'message', content: [{ type: 'output_text', text: 'Hi', annotations: [{ type: 'url_citation', url: 'https://a.example/x', title: 'A', start_index: 0, end_index: 2 }, { type: 'other', url: 'https://b.example' }] }] }] };
-    expect(parseAgentResponse(body).cited).toEqual([{ id: null, url: 'https://a.example/x', title: 'A' }]);
+  it('finds the same fields under message or provider_metadata', () => {
+    const body = { choices: [{ message: { content: 'x', provider_metadata: { perplexity: { citations: ['https://a.example/1'] } } } }] };
+    expect(parseAgentResponse(body).results).toEqual([{ id: 1, url: 'https://a.example/1', title: '' }]);
   });
   it('survives junk', () => {
-    for (const junk of [null, undefined, 5, 'x', [], {}, { output: 'no' }, { output: [null, 3, { type: 'message', content: 'x' }] }]) {
-      expect(parseAgentResponse(junk).text).toBe('');
+    for (const junk of [null, undefined, 5, 'x', [], {}, { choices: 'no' }, { choices: [null, 3] }, { choices: [{ message: { content: 5 } }] }]) {
+      const a = parseAgentResponse(junk);
+      expect(a.text).toBe('');
+      expect(a.sourcesFrom).toBe('none');
     }
+  });
+});
+
+describe('reading a gateway response with OpenAI-style annotations', () => {
+  const answer = parseAgentResponse(annotated);
+  it('reads url_citation annotations and the gateway cost in provider_metadata', () => {
+    expect(answer.sourcesFrom).toBe('annotations');
+    expect(answer.results).toEqual([]);
+    expect(answer.cited.map((c) => c.url)).toEqual([
+      'https://www.example-road-authority.example/status', 'http://not-secure.example/page', 'https://www.example-road-authority.example/status', 'https://weather.example/pass',
+    ]);
+    expect(answer.usage).toEqual({ input_tokens: 380, output_tokens: 64, total_tokens: 444, cost_usd: 0.0061 });
+  });
+  it('builds https, deduplicated, numbered sources from them', () => {
+    const raw = buildClimbRaw(answer)!;
+    expect(raw.summary).toBe('The road is open to bicycles as of 2026-11-09.');
+    expect(raw.sources).toEqual([
+      { n: 1, title: 'Road status', host: 'example-road-authority.example', url: 'https://www.example-road-authority.example/status' },
+      { n: 2, title: 'Pass weather', host: 'weather.example', url: 'https://weather.example/pass' },
+    ]);
   });
 });
 
@@ -126,7 +157,7 @@ describe('sources and markers', () => {
   });
   it('falls back to annotations, then to the other results, when the text cites nothing', () => {
     const a: PerplexityAnswer = {
-      text: 'No markers here.', model: null, effort: null, usage: {},
+      text: 'No markers here.', model: null, sourcesFrom: 'search_results', usage: {},
       results: [{ id: 1, url: 'https://r1.example/a', title: 'R1' }, { id: 2, url: 'https://r2.example/a', title: 'R2' }],
       cited: [{ id: null, url: 'https://c.example/a', title: 'C' }],
     };
@@ -134,7 +165,7 @@ describe('sources and markers', () => {
   });
   it('reads [web:N] markers as in the docs example', () => {
     const a: PerplexityAnswer = {
-      text: 'Open now.[web:2][web:1]', model: null, effort: null, usage: {},
+      text: 'Open now.[web:2][web:1]', model: null, sourcesFrom: 'search_results', usage: {},
       results: [{ id: 1, url: 'https://r1.example/a', title: 'R1' }, { id: 2, url: 'https://r2.example/a', title: 'R2' }], cited: [],
     };
     const r = buildClimbRaw(a)!;
@@ -240,7 +271,6 @@ function setup(opts: { claim?: unknown; run?: PerplexityRunner | null; claudeRun
   const deps = {
     runner: opts.claudeRunner ? (async () => { throw new Error('Claude must not be called'); }) as never : null,
     perplexity,
-    effort: 'low',
     dataApi: { url: 'https://data.example/rest/v1', fetch: fakeFetch },
     now: () => new Date('2026-11-09T10:00:00Z'),
     log: (l: string) => logs.push(l),
@@ -261,9 +291,9 @@ describe('POST /api/ai with coach_climb', () => {
     expect(body.data.summary).toContain('Fausto Coppi');
     expect(rpc).toEqual([{ name: 'ai_claim', body: { p_kind: 'coach_climb', p_rival: null }, auth: `Bearer ${TOKEN}` }]);
     expect(requests).toHaveLength(1);
-    expect((requests[0] as { input: string }).input).toContain('Alpe d’Huez');
+    expect((requests[0] as { messages: { content: string }[] }).messages[1].content).toContain('Alpe d’Huez');
     const line = JSON.parse(logs[0]);
-    expect(line).toMatchObject({ ai: true, kind: 'coach_climb', provider: 'perplexity', model: 'openai/gpt-6-luna', effort: 'low@2026-10-16.0', outcome: 'ok', sources: 5, input_tokens: 6852, cost_usd: 0.02189 });
+    expect(line).toMatchObject({ ai: true, kind: 'coach_climb', provider: 'perplexity-gateway', model: 'perplexity/sonar', outcome: 'ok', sources: 'citations', n_sources: 5, input_tokens: 412, cost_usd: 0.0079 });
     expect(typeof line.ms).toBe('number');
   });
   it('is 503 not_configured without the Perplexity runner, even if Claude is configured, and never touches the database', async () => {
@@ -291,7 +321,7 @@ describe('POST /api/ai with coach_climb', () => {
   });
   it('401 from Perplexity or 403 (no paid credits) is 503 unavailable with no details, and is logged without the message', async () => {
     for (const status of [401, 403]) {
-      const run: PerplexityRunner = async () => { throw Object.assign(new Error('The Agent API requires paid credits. sk-secret-key'), { status }); };
+      const run: PerplexityRunner = async () => { throw Object.assign(new Error('Insufficient credits. sk-secret-key'), { status }); };
       const { deps, logs } = setup({ run });
       const res = await handleAi(post(climbBody), deps);
       expect(res.status).toBe(503);
@@ -299,7 +329,7 @@ describe('POST /api/ai with coach_climb', () => {
       expect(JSON.parse(text)).toMatchObject({ ok: false, error: 'unavailable' });
       expect(text).not.toMatch(/credit|sk-secret|key/i);
       expect(JSON.parse(logs[0])).toMatchObject({ kind: 'coach_climb', error: 'auth', status });
-      expect(logs.join('')).not.toMatch(/sk-secret|paid credits/);
+      expect(logs.join('')).not.toMatch(/sk-secret|Insufficient/);
     }
   });
   it('429 is 503 unavailable and logs retry-after', async () => {
@@ -322,7 +352,7 @@ describe('POST /api/ai with coach_climb', () => {
     expect((await handleAi(post(climbBody), deps)).status).toBe(503);
   });
   it('an unusable answer becomes the canned line', async () => {
-    const { deps } = setup({ run: async () => parseAgentResponse({ output: [] }) });
+    const { deps } = setup({ run: async () => parseAgentResponse({ choices: [] }) });
     const res = await handleAi(post(climbBody), deps);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -332,7 +362,7 @@ describe('POST /api/ai with coach_climb', () => {
   });
 });
 
-describe('failure classes and the SDK runner', () => {
+describe('failure classes and the gateway runner', () => {
   it('classifies by status and name', () => {
     expect(classifyError({ status: 401 }).kind).toBe('auth');
     expect(classifyError({ status: 403 }).kind).toBe('auth');
@@ -344,18 +374,37 @@ describe('failure classes and the SDK runner', () => {
     const f = new PerplexityFailure('timeout', null, null);
     expect(classifyError(f)).toBe(f);
   });
-  it('calls responses.create with the request and a 25 s timeout, and parses the reply', async () => {
-    const calls: { body: unknown; options: unknown }[] = [];
-    const client = { responses: { create: async (body: unknown, options: unknown) => { calls.push({ body, options }); return { ...fixture, output_text: 'sdk text' }; } } };
+  it('posts a Chat Completions request to the gateway with the Bearer token and a 25 s timeout, and parses the reply', async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const fakeFetch = (async (url: string, init: RequestInit) => { calls.push({ url, init }); return new Response(JSON.stringify(fixture), { status: 200 }); }) as unknown as typeof fetch;
     const req = buildClimbRequest(alpe, 'history', '2026-11-09');
-    const out = await makeRunner(client as never)(req);
-    expect(calls).toEqual([{ body: req, options: { timeout: CALL_TIMEOUT_MS, maxRetries: 0 } }]);
+    const out = await makeRunner('tok-123', fakeFetch)(req);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://ai-gateway.vercel.sh/v1/chat/completions');
+    expect(GATEWAY_URL).toBe(calls[0].url);
+    expect(calls[0].init.method).toBe('POST');
+    expect((calls[0].init.headers as Record<string, string>).authorization).toBe('Bearer tok-123');
+    expect(JSON.parse(String(calls[0].init.body))).toEqual(req);
+    expect(calls[0].init.signal).toBeInstanceOf(AbortSignal);
     expect(CALL_TIMEOUT_MS).toBe(25_000);
-    expect(out.text).toBe('sdk text');
     expect(out.results).toHaveLength(7);
   });
-  it('turns SDK errors into classified failures', async () => {
-    const client = { responses: { create: async () => { throw Object.assign(new Error('nope'), { status: 403 }); } } };
-    await expect(makeRunner(client as never)(buildClimbRequest(alpe, 'history', 'd'))).rejects.toMatchObject({ name: 'PerplexityFailure', kind: 'auth', status: 403 });
+  it('turns HTTP errors into classified failures that carry no response text or token', async () => {
+    const respond = (status: number, headers: Record<string, string> = {}) =>
+      (async () => new Response('{"error":{"message":"secret detail tok-123"}}', { status, headers })) as unknown as typeof fetch;
+    const req = buildClimbRequest(alpe, 'history', 'd');
+    for (const [status, kind] of [[401, 'auth'], [403, 'auth'], [429, 'rate_limit'], [500, 'other']] as const) {
+      const err = await makeRunner('tok-123', respond(status, { 'retry-after': '9' }))(req).catch((e) => e);
+      expect(err).toMatchObject({ name: 'PerplexityFailure', kind, status });
+      expect(String(err.message)).not.toMatch(/secret|tok-123/);
+    }
+    expect(await makeRunner('t', respond(429, { 'retry-after': '9' }))(req).catch((e) => e)).toMatchObject({ retryAfter: '9' });
+  });
+  it('a network error or a timeout becomes a failure', async () => {
+    const req = buildClimbRequest(alpe, 'history', 'd');
+    const boom = (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch;
+    expect(await makeRunner('t', boom)(req).catch((e) => e)).toMatchObject({ kind: 'other' });
+    const slow = (async () => { throw Object.assign(new Error('x'), { name: 'TimeoutError' }); }) as unknown as typeof fetch;
+    expect(await makeRunner('t', slow)(req).catch((e) => e)).toMatchObject({ kind: 'timeout' });
   });
 });

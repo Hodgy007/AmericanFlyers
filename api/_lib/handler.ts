@@ -20,7 +20,7 @@ import { cannedClimb, cannedDebrief, cannedPlan, cannedRivalLines, cannedRivalPo
 import { sanitizeClimbGuide, sanitizeDebrief, sanitizePlan, sanitizeRivalLines, sanitizeRivalPost, sanitizeTip } from '../../src/ai/sanitize.js';
 import { climbById, type ClimbTopic } from '../../src/ai/climbs.js';
 import type { AiError, AiKind, AiReply, AiResults } from '../../src/ai/types.js';
-import { buildClimbRaw, buildClimbRequest, classifyError, DEFAULT_EFFORT, type PerplexityRunner } from './perplexity.js';
+import { buildClimbRaw, buildClimbRequest, classifyError, DEFAULT_MODEL as DEFAULT_CLIMB_MODEL, type PerplexityRunner } from './perplexity.js';
 
 export const MAX_BODY_BYTES = 24_000;
 
@@ -28,10 +28,11 @@ export interface AiDeps {
   /** Null when ANTHROPIC_API_KEY isn't set. */
   runner: ClaudeRunner | null;
   model?: string;
-  /** The Climb guide's web-search runner; null when PERPLEXITY_API_KEY isn't set. */
+  /** The Climb guide's web-search runner; null when there is no AI Gateway token (see api/ai.ts). */
   perplexity?: PerplexityRunner | null;
-  /** PERPLEXITY_EFFORT, already checked (see pickEffort). */
-  effort?: string;
+
+  /** CLIMB_GUIDE_MODEL, already checked (see pickModel). */
+  climbModel?: string;
   dataApi: DataApi;
   now?: () => Date;
   log?: (line: string) => void;
@@ -109,28 +110,28 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
 type ClimbPayload = { stageId: string; topic: ClimbTopic };
 
 /**
- * The Climb guide: one Perplexity Agent API call with web search. The question is built from our own stage table, so
+ * The Climb guide: one Perplexity Sonar call (web search) through the Vercel AI Gateway. The question is built from our own stage table, so
  * the body only chooses a stage and a topic. Failures are logged without the key, the prompt or the provider's message.
  */
 async function climbGuide(deps: AiDeps, p: ClimbPayload, c: Claim, today: string, started: number): Promise<Response> {
   const log = deps.log ?? (() => {});
   const climb = climbById(p.stageId);
   if (!climb || !deps.perplexity) return fail(400, 'bad_request', 'The ride details weren’t valid.');
-  const effort = deps.effort || DEFAULT_EFFORT;
+  const climbModel = deps.climbModel || DEFAULT_CLIMB_MODEL;
   const remaining = Math.max(0, c.limit - c.used);
   let answer;
   try {
-    answer = await deps.perplexity(buildClimbRequest(climb, p.topic, today, effort));
+    answer = await deps.perplexity(buildClimbRequest(climb, p.topic, today, climbModel));
   } catch (e) {
     const f = classifyError(e);
-    log(JSON.stringify({ ai: true, kind: 'coach_climb', provider: 'perplexity', effort, error: f.kind, status: f.status, ...(f.retryAfter ? { retryAfter: f.retryAfter } : {}), ms: Date.now() - started }));
+    log(JSON.stringify({ ai: true, kind: 'coach_climb', provider: 'perplexity-gateway', model: climbModel, error: f.kind, status: f.status, ...(f.retryAfter ? { retryAfter: f.retryAfter } : {}), ms: Date.now() - started }));
     return f.kind === 'timeout'
       ? fail(504, 'unavailable', 'The climb guide took too long. Try again in a bit.')
       : fail(503, 'unavailable', 'The climb guide is taking a break. Try again in a bit.');
   }
   const raw = buildClimbRaw(answer);
   const data = raw ? sanitizeClimbGuide(raw, p.stageId, p.topic, today) : null;
-  log(JSON.stringify({ ai: true, kind: 'coach_climb', provider: 'perplexity', model: answer.model, effort: answer.effort ?? effort, outcome: data ? 'ok' : 'unusable', sources: data?.sources.length ?? 0, ms: Date.now() - started, ...answer.usage }));
+  log(JSON.stringify({ ai: true, kind: 'coach_climb', provider: 'perplexity-gateway', model: answer.model ?? climbModel, outcome: data ? 'ok' : 'unusable', sources: answer.sourcesFrom, n_sources: data?.sources.length ?? 0, ms: Date.now() - started, ...answer.usage }));
   if (!data) return json(200, { ok: true, kind: 'coach_climb', source: 'canned', data: cannedClimb(p, false, today), remaining } as AiReply);
   return json(200, { ok: true, kind: 'coach_climb', source: 'web', data, remaining } as AiReply);
 }

@@ -1,60 +1,49 @@
-// One place that talks to Perplexity's Agent API (POST https://api.perplexity.ai/v1/agent) for the Climb guide.
+// One place that talks to Perplexity's Sonar model for the Climb guide, through the Vercel AI Gateway
+// (POST https://ai-gateway.vercel.sh/v1/chat/completions, the OpenAI-compatible Chat Completions format).
 // Decisions:
-//  - official SDK `@perplexity-ai/perplexity_ai`, `client.responses.create`;
-//  - `effort` (fast | low | medium | high | xhigh | ultra) picks the model, search and tools. Default "low", which
-//    already includes web_search (docs: Agent API > Effort), so no `tools` are passed. PERPLEXITY_EFFORT overrides it;
-//  - `max_output_tokens` bounds the answer (the docs allow overriding it under an effort), `store: false` keeps the
-//    response out of retrieval, and a 25 s timeout with no retries bounds the wait;
-//  - `response_format` json_schema asks for {summary, facts[]}. The docs warn that the first request with a new schema
-//    can take 10 to 30 s to prepare, so a first call may time out; an answer that isn't JSON is still read as text;
-//  - the answer is read from either the SDK object (`output_text`) or the raw JSON (`output[]`): message items'
-//    output_text content, url_citation annotations, and search_results items (whose `id`s the [n] markers refer to);
-//  - the key is read by api/ai.ts only and never logged.
+//  - plain `fetch` with a 25 s timeout and no retries; no SDK;
+//  - model "perplexity/sonar" unless CLIMB_GUIDE_MODEL says otherwise; `max_tokens` bounds the answer;
+//  - auth is a Bearer token chosen in api/ai.ts: AI_GATEWAY_API_KEY, else VERCEL_OIDC_TOKEN, else the request's
+//    x-vercel-oidc-token header (Vercel functions get one automatically). It is never logged;
+//  - the answer is `choices[0].message.content`. Sonar searches the web itself and the gateway returns its sources;
+//    where they sit is read defensively (top-level `citations` / `search_results`, `message.annotations`,
+//    `provider_metadata`). The [n] markers in the text are 1-based positions in that source list.
 
-import Perplexity from '@perplexity-ai/perplexity_ai';
 import type { Climb, ClimbTopic } from '../../src/ai/climbs.js';
 import { CLIMB_MAX_SOURCES } from '../../src/ai/sanitize.js';
 import { CLIMB_SYSTEM, climbQuestion } from './prompts/climb.js';
 
-export const DEFAULT_EFFORT = 'low';
-export const MAX_OUTPUT_TOKENS = 900;
+export const GATEWAY_URL = 'https://ai-gateway.vercel.sh/v1/chat/completions';
+export const DEFAULT_MODEL = 'perplexity/sonar';
+export const MAX_TOKENS = 900;
 export const CALL_TIMEOUT_MS = 25_000;
-export const SCHEMA_NAME = 'climb_guide';
 
-export const CLIMB_SCHEMA = {
-  type: 'object',
-  properties: {
-    summary: { type: 'string' },
-    facts: { type: 'array', items: { type: 'string' } },
-  },
-  required: ['summary', 'facts'],
-  additionalProperties: false,
-} as const;
-
-/** An effort name, optionally pinned like `low@2026-10-16.0`. Anything else falls back to the default. */
-export function pickEffort(env: string | undefined): string {
+/** A gateway model id like `perplexity/sonar`; anything else falls back to the default. */
+export function pickModel(env: string | undefined): string {
   const v = (env ?? '').trim();
-  return /^(fast|low|medium|high|xhigh|ultra)(@[A-Za-z0-9._-]{1,40})?$/.test(v) ? v : DEFAULT_EFFORT;
+  return /^[a-z0-9][a-z0-9._-]{0,40}\/[A-Za-z0-9][A-Za-z0-9._:-]{0,60}$/.test(v) ? v : DEFAULT_MODEL;
 }
 
-export interface PerplexityRequest {
-  effort: string;
-  instructions: string;
-  input: string;
-  max_output_tokens: number;
-  store: false;
-  response_format: { type: 'json_schema'; json_schema: { name: string; schema: typeof CLIMB_SCHEMA } };
+/** The first non-empty of: AI_GATEWAY_API_KEY, VERCEL_OIDC_TOKEN, the request's x-vercel-oidc-token header. */
+export function pickToken(env: Record<string, string | undefined>, headers: Headers): string | null {
+  return env.AI_GATEWAY_API_KEY?.trim() || env.VERCEL_OIDC_TOKEN?.trim() || headers.get('x-vercel-oidc-token')?.trim() || null;
+}
+
+export interface GatewayRequest {
+  model: string;
+  messages: { role: 'system' | 'user'; content: string }[];
+  max_tokens: number;
 }
 
 /** The request for one stage and topic. Only our own table data and the fixed topic text go into it. */
-export function buildClimbRequest(climb: Climb, topic: ClimbTopic, today: string, effort: string = DEFAULT_EFFORT): PerplexityRequest {
+export function buildClimbRequest(climb: Climb, topic: ClimbTopic, today: string, model: string = DEFAULT_MODEL): GatewayRequest {
   return {
-    effort,
-    instructions: CLIMB_SYSTEM,
-    input: climbQuestion(climb, topic, today),
-    max_output_tokens: MAX_OUTPUT_TOKENS,
-    store: false,
-    response_format: { type: 'json_schema', json_schema: { name: SCHEMA_NAME, schema: CLIMB_SCHEMA } },
+    model,
+    messages: [
+      { role: 'system', content: CLIMB_SYSTEM },
+      { role: 'user', content: climbQuestion(climb, topic, today) },
+    ],
+    max_tokens: MAX_TOKENS,
   };
 }
 
@@ -63,55 +52,102 @@ export function buildClimbRequest(climb: Climb, topic: ClimbTopic, today: string
 export interface SearchHit { id: number | null; url: string; title: string }
 
 export interface PerplexityAnswer {
-  /** The answer text (the JSON string when a schema was used). */
+  /** The answer text (a JSON string, as asked). */
   text: string;
-  /** Every web result the model saw, in order, with the ids the [n] markers refer to. */
+  /** Every source the model had, in order; `id` is the 1-based position the [n] markers refer to. */
   results: SearchHit[];
   /** Sources named by url_citation annotations. */
   cited: SearchHit[];
   model: string | null;
-  effort: string | null;
+  /** Where the gateway put the sources: for the log, to confirm the real shape. */
+  sourcesFrom: 'citations' | 'search_results' | 'annotations' | 'none';
   usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number; cost_usd?: number };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
-const numOrU = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+const numOrU = (v: unknown) => {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
+  return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
+};
 
-/** Reads a Perplexity Agent API response, whether it is the SDK's object (with `output_text`) or the raw JSON body. */
-export function parseAgentResponse(raw: unknown): PerplexityAnswer {
+const hitFrom = (v: unknown, id: number | null): SearchHit | null => {
+  if (typeof v === 'string') return { id, url: v, title: '' };
+  if (!isObj(v)) return null;
+  const inner = isObj(v.url_citation) ? v.url_citation : v;
+  return typeof inner.url === 'string' ? { id, url: inner.url, title: str(inner.title) } : null;
+};
+
+/** Finds a field in the places the gateway may put it: the roots, their provider_metadata, and one level below that. */
+function findAll(roots: Record<string, unknown>[], key: string): unknown[] {
+  const found: unknown[] = [];
+  const seen = new Set<unknown>();
+  const visit = (o: Record<string, unknown>, depth: number) => {
+    if (seen.has(o)) return;
+    seen.add(o);
+    if (key in o) found.push(o[key]);
+    if (depth > 0) for (const k of ['provider_metadata', 'perplexity', 'gateway']) if (isObj(o[k])) visit(o[k], depth - 1);
+  };
+  for (const r of roots) visit(r, 2);
+  return found;
+}
+
+/** Reads a gateway Chat Completions response (the raw JSON body). */
+export function parseGatewayResponse(raw: unknown): PerplexityAnswer {
   const r = isObj(raw) ? raw : {};
-  const output = Array.isArray(r.output) ? r.output : [];
-  const results: SearchHit[] = [];
+  const choice = Array.isArray(r.choices) && isObj(r.choices[0]) ? r.choices[0] : {};
+  const message = isObj(choice.message) ? choice.message : {};
+  let text = '';
+  if (typeof message.content === 'string') text = message.content;
+  else if (Array.isArray(message.content)) text = message.content.map((p) => (isObj(p) ? str(p.text) : '')).join('');
+  const roots = [r, message];
+
+  // `citations` (urls) and `search_results` (url + title) are both in the order the [n] markers count from.
+  const titles = new Map<string, string>();
+  let results: SearchHit[] = [];
+  let sourcesFrom: PerplexityAnswer['sourcesFrom'] = 'none';
+  const asHits = (list: unknown[]) => list.map((v, i) => hitFrom(v, i + 1) ?? { id: i + 1, url: '', title: '' });
+  for (const list of findAll(roots, 'search_results')) {
+    if (!Array.isArray(list)) continue;
+    const hits = asHits(list);
+    for (const h of hits) if (h.title && !titles.has(h.url)) titles.set(h.url, h.title);
+    if (!results.length && hits.length) { results = hits; sourcesFrom = 'search_results'; }
+  }
+  for (const list of findAll(roots, 'citations')) {
+    if (!Array.isArray(list) || !list.length) continue;
+    results = asHits(list);
+    sourcesFrom = 'citations';
+    break;
+  }
+  results = results.map((h) => ({ ...h, title: h.title || titles.get(h.url) || '' }));
+
   const cited: SearchHit[] = [];
-  let walked = '';
-  for (const item of output) {
-    if (!isObj(item)) continue;
-    if (item.type === 'search_results' && Array.isArray(item.results)) {
-      for (const hit of item.results) {
-        if (!isObj(hit) || typeof hit.url !== 'string') continue;
-        results.push({ id: typeof hit.id === 'number' ? hit.id : null, url: hit.url, title: str(hit.title) });
-      }
-    } else if (item.type === 'message' && Array.isArray(item.content)) {
-      for (const part of item.content) {
-        if (!isObj(part) || part.type !== 'output_text') continue;
-        walked += str(part.text);
-        for (const a of Array.isArray(part.annotations) ? part.annotations : []) {
-          if (isObj(a) && a.type === 'url_citation' && typeof a.url === 'string') cited.push({ id: null, url: a.url, title: str(a.title) });
-        }
-      }
+  for (const list of findAll(roots, 'annotations')) {
+    if (!Array.isArray(list)) continue;
+    for (const a of list) {
+      if (!isObj(a) || (a.type !== undefined && a.type !== 'url_citation')) continue;
+      const hit = hitFrom(a, null);
+      if (hit) cited.push({ ...hit, title: hit.title || titles.get(hit.url) || '' });
     }
   }
-  const text = typeof r.output_text === 'string' && r.output_text ? r.output_text : walked;
+
+  if (sourcesFrom === 'none' && cited.length) sourcesFrom = 'annotations';
+
   const u = isObj(r.usage) ? r.usage : {};
-  const cost = isObj(u.cost) ? numOrU(u.cost.total_cost) : undefined;
+  const gw = findAll([message, r], 'gateway').find(isObj);
+  const cost = numOrU(u.cost) ?? numOrU(isObj(u.cost) ? u.cost.total_cost : undefined) ?? numOrU(gw?.cost) ?? numOrU(gw?.marketCost);
   return {
     text,
     results,
     cited,
     model: str(r.model) || null,
-    effort: str(r.effort) || null,
-    usage: { input_tokens: numOrU(u.input_tokens), output_tokens: numOrU(u.output_tokens), total_tokens: numOrU(u.total_tokens), cost_usd: cost },
+    sourcesFrom,
+    usage: {
+      input_tokens: numOrU(u.prompt_tokens) ?? numOrU(u.input_tokens),
+      output_tokens: numOrU(u.completion_tokens) ?? numOrU(u.output_tokens),
+      total_tokens: numOrU(u.total_tokens),
+      cost_usd: cost,
+    },
   };
 }
 
@@ -151,7 +187,7 @@ export function readSummaryFacts(text: string): { summary: string; facts: string
 /**
  * Turns an answer into {summary, facts, sources}: up to five https sources, deduplicated by URL and numbered 1 to 5,
  * those the text cites with [n] markers first (in order of first mention), then url_citation annotations, then the other
- * search results. Markers in the text are renumbered to match; markers that match no result are removed.
+ * sources. Markers in the text are renumbered to match; markers that match no source are removed.
  */
 export function buildClimbRaw(a: PerplexityAnswer): ClimbRaw | null {
   const sf = readSummaryFacts(a.text);
@@ -193,7 +229,7 @@ export type FailKind = 'auth' | 'rate_limit' | 'timeout' | 'other';
 /** What went wrong with a call, without the message (it can carry request details): the kind, the HTTP status and Retry-After. */
 export class PerplexityFailure extends Error {
   constructor(readonly kind: FailKind, readonly status: number | null, readonly retryAfter: string | null) {
-    super(`perplexity ${kind}`);
+    super(`climb guide ${kind}`);
     this.name = 'PerplexityFailure';
   }
 }
@@ -215,19 +251,29 @@ export function classifyError(e: unknown): PerplexityFailure {
 
 // -------------------------------------------------------------- runner ----
 
-export type PerplexityRunner = (req: PerplexityRequest) => Promise<PerplexityAnswer>;
+export type PerplexityRunner = (req: GatewayRequest) => Promise<PerplexityAnswer>;
 
-export function makeClient(apiKey: string) {
-  return new Perplexity({ apiKey, timeout: CALL_TIMEOUT_MS, maxRetries: 0 });
-}
-
-export function makeRunner(client: Perplexity): PerplexityRunner {
+/** Calls the gateway with plain fetch. Failures are thrown as PerplexityFailure (kind, status, Retry-After), never with the response text. */
+export function makeRunner(token: string, fetcher: typeof fetch = fetch, url: string = GATEWAY_URL): PerplexityRunner {
   return async (req) => {
+    let res: Response;
     try {
-      const response = await client.responses.create(req, { timeout: CALL_TIMEOUT_MS, maxRetries: 0 });
-      return parseAgentResponse(response);
+      res = await fetcher(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify(req),
+        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      });
     } catch (e) {
       throw classifyError(e);
     }
+    if (!res.ok) throw classifyError({ status: res.status, headers: res.headers });
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch (e) {
+      throw classifyError(e);
+    }
+    return parseGatewayResponse(body);
   };
 }

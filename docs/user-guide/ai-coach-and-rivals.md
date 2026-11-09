@@ -22,6 +22,17 @@ Coach Marty is a gruff-but-warm former team mechanic, an AI character.
 
 Daily limits (UTC day): 10 debriefs, 6 plans and 30 tips.
 
+## Climb guide
+
+On the hub's **Route** section, the stages that follow a real road (Alpe d'Huez, Stelvio, Ventoux, Tourmalet, Zoncolan, Mount Washington, Mount Blue Sky, Mount Diablo, Flagstaff, Tour of the Moon and Echo Lake) have a **🧭 Climb guide** button. It opens a small panel with four topics:
+
+- **History**: the climb's story and famous race moments.
+- **Records**: the fastest known ascents and notable times, with how sure the answer is.
+- **Conditions now**: whether the road is open, closures, roadworks and weather hazards.
+- **Riding it**: where to start and park, water, the best time of year and other tips for riding it for real.
+
+You get a short answer from a web search, dated ("as of ..."), with numbered links to the sources it used. It is AI-generated and can be wrong, so check an official site before you travel. It uses the **AI coach** setting: if that is off, the guide offers to turn it on. Only the climb and the topic you pick are sent (never free text). The answer is kept in your browser for 24 hours so reopening it doesn't use up your messages. Limit: 8 a day (UTC). When it is busy or you have used them, you get a line from the stage's own numbers instead.
+
 ## Rivals
 
 ☰ Menu → **🤺 Rivals** shows four original rivals:
