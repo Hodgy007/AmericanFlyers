@@ -8,7 +8,7 @@ Open **☰ Menu → 🗓 Events**. It lists what is on over the next two days, w
 
 | Event | When | Where | What |
 | --- | --- | --- | --- |
-| **Evening race** | Every day at 19:30 UTC | A different stage each day, rotating through the Hell of the West stages, Alpe d'Huez, Stelvio, Ventoux, Tourmalet, Zoncolan, Route 66 and the American climbs (Mount Washington, Mount Blue Sky, Mount Diablo, Flagstaff) | A race against the computer-ridden pro field and any other riders who join |
+| **Evening race** | Every day at 19:30 UTC | A different stage each day, rotating through the Hell of the West stages, Alpe d'Huez, Stelvio, Ventoux, Tourmalet, Zoncolan, Route 66 and the American climbs (Mount Washington, Mount Blue Sky, Mount Diablo, Flagstaff) and the road stages (Richmond, Central Park, Harrogate, Pacific Coast) | A race against the computer-ridden pro field and any other riders who join |
 | **Group ride** | Every day at 12:30 UTC | Heartland Rollers | A steady bunch at 2.6 W/kg for 90 minutes |
 | **One-off events** | Whenever an admin adds one | Any stage | A race or a group ride, with its own title |
 

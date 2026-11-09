@@ -6,6 +6,13 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Four road stages: three circuits and the Pacific Coast
+
+- **New stages** on their real roads, with real elevation: **Richmond Worlds Circuit** (`richmond-worlds`, 2 × 16.2 km, Libby Hill and 23rd Street KOMs, finish by the State Capitol), **Central Park Loop** (`central-park`, 3 × 9.8 km counter-clockwise, Cat Hill and Harlem Hill, the Manhattan skyline round the park, the Reservoir), **Harrogate Worlds Circuit** (`harrogate-worlds`, 2 × 13.9 km, dry-stone walls, stone terraces, the Stray at the finish) and **Pacific Coast Highway** (`pacific-coast`, 39.1 km of California 1 through Big Sur, Bixby Creek Bridge, Hurricane Point, the Pacific below the cliffs). Each has wind, a finish badge, a place in the evening race rotation and a `stage_limits` row (SQL in `db/schema.sql`, to be applied by hand).
+- **Yorkshire crowds.** A British culture (`gb`): Union flags, the white-rose Yorkshire flag and polka-dot shirts; Harrogate uses it. Culture ids live in `world/cultureTypes.ts`.
+- **Water.** New `Scenery.water` (`world/water.ts`): a sea plane at sea level and ponds (the Reservoir), used by the Pacific Coast and Central Park.
+- **Skyline and bridge.** A procedural city skyline (`world/skyline.ts`) ring of towers outside a loop, a domed Virginia Capitol, brick and stone terraced houses and Bixby Creek Bridge, all landmark models.
+
 ### Loose ends from the polish batch
 
 - **Mount Washington summit in frame at 400, 200, 100 and 50 m.** At 200 m the buildings were 53 degrees right of the chase camera's heading (the half-view is 43). A search over every position and rotation within about 100 m of the finish found none that keeps one group in view at all four distances, because the road wraps round the summit and the camera turns 100 degrees between 200 and 50 m. So the lattice broadcast tower is now its own landmark (`washington-tower`, with its own rock pile) on the outside of the bend, 60 m left of the road at 12,200 m and dead ahead of the last straight (23 degrees at 200 m, 13 at 400 m, 19 at 100 m), and the buildings stay inside the bend, where they are in frame at 400, 100 and 50 m. The summit group's size is now 38.5 m (its height without the tower), and it (and the summit cone) moved from 32 m to 40 m beside the road: its knoll's lower step reached to about 3 m from the road centre and showed as a grey wall across the right lane 25 m before the finish. Shots at 400, 200, 100, 50, 30 and 10 m checked. Tests in `summitCone.test.ts`.

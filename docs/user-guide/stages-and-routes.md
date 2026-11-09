@@ -27,6 +27,10 @@ Choosing a stage resets the ride. If your current ride is at least a minute long
 | **Mount Blue Sky** | 23.3 km | Colorado's highest paved road (formerly Mount Evans): from Echo Lake Lodge, where the Hell of the West stops, from 3,231 m up to 4,311 m (14,130 ft), 4.6% on average. Spruce and bristlecone pines, then tundra, rock and snow above the tree line, ending at the Crest House ruins. |
 | **Mount Diablo** | 18 km | California: from Diablo Road in Danville through the South Gate to the stone summit tower at 1,173 m, 990 m of climbing. Golden summer grass, oaks and chaparral. |
 | **Flagstaff Mountain** | 7.4 km | Boulder, Colorado: Flagstaff Road from Baseline Road (1,746 m) to the crest at 2,349 m, 8.1% on average, through ponderosa pines with the Flatirons beside the lower switchbacks. |
+| **Richmond Worlds Circuit** | 2 × 16.2 km | Richmond, Virginia: the 2015 World Championships road-race circuit, twice round. Rolling city streets, then the cobbled Libby Hill and the very steep 23rd Street, and the drag up Governor Street to the finish by the State Capitol. KOMs on both climbs and a sprint at the line each lap. |
+| **Central Park Loop** | 3 × 9.8 km | New York: Park Drive counter-clockwise, three laps, with Cat Hill, the Reservoir and Harlem Hill, and the Manhattan skyline all round the park. |
+| **Harrogate Worlds Circuit** | 2 × 13.9 km | North Yorkshire: the 2019 World Championships finishing circuit, twice round. Green fields and dry-stone walls, the climb out of the Oak Beck valley (KOM), and the drag up Parliament Street to the finish by The Stray. British and Yorkshire crowds. |
+| **Pacific Coast Highway** | 39 km | California Highway 1 through Big Sur: rolling cliff road above the Pacific, Bixby Creek Bridge and Hurricane Point, in the morning fog. A point-to-point stage, 710 m of climbing. |
 
 Each stage also has its own light and weather when **Time & weather** is on Auto: Route 66 Flats and Hell of the West start at dusk (and it goes dark as you ride), the Tourmalet and Mount Washington are cloudy. See [Riding](riding.md#time-of-day-and-weather).
 
