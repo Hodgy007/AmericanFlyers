@@ -31,7 +31,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [My kit](user-guide/my-kit.md): design your jersey and bike colours, presets, and how other riders see them.
 - [Garage, credits and challenges](user-guide/garage-and-credits.md): levels, credits, the bike store, the Tron bike, weekly challenges and the share card.
 - [AI coach and AI rivals](user-guide/ai-coach-and-rivals.md): Coach Marty's tips and debriefs, the four rivals who remember you, turning them on, and the daily limits.
-- [Leaderboards and ghosts](user-guide/leaderboards-and-ghosts.md): what counts, the 🏆 leaderboard, and racing ghosts.
+- [Leaderboards and ghosts](user-guide/leaderboards-and-ghosts.md): what counts, the 🏆 leaderboard, KOM segments on the big climbs, and racing ghosts.
 - [Training plans](user-guide/training-plans.md): the four plans and how sessions tick off.
 - [Sound and virtual shifting](user-guide/sound-and-shifting.md): ride sounds, and choosing your own gears.
 - [Installing the app](user-guide/installing-the-app.md): the first-ride setup guide, installing as an app, full screen and TVs.
@@ -63,6 +63,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [3D world](developer-guide/3d-world.md): renderer, terrain, road, rider, sky, landmarks and cameras.
 - [Stages and GPX](developer-guide/stages-and-gpx.md): stage definitions, how the climbs are built, the tour stages, and GPX parsing.
 - [Racing and the tour](developer-guide/racing-and-tour.md): the race engine, the live race, the classifications and the tour.
+- [KOM segments](developer-guide/kom-segments.md): how a stage's big climbs are found, how efforts are timed and compared, storage, the database and the HUD.
 - [Workouts format](developer-guide/workouts-format.md): the workout model, file import rules and `.zwo` export.
 - [Backend and database](developer-guide/backend-and-database.md): Neon, the browser client, sync rules, activities and `.tcx` export.
 - [Security](developer-guide/security.md): what protects what, and what doesn't.

@@ -4,11 +4,11 @@ The Privacy page (☰ Menu → 🔒 Privacy) explains in plain English what Amer
 
 ## What other riders see
 
-Your first name and last initial, your position, speed and kit while you ride on the same stage, and your finish times on leaderboards. Never your email, weight, FTP or heart rate.
+Your first name and last initial, your position, speed and kit while you ride on the same stage, your finish times on leaderboards, and your best time and average power on a climb's KOM leaderboard. Never your email, weight, FTP or heart rate, and never your split times.
 
 ## Download my data
 
-Profile → **🔒 Privacy & data** → **Download my data** saves one JSON file with your account details, settings, rides (including the second-by-second readings), workouts, routes, FTP history, feedback, and the ride-ons you've sent and received.
+Profile → **🔒 Privacy & data** → **Download my data** saves one JSON file with your account details, settings, rides (including the second-by-second readings), workouts, routes, FTP history, feedback, your KOM segment efforts, and the ride-ons you've sent and received.
 
 ## Delete my account
 

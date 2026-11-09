@@ -1087,6 +1087,55 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .wind-arrow { transition: none; } }
 
+/* ---- KOM panel: the leaderboard of the segment ahead, and the live gap on it (segmentUi.ts) ---- */
+.kom-card {
+  position: fixed; top: var(--below-hud, 150px); left: 50%; transform: translateX(-50%); z-index: 4;
+  width: min(290px, calc(100vw - 32px)); padding: 8px 12px 9px; border-radius: 14px;
+  background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font-size: 12px; color: var(--muted);
+}
+.kom-card[hidden] { display: none; }
+.kom-card[data-state='on'] { border-color: rgba(250, 204, 21, 0.65); }
+.kom-head { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
+.kom-head strong { font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kom-gap { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; }
+.kom-gap[hidden] { display: none; }
+.kom-gap-main { font-family: var(--font-display); font-size: 40px; line-height: 1; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.kom-gap[data-state='ahead'] .kom-gap-main { color: #4ade80; }
+.kom-gap[data-state='behind'] .kom-gap-main { color: #f87171; }
+.kom-gap-lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kom-gap-last { font-weight: 700; font-variant-numeric: tabular-nums; }
+.kom-gap-last[data-state='ahead'] { color: #4ade80; }
+.kom-gap-last[data-state='behind'] { color: #f87171; }
+.kom-board { list-style: none; margin: 0; padding: 0; }
+.kom-board[hidden], .kom-board li[hidden], .kom-note[hidden] { display: none; }
+.kom-board li { display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; padding: 1px 0; color: var(--text); font-variant-numeric: tabular-nums; }
+.kom-board li.me { color: #facc15; font-weight: 700; }
+.kom-board .k-rank { text-align: center; color: var(--muted); }
+.kom-board .k-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kom-note { margin: 2px 0 0; }
+.kom-me { margin: 4px 0 0; padding-top: 4px; border-top: 1px solid var(--glass-border); color: var(--text); font-weight: 700; }
+body.at-home .kom-card { display: none; }
+/* Wide screens: beside the climb card, so the rider in the middle of the road stays clear. Left of it by default; right of it where the
+   left is taken (the race panel, the data blocks in a left column, the mini-map in demo) unless a workout panel holds the right. */
+@media (min-width: 561px) {
+  .kom-card { left: auto; right: calc(50% + 160px); transform: none; width: min(290px, calc(50vw - 175px)); }
+  body.hud-left .kom-card, body:has(#race-panel:not([hidden])) .kom-card, body:has(#demo-panel:not([hidden])) .kom-card { right: auto; left: calc(50% + 160px); }
+  body:has(#workout-panel:not([hidden])) .kom-card { left: auto; right: calc(50% + 160px); }
+}
+@media (max-height: 640px) {
+  .kom-gap-main { font-size: 34px; }
+  .kom-card[data-state='on'] .kom-board li:nth-child(n + 4) { display: none; } /* on the climb the gap matters more than the list */
+  .kom-card[data-state='on'] .kom-me { display: none; }
+}
+@media (max-width: 560px) {
+  .kom-card { left: 12px; right: 128px; width: auto; transform: none; padding: 6px 9px 7px; }
+  .kom-head strong { font-size: 13px; }
+  .kom-gap-main { font-size: 34px; }
+  .kom-board li:nth-child(n + 5) { display: none; }
+  .kom-card[data-state='on'] .kom-board li:nth-child(n + 4) { display: none; }
+}
+
 /* ---- trust and safety: privacy page, account deletion, email verification (stream D) ---- */
 .privacy-dialog { width: min(94vw, 720px); max-height: 92vh; }
 .privacy-body { max-height: 70vh; overflow-y: auto; padding-right: 6px; line-height: 1.5; }
@@ -1275,3 +1324,12 @@ body.at-home .end-ride { display: none; }
 .rival-actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
 .rivals-note { min-height: 1.2em; }
 .rival-closing { margin-top: 6px; }
+
+/* ---- KOM segments dialog (segmentBoardUi.ts) ---- */
+.sb-dialog .lb-tabs[hidden] { display: none; }
+.sb-item { display: grid; grid-template-columns: 1fr auto; gap: 1px 12px; width: 100%; margin: 0 0 8px; padding: 9px 12px; text-align: left; border-radius: 12px; }
+.sb-item .sb-name { font-weight: 700; color: var(--text); }
+.sb-item .sb-meta, .sb-item .sb-you { font-size: 12px; color: var(--muted); }
+.sb-item .sb-king { grid-column: 1; font-size: 13px; color: #f6d58a; }
+.sb-item .sb-meta { grid-column: 1; }
+.sb-item .sb-you { grid-column: 2; grid-row: 1 / span 3; align-self: center; text-align: right; }

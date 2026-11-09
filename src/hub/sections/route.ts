@@ -6,6 +6,7 @@ import { climbById } from '../../ai/climbs';
 import { raceTime } from '../../ghost';
 import { drawProfile } from '../../profile';
 import { allStages } from '../../routes/library';
+import { segmentsFor } from '../../segments';
 import type { Stage } from '../../stages';
 import { climbText, distanceText, pickStage, stageFigures } from '../data';
 import { button, drawWhenVisible, forgetCanvas, h } from '../dom';
@@ -70,6 +71,12 @@ export const mount: SectionMount = (root, ctx) => {
     if (best) foot.append(h('span', { class: 'hub-chip gold', title: 'Your best whole-stage time', text: `🏆 ${raceTime(best.finishS)}` }));
     if (climbById(stage.id)) foot.append(button('🧭 Climb guide', () => { void toggleGuide(stage); }, 'hub-mini hub-race', { title: `Current, web-sourced facts about ${stage.name}: history, records, road conditions, riding it for real`, 'aria-label': `Climb guide for ${stage.name}`, 'aria-expanded': 'false', 'data-guide': stage.id, 'data-fkey': `guide-${stage.id}` }));
     if (stage.finish !== null) foot.append(button('🏁 Race it', () => ctx.deps.race(stage), 'hub-mini hub-race', { title: `Skip the ride mode and race the pro teams over ${stage.name} now`, 'aria-label': `Race the pro teams over ${stage.name}`, 'data-fkey': `race-${stage.id}` }));
+    const segs = segmentsFor(stage);
+    if (segs.length) {
+      foot.append(button(`⛰ KOM ×${segs.length}`, () => {
+        import('../../segmentBoardUi').then((m) => m.openStageSegments(stage, imp(), () => ctx.deps.dialogs.account())).catch(() => ctx.deps.toast('Couldn’t open the KOM segments just now.'));
+      }, 'hub-mini hub-race', { title: `The big climbs on ${stage.name}: who holds the KOM, and your best`, 'aria-label': `KOM segments on ${stage.name}: ${segs.map((s) => s.name).join(', ')}`, 'data-fkey': `kom-${stage.id}` }));
+    }
     const el = h('article', { class: 'hub-card hub-stage' },
       canvas,
       h('div', { class: 'hub-card-body' }, h('h3', {}, pick), meta, h('p', { class: 'hub-desc', text: stage.tagline }), foot),

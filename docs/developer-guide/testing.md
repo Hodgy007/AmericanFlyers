@@ -36,6 +36,7 @@ npm run build && npm test
 | `tour.test.ts` | the three classifications, jerseys, recording stages, `simulateStage` |
 | `ghost.test.ts` | ghost replay, interpolation and clamping, `raceTime` |
 | `freewheel.test.ts` | the ratchet tick rate (engagement points × wheel revs gained on the cassette), silence while pedalling, the rendered tick's shape and variants |
+| `segments.test.ts`, `segmentLimits.test.ts`, `segmentStore.test.ts`, `segmentAchievements.test.ts` | KOM segments: detection pinned per built-in stage (ids, names, start and end), effort timing (pause-void, jumps, laps), splits and the live gap, the local store and row mapping, the `segment_limits` rows against the physics, the achievements |
 | `trust.test.ts` | which rides may go on leaderboards (demo slider, `?timescale`), the finish-card note, the DELETE confirmation, verification-code entry |
 | `schedule.test.ts` | the daily event schedule and stage rotation (matches the database), join windows |
 | `eventSession.test.ts` | the shared event clock, the "you've been dropped" watcher, merging real and computer-ridden results, fixed-step determinism |

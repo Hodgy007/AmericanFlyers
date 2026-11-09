@@ -1,5 +1,6 @@
 // Achievements, worked out from a rider's saved activities and FTP history.
 
+import type { EffortLogRow } from './segmentApi';
 import type { Activity, FtpEntry } from './sync';
 
 export interface Achievement {
@@ -49,7 +50,7 @@ export function weekIndex(d: Date) {
   return Math.floor((day / 86400000 + 3) / 7); // 1970-01-01 was a Thursday
 }
 
-export function achievements(acts: Activity[], ftp: FtpEntry[], riderKg: number): Achievement[] {
+export function achievements(acts: Activity[], ftp: FtpEntry[], riderKg: number, efforts: EffortLogRow[] = []): Achievement[] {
   const chrono = [...acts].sort((a, b) => a.started_at.localeCompare(b.started_at));
   const list: Achievement[] = [];
   const date = (a: Activity | undefined) => (a ? `Earned ${new Date(a.started_at).toLocaleDateString()}` : '');
@@ -99,6 +100,21 @@ export function achievements(acts: Activity[], ftp: FtpEntry[], riderKg: number)
   counted('🏋', 'Workout regular', 'Complete 10 workouts.', 10, workouts, 'workouts');
   counted('📆', 'Three in a row', 'Ride on 3 days in a row.', 3, longestDayStreak(acts), 'days');
   counted('🗓', 'Consistency', 'Ride every week for 4 weeks.', 4, longestWeekStreak(acts), 'weeks');
+
+  // KOM segments (src/segments.ts): every whole climb you have been timed up.
+  const timed = [...efforts].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const earned = (e: EffortLogRow | undefined) => (e ? `Earned ${new Date(e.created_at).toLocaleDateString()}` : '');
+  const firstEffort = timed[0];
+  list.push({ icon: '⛰', name: 'Hill climber', description: 'Ride all of a KOM segment, a big climb timed from its start to its top.', done: !!firstEffort, progress: firstEffort ? 1 : 0, detail: firstEffort ? earned(firstEffort) : 'Not yet' });
+  const bestSoFar = new Map<string, number>();
+  let pb: EffortLogRow | undefined;
+  for (const e of timed) {
+    const before = bestSoFar.get(e.segment_id);
+    if (before !== undefined && e.elapsed_s < before && !pb) pb = e;
+    if (before === undefined || e.elapsed_s < before) bestSoFar.set(e.segment_id, e.elapsed_s);
+  }
+  list.push({ icon: '📈', name: 'Beat yourself', description: 'Set a personal best on a KOM segment you have ridden before.', done: !!pb, progress: pb ? 1 : 0, detail: pb ? earned(pb) : 'Not yet' });
+  counted('🗻', 'Segment collector', 'Ride 5 different KOM segments.', 5, bestSoFar.size, 'segments');
 
   const gain = ftp.length ? ftp[ftp.length - 1].ftp - ftp[0].ftp : 0;
   counted('📈', 'Getting stronger', 'Raise your FTP by 10 W from your first recorded value.', 10, Math.max(0, gain), 'W');

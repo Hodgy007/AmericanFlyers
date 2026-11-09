@@ -7,6 +7,7 @@ import { ownRoutes, routeSync, setLocalRoutes } from '../routes/library';
 import type { Settings } from '../settings';
 import type { Workout } from '../workouts/model';
 import { ownWorkouts, setLocalWorkouts, workoutSync } from '../workouts/library';
+import { sharedSegmentStore } from '../segmentStore';
 import { account } from './account';
 import { neon } from './client';
 
@@ -67,6 +68,7 @@ export async function syncOnSignIn(local: Settings): Promise<Settings | null> {
 export function forgetLocalCopies() {
   setLocalWorkouts([]);
   setLocalRoutes([]);
+  sharedSegmentStore().clear(); // your KOM segment times are yours: the next rider here starts clean
 }
 
 // ------------------------------------------------------- write-through ----

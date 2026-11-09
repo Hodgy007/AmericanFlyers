@@ -6,6 +6,16 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### KOM segments on the big climbs
+
+- **Segments.** A stage's big climbs (about a kilometre or more with at least 60 m of climbing, or a categorised summit) are timed segments: `src/segments.ts` derives them from the stage's own elevation, with stable ids (`alpe-dhuez:main`, pinned per built-in stage in `tests/unit/segments.test.ts`). Each mountain stage gets one segment for the whole climb, rolling stages their named climbs (Morgul-Bismark's Wall on each lap, Cold Shivers and the high point on the Tour of the Moon), flat stages none. Uploaded routes keep their segments local.
+- **Efforts.** Each passage is timed in moving time with a split every 50 m; stopping, jumping along the road, opening the hub or resetting voids it. Your best and latest effort per segment are kept in this browser and, signed in, in the new `segment_efforts` table.
+- **In the ride.** A KOM panel under the climb card shows the top 5 and your rank within 2 km of a segment, then a live gap to your best (and a smaller one to your last attempt) on it, and a result banner at the top (*Alpe d'Huez — 52:14 · New PB by 0:41 · #3 of 27*). A ghost of your best effort rides the road. **KOM panel** in Settings hides it.
+- **Hub.** A **⛰ KOM ×n** chip on each route card opens its segments with the king of each climb and your best; each opens a top-10 board (this month or all time).
+- **Database.** `segment_efforts` (own rows only), `segment_limits` (a plausibility floor per built-in segment, from the app's own physics) and `segment_leaderboard()`; `delete_my_account()` deletes the efforts by name. Not applied to the live database yet: see the SQL in `db/schema.sql` ("KOM segments").
+- **Achievements.** Hill climber, Beat yourself and Segment collector. **Privacy** text and docs updated; `?komtest` lets a demo ride count for your local times.
+- Tests: `segments`, `segmentLimits`, `segmentStore`, `segmentAchievements` (unit) and `kom.spec.ts` (e2e).
+
 ### Higgsfield graphics
 
 - **Horizon panoramas.** The far mountains are now a panorama of the stage's region (Alps, Pyrenees, Rockies, red-rock desert, rolling hills), generated with Higgsfield, keyed on its sky and wrapped round the sky ring with mirrored repeat. `scenery.horizon` picks it per stage (uploaded routes: alps if `mountainScale` >= 2, else hills). Loaded lazily, one WebP (about 55 to 110 KB, half size on Low); the procedural ring shows until it arrives or if it fails. The ring's haze, tint and per-stage height scale still apply. Files built by `scripts/prep-horizon.py`.
