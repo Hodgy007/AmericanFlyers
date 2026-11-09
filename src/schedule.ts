@@ -21,6 +21,10 @@ export const EVENT_STAGE_POOL: PoolStage[] = [
   { id: 'mt-blue-sky', name: 'Mount Blue Sky', lengthM: 23300 },
   { id: 'mt-diablo', name: 'Mount Diablo', lengthM: 18000 },
   { id: 'flagstaff', name: 'Flagstaff Mountain', lengthM: 7400 },
+  { id: 'richmond-worlds', name: 'Richmond Worlds Circuit', lengthM: 32400 },
+  { id: 'central-park', name: 'Central Park Loop', lengthM: 29400 },
+  { id: 'harrogate-worlds', name: 'Harrogate Worlds Circuit', lengthM: 27800 },
+  { id: 'pacific-coast', name: 'Pacific Coast Highway', lengthM: 39100 },
 ];
 
 export const RACE_HOUR_UTC = 19.5; // 19:30 UTC every day

@@ -438,7 +438,11 @@ insert into public.stage_limits (stage_id, distance_m, min_finish_s, max_avg_kmh
   ('mt-washington', 12200, 2146, 21),
   ('mt-blue-sky', 23300, 2246, 38),
   ('mt-diablo', 18000, 1927, 34),
-  ('flagstaff', 7400, 999, 27)
+  ('flagstaff', 7400, 999, 27),
+  ('richmond-worlds', 32400, 2021, 58),
+  ('central-park', 29400, 1831, 58),
+  ('harrogate-worlds', 27800, 1858, 54),
+  ('pacific-coast', 39100, 2563, 55)
 on conflict (stage_id) do update set distance_m = excluded.distance_m, min_finish_s = excluded.min_finish_s, max_avg_kmh = excluded.max_avg_kmh;
 
 -- Set by the app when a ride used the demo slider or ?timescale: such rides never count for times.
@@ -606,7 +610,11 @@ insert into public.event_stage_pool (stage_id, name, length_m, position) values
   ('mt-washington', 'Mount Washington', 12200, 9),
   ('mt-blue-sky', 'Mount Blue Sky', 23300, 10),
   ('mt-diablo', 'Mount Diablo', 18000, 11),
-  ('flagstaff', 'Flagstaff Mountain', 7400, 12)
+  ('flagstaff', 'Flagstaff Mountain', 7400, 12),
+  ('richmond-worlds', 'Richmond Worlds Circuit', 32400, 13),
+  ('central-park', 'Central Park Loop', 29400, 14),
+  ('harrogate-worlds', 'Harrogate Worlds Circuit', 27800, 15),
+  ('pacific-coast', 'Pacific Coast Highway', 39100, 16)
 on conflict (stage_id) do nothing;
 
 create table if not exists public.events (
@@ -1310,7 +1318,13 @@ insert into public.segment_limits (segment_id, stage_id, length_m, min_s, max_av
   ('mt-washington:main', 'mt-washington', 12075, 2133, 21),
   ('mt-blue-sky:main', 'mt-blue-sky', 23250, 2239, 38),
   ('mt-diablo:main', 'mt-diablo', 15850, 1741, 33),
-  ('flagstaff:main', 'flagstaff', 7375, 995, 27)
+  ('flagstaff:main', 'flagstaff', 7375, 995, 27),
+  ('richmond-worlds:libby-hill', 'richmond-worlds', 1300, 98, 48),
+  ('richmond-worlds:23rd-street', 'richmond-worlds', 350, 25, 51),
+  ('central-park:cat-hill', 'central-park', 1000, 68, 53),
+  ('central-park:harlem-hill', 'central-park', 700, 55, 46),
+  ('harrogate-worlds:oak-beck-climb', 'harrogate-worlds', 725, 87, 31),
+  ('pacific-coast:hurricane-point', 'pacific-coast', 1425, 151, 34)
 on conflict (segment_id) do update set stage_id = excluded.stage_id, length_m = excluded.length_m, min_s = excluded.min_s, max_avg_kmh = excluded.max_avg_kmh;
 
 -- Same idea as ride_is_plausible(): not a demo or sped-up effort, no average power above 2000 W, not under the floor,

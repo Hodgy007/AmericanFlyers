@@ -26,6 +26,16 @@ const PINNED: Record<string, [string, string, number, number][]> = {
   'mt-blue-sky': [['mt-blue-sky:main', 'Mount Blue Sky', 50, 23300]],
   'mt-diablo': [['mt-diablo:main', 'Mount Diablo', 2150, 18000]],
   'flagstaff': [['flagstaff:main', 'Flagstaff Mountain', 25, 7400]],
+  'richmond-worlds': [
+    ['richmond-worlds:libby-hill', 'Libby Hill', 10940, 12240],
+    ['richmond-worlds:23rd-street', '23rd Street', 13115, 13465],
+  ],
+  'central-park': [
+    ['central-park:cat-hill', 'Cat Hill', 820, 1820],
+    ['central-park:harlem-hill', 'Harlem Hill', 4010, 4710],
+  ],
+  'harrogate-worlds': [['harrogate-worlds:oak-beck-climb', 'Oak Beck climb', 9825, 10550]],
+  'pacific-coast': [['pacific-coast:hurricane-point', 'Hurricane Point', 22025, 23450]],
 };
 
 describe('segment detection on the built-in stages', () => {
@@ -51,12 +61,14 @@ describe('segment detection on the built-in stages', () => {
     expect(segmentsFor(stageById('route66'))).toEqual([]);
   });
 
-  it('only meets the size thresholds, has unique ids, and makes Morgul-Bismark’s wall a segment ridden on each of its two laps', () => {
+  it('only meets the size thresholds (lower for a circuit’s named climbs), has unique ids, and makes Morgul-Bismark’s wall a segment ridden on each of its two laps', () => {
     const ids = new Set<string>();
     for (const s of STAGES) {
       for (const g of segmentsFor(s)) {
-        expect(g.length, g.id).toBeGreaterThanOrEqual(750);
-        expect(g.gain, g.id).toBeGreaterThanOrEqual(49);
+        // A circuit's named climbs may be short (Harlem Hill, 23rd Street): they are ridden again every lap.
+        const circuit = g.lap !== undefined;
+        expect(g.length, g.id).toBeGreaterThanOrEqual(circuit ? 300 : 750);
+        expect(g.gain, g.id).toBeGreaterThanOrEqual(circuit ? 12 : 49);
         expect(g.shared).toBe(true);
         expect(ids.has(g.id)).toBe(false);
         ids.add(g.id);

@@ -15,6 +15,7 @@ import type { TimeOfDay, Weather } from '../settings';
 import { Terrain } from './terrain';
 import { updateSway } from './sway';
 import { Monoliths } from './monoliths';
+import { Water } from './water';
 import { horizonFor } from './horizon';
 import type { GroundCover } from './groundCover'; // grass, flowers and stones beside the road: High and Ultra only, a lazily loaded chunk
 
@@ -46,6 +47,7 @@ export class World {
   private readonly sky = new Sky(currentStage().scenery.mountainScale, horizonFor(currentStage().scenery), currentStage().id);
   private readonly landmarks = new Landmarks();
   private readonly monoliths = new Monoliths();
+  private readonly water = new Water();
   private readonly others = new OtherRiders();
   private readonly hemi = new THREE.HemisphereLight('#cfe3ff', '#4d5a3a', 1.1);
   private atmosphere!: Atmosphere;
@@ -90,12 +92,13 @@ export class World {
 
     this.road = new Road(this.renderer, markers);
     this.terrain = new Terrain(this.renderer);
-    this.scene.add(this.sky.group, this.terrain.group, this.road.group, this.landmarks.group, this.monoliths.group, this.rider.group, this.others.group);
+    this.scene.add(this.sky.group, this.terrain.group, this.water.group, this.road.group, this.landmarks.group, this.monoliths.group, this.rider.group, this.others.group);
     this.atmosphere = new Atmosphere({
       renderer: this.renderer, scene: this.scene, sun: this.sun, hemi: this.hemi, sky: this.sky,
       setWet: (w) => { this.road.setWet(w); this.terrain.setWet(w); this.monoliths.setWet(w); this.cover?.setWet(w); this.coverWet = w; },
     });
     this.atmosphere.restage(currentStage());
+    this.water.restage(currentStage());
     // Graphics tier (Low to Ultra, Auto by default): shadows, post-processing, sky detail, render scale. See graphics.ts.
     this.gfx = new Graphics({ renderer: this.renderer, scene: this.scene, camera: this.camera, sun: this.sun, sky: this.sky }, signals);
     this.gfx.attach(this.atmosphere);
@@ -237,6 +240,7 @@ export class World {
     this.monoliths.clear();
     this.road.setMarkers(markers);
     this.sky.setHorizon(horizonFor(currentStage().scenery), currentStage().scenery.mountainScale, currentStage().id);
+    this.water.restage(currentStage());
     this.atmosphere.restage(currentStage());
     this.gfx.pause(2000); // the new stage's terrain and shaders are building: not a verdict on the device
     this.jumped();
@@ -336,6 +340,7 @@ export class World {
 
     updateGlow(performance.now() / 1000, this.atmosphere.nightAmount); // the Tron bike's pulse
     this.sky.update(this.camera, dt);
+    this.water.update(riderPos.x, riderPos.z);
     updateSway(dt); // trees and grass bend with the wind
     this.road.animate(performance.now() / 1000, riderPos.x, riderPos.y, riderPos.z);
     this.gfx.render(dt);

@@ -42,8 +42,8 @@ describe('every monument builder', () => {
     }
   });
 
-  it('only the small ones cast shadows: the Flatirons do not', () => {
-    for (const id of MONUMENT_IDS) expect(buildMonument(id).userData.shadows, id).toBe(id !== 'flatirons');
+  it('only the small ones cast shadows: the Flatirons and the Manhattan skyline (a hundred towers) do not', () => {
+    for (const id of MONUMENT_IDS) expect(buildMonument(id).userData.shadows, id).toBe(id !== 'flatirons' && id !== 'manhattan-skyline');
   });
 
   it('a cluster of apartment blocks varies with its seed, three to five blocks', () => {

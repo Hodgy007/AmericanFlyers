@@ -22,7 +22,7 @@ The app reads these parameters when it loads.
 
 | Parameter | Example | What it does |
 | --- | --- | --- |
-| `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `hotw-morgul-bismark`, `hotw-tour-of-the-moon`, `hell-of-the-west`, `alpe-dhuez`, `stelvio`, `ventoux`, `tourmalet`, `zoncolan`, `mt-washington`, `mt-blue-sky`, `mt-diablo` and `flagstaff`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
+| `stage` | `?stage=alpe-dhuez` | Starts on the stage with that ID. Accepts `heartland`, `route66`, `hotw-morgul-bismark`, `hotw-tour-of-the-moon`, `hell-of-the-west`, `alpe-dhuez`, `stelvio`, `ventoux`, `tourmalet`, `zoncolan`, `mt-washington`, `mt-blue-sky`, `mt-diablo`, `flagstaff`, `richmond-worlds`, `central-park`, `harrogate-worlds` and `pacific-coast`, and the ID of an uploaded GPX route (for example `gpx-…`) saved in this browser. Any other value starts on Heartland Rollers. |
 | `start` | `?start=6` | Starts the ride this many kilometers into the stage. Decimal values work, for example `6.5`. Values of zero or less are ignored. |
 | `komtest` | `?komtest` | For testing: a demo or sped-up ride still counts for your KOM segment times on this device (never sent to your account). Without it such rides are timed but not kept. |
 | `timescale` | `?timescale=8` | Runs the ride clock this many times faster (1 to 20), for testing whole races quickly. Not for normal riding: the physics and the field step in bigger jumps. |

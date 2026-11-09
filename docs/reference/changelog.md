@@ -6,6 +6,14 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Four road stages: three circuits and the Pacific Coast
+
+- **New stages** on their real roads, with real elevation: **Richmond Worlds Circuit** (`richmond-worlds`, 2 × 16.2 km, Libby Hill and 23rd Street KOMs, finish by the State Capitol), **Central Park Loop** (`central-park`, 3 × 9.8 km counter-clockwise, Cat Hill and Harlem Hill, the Manhattan skyline round the park, the Reservoir), **Harrogate Worlds Circuit** (`harrogate-worlds`, 2 × 13.9 km, dry-stone walls, stone terraces, the Stray at the finish) and **Pacific Coast Highway** (`pacific-coast`, 39.1 km of California 1 through Big Sur, Bixby Creek Bridge, Hurricane Point, the Pacific below the cliffs). Each has wind, a finish badge, a place in the evening race rotation and a `stage_limits` row (SQL in `db/schema.sql`, to be applied by hand).
+- **KOM segments on the new roads:** Libby Hill and 23rd Street (Richmond), Cat Hill and Harlem Hill (Central Park), the Oak Beck climb (Harrogate) and Hurricane Point (Pacific Coast). On a circuit any named climb of 300 m and 12 m or more is a segment, found by walking back from its summit when it is too short for the climb detector. `segment_limits` rows added.
+- **Yorkshire crowds.** A British culture (`gb`): Union flags, the white-rose Yorkshire flag and polka-dot shirts; Harrogate uses it. Culture ids live in `world/cultureTypes.ts`.
+- **Water.** New `Scenery.water` (`world/water.ts`): a sea plane at sea level and ponds (the Reservoir), used by the Pacific Coast and Central Park.
+- **Skyline and bridge.** A procedural city skyline (`world/skyline.ts`) ring of towers outside a loop, a domed Virginia Capitol, brick and stone terraced houses and Bixby Creek Bridge, all landmark models.
+
 ### Fix: the AI coach crashed on Vercel
 
 - `/api/ai` failed to start (`ERR_MODULE_NOT_FOUND`), so the coach answered "taking a break": its suggestion list imported `src/stages.ts`, whose world modules use extensionless imports Node can't resolve in an unbundled function. The suggestions are now plain data (`src/ai/stageSuggestions.ts`), and `tests/unit/aiServerImports.test.ts` walks everything the functions import, failing on a missing `.js` or on `src/stages.ts`, and keeps the list in step with the stages.
@@ -16,7 +24,7 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Efforts.** Each passage is timed in moving time with a split every 50 m; stopping, jumping along the road, opening the hub or resetting voids it. Your best and latest effort per segment are kept in this browser and, signed in, in the new `segment_efforts` table.
 - **In the ride.** A KOM panel under the climb card shows the top 5 and your rank within 2 km of a segment, then a live gap to your best (and a smaller one to your last attempt) on it, and a result banner at the top (*Alpe d'Huez — 52:14 · New PB by 0:41 · #3 of 27*). A ghost of your best effort rides the road. **KOM panel** in Settings hides it.
 - **Hub.** A **⛰ KOM ×n** chip on each route card opens its segments with the king of each climb and your best; each opens a top-10 board (this month or all time).
-- **Database.** `segment_efforts` (own rows only), `segment_limits` (a plausibility floor per built-in segment, from the app's own physics) and `segment_leaderboard()`; `delete_my_account()` deletes the efforts by name. Not applied to the live database yet: see the SQL in `db/schema.sql` ("KOM segments").
+- **Database.** `segment_efforts` (own rows only), `segment_limits` (a plausibility floor per built-in segment, from the app's own physics) and `segment_leaderboard()`; `delete_my_account()` deletes the efforts by name. Applied to the live database (the SQL is in `db/schema.sql`, "KOM segments").
 - **Achievements.** Hill climber, Beat yourself and Segment collector. **Privacy** text and docs updated; `?komtest` lets a demo ride count for your local times.
 - Tests: `segments`, `segmentLimits`, `segmentStore`, `segmentAchievements` (unit) and `kom.spec.ts` (e2e).
 

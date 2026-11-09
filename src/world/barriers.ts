@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { roadPoint } from '../course';
 import type { Stage } from '../stages';
 import { hash2 } from './noise';
-import { ROAD_HALF_WIDTH, bendsOf, isClimb } from './roadside';
+import { ROAD_HALF_WIDTH, bendsOf, hash01, isClimb } from './roadside';
 
 // Guardrails (a W-beam on posts) on mountain stages: along the outside of every
 // hairpin and wherever the ground falls away beside the road. One instanced
@@ -20,7 +20,7 @@ const DROP_MIN = 4; // metres lower than the road there = a drop worth a rail
 export const barrierKind = (stage: Stage): 'rail' | 'stone' | 'none' => stage.scenery.barrier ?? 'rail';
 
 /** Climbs, and stages with canyons beside the road, get barriers, unless the stage says the road is unguarded (`barrier: 'none'`, Mount Washington). */
-export const hasBarriers = (stage: Stage) => barrierKind(stage) !== 'none' && (isClimb(stage) || stage.scenery.roadside !== undefined);
+export const hasBarriers = (stage: Stage) => barrierKind(stage) !== 'none' && (isClimb(stage) || stage.scenery.roadside !== undefined || stage.scenery.walls !== undefined);
 
 /** Which sections along [d0, d1) get a rail, and on which side (-1 left, +1 right). `ground` is a height lookup (terrain's `groundSampler`). */
 export function barrierSections(stage: Stage, d0: number, d1: number, ground: (x: number, z: number) => number): { d: number; side: -1 | 1 }[] {
@@ -42,7 +42,9 @@ export function barrierSections(stage: Stage, d0: number, d1: number, ground: (x
         const z = p.z + Math.cos(p.heading) * DROP_AT * side;
         drop = p.y - ground(x, z) > DROP_MIN;
       }
-      if (bend || drop) out.push({ d, side });
+      // Dry-stone walls along a country lane (`Scenery.walls`): both sides, with a field gate now and then.
+      const wall = !bend && !drop && stage.scenery.walls?.(d) === true && hash01(k, side, 0x5a11) > 0.05;
+      if (bend || drop || wall) out.push({ d, side });
     }
   }
   return out;

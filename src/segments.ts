@@ -37,6 +37,9 @@ export const SEGMENT_MIN_GAIN = 60; // metres
 /** A named summit (hors catégorie to category 2) makes a shorter, lower climb count. */
 const SUMMIT_MIN_LENGTH = 500;
 const SUMMIT_MIN_GAIN = 40;
+/** On a circuit, a climb to any named summit counts from this long and this high. */
+const CIRCUIT_MIN_LENGTH = 300;
+const CIRCUIT_MIN_GAIN = 12;
 /** Climbs this close together, with at most BRIDGE_DIP metres of descent between, are one segment (a hairpin's flat is not a break). */
 const BRIDGE_GAP = 250;
 const BRIDGE_DIP = 12;
@@ -142,10 +145,29 @@ function findSegments(stage: Stage): Segment[] {
     if (c.length <= 0) continue;
     const big = c.length >= SEGMENT_MIN_LENGTH && c.gain >= SEGMENT_MIN_GAIN;
     const summit = summitFor(c);
-    const important = summitFor(c, summits) !== null && c.length >= SUMMIT_MIN_LENGTH && c.gain >= SUMMIT_MIN_GAIN;
+    // On a circuit any named summit's climb counts (Harlem Hill, Libby Hill): short, but ridden again every lap.
+    const important = (summitFor(c, summits) !== null && c.length >= SUMMIT_MIN_LENGTH && c.gain >= SUMMIT_MIN_GAIN)
+      || (lap !== undefined && summit !== null && c.length >= CIRCUIT_MIN_LENGTH && c.gain >= CIRCUIT_MIN_GAIN);
     // Unnamed climbs on a rolling stage are kept only if they are really big.
     const bigUnnamed = c.length >= 2000 && c.gain >= 100;
     if ((big || important) && (summit || important || bigUnnamed)) picked.push({ c, name: summit?.name ?? null });
+  }
+  // A circuit's short named climbs (Libby Hill, Harlem Hill) can be too short for findClimbs: walk back from the summit
+  // while the road climbs (every 50 m) and keep it if it is long and high enough.
+  if (lap) {
+    for (const s of named) {
+      if (s.d > lap) continue;
+      if (picked.some((p) => s.d >= p.c.start && s.d <= p.c.end + NAME_REACH)) continue;
+      let top = s.d;
+      for (let d = Math.max(0, s.d - NAME_REACH); d <= s.d + NAME_REACH; d += 25) if (el(d) > el(top)) top = d;
+      let start = top;
+      while (start - 50 >= 0 && el(start - 50) < el(start) + (top - start < 300 ? 0.3 : 0)) start -= 50; // across a level top too
+      const length = top - start;
+      const gain = el(top) - el(start);
+      if (length < CIRCUIT_MIN_LENGTH || gain < CIRCUIT_MIN_GAIN) continue;
+      picked.push({ c: { start, end: top, length, gain, avg: gain / length, max: steepest(el, start, top, gain / length) }, name: s.name });
+    }
+    picked.sort((a, b) => a.c.start - b.c.start);
   }
   // Names: the summit's, else "<Stage> climb" for the biggest, "Climb N" for the rest. Ids follow the name.
   const short = shortStageName(stage.name);

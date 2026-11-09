@@ -135,6 +135,8 @@ export interface ScaleTo {
   maxGrade?: number;
   /** A climb never descends: SRTM's dips (a hairpin cutting a corner of its cell) are levelled before scaling. */
   climbOnly?: boolean;
+  /** Average the profile over this many metres first: SRTM's 30 m cells read trees and buildings as bumps, which in a park or a town turn a gentle road into a run of short ramps. */
+  smooth?: number;
 }
 
 /**
@@ -153,6 +155,18 @@ export function elevationFrom(geo: RealGeometry, stageLength: number, scaleTo: S
       const step = Math.max(0, geo.rise[i] - geo.rise[i - 1]);
       prof[i] = top += step;
     }
+  }
+  if (scaleTo.smooth && scaleTo.smooth > PROFILE_STEP) {
+    const half = Math.round(scaleTo.smooth / PROFILE_STEP / 2);
+    const sum = new Float64Array(prof.length + 1);
+    for (let i = 0; i < prof.length; i++) sum[i + 1] = sum[i] + prof[i];
+    const out = new Float64Array(prof.length);
+    for (let i = 0; i < prof.length; i++) {
+      const a = Math.max(0, i - half), b = Math.min(prof.length, i + half + 1);
+      out[i] = (sum[b] - sum[a]) / (b - a);
+    }
+    const start = out[0];
+    for (let i = 0; i < prof.length; i++) prof[i] = out[i] - start; // the road still starts at 0
   }
   if (kmGrades) {
     const step = PROFILE_STEP;

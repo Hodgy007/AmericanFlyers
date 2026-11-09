@@ -477,11 +477,12 @@ export class Terrain {
       const keep = rand();
       if (desert ? forest < 0.0 && keep > 0.08 : forest < 0.05 - sc.forestCover && keep > lone) continue;
       const near = nearestRoad(cands, x, z);
-      if (near && (near.dist < 12 || nearLandmark(x, z, near.d) || roadsideSlope(x, z, near) > CLIFF_SLOPE)) continue; // nor on a cliff face
+      if (near && (near.dist < 12 || nearLandmark(x, z, near.d) || roadsideSlope(x, z, near) > CLIFF_SLOPE || (near.dist < 220 && sc.clearing?.(near.d)))) continue; // nor on a cliff face, nor on a park lawn
       const h = heightAt(x, z, near);
       const rule = treeLineRule(h, sc.treeLine, forest, rand()); // the tree line
       if (!rule) continue;
       if (sc.screeLine !== undefined && h > sc.screeLine) continue; // nothing grows on the scree
+      if (sc.water && sc.water.some((b) => h < b.level + 0.3)) continue; // nor under water
       const species = rule === 'shrub' ? 'shrub' : pickSpecies(mix, h, standRoll(x, z, rand(), rand()));
       const s = treeScale(species, rand());
       q.setFromAxisAngle(up, rand() * Math.PI * 2);

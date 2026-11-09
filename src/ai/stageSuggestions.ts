@@ -13,4 +13,8 @@ export const STAGE_SUGGESTIONS: readonly { id: string; name: string; about: stri
   { id: 'mt-blue-sky', name: 'Mount Blue Sky', about: '23.3 km. 14.5 miles from Echo Lake Lodge, where the Hell of the West stops, up the highest paved road in North America to 14,130 ft.' },
   { id: 'mt-diablo', name: 'Mount Diablo', about: '18.0 km. 11.2 miles from Danville through South Gate to the stone summit tower, over golden grass and oaks.' },
   { id: 'flagstaff', name: 'Flagstaff Mountain', about: '7.4 km. 4.6 miles at 8% up Boulder’s own climb: Flagstaff Road from Baseline, with the Flatirons beside the first switchbacks.' },
+  { id: 'richmond-worlds', name: 'Richmond Worlds Circuit', about: '32.4 km. Two laps of the 2015 World Championships circuit: Monument Avenue, the cobbles of Libby Hill and 23rd Street, and the drag up Gover' },
+  { id: 'central-park', name: 'Central Park Loop', about: '29.4 km. Three counter-clockwise laps of Park Drive: Cat Hill, the Reservoir, Harlem Hill, with Manhattan standing round the park.' },
+  { id: 'harrogate-worlds', name: 'Harrogate Worlds Circuit', about: '27.8 km. Two laps of the 2019 World Championships finishing circuit: Otley Road, the Oak Beck valley between its dry-stone walls, and the dr' },
+  { id: 'pacific-coast', name: 'Pacific Coast Highway', about: '39.1 km. 39 km of California Highway 1 through Big Sur: the cliffs above the Pacific, Bixby Creek Bridge, Hurricane Point and the road to Bi' },
 ];

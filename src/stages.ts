@@ -2,6 +2,8 @@
 // bends, scenery style, roadside landmarks and signs.
 
 import type { MonumentId, MonumentOptions } from './world/monumentTypes';
+import type { CultureId } from './world/cultureTypes';
+import type { WaterBody } from './world/waterTypes';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
 import type { HorizonChoice } from './world/horizon';
@@ -22,6 +24,12 @@ import flagstaffRoute from './routes/real/flagstaff';
 import echoLakeRoute from './routes/real/hell-of-the-west';
 import morgulRoute from './routes/real/hotw-morgul-bismark';
 import moonRoute from './routes/real/hotw-tour-of-the-moon';
+import richmondRoute from './routes/real/richmond-worlds';
+import centralParkRoute from './routes/real/central-park';
+import harrogateRoute from './routes/real/harrogate-worlds';
+import pacificRoute from './routes/real/pacific-coast';
+import { sinkInto } from './world/waterTypes';
+import { skylineHeight, skylineTowers } from './world/skyline';
 
 interface LandmarkBase {
   every: number; // metres between repeats
@@ -35,6 +43,10 @@ interface LandmarkBase {
   clearance: number; // keep trees this far away
   /** Metres of course either side within which it is placed (default: 250 behind, 1,500 ahead). For huge, distant things. */
   reach?: number;
+  /** Course distance after which it is no longer repeated (default: all the way). For a row of houses along one stretch of a circuit. */
+  until?: number;
+  /** Metres added to its height after it is placed (negative: a bridge whose deck is its origin, standing on the gorge floor). */
+  lift?: number;
   /**
    * Placed in the world instead of along the road, for something whose real position is known (the Flatirons):
    * metres east (x) and south (z) of the course start, `y` above the start's datum, and `yaw` about the vertical
@@ -90,6 +102,12 @@ export interface Scenery {
   directHaze?: boolean;
   /** Scales the sky's ambient and reflected light (the environment map, High and Ultra only; default 1). Lower on a stage where it pales sunlit rock. */
   skyLight?: number;
+  /** Water: the sea, lakes and rivers, flat sheets that the ground sinks below (world/waterTypes.ts, drawn by world/water.ts). */
+  water?: WaterBody[];
+  /** Where dry-stone walls line both sides of the road (fields on a country lane): true for a course distance. */
+  walls?(d: number): boolean;
+  /** Where no trees grow beside the road (a park lawn, The Stray): true for a course distance. */
+  clearing?(d: number): boolean;
 }
 
 /** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
@@ -138,6 +156,12 @@ export interface Stage {
   tourStage?: number;
   /** Prevailing wind here (see world/wind.ts). Left out: the built-in table, or a mild wind picked from the id. */
   wind?: import('./world/wind').StageWind;
+  /** Whose flags and shirts the crowd wears (world/crowdCulture.ts). Left out: from the hairpin word, as before. */
+  culture?: CultureId;
+  /** Course distances where spectators gather as they do at a hairpin: the cobbled climbs of a circuit. */
+  crowdSpots?: number[];
+  /** False for a stage with named places but no climb to speak of (a circuit, a coast road): no painted words, campers or hairpin rails. */
+  climb?: false;
 }
 
 // --------------------------------------------------------------- helpers ----
@@ -1049,7 +1073,427 @@ const tourOfTheMoon: Stage = {
   },
 };
 
-export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan, mtWashington, mtBlueSky, mtDiablo, flagstaff];
+// --------------------------------------- real-road circuits and the coast ----
+//
+// Three race circuits and a coast road, on their real roads (OpenStreetMap, SRTM: routes/real/*.ts, baked by
+// scripts/bake-routes.mjs) with the real elevation as it is baked, not rescaled to a published gain. A circuit's
+// baked loop closes exactly (heading included), is mapped onto the published lap length, and its elevation is
+// periodic (`d mod lap`), so lap 2 lies on lap 1; each lap adds the loop's own whole turn to the heading
+// (Morgul-Bismark's way, see `MB_TURN`). The scenery that needs the road's shape (a skyline round a park, the sea
+// beside a cliff road) is worked out from the stage's own heading, so it follows the stage's scale.
+
+interface CircuitGeometry {
+  lap: number;
+  laps: number;
+  finish: number;
+  headingAt(d: number): number;
+  elevationAt(d: number): number;
+  /** Real metres per stage metre. */
+  scale: number;
+  /** The mean elevation round one lap, m above the start. */
+  mean: number;
+}
+
+function circuitGeometry(route: RealRouteData, lap: number, laps: number, maxGrade: number, smooth?: number, lapGain?: number): CircuitGeometry {
+  const geo = mapRoute(route, lap);
+  // lapGain: the published climbing per lap. SRTM reads a town's roofs and a park's trees as extra ups and downs, so the
+  // (smoothed) profile is scaled about the start until a lap climbs that much, before the gradient cap.
+  let peak: number | undefined;
+  if (lapGain) {
+    const raw = elevationFrom(geo, lap, { maxGrade: 1, smooth });
+    let high = 0, gain = 0;
+    for (let u = 0; u < lap; u += 10) { const a = raw(u), b = raw(u + 10); high = Math.max(high, a); if (b > a) gain += b - a; }
+    if (high > 0 && gain > 0) peak = (high * lapGain) / gain;
+  }
+  const rise = elevationFrom(geo, lap, { maxGrade, smooth, peak });
+  // The baked road ends a metre or two off the altitude it started at: spread that over the lap, so the lap is periodic.
+  const closing = rise(lap);
+  const lapElevation = (u: number) => rise(u) - (closing * u) / lap;
+  // The loop turns a whole number of times, once, either way; each lap adds that again.
+  const turn = geo.headingAt(lap) - geo.headingAt(0);
+  let mean = 0;
+  let n = 0;
+  for (let u = 0; u < lap; u += 10) { mean += lapElevation(u); n++; }
+  return {
+    lap, laps, finish: lap * laps, scale: geo.scale, mean: mean / n,
+    headingAt: (d) => (d <= 0 ? geo.headingAt(0) : geo.headingAt(d - Math.floor(d / lap) * lap) + Math.floor(d / lap) * turn),
+    elevationAt: (d) => lapElevation(((d % lap) + lap) % lap),
+  };
+}
+
+/** The road's (x, z) every `step` metres from the course start (x east, z south), by integrating its heading. */
+function roadTrace(headingAt: (d: number) => number, length: number, step = 20): [number, number][] {
+  const out: [number, number][] = [[0, 0]];
+  let x = 0, z = 0;
+  for (let d = 0; d < length; d += step) {
+    const h = headingAt(d + step / 2);
+    x += Math.cos(h) * step;
+    z += Math.sin(h) * step;
+    out.push([x, z]);
+  }
+  return out;
+}
+
+/** The course distance and lateral offset (+ right, as terrain.ts measures it) of the nearest road point to (x, z): for ground beyond `Scenery.roadside`'s reach. */
+function roadLocator(trace: readonly [number, number][], step: number) {
+  const CELL = 300;
+  const grid = new Map<string, number[]>();
+  trace.forEach(([x, z], i) => {
+    const key = `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
+    const cell = grid.get(key);
+    if (cell) cell.push(i); else grid.set(key, [i]);
+  });
+  return (x: number, z: number): { d: number; lateral: number } => {
+    const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    let best = -1, bestD2 = Infinity;
+    for (let ring = 0; ring < 14 && best < 0; ring++) {
+      for (let i = cx - ring; i <= cx + ring; i++) {
+        for (let j = cz - ring; j <= cz + ring; j++) {
+          if (ring && Math.abs(i - cx) < ring && Math.abs(j - cz) < ring) continue;
+          for (const k of grid.get(`${i},${j}`) ?? []) {
+            const d2 = (trace[k][0] - x) ** 2 + (trace[k][1] - z) ** 2;
+            if (d2 < bestD2) { bestD2 = d2; best = k; }
+          }
+        }
+      }
+    }
+    if (best < 0) return { d: 0, lateral: 0 };
+    const a = trace[Math.max(0, best - 1)], b = trace[Math.min(trace.length - 1, best + 1)];
+    const vx = b[0] - a[0], vz = b[1] - a[1];
+    const len = Math.hypot(vx, vz) || 1;
+    return { d: best * step, lateral: ((trace[best][0] - x) * vz - (trace[best][1] - z) * vx) / len };
+  };
+}
+
+/** Spreads landmark kinds over every lap of a circuit: `first` and `until` are course distances within the lap. */
+const perLap = (kinds: LandmarkKind[], lap: number, laps: number): LandmarkKind[] =>
+  kinds.flatMap((k) => Array.from({ length: laps }, (_, i) => ({ ...k, first: k.first + i * lap, until: (k.until ?? lap) + i * lap })));
+
+/** A street of terraced houses along one side of the road from lap metre `from` to `to`: `seeds` alternate along it, so it is not one house repeated. */
+function terraceRow(from: number, to: number, side: -1 | 1, material: 'brick' | 'stone', seeds: number[], spacing = 44): LandmarkKind[] {
+  return seeds.map((seed, i) => ({
+    ...monumentAt('terrace', from + i * spacing, side, 21, TERRACE_HEIGHT, { options: { seed, material }, clearance: 16 }),
+    every: spacing * seeds.length,
+    until: to,
+  }));
+}
+/** A terrace's height as built (monumentCity.ts), so it is not stretched: about 14 m, chimneys included. */
+const TERRACE_HEIGHT = 14;
+
+/** Named places (announced as "next: ...", not drawn), for a circuit's every lap. */
+const namedPlaces = (places: [number, string][], lap: number, laps: number): StageSign[] =>
+  Array.from({ length: laps }, (_, i) => places.map(([d, name]) => ({ d: d + i * lap, label: '', name, style: 'hairpin' as const, numbered: false }))).flat();
+
+// ---- Richmond: the 2015 Worlds road-race circuit ----
+//
+// The UCI Road World Championships road-race circuit, Richmond, Virginia (2015; the elite men rode it 16 times):
+// 16.2 km from the Greater Richmond Convention Center on Broad Street west to Monument Avenue and round the Jefferson Davis
+// monument, back through Virginia Commonwealth University and Shockoe Slip, east along the canal to Great Shiplock Park and up
+// the cobbled Libby Hill from Rocketts Landing (a 250 m climb up Church Hill, the view that gave the city its name), a quick
+// descent and the 110 m climb of 23rd Street (cobbles, up to 20%), down through Shockoe Bottom and up the 300 m of Governor
+// Street beside the Capitol, then the 680 m of Broad Street to the line (richmond2015.com course notes quoted by
+// cyclingmagazine.ca 2015-09-25 and capovelo.com 2014-02-25; WWBT NBC12's race guide 2015-09-24). The road is the real one,
+// baked to 15.0 km and stretched to the published lap; its elevation is SRTM's, which smooths the cobbled ramps (the real
+// 23rd Street is steeper than the 7% the 100 m grid shows). The stage is two laps.
+/** The Capitol's height as built (monumentCity.ts), metres. */
+const CAPITOL_HEIGHT = 34.4;
+const RW_LAP = 16200;
+const RW_LAPS = 2;
+const rw = circuitGeometry(richmondRoute, RW_LAP, RW_LAPS, 0.2, 40, 127);
+const RW_START: LonLat = [-77.43638, 37.54238]; // the baked road's first point: the finish line
+const RW_ALTITUDE = 64; // m above sea level at the line
+const RW_GROUND = rw.mean + 4; // the wild ground: the plateau the city stands on, a little above the road's mean
+/** A real place in the stage's frame: metres east and south of the line, stretched like the road. */
+const rwAt = (p: LonLat): [number, number] => { const e = eastSouth(RW_START, p); return [e.x / rw.scale, e.z / rw.scale]; };
+// The James River below the canal, Libby Hill and Great Shiplock Park: its middle, from OpenStreetMap, west to east.
+const RW_WATER: WaterBody[] = [{
+  kind: 'river', width: 230, level: -RW_ALTITUDE + 1.5,
+  pts: ([[-77.4600, 37.5310], [-77.4500, 37.5300], [-77.4420, 37.5268], [-77.4337, 37.5253], [-77.4280, 37.5236], [-77.4235, 37.5215], [-77.4180, 37.5196], [-77.4120, 37.5170], [-77.4040, 37.5140]] as LonLat[]).map(rwAt),
+}];
+const RW_HILLS = (x: number, z: number) => RW_GROUND + fbm(x / 600 + 11, z / 600, 3) * 10 + fbm(x / 160, z / 160, 2) * 2.5;
+// KOMs and places, in lap metres (the baked profile's tops: Libby Hill 12,240; 23rd Street 13,440).
+const RW_LIBBY = 12240;
+const RW_23RD = 13440;
+/** Lap metres (multiples of the 44 m row spacing) where a row of houses fits beside the road, on the left and on the right. */
+const RW_LEFT: [number, number][] = [[0, 484], [836, 1804], [2068, 2948], [4708, 5060], [5368, 5764], [5852, 6600], [6688, 7084], [7172, 8140], [8228, 9500], [12364, 12804], [13552, 14564], [14960, 15400]];
+const RW_RIGHT: [number, number][] = [[0, 748], [968, 1672], [2024, 2992], [3916, 5016], [5456, 5764], [5852, 6600], [6908, 8140], [8272, 9500], [12276, 12804], [13420, 14740], [15180, 15664], [15752, 16192]];
+const RW_PLACES: [number, string][] = [[3400, 'Monument Avenue'], [8100, 'Shockoe Slip'], [10300, 'Great Shiplock Park'], [11000, 'Libby Hill'], [12950, '23rd Street'], [14100, 'Governor Street']];
+
+const richmondWorlds: Stage = {
+  id: 'richmond-worlds',
+  name: 'Richmond Worlds Circuit',
+  tagline: 'Two laps of the 2015 World Championships circuit: Monument Avenue, the cobbles of Libby Hill and 23rd Street, and the drag up Governor Street to the Capitol.',
+  finish: rw.finish,
+  lapLength: rw.lap,
+  elevationAt: rw.elevationAt,
+  headingAt: rw.headingAt,
+  baseAltitude: RW_ALTITUDE,
+  climb: false,
+  weather: 'clear',
+  scenery: {
+    wildHeight: (x, z) => sinkInto(RW_WATER, x, z, RW_HILLS(x, z), 22, 140),
+    bumpAmp: 2,
+    rockLine: 900,
+    snowLine: 1e9,
+    treeLine: 900,
+    coniferBias: 0.15,
+    forestCover: 0.12,
+    trees: { oak: 0.35, beech: 0.2, cottonwood: 0.2, pine: 0.1, shrub: 0.15 },
+    fields: false,
+    mountainScale: 0.6,
+    horizon: 'hills',
+    road: 'us-highway',
+    water: RW_WATER,
+    clearing: (d) => { const u = d % rw.lap; return u > rw.lap - 520 && u < rw.lap - 120; }, // Capitol Square
+  },
+  landmarks: [
+    startArch, finishArch(rw.lap), finishArch(rw.finish),
+    ...perLap([
+      // The Capitol, on the left of Broad Street just before the line (the real one stands a few blocks east, by Governor Street).
+      monumentAt('virginia-capitol', rw.lap - 330, -1, 78, CAPITOL_HEIGHT, { yaw: 0, clearance: 50 }),
+      // Brick rowhouses along the streets where the whole row clears the road's other legs and the river (found from the stage's own road).
+      ...RW_LEFT.flatMap(([a, b]) => terraceRow(a, b, -1, 'brick', [1, 2])),
+      ...RW_RIGHT.flatMap(([a, b]) => terraceRow(a, b, 1, 'brick', [3, 4])),
+    ], rw.lap, rw.laps),
+  ],
+  signs: namedPlaces(RW_PLACES, rw.lap, rw.laps),
+  crowdSpots: [RW_LIBBY - 150, RW_23RD - 90, 14600].flatMap((d) => [d, d + rw.lap]),
+  race: {
+    sprints: [{ d: rw.lap, name: 'Broad Street sprint' }],
+    summits: [RW_LIBBY, RW_23RD, rw.lap + RW_LIBBY, rw.lap + RW_23RD].map((d, i) => ({ d, name: i % 2 ? '23rd Street' : 'Libby Hill', cat: 3 as const })),
+  },
+};
+
+// ---- Central Park: the Park Drive loop ----
+//
+// Park Drive, Central Park, New York: the 6.1-mile loop of East, Center and West Drives (nycgovparks.org; the drives are
+// closed to cars, which is why OpenStreetMap maps them as pedestrian ways and the baked route needed waypoints on them),
+// ridden counter-clockwise, the way the cyclists go: north up the east side past the Met and the Reservoir, with Cat Hill on
+// East Drive, round Harlem Meer, up Harlem Hill (about 28 m in 700 m, the park's steepest) and south down West Drive.
+// The road is the real one (baked to 10.3 km, scaled to 9.8 km: 6.1 miles); three laps. The towers round the park are
+// procedural (world/skyline.ts): a band outside the drive, taller to the south.
+const CP_LAP = 9800;
+const CP_LAPS = 3;
+const cp = circuitGeometry(centralParkRoute, CP_LAP, CP_LAPS, 0.07, 250, 88);
+const CP_START: LonLat = [-73.97293, 40.76885];
+const CP_ALTITUDE = 28;
+const cpAt = (p: LonLat): { x: number; z: number } => { const e = eastSouth(CP_START, p); return { x: e.x / cp.scale, z: e.z / cp.scale }; };
+const CP_LOOP = roadTrace(cp.headingAt, CP_LAP, 20);
+const CP_TOWERS = skylineTowers(CP_LOOP);
+const CP_GROUND = cp.mean; // the park's own ground, in the road's datum
+// The Reservoir (the Jacqueline Kennedy Onassis Reservoir, 106 acres), inside the loop between 86th and 96th Streets, its long side along the avenues.
+const CP_RESERVOIR_AT = cpAt([-73.9626, 40.78545]);
+const CP_WATER: WaterBody[] = [{ kind: 'pond', ...CP_RESERVOIR_AT, rx: 230, rz: 400, rot: -0.507, level: CP_GROUND + 4 }];
+const CP_KOM_CAT = 1520; // the top of Cat Hill on East Drive
+const CP_KOM_HARLEM = 4760; // the top of Harlem Hill
+const CP_PLACES: [number, string][] = [[700, 'Cat Hill'], [2200, 'The Reservoir'], [3900, 'Harlem Meer'], [4000, 'Harlem Hill'], [7300, 'West Drive']];
+
+const centralPark: Stage = {
+  id: 'central-park',
+  name: 'Central Park Loop',
+  tagline: 'Three counter-clockwise laps of Park Drive: Cat Hill, the Reservoir, Harlem Hill, with Manhattan standing round the park.',
+  finish: cp.finish,
+  lapLength: cp.lap,
+  elevationAt: cp.elevationAt,
+  headingAt: cp.headingAt,
+  baseAltitude: CP_ALTITUDE,
+  climb: false,
+  scenery: {
+    wildHeight: (x, z) => sinkInto(CP_WATER, x, z, CP_GROUND + fbm(x / 420 + 5, z / 420, 3) * 5 + fbm(x / 110, z / 110, 2), 6, 60),
+    bumpAmp: 1.6,
+    rockLine: 900,
+    snowLine: 1e9,
+    treeLine: 900,
+    coniferBias: 0.2,
+    forestCover: 0.25,
+    trees: { oak: 0.35, beech: 0.2, cottonwood: 0.2, pine: 0.1, aspen: 0.05, shrub: 0.1 },
+    fields: false,
+    mountainScale: 0.4,
+    horizon: 'hills',
+    road: 'lane',
+    water: CP_WATER,
+  },
+  landmarks: [
+    startArch, finishArch(cp.lap), finishArch(2 * cp.lap), finishArch(cp.finish),
+    // Manhattan, round the whole loop: one landmark at the world's origin, in range the whole stage (the tower positions are in the course frame).
+    monumentInWorld('manhattan-skyline', { x: 0, z: 0, y: CP_GROUND - 3, yaw: 0 }, skylineHeight(CP_TOWERS), { options: { loop: CP_LOOP } }),
+  ],
+  signs: namedPlaces(CP_PLACES, cp.lap, cp.laps),
+  crowdSpots: [CP_KOM_CAT - 120, CP_KOM_HARLEM - 120].flatMap((d) => Array.from({ length: cp.laps }, (_, i) => d + i * cp.lap)),
+  race: {
+    sprints: [{ d: cp.lap, name: 'Park Drive sprint' }, { d: 2 * cp.lap, name: 'Park Drive sprint' }],
+    summits: Array.from({ length: cp.laps }, (_, i) => [
+      { d: i * cp.lap + CP_KOM_CAT, name: 'Cat Hill', cat: 4 as const },
+      { d: i * cp.lap + CP_KOM_HARLEM, name: 'Harlem Hill', cat: 3 as const },
+    ]).flat(),
+  },
+};
+
+// ---- Harrogate: the 2019 Worlds finishing circuit ----
+//
+// The finishing circuit of the 2019 UCI Road World Championships, Harrogate, North Yorkshire: 13.9 km (Strava's "Harrogate
+// Worlds Lap", VeloViewer; 14 km in the UCI's words), ridden in the race direction from the line on Parliament Street, south
+// down West Park beside The Stray, then right on to Otley Road, the long straight out of town (Zwift Insider's notes for the
+// route), north through the farmland of the Oak Beck valley to Penny Pot Lane, the sharp descent to the stone bridge over the beck
+// and the climb out of the valley (the Yorkshire KOM), east along Cornwall Road in the Duchy Estate and the Royal Pump Room, and
+// up the drag of Parliament Street past Betty's to the line, where Cavendish crashed in 2014. The sources do not name every
+// road, so the loop between Otley Road and Cornwall Road is reconstructed; the baked road is 12.1 km and the game stretches it to
+// the published lap. Two laps.
+const HW_LAP = 13900;
+const HW_LAPS = 2;
+const hw = circuitGeometry(harrogateRoute, HW_LAP, HW_LAPS, 0.12, 100, 245);
+const HW_ALTITUDE = 120;
+const HW_KOM = 10600; // the top of the Oak Beck climb
+const HW_PLACES: [number, string][] = [[1500, 'Otley Road'], [9650, 'Oak Beck'], [10900, 'Cornwall Road'], [12500, 'Royal Pump Room'], [13300, 'Parliament Street']];
+/** The open country between Otley Road's last houses and the Duchy Estate: dry-stone walls line the lane. */
+const hwRural = (d: number) => { const u = d % hw.lap; return u > 1900 && u < 10250; };
+/** The Stray, the open common beside West Park at the line, where no trees grow. */
+const hwStray = (d: number) => { const u = d % hw.lap; return u < 900 || u > hw.lap - 500; };
+
+const harrogateWorlds: Stage = {
+  id: 'harrogate-worlds',
+  name: 'Harrogate Worlds Circuit',
+  tagline: 'Two laps of the 2019 World Championships finishing circuit: Otley Road, the Oak Beck valley between its dry-stone walls, and the drag up Parliament Street.',
+  finish: hw.finish,
+  lapLength: hw.lap,
+  elevationAt: hw.elevationAt,
+  headingAt: hw.headingAt,
+  baseAltitude: HW_ALTITUDE,
+  climb: false,
+  culture: 'gb',
+  weather: 'cloudy',
+  scenery: {
+    wildHeight: (x, z) => hw.mean + 8 + fbm(x / 800 + 21, z / 800, 4) * 40 + fbm(x / 240, z / 240, 3) * 7,
+    bumpAmp: 3,
+    rockLine: 900,
+    snowLine: 1e9,
+    treeLine: 900,
+    coniferBias: 0.1,
+    forestCover: -0.1, // fields and hedgerows: a tree here, a copse there
+    trees: { oak: 0.4, beech: 0.3, pine: 0.05, shrub: 0.25 },
+    fields: false,
+    mountainScale: 1.4, // the Pennines
+    horizon: 'hills',
+    road: 'alpine', // white dashed centre, thin edge lines
+    barrier: 'stone',
+    walls: hwRural,
+    clearing: hwStray,
+  },
+  landmarks: [
+    startArch, finishArch(hw.lap), finishArch(hw.finish),
+    // Stone terraces in the town stretches: West Park (the Stray is on the left), the Duchy Estate's Cornwall Road and the finish straight.
+    ...perLap([
+      ...terraceRow(220, 1320, 1, 'stone', [1, 2]),
+      ...terraceRow(9328, 11572, 1, 'stone', [3, 4]),
+      ...terraceRow(11660, 13024, -1, 'stone', [5, 6]),
+      ...terraceRow(12452, 12848, 1, 'stone', [7, 8]),
+    ], hw.lap, hw.laps),
+  ],
+  signs: namedPlaces(HW_PLACES, hw.lap, hw.laps),
+  crowdSpots: Array.from({ length: hw.laps }, (_, i) => i * hw.lap + HW_KOM - 80),
+  race: {
+    sprints: [{ d: hw.lap, name: 'Parliament Street sprint' }],
+    summits: Array.from({ length: hw.laps }, (_, i) => ({ d: i * hw.lap + HW_KOM, name: 'Oak Beck climb', cat: 4 as const })),
+  },
+};
+
+// ---- Pacific Coast Highway through Big Sur ----
+//
+// California Highway 1 southbound from the Carmel River past Carmel Highlands and Garrapata, over Bixby Creek Bridge, up Hurricane
+// Point and past Point Sur to Big Sur village: 39 km, the ocean on the right all the way. The road and its profile are the real
+// ones (OpenStreetMap, SRTM; baked with the car profile, which stays on the highway where the bicycle profile prefers the Old
+// Coast Road over the hills). Bixby Creek Bridge (1932, 218 m of concrete open-spandrel arch, 79 m above the creek: nps.gov, the
+// Monterey County site) is at 21.9 km; Hurricane Point (the highway climbs to about 180 m) peaks at 23.5 km; the Point Sur
+// lighthouse stands on its rock 1.4 km offshore at 29.8 km. The ground falls away to the Pacific on the right (the `roadside`
+// hook shapes the cliff, sea level is a plane) and climbs in golden hills on the left.
+const PC_LENGTH = 39100;
+const pcGeo = mapRoute(pacificRoute, PC_LENGTH);
+const PC_ALTITUDE = 6; // m above sea level at the start (the Carmel River bridge)
+const PC_FLOOR = -1.5; // the lowest the road runs, in the datum: the baked profile dips to the sea's level at the river mouth, the highway does not
+const pcElevation = (() => {
+  const f = elevationFrom(pcGeo, PC_LENGTH, { maxGrade: 0.09, smooth: 250 });
+  return (d: number) => Math.max(PC_FLOOR, f(d));
+})();
+const PC_BIXBY = 21850;
+const PC_HURRICANE = 23470;
+const PC_TRACE = roadTrace(pcGeo.headingAt, PC_LENGTH, 20);
+const pcLocate = roadLocator(PC_TRACE, 20);
+const PC_LIP = 6.5;
+const PC_SEA = -PC_ALTITUDE; // sea level in the road's datum
+/** 1 where the ocean is beside the road (on the right), fading in after the river and out at the Big Sur valley. */
+const pcSea = (d: number) => smoothstep(2800, 3700, d) * (1 - smoothstep(33200, 35500, d));
+/** Ground height relative to the road, `lateral` m to its right. */
+function pcRel(d: number, lateral: number): number {
+  const dd = Math.max(0, Math.min(PC_LENGTH, d));
+  const road = pcElevation(dd);
+  const above = Math.max(3, PC_ALTITUDE + road); // m above the sea
+  const s = Math.abs(lateral);
+  // Bixby Creek's gorge cuts across the road at the bridge; its floor stays above the sea.
+  const gorge = -Math.max(0, Math.min(78, above - 6)) * (1 - smoothstep(24, 100, Math.abs(dd - PC_BIXBY))) * (1 - smoothstep(520, 880, s));
+  if (s <= PC_LIP) return gorge;
+  const out = s - PC_LIP;
+  // Inland (and where the sea is not near): golden hills that rise from the verge.
+  const hills = 200 * (1 - Math.exp(-out / 170)) + fbm(dd / 700 + 3, s / 350, 3) * 55 * smoothstep(30, 300, s);
+  let rel = hills;
+  if (lateral > 0) {
+    const w = pcSea(dd);
+    if (w > 0) {
+      // The cliff: steep at the lip and easing into the surf, down to a little below the sea.
+      const run = Math.max(28, above * 1.5);
+      const t = Math.min(1, out / run);
+      const cliff = -(above + 8) * (1 - Math.pow(1 - t, 1.7)) + fbm(dd / 80, s / 40, 2) * 2.2 * Math.sin(Math.PI * Math.min(1, t));
+      rel = hills * (1 - w) + cliff * w;
+    }
+  }
+  return Math.min(rel, gorge);
+}
+const PC_PLACES: StageSign[] = ([[4300, 'Carmel Highlands'], [21550, 'Bixby Creek Bridge'], [23300, 'Hurricane Point'], [29500, 'Point Sur'], [35400, 'Andrew Molera']] as [number, string][])
+  .map(([d, name]) => ({ d, label: '', name, style: 'hairpin' as const, numbered: false }));
+
+const pacificCoast: Stage = {
+  id: 'pacific-coast',
+  name: 'Pacific Coast Highway',
+  tagline: '39 km of California Highway 1 through Big Sur: the cliffs above the Pacific, Bixby Creek Bridge, Hurricane Point and the road to Big Sur village.',
+  finish: PC_LENGTH,
+  elevationAt: pcElevation,
+  headingAt: pcGeo.headingAt,
+  baseAltitude: PC_ALTITUDE,
+  climb: false,
+  weather: 'cloudy', // the morning marine layer
+  scenery: {
+    wildHeight: (x, z) => {
+      const { d, lateral } = pcLocate(x, z);
+      return pcElevation(Math.max(0, Math.min(PC_LENGTH, d))) + pcRel(d, lateral);
+    },
+    roadside: pcRel,
+    bumpAmp: 2.5,
+    rockLine: 900,
+    snowLine: 1e9,
+    treeLine: 330,
+    dryGrass: 0.7,
+    coniferBias: 0.3,
+    forestCover: -0.4, // coastal scrub: shrubs, with the odd oak and Monterey pine
+    trees: { shrub: 0.55, oak: 0.2, pine: 0.25 },
+    fields: false,
+    mountainScale: 2.4, // the Santa Lucia range
+    horizon: 'hills',
+    road: 'us-highway',
+    barrier: 'rail',
+    water: [{ kind: 'sea', level: PC_SEA }],
+  },
+  landmarks: [
+    startArch, finishArch(PC_LENGTH),
+    // Bixby Creek Bridge carries the road: its deck is the model's top (BIXBY_DECK above its origin), 218 m along the road.
+    { model: 'bixby-bridge', first: PC_BIXBY, every: 1e9, side: 0, span: 'along', offset: 0, size: 80, clearance: 40, lift: -79.2 },
+  ],
+  signs: PC_PLACES,
+  race: {
+    sprints: [{ d: PC_BIXBY, name: 'Bixby Bridge sprint' }],
+    summits: [{ d: PC_HURRICANE, name: 'Hurricane Point', cat: 4 }],
+  },
+};
+
+export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan, mtWashington, mtBlueSky, mtDiablo, flagstaff, richmondWorlds, centralPark, harrogateWorlds, pacificCoast];
 
 export function stageById(id: string | null): Stage {
   return STAGES.find((s) => s.id === id) ?? heartland;

@@ -34,8 +34,8 @@ describe('stage_limits', () => {
     for (const s of FINISH_STAGES) expect(limits.get(s.id)?.distanceM, s.id).toBe(Math.round(s.finish!));
   });
 
-  it('holds exactly the computed numbers for the American climbs', () => {
-    for (const id of ['mt-washington', 'mt-blue-sky', 'mt-diablo', 'flagstaff']) {
+  it('holds exactly the computed numbers for the American climbs, the circuits and the coast road', () => {
+    for (const id of ['mt-washington', 'mt-blue-sky', 'mt-diablo', 'flagstaff', 'richmond-worlds', 'central-park', 'harrogate-worlds', 'pacific-coast']) {
       expect(limits.get(id), id).toEqual(limitsFor(FINISH_STAGES.find((s) => s.id === id)!));
     }
   });

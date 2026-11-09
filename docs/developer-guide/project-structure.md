@@ -105,7 +105,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `zones.ts` | Heart-rate and power zone definitions, zone lookup, and the zone bar display. |
 | `physics.ts` | The power-to-speed model: gravity, rolling resistance, air drag (reduced in a draft), drivetrain loss and momentum. |
 | `course.ts` | The current stage's road: elevation, grade, heading and a cached centerline. |
-| `stages.ts` | Built-in stages (Heartland Rollers, Route 66 Flats, the three Hell of the West tour stages, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet, Monte Zoncolan, Mount Washington, Mount Blue Sky, Mount Diablo, Flagstaff Mountain), the climb builder, landmark kinds, and the stage list. |
+| `stages.ts` | Built-in stages (Heartland Rollers, Route 66 Flats, the three Hell of the West tour stages, Alpe d'Huez, Stelvio Pass, Mont Ventoux, Col du Tourmalet, Monte Zoncolan, Mount Washington, Mount Blue Sky, Mount Diablo, Flagstaff Mountain, the Richmond, Central Park and Harrogate circuits, the Pacific Coast Highway), the climb builder, landmark kinds, and the stage list. |
 | `profile.ts` | The elevation strip, and the grade-to-color function. |
 | `ble/trainer.ts` | Trainer connection: FTMS and Cycling Power, parsing, and the control point (grade with a wind-resistance factor, and target power). |
 | `ble/heartRate.ts` | Heart-rate strap connection and parsing. |
