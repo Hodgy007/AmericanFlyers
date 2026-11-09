@@ -200,6 +200,8 @@ The rig needs these bone names: `Hips`, `Spine02`, `Spine01`, `Spine`, `neck`, `
 
 If `rider.glb` fails to load, the built-in primitive rider is used instead. The console logs *Rider model not found* and carries on.
 
+The default American Flyers kit (no team kit) has white stars on the navy shorts: the kit shader draws them from the vertex's rest position, projected from the front or the side by its rest normal so they keep their shape (`starMask` in `bikeParts.ts`). A replacement model needs the same colour scheme: a red jersey, navy shorts and side panels, white socks.
+
 `rider.glb` is loaded once and cloned (with `SkeletonUtils.clone`) for every rider on the road. `RiderModel` takes an optional look: a frame and jersey colour (other riders get one picked from their id), a `kit` (the rigged rider's navy and red become two chosen colours), or `ghost`, which makes every material see-through and blue-tinted and turns off its shadows.
 
 ### Changing a rider's look at runtime

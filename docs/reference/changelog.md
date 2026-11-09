@@ -6,6 +6,11 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### A new rider
+
+- **New rider model** (`public/models/rider.glb`), designed with Higgsfield from front, side and back views and built from all of them, so the back you see from the chase camera is modelled, not guessed: a vented helmet, wraparound glasses, gloves, a panelled jersey with a white chest band, bib shorts and cycling shoes. Rigged with the same skeleton, so pedalling, team kits, jersey patterns and socks work as before. 0.9 MB (was 1.4 MB).
+- The default kit keeps its **stars**: white stars on the navy shorts, drawn by the kit shader.
+
 ### Fix: riding with others crashed every frame
 
 - Since the code-review fixes, `presence.riders()` returns its own reused array, and the ride loop added the pro teams and the AI rival to it, so the next frame read past the riders it knew (`Cannot read properties of undefined (reading 'at')`): with Ride together on, pro teams, a race or an AI rival broke the ride loop. The loop now copies the array, and `riders()` trims anything a caller added. Caught by `kom.spec.ts` and `ai.spec.ts`.
