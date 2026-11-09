@@ -104,6 +104,8 @@ export class Presence {
   riders(): OtherRider[] {
     const now = performance.now();
     const out = this.out;
+    // Callers must not add to the returned array (copy it first); if one did, stop at the riders this knows about.
+    if (out.length > this.known.length) out.length = this.known.length;
     for (let i = 0; i < out.length; i++) {
       const o = out[i];
       const k = this.known[i];

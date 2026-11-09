@@ -415,7 +415,8 @@ function frame(now: number) {
   lastCrossShift = crossShift;
 
   // Other riders on the road, and the draft from the one just ahead.
-  const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders() : [];
+  // A copy: presence.riders() returns its own reused array, and the pro teams and the AI rival are added to this one.
+  const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders().slice() : [];
   if (race) race.update(dt, ride.distance, ride.speed); // the field races with you
   if (settings.proTeams || race || eventState) {
     peloton.update(dt);

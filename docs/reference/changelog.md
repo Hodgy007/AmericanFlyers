@@ -6,6 +6,10 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Fix: riding with others crashed every frame
+
+- Since the code-review fixes, `presence.riders()` returns its own reused array, and the ride loop added the pro teams and the AI rival to it, so the next frame read past the riders it knew (`Cannot read properties of undefined (reading 'at')`): with Ride together on, pro teams, a race or an AI rival broke the ride loop. The loop now copies the array, and `riders()` trims anything a caller added. Caught by `kom.spec.ts` and `ai.spec.ts`.
+
 ### Four road stages: three circuits and the Pacific Coast
 
 - **New stages** on their real roads, with real elevation: **Richmond Worlds Circuit** (`richmond-worlds`, 2 × 16.2 km, Libby Hill and 23rd Street KOMs, finish by the State Capitol), **Central Park Loop** (`central-park`, 3 × 9.8 km counter-clockwise, Cat Hill and Harlem Hill, the Manhattan skyline round the park, the Reservoir), **Harrogate Worlds Circuit** (`harrogate-worlds`, 2 × 13.9 km, dry-stone walls, stone terraces, the Stray at the finish) and **Pacific Coast Highway** (`pacific-coast`, 39.1 km of California 1 through Big Sur, Bixby Creek Bridge, Hurricane Point, the Pacific below the cliffs). Each has wind, a finish badge, a place in the evening race rotation and a `stage_limits` row (SQL in `db/schema.sql`, to be applied by hand).
