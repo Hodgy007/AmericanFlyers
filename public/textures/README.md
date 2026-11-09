@@ -16,10 +16,12 @@ re-encoded with ImageMagick (`-strip -interlace JPEG`, sRGB):
 | `terrain/snow.jpg`, `snow-n.jpg` | [Snow 02](https://polyhaven.com/a/snow_02) | Rob Tuytel | layer 4, snow | same |
 | `terrain/sandstone.jpg`, `sandstone-n.jpg` | generated with Higgsfield for this project (replaced Poly Haven's [Sandstone Cracks](https://polyhaven.com/a/sandstone_cracks), Rob Tuytel) | | layer 5, red sandstone (desert) | same |
 | `terrain/sand.jpg`, `sand-n.jpg` | [Sand 01](https://polyhaven.com/a/sand_01) | Rob Tuytel | layer 6, sand (desert) | same |
-| `terrain/scree.jpg`, `scree-n.jpg` | [Gray Rocks](https://polyhaven.com/a/gray_rocks) | Dimitrios Savva | layer 7, scree (the bare limestone summit of Mont Ventoux) | same |
+| `terrain/scree.jpg`, `scree-n.jpg` | generated with Higgsfield for this project (replaced Poly Haven's [Gray Rocks](https://polyhaven.com/a/gray_rocks), Dimitrios Savva) | | layer 7, scree (the bare limestone summit of Mont Ventoux) | diffuse 1024², JPEG q80, 4:2:0; normal (OpenGL) 512², q70, 4:4:4 |
 | `asphalt-n.jpg` | [Asphalt 01](https://polyhaven.com/a/asphalt_01) | Dario Barresi (processing), Charlotte Baglioni (photography) | the road's normal map | normal (OpenGL) 512², q72, 4:4:4 |
 
-Grass and sandstone are the Higgsfield-generated seamless textures; their normal maps are made by `scripts/prep-terrain.py` (height from luminance, wrap-around Sobel, OpenGL). Generated rock and snow were tried and not adopted: at riding distance they looked the same as the photographs and weigh more (314 vs 201 KB, 166 vs 115 KB).
+Grass, sandstone and scree are the Higgsfield-generated seamless textures; their normal maps are made by
+`scripts/prep-terrain.py` (height from luminance, wrap-around Sobel, OpenGL). Generated rock and snow were tried and
+not adopted: at riding distance they looked the same as the photographs and weigh more (314 vs 201 KB, 166 vs 115 KB).
 
 The terrain shader (`src/world/ground.ts`) uses each diffuse map only for its grain: the
 texture divided by its own average colour, laid over the stage's own vertex colours. So the

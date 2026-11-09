@@ -170,15 +170,16 @@ describe('where the stages put monuments', () => {
     expect(modelsOn('stelvio', 'col-sign')[0].options?.style).toBe('it');
   });
 
-  it('puts the Ventoux monuments in order: chalet, memorial 1.3 km from the top, observatory at the summit on the left', () => {
+  it('puts the Ventoux monuments in order: chalet, memorial 1.3 km from the top, observatory on the summit plateau right of the finish', () => {
     const v = stageById('ventoux');
     expect(modelsOn('ventoux', 'chalet')[0].first).toBeCloseTo(15300, -2); // where the real road is at 1,440 m
     const memorial = modelsOn('ventoux', 'simpson-memorial')[0];
     expect(v.finish! - memorial.first).toBeCloseTo(1300, -1);
     expect(memorial.side).toBe(1);
     const obs = modelsOn('ventoux', 'ventoux-observatory')[0];
-    expect(obs.side).toBe(-1);
+    expect(obs.side).toBe(1);
     expect(obs.first).toBeGreaterThan(v.finish! - 150);
+    expect(obs.size).toBeGreaterThan(60); // tall enough to read on the skyline well below the plateau
   });
 
   it('puts the Flatirons well to the west of the Morgul-Bismark circuit, seen from afar, once a lap', () => {

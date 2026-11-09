@@ -1068,7 +1068,8 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 @media (max-height: 560px) { .minimap { width: 118px; height: 118px; } }
 
 .climb-card {
-  position: fixed; top: var(--below-hud, 150px); left: 50%; transform: translateX(-50%); z-index: 4;
+  /* Left of centre: the road's vanishing point (and whatever stands on the summit skyline) is dead centre. */
+  position: fixed; top: var(--below-hud, 150px); left: 50%; transform: translateX(calc(-50% - 260px)); z-index: 4;
   width: min(290px, calc(100vw - 32px)); padding: 8px 12px 8px; border-radius: 14px;
   background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
