@@ -6,6 +6,10 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Fix: the AI coach crashed on Vercel
+
+- `/api/ai` failed to start (`ERR_MODULE_NOT_FOUND`), so the coach answered "taking a break": its suggestion list imported `src/stages.ts`, whose world modules use extensionless imports Node can't resolve in an unbundled function. The suggestions are now plain data (`src/ai/stageSuggestions.ts`), and `tests/unit/aiServerImports.test.ts` walks everything the functions import, failing on a missing `.js` or on `src/stages.ts`, and keeps the list in step with the stages.
+
 ### KOM segments on the big climbs
 
 - **Segments.** A stage's big climbs (about a kilometre or more with at least 60 m of climbing, or a categorised summit) are timed segments: `src/segments.ts` derives them from the stage's own elevation, with stable ids (`alpe-dhuez:main`, pinned per built-in stage in `tests/unit/segments.test.ts`). Each mountain stage gets one segment for the whole climb, rolling stages their named climbs (Morgul-Bismark's Wall on each lap, Cold Shivers and the high point on the Tour of the Moon), flat stages none. Uploaded routes keep their segments local.
