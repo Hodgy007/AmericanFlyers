@@ -107,6 +107,45 @@ const ROUTES = {
     lonlats: [[-105.2877748, 40.0000659], [-105.3234, 39.9834]],
     length: 7400, start: 1746, end: 2349,
   },
+  // Richmond 2015 UCI Road World Championships road-race circuit (16.2 km, Richmond, Virginia), ridden in the race
+  // direction from the Convention Center on Broad Street: west to Monument Avenue and the 180-degree turn at the Davis
+  // monument, back through VCU and Shockoe Slip, east along the canal (Cary Street, Dock Street) to Great Shiplock Park,
+  // up the cobbled Libby Hill (Williamsburg Avenue, N 29th Street, Libby Terrace), the cobbled 23rd Street, then down
+  // through Shockoe Bottom and up Governor Street to the finish on Broad Street. Sources: richmond2015.com course notes
+  // as quoted by cyclingmagazine.ca (2015-09-25), capovelo.com (2014-02-25) and WWBT NBC12's race guide (2015-09-24).
+  // The waypoints are on the streets those texts name; where the text does not say which of two parallel streets,
+  // BRouter picks (it rides West Grace Street where the race used Broad Street). The real lap is 16.2 km; the road
+  // baked here is 5% shorter and the game stretches it to the published length.
+  'richmond-worlds': {
+    lonlats: [[-77.43638, 37.54238], [-77.4502, 37.5463], [-77.4642, 37.5565], [-77.4540, 37.5490], [-77.4338, 37.5352], [-77.4225, 37.5261], [-77.4184, 37.5251], [-77.4173, 37.5272], [-77.4170, 37.5283], [-77.4229, 37.5305], [-77.4229, 37.5322], [-77.4324, 37.5373], [-77.43638, 37.54238]],
+    length: 16200, start: 60, end: 60, closed: true, smoothing: 1.5,
+  },
+  // Central Park, New York: the Park Drive loop (West Drive, Center Drive and East Drive, about 6.1 miles) ridden counter-clockwise
+  // from East Drive in the 60s, north up the east side past the Met and the Reservoir, round the north end by Harlem Meer
+  // and Harlem Hill, and south down West Drive. The drives are mapped highway=pedestrian (closed to cars), so the waypoints
+  // sit on them (taken from the way geometry in Nominatim, © OpenStreetMap contributors) and BRouter's fastbike follows.
+  'central-park': {
+    lonlats: [[-73.97293, 40.76885], [-73.96892, 40.77245], [-73.96727, 40.77596], [-73.96509, 40.7795], [-73.95907, 40.78395], [-73.957, 40.78747], [-73.95642, 40.79101], [-73.9546, 40.79459], [-73.95429, 40.7981], [-73.95811, 40.79829], [-73.95915, 40.79479], [-73.96312, 40.79111], [-73.96701, 40.78759], [-73.96945, 40.78214], [-73.97282, 40.77848], [-73.97436, 40.77488], [-73.97764, 40.77137], [-73.97859, 40.76769], [-73.97624, 40.76568], [-73.97303, 40.76511], [-73.97293, 40.76885]],
+    length: 9800, start: 25, end: 25, closed: true,
+  },
+  // Harrogate, North Yorkshire: the finishing circuit of the 2019 UCI Road World Championships (13.9 km on Strava's
+  // "Harrogate Worlds Lap", 14 km in the UCI's words), ridden in the race direction: from the finish on Parliament Street
+  // south down West Park, round to Otley Road (the long straight out of town), then north through the Oak Beck valley to
+  // Penny Pot Lane, back east along Cornwall Road in the Duchy Estate to the Royal Pump Room and up Parliament Street to the
+  // line. Sources: Zwift Insider's route notes for the "2019 Worlds Harrogate Circuit", VeloViewer's course notes for the
+  // Worlds, wikipedia.org (2019 UCI Road World Championships). Those do not name every road, so the loop between Otley Road
+  // and Cornwall Road is reconstructed from them; the baked road is shorter than the real lap and the game stretches it.
+  'harrogate-worlds': {
+    lonlats: [[-1.54139, 53.99156], [-1.53946, 53.98731], [-1.54905, 53.98438], [-1.57636, 53.97805], [-1.59194, 53.97504], [-1.57416, 53.99466], [-1.57185, 53.99143], [-1.56351, 53.98987], [-1.55347, 53.99178], [-1.54731, 53.99363], [-1.54411, 53.99478], [-1.54309, 53.99374], [-1.54139, 53.99156]],
+    length: 13900, start: 100, end: 100, closed: true, smoothing: 1.5,
+  },
+  // California Highway 1 through Big Sur, southbound from the Carmel River past Carmel Highlands, Garrapata, Bixby Creek
+  // Bridge (the Old Coast Road, which fastbike prefers, is avoided with the car profile), Hurricane Point and Point Sur
+  // to Big Sur village (the Rio Road end of the Big Sur valley). The ocean is on the right all the way.
+  'pacific-coast': {
+    lonlats: [[-121.9142, 36.5396], [-121.9345, 36.511], [-121.90559, 36.47359], [-121.90193, 36.37159], [-121.80745, 36.27024]],
+    length: 39100, start: 10, end: 57, profile: 'car-eco',
+  },
 };
 
 // ---------------------------------------------------------------- fetch ----
