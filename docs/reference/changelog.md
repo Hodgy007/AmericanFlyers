@@ -8,6 +8,8 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ### Loose ends from the polish batch
 
+- **Coke Ovens checked and reshaped.** First time seen: they stand on the flat canyon floor (ground 163 to 181 m under the whole row, the road is 236 m above) and read through the haze, but they were squat hemispheres on pale plate-like aprons with striped Entrada colours. Now four taller beehive domes with near-vertical sides, a Wingate red-brown palette (new optional `colors` on the monolith lathe), a smaller and darker talus apron, and the row shifted onto the flat part of the floor. They are not visible from the chase, side or rider cameras at any distance: the guardrail and the 20 to 36 degree depression angle hide the canyon floor, so only a camera above the rail shows them.
+
 - **autoGraphics e2e no longer flaky.** The race: the test looked at the toast (up for 4.5 s) and at `__afGraphics.change` (overwritten by the next step down) some time after the tier had dropped, and read the tier for the Settings note separately from the note while Auto was still stepping down; the last reload also had no wait for the hub. The test now records toasts and changes as they happen (MutationObserver and a 20 ms sampler), waits until the tier and the note agree, and waits for the hub after every reload. Assertions are unchanged.
 
 ### Stage fixes: Washington, Flagstaff, training plans
