@@ -658,9 +658,10 @@ const mtWashington = buildClimb({
   },
   // The ground falls away from a bare cone at the summit, so the buildings stand against the sky and are in view from
   // the last 500 m (the generic wild ground climbs hundreds of metres within a kilometre of the road and hid them).
-  summit: { d: 12225, side: 1, offset: 32, rise: 3, flat: 60, slope: 0.5, fadeFrom: 380, fadeTo: 1200 },
+  summit: { d: 12225, side: 1, offset: 40, rise: 3, flat: 60, slope: 0.5, fadeFrom: 380, fadeTo: 1200 },
   landmarks: [
-    monumentAt('washington-summit', 12225, 1, 32, 57, { yaw: -0.12, clearance: 40 }), // inside the last bend, just past the finish: the road wraps round it, so it is ahead on the right from 500 m out and again in the last 100 m
+    monumentAt('washington-summit', 12225, 1, 40, 38.5, { yaw: -0.12, clearance: 40 }), // the buildings: inside the last bend, just past the finish, so they are ahead on the right from 500 m out, off the right edge at 200 m (the camera swings 100 degrees by 50 m out), and ahead again in the last 100 m
+    monumentAt('washington-tower', 12200, -1, 60, 57, { clearance: 20 }), // the broadcast tower, apart from them on the outside of the bend, straight ahead of the last straight: it is what the camera sees at 200 m
     summitSign(12200, 'MOUNT WASHINGTON', 'ELEV. 6,288 FT'),
   ],
 });
