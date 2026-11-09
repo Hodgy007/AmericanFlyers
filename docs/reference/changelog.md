@@ -6,6 +6,11 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### A new rider
+
+- **New rider model** (`public/models/rider.glb`), designed with Higgsfield from front, side and back views and built from all of them, so the back you see from the chase camera is modelled, not guessed: a vented helmet, wraparound glasses, gloves, a panelled jersey with a white chest band, bib shorts and cycling shoes. Rigged with the same skeleton, so pedalling, team kits, jersey patterns and socks work as before. 0.9 MB (was 1.4 MB).
+- The default kit keeps its **stars**: white stars on the navy shorts, drawn by the kit shader.
+
 ### Four road stages: three circuits and the Pacific Coast
 
 - **New stages** on their real roads, with real elevation: **Richmond Worlds Circuit** (`richmond-worlds`, 2 × 16.2 km, Libby Hill and 23rd Street KOMs, finish by the State Capitol), **Central Park Loop** (`central-park`, 3 × 9.8 km counter-clockwise, Cat Hill and Harlem Hill, the Manhattan skyline round the park, the Reservoir), **Harrogate Worlds Circuit** (`harrogate-worlds`, 2 × 13.9 km, dry-stone walls, stone terraces, the Stray at the finish) and **Pacific Coast Highway** (`pacific-coast`, 39.1 km of California 1 through Big Sur, Bixby Creek Bridge, Hurricane Point, the Pacific below the cliffs). Each has wind, a finish badge, a place in the evening race rotation and a `stage_limits` row (SQL in `db/schema.sql`, to be applied by hand).
