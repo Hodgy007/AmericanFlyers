@@ -2,7 +2,7 @@
 // what the browser sends for each kind of AI request, and what comes back.
 // Pure types and constants: no DOM, no Three.js, no SDK, so both sides can import it.
 
-export const AI_KINDS = ['coach_debrief', 'coach_plan', 'coach_tip', 'rival_pre', 'rival_post'] as const;
+export const AI_KINDS = ['coach_debrief', 'coach_plan', 'coach_tip', 'coach_climb', 'rival_pre', 'rival_post'] as const;
 export type AiKind = (typeof AI_KINDS)[number];
 
 /** The reactive moments the browser spots while you ride (src/ai/moments.ts). */
@@ -91,8 +91,15 @@ export interface RivalPostPayload {
   counts: boolean;
 }
 
+/** The Climb guide: which built-in stage (src/ai/climbs.ts) and which of the four fixed topics. No free text. */
+export interface ClimbPayload {
+  stageId: string;
+  topic: 'history' | 'records' | 'conditions' | 'visit';
+}
+
 export type AiPayloads = {
   coach_plan: PlanPayload;
+  coach_climb: ClimbPayload;
   coach_tip: TipPayload;
   coach_debrief: DebriefPayload;
   rival_pre: RivalPrePayload;
@@ -115,19 +122,32 @@ export type RivalLines = Record<RivalTrigger, string[]>;
 export interface RivalPreResult { lines: RivalLines }
 export interface RivalPostResult { line: string; note: string }
 
+/** One numbered source under a climb guide answer. `n` matches the [n] markers in the text. */
+export interface ClimbSource { n: number; title: string; host: string; url: string }
+export interface ClimbResult {
+  stageId: string;
+  topic: ClimbPayload['topic'];
+  summary: string;
+  facts: string[];
+  sources: ClimbSource[];
+  /** The date (YYYY-MM-DD, UTC) the answer was fetched; a cached answer shows it. */
+  asOf: string;
+}
+
 export type AiResults = {
   coach_plan: PlanResult;
+  coach_climb: ClimbResult;
   coach_tip: TipResult;
   coach_debrief: DebriefResult;
   rival_pre: RivalPreResult;
   rival_post: RivalPostResult;
 };
 
-/** The function's reply. `source` says whether Claude wrote it or the canned text was used (refusal). */
+/** The function's reply. `source` says whether Claude (or, for the Climb guide, Perplexity's web search) wrote it or the canned text was used. */
 export interface AiReply<K extends AiKind = AiKind> {
   ok: true;
   kind: K;
-  source: 'claude' | 'canned';
+  source: K extends 'coach_climb' ? 'web' | 'canned' : 'claude' | 'canned';
   data: AiResults[K];
 }
 

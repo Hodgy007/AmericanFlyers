@@ -4,10 +4,11 @@
 // function when the whole model chain refuses. Pure.
 
 import { cleanLine } from './text.js';
+import { climbAvgPct, climbById } from './climbs.js';
 import { rivalById, RIVALS } from './rivals.js';
 import {
   RIVAL_TRIGGERS,
-  type CoachMoment, type CoachTip, type DebriefPayload, type DebriefResult, type PlanPayload, type PlanResult,
+  type ClimbPayload, type ClimbResult, type CoachMoment, type CoachTip, type DebriefPayload, type DebriefResult, type PlanPayload, type PlanResult,
   type RivalLines, type RivalPostPayload, type RivalPostResult, type RivalTrigger,
 } from './types.js';
 
@@ -82,4 +83,21 @@ export function cannedRivalPost(p: RivalPostPayload, rand: () => number = Math.r
   const gap = p.gapS >= 1 ? ` by ${Math.round(p.gapS)} s` : '';
   const note = p.result === 'won' ? `You beat me${gap} on ${p.stageName}.` : `I beat you${gap} on ${p.stageName}.`;
   return { line: list[Math.floor(rand() * list.length) % list.length], note: cleanLine(note, 24, 140) };
+}
+
+/** The Climb guide when the web answer isn't available: a line from our own stage figures. */
+export function cannedClimb(p: ClimbPayload, imperial = false, asOf = ''): ClimbResult {
+  const c = climbById(p.stageId);
+  const stageId = p.stageId;
+  if (!c) return { stageId, topic: p.topic, summary: 'Live climb guide unavailable right now.', facts: [], sources: [], asOf };
+  const length = imperial ? `${(c.lengthM / 1609.344).toFixed(1)} mi` : `${(c.lengthM / 1000).toFixed(1)} km`;
+  const gain = imperial ? `${Math.round(c.gainM * 3.28084).toLocaleString('en-US')} ft` : `${c.gainM.toLocaleString('en-US')} m`;
+  return {
+    stageId,
+    topic: p.topic,
+    summary: `${c.place}: ${length}, ${gain} of climbing, ${climbAvgPct(c).toFixed(1)}% on average. Live climb guide unavailable right now.`,
+    facts: [],
+    sources: [],
+    asOf,
+  };
 }

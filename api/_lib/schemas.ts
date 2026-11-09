@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { AI_KINDS, COACH_MOMENTS, RIVAL_MOMENTS, RIVAL_TRIGGERS } from '../../src/ai/types.js';
+import { CLIMB_IDS, CLIMB_TOPICS } from '../../src/ai/climbs.js';
 import { RIVAL_IDS } from '../../src/ai/rivals.js';
 import { SUGGESTION_IDS } from '../../src/ai/catalogue.js';
 
@@ -78,10 +79,14 @@ export const RivalPostPayload = z.object({
   counts: z.boolean(),
 });
 
+// The Climb guide: two enums and nothing else, so the body can't carry a name or a question.
+export const ClimbPayload = z.object({ stageId: z.enum(CLIMB_IDS), topic: z.enum(CLIMB_TOPICS) }).strict();
+
 export const PAYLOADS = {
   coach_plan: PlanPayload,
   coach_tip: TipPayload,
   coach_debrief: DebriefPayload,
+  coach_climb: ClimbPayload,
   rival_pre: RivalPrePayload,
   rival_post: RivalPostPayload,
 } as const;
