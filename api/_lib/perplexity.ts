@@ -3,8 +3,9 @@
 // Decisions:
 //  - plain `fetch` with a 25 s timeout and no retries; no SDK;
 //  - model "perplexity/sonar" unless CLIMB_GUIDE_MODEL says otherwise; `max_tokens` bounds the answer;
-//  - auth is a Bearer token chosen in api/ai.ts: AI_GATEWAY_API_KEY, else VERCEL_OIDC_TOKEN, else the request's
-//    x-vercel-oidc-token header (Vercel functions get one automatically). It is never logged;
+//  - auth is a Bearer token chosen in api/ai.ts: AI_GATEWAY_API_KEY, else the request's x-vercel-oidc-token header
+//    (Vercel sets a fresh one on every function invocation), else VERCEL_OIDC_TOKEN (e.g. from `vercel env pull`),
+//    the same order as @vercel/oidc. It is never logged;
 //  - the answer is `choices[0].message.content`. Sonar searches the web itself and the gateway returns its sources;
 //    where they sit is read defensively (top-level `citations` / `search_results`, `message.annotations`,
 //    `provider_metadata`). The [n] markers in the text are 1-based positions in that source list.
@@ -24,9 +25,9 @@ export function pickModel(env: string | undefined): string {
   return /^[a-z0-9][a-z0-9._-]{0,40}\/[A-Za-z0-9][A-Za-z0-9._:-]{0,60}$/.test(v) ? v : DEFAULT_MODEL;
 }
 
-/** The first non-empty of: AI_GATEWAY_API_KEY, VERCEL_OIDC_TOKEN, the request's x-vercel-oidc-token header. */
+/** The first non-empty of: AI_GATEWAY_API_KEY, the request's x-vercel-oidc-token header (fresh per invocation), VERCEL_OIDC_TOKEN. */
 export function pickToken(env: Record<string, string | undefined>, headers: Headers): string | null {
-  return env.AI_GATEWAY_API_KEY?.trim() || env.VERCEL_OIDC_TOKEN?.trim() || headers.get('x-vercel-oidc-token')?.trim() || null;
+  return env.AI_GATEWAY_API_KEY?.trim() || headers.get('x-vercel-oidc-token')?.trim() || env.VERCEL_OIDC_TOKEN?.trim() || null;
 }
 
 export interface GatewayRequest {
