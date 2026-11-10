@@ -730,6 +730,19 @@
       </form>
     </dialog>
 
+    <!-- A ride interrupted by a crash or a closed tab (src/hub/resume.ts, src/rideSnapshot.ts). -->
+    <dialog id="hub-resume" class="signin-dialog hub-leave">
+      <form method="dialog">
+        <h2 id="hub-resume-title">Pick up your ride?</h2>
+        <p id="hub-resume-text"></p>
+        <div class="dialog-actions">
+          <button value="discard" id="hub-resume-discard">Discard</button>
+          <button value="save" id="hub-resume-save">Save it and start fresh</button>
+          <button value="resume" id="hub-resume-go" class="primary" autofocus>Resume</button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- Trust and safety: the privacy page and the goodbye shown after deleting an account. -->
     <dialog id="privacy" class="wide-dialog privacy-dialog">
       <form method="dialog">
