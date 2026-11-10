@@ -15,6 +15,12 @@ Turn sound on or off with **☰ Menu → 🔊 Sound** or the **M** key. Browsers
 
 In the rain, with sound on, there's a soft rain hiss that fades in and out with the weather (see [Riding](riding.md#time-of-day-and-weather)).
 
+## Music
+
+There's music too, made in the browser: the **American Flyers theme tune**, which plays at home and in the hub, and a **riding score** that follows your speed (busier the faster you go) and the road (quieter and sparser on the climbs). When a ride finishes the theme plays its close over the summary.
+
+Music is on by default. Turn it off or on with **☰ Menu → 🎵 Music**, the **N** key, the switch on the finish card, or **Music** in ⚙ Settings. Like the other sounds it needs sound on.
+
 ## Virtual shifting
 
 Turn on **Virtual shifting** in ⚙ Settings to choose your own gear, like on a real bike. Leave your trainer's real chain in one gear.

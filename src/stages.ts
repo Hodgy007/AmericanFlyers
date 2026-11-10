@@ -573,12 +573,19 @@ const ventoux = buildClimb({
     road: 'alpine',
     barrier: 'stone',
   },
+  // The summit is a broad, bare, gently rounded top (Mont Ventoux's white plateau), not a ridge: the
+  // ground spreads level out to about 130 m around the finish and falls away 20 degrees beyond it.
+  summit: { d: 21330, side: 0, offset: 0, rise: 4, flat: 130, slope: 0.36, fadeFrom: 520, fadeTo: 1300 },
   // Chalet Reynard is at 1,440 m on the real road; the Simpson memorial stands 1.3 km below the top.
   places: (at) => [{ d: 5500, name: 'Saint-Estève' }, { d: at.altitude(1440) - 90, name: 'Chalet Reynard' }],
   landmarks: (at) => [
     monumentAt('chalet', at.altitude(1440), 1, 24, 10.2, { options: { lines: ['CHALET REYNARD'] }, yaw: -0.4, clearance: 20 }),
     monumentAt('simpson-memorial', 20100, 1, 8, 2.9, { yaw: -0.5, clearance: 6 }),
-    monumentAt('ventoux-observatory', 21330, -1, 46, 52, { yaw: 0.2, clearance: 34 }),
+    // On the level crown of the summit plateau, right of the road through the last 100 m: the road swings hard left
+    // over the finish, so the banded mast stands ahead of the rider on the way up, then sweeps past on the right in
+    // the last 130 m. Sized for its part on the skyline: the real mast is 120 m on a plateau this wide. It has to stay
+    // inside the 130 m crown: out on the flank the falling ground hides it from below.
+    monumentAt('ventoux-observatory', 21300, 1, 40, 76, { yaw: -Math.PI / 2, clearance: 46 }),
     colSign(21400, { style: 'fr', lines: ['MONT VENTOUX', '1910 m'] }),
   ],
 });

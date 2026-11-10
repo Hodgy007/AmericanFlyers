@@ -5,4 +5,4 @@ test-results
 playwright-report
 scripts/.cache
 .vercel
-.env*.local
+.env*

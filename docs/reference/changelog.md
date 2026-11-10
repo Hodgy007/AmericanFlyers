@@ -6,6 +6,11 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### A new rider
+
+- **New rider model** (`public/models/rider.glb`), designed with Higgsfield from front, side and back views and built from all of them, so the back you see from the chase camera is modelled, not guessed: a vented helmet, wraparound glasses, gloves, a panelled jersey with a white chest band, bib shorts and cycling shoes. Rigged with the same skeleton, so pedalling, team kits, jersey patterns and socks work as before. 0.9 MB (was 1.4 MB).
+- The default kit keeps its **stars**: white stars on the navy shorts, drawn by the kit shader.
+
 ### Fix: riding with others crashed every frame
 
 - Since the code-review fixes, `presence.riders()` returns its own reused array, and the ride loop added the pro teams and the AI rival to it, so the next frame read past the riders it knew (`Cannot read properties of undefined (reading 'at')`): with Ride together on, pro teams, a race or an AI rival broke the ride loop. The loop now copies the array, and `riders()` trims anything a caller added. Caught by `kom.spec.ts` and `ai.spec.ts`.
@@ -31,6 +36,11 @@ The repository has no tags, so each group is named for the pull request that mer
 - **Database.** `segment_efforts` (own rows only), `segment_limits` (a plausibility floor per built-in segment, from the app's own physics) and `segment_leaderboard()`; `delete_my_account()` deletes the efforts by name. Applied to the live database (the SQL is in `db/schema.sql`, "KOM segments").
 - **Achievements.** Hill climber, Beat yourself and Segment collector. **Privacy** text and docs updated; `?komtest` lets a demo ride count for your local times.
 - Tests: `segments`, `segmentLimits`, `segmentStore`, `segmentAchievements` (unit) and `kom.spec.ts` (e2e).
+### Mont Ventoux's summit: modelled mast on the white plateau
+
+- **The summit is modelled** (Higgsfield, `public/models/ventoux-summit.glb`, about 1.1 MB and 21k triangles): the banded red-and-white weather-station mast on its pale concrete block, over the code-built observatory, which stays as the fallback if the file is missing (`MONUMENT_GLB` in `landmarks.ts`). It stands right of the road at 21,300 m, on the level crown of a new **summit cone** (130 m flat, then the ground falls away at 20 degrees), so it reads on the skyline well below the plateau and then sweeps past on the right in the last 130 m. The code-built mast grew to match (banded tower from 9.5 m to 68 m, taller aerial), so the fallback isn't stretched at the landmark's 76 m.
+- **New scree texture** (Higgsfield `gpt_image_2`, through `scripts/prep-terrain.py`): pale limestone rubble with ochre patches and dark stones replaces Poly Haven's *Gray Rocks* in `public/textures/terrain/scree.jpg` and its normal map, so Ventoux's bald white top is limestone, not snow.
+- Tests: `tests/unit/monuments.test.ts` (the observatory's height and place on the summit plateau).
 
 ### Higgsfield graphics
 
