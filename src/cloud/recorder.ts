@@ -4,13 +4,22 @@
 import type { Samples } from './sync';
 
 export class RideRecorder {
-  id = crypto.randomUUID();
+  id: string = crypto.randomUUID();
   startedAt: Date | null = null;
   readonly samples: Samples = { power: [], cadence: [], hr: [], speed: [], distance: [], elevation: [] };
   private acc = 0;
 
   get seconds() {
     return this.samples.power.length;
+  }
+
+  /** A recorder carrying on a ride that was interrupted (see rideSnapshot.ts): the same id, so later saves update the same activity. */
+  static restore(id: string, startedAt: string | null, samples: Samples): RideRecorder {
+    const r = new RideRecorder();
+    r.id = id;
+    r.startedAt = startedAt ? new Date(startedAt) : null;
+    for (const k of Object.keys(r.samples) as (keyof Samples)[]) for (const v of samples[k]) r.samples[k].push(v); // (a loop: a long ride is too many arguments for push(...))
+    return r;
   }
 
   /** Call every frame; stores one sample per second while moving. */
