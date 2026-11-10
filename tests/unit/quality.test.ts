@@ -138,6 +138,23 @@ describe('tiers', () => {
     expect(TIER_SPECS.high.ao).toBeGreaterThan(0);
     expect(TIER_SPECS.medium.ao).toBe(0);
   });
+  it('cascaded sun shadows only on High and Ultra, reaching further on Ultra, with sane splits', () => {
+    expect(TIER_SPECS.low.cascade).toBeNull();
+    expect(TIER_SPECS.medium.cascade).toBeNull();
+    for (const t of ['high', 'ultra'] as const) {
+      const c = TIER_SPECS[t].cascade!;
+      expect(c).not.toBeNull();
+      expect(c.ends[0]).toBeGreaterThan(5); // the rider and bike (a few metres from the camera) sit in the sharp cascade
+      expect(c.ends[1]).toBeGreaterThan(c.ends[0] * 2);
+      expect(c.range).toBeGreaterThan(c.ends[1] * 2);
+      expect(c.range).toBeGreaterThanOrEqual(150);
+      expect(c.range).toBeLessThanOrEqual(260);
+      expect(c.tile).toBeGreaterThanOrEqual(TIER_SPECS.medium.shadowSize);
+    }
+    expect(TIER_SPECS.ultra.cascade!.range).toBeGreaterThanOrEqual(TIER_SPECS.high.cascade!.range);
+    expect(TIER_SPECS.ultra.cascade!.tile).toBeGreaterThanOrEqual(TIER_SPECS.high.cascade!.tile);
+    expect(TIER_SPECS.medium.shadowBox).toBeGreaterThanOrEqual(TIER_SPECS.low.shadowBox); // Medium's single box is a little wider than Low's
+  });
   it('recognises valid choices only', () => {
     expect(isChoice('auto')).toBe(true);
     expect(isChoice('ultra')).toBe(true);

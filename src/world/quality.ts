@@ -11,11 +11,19 @@ export type GraphicsChoice = Tier | 'auto';
 export const TIERS: readonly Tier[] = ['low', 'medium', 'high', 'ultra'];
 export const CHOICES: readonly GraphicsChoice[] = ['auto', ...TIERS];
 
+/** Cascaded sun shadows (High and Ultra; see cascades.ts): three maps fitted to slices of the camera's view. */
+export interface CascadePlan {
+  tile: number; // each cascade's map is tile x tile px
+  ends: readonly [number, number]; // view depths (m) where cascade 0 and cascade 1 end
+  range: number; // m of view depth (the last cascade's end) that gets any shadow
+}
+
 export interface TierSpec {
   maxPixelRatio: number;
-  shadowSize: number; // shadow map side, px
+  shadowSize: number; // single shadow map side, px (Low and Medium; the cascades use their own `tile`)
   shadowRadius: number; // PCF blur, in shadow-map texels
-  shadowBox: number; // half-width of the shadow box round the rider, m
+  shadowBox: number; // half-width of the single shadow box round the rider, m (Low and Medium; with cascades it is unused)
+  cascade: CascadePlan | null; // High and Ultra: cascaded shadows instead of the one box
   post: boolean; // bloom + colour grade + anti-aliasing (the lazily loaded post chunk)
   bloom: number; // 0 off, else the bloom chain's size relative to the frame (0.5 = half)
   aa: 'none' | 'fxaa' | 'smaa';
@@ -27,10 +35,10 @@ export interface TierSpec {
 }
 
 export const TIER_SPECS: Record<Tier, TierSpec> = {
-  low: { maxPixelRatio: 1, shadowSize: 1024, shadowRadius: 1, shadowBox: 30, post: false, bloom: 0, aa: 'none', ao: 0, ibl: false, cloudShadows: false, skyQuality: 0, scenery: SCENERY.low },
-  medium: { maxPixelRatio: 1.5, shadowSize: 2048, shadowRadius: 1, shadowBox: 30, post: true, bloom: 0.5, aa: 'fxaa', ao: 0, ibl: false, cloudShadows: false, skyQuality: 1, scenery: SCENERY.medium },
-  high: { maxPixelRatio: 2, shadowSize: 2048, shadowRadius: 2, shadowBox: 30, post: true, bloom: 1, aa: 'smaa', ao: 0.5, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.high },
-  ultra: { maxPixelRatio: 2, shadowSize: 4096, shadowRadius: 1.6, shadowBox: 38, post: true, bloom: 2, aa: 'smaa', ao: 0.75, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.ultra },
+  low: { maxPixelRatio: 1, shadowSize: 1024, shadowRadius: 1, shadowBox: 30, cascade: null, post: false, bloom: 0, aa: 'none', ao: 0, ibl: false, cloudShadows: false, skyQuality: 0, scenery: SCENERY.low },
+  medium: { maxPixelRatio: 1.5, shadowSize: 2048, shadowRadius: 1, shadowBox: 40, cascade: null, post: true, bloom: 0.5, aa: 'fxaa', ao: 0, ibl: false, cloudShadows: false, skyQuality: 1, scenery: SCENERY.medium },
+  high: { maxPixelRatio: 2, shadowSize: 2048, shadowRadius: 2, shadowBox: 30, cascade: { tile: 2048, ends: [22, 70], range: 190 }, post: true, bloom: 1, aa: 'smaa', ao: 0.5, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.high },
+  ultra: { maxPixelRatio: 2, shadowSize: 4096, shadowRadius: 1.6, shadowBox: 38, cascade: { tile: 2048, ends: [24, 75], range: 240 }, post: true, bloom: 2, aa: 'smaa', ao: 0.75, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.ultra },
 };
 
 /** Render scales the controller steps through (fractions of the pixel ratio the tier allows). */
