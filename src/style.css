@@ -241,7 +241,8 @@ dialog .block-field input[type] { display: inline-block; margin: 2px 0 0; width:
   padding: 8px 16px 12px;
   background: linear-gradient(rgba(14, 22, 44, 0), var(--glass) 40%);
 }
-.status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 6px; min-width: 0; }
+.trainer-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: #6b7280; flex: none; }
 .dot[data-state='on'] { background: #48c774; box-shadow: 0 0 8px #48c774; }
 .dot[data-state='pending'] { background: #f2c14e; }
@@ -294,7 +295,7 @@ dialog output { color: var(--text); font-weight: 700; float: right; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
 /* Stage picker */
-.stage-name { margin-left: auto; color: var(--text); font-weight: 600; text-align: right; }
+.stage-name { margin-left: auto; color: var(--text); font-weight: 600; text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stages-dialog { width: min(94vw, 760px); }
 .stage-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 8px; }
 .stage-card {
@@ -481,22 +482,33 @@ dialog h3 { font-size: 15px; margin: 18px 0 8px; }
   .creator-meta { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
-  .topbar { padding: 10px 16px; }
-  .brand { font-size: 16px; }
-  .actions { gap: 5px; flex-wrap: nowrap; width: 100%; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
-  .actions::-webkit-scrollbar { display: none; }
-  .actions button { padding: 6px 7px; font-size: 12px; flex: 1 1 auto; white-space: nowrap; }
-  .hud-wrap { top: 92px; left: 12px; right: 12px; }
-  .hud { gap: 6px; }
-  .tile { padding: 6px 8px; border-radius: 10px; }
+  /* Two rows that never clip: the brand with End and the account first, then the buttons, icon-only where the
+     icon says it (the labels stay in the accessible name), "Connect trainer" taking the spare width. */
+  .topbar { padding: 8px 12px; gap: 6px 8px; align-items: center; }
+  .brand { font-size: 15px; flex: 1 1 auto; text-align: left; min-width: 0; }
+  .actions { display: contents; }
+  .actions button { padding: 6px 10px; font-size: 13px; min-height: 34px; white-space: nowrap; flex: none; }
+  .actions .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #btn-end { order: 1; }
+  #btn-account { order: 2; }
+  .bar-break { display: block; order: 3; flex: 0 0 100%; height: 0; }
+  #btn-stage { order: 4; }
+  #btn-workouts { order: 5; }
+  #btn-riders { order: 6; }
+  #btn-trainer { order: 7; flex: 1 1 auto; }
+  .menu-wrap { order: 8; }
+  .hud-wrap { top: 86px; left: 12px; right: 12px; }
+  .hud { gap: 4px; }
+  .tile { padding: 4px 8px; border-radius: 10px; }
   .label { font-size: 9px; }
-  .value { font-size: 16px; }
+  .value { font-size: 15px; line-height: 1.15; }
   .value small { font-size: 10px; margin-left: 2px; }
-  .tile.hero { grid-column: span 4; }
-  .tile.hero .value { font-size: 30px; }
-  .workout-panel { top: auto; bottom: 120px; left: 12px; right: 12px; width: auto; }
-  .demo-panel { left: 16px; right: 16px; width: auto; }
+  /* The first block is one row: name, number and zone side by side. */
+  .tile.hero { grid-column: span 4; display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; }
+  .tile.hero .value { font-size: 26px; line-height: 1.05; }
+  .workout-panel { top: auto; bottom: calc(var(--footer-h, 120px) + 4px); left: 12px; right: 12px; width: auto; }
 }
+.bar-break { display: none; }
 button.link { background: none; border: none; padding: 0; color: #8fb8ff; text-decoration: underline; font-size: inherit; }
 button.link:hover:not(:disabled) { background: none; color: #fff; }
 .feedback-card select, .tab-admin select { font-size: 13px; padding: 6px 8px; }
@@ -748,7 +760,7 @@ label.check .hint { grid-column: 2; }
 .gear-bar::after { content: ''; position: absolute; inset: 0; width: calc(var(--gear, 0.5) * 100%); background: linear-gradient(90deg, #4ade80, #facc15, var(--red, #d62839)); border-radius: 2px; }
 .gear-ratio { font-size: 10px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
 body.at-home .gear-panel { display: none; }
-@media (max-width: 560px) { .gear-panel { bottom: 190px; } }
+@media (max-width: 560px) { .gear-panel { bottom: calc(var(--footer-h, 120px) + 8px); } } /* --footer-h: the bottom bar's height, kept by cardDock.ts */
 
 /* -------------------------------------------------- training plans ---- */
 .plans-dialog { width: min(96vw, 760px); }
@@ -833,8 +845,8 @@ body.at-home .gear-panel { display: none; }
 .actions .menu button[hidden] { display: none; }
 .menu hr { border: 0; border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08)); margin: 4px 6px; }
 @media (max-width: 560px) {
-  /* The bar scrolls sideways on phones, so the menu hangs from the right edge of the screen. */
-  .menu { position: fixed; top: 92px; right: 12px; left: auto; }
+  /* The menu button is in the bar's second row, so the menu hangs from the right edge of the screen. */
+  .menu { position: fixed; top: 86px; right: 12px; left: auto; }
 }
 
 /* ------------------------------------------------- data block position ---- */
@@ -906,7 +918,7 @@ body.at-home .gear-panel { display: none; }
 .draft-panel.sweet .draft-bar span { background: linear-gradient(90deg, #38bdf8, #4ade80); }
 .draft-hint { font-size: 12px; color: var(--muted); }
 body.at-home .draft-panel { display: none; }
-@media (max-width: 560px) { .draft-panel { bottom: 190px; } .gear-panel:not([hidden]) ~ .draft-panel { bottom: 262px; } }
+@media (max-width: 560px) { .draft-panel { bottom: calc(var(--footer-h, 120px) + 8px); } .gear-panel:not([hidden]) ~ .draft-panel { bottom: calc(var(--footer-h, 120px) + 80px); } }
 .email-auth input:not([type='checkbox']) {
   background: var(--field, rgba(255, 255, 255, 0.06)); border: 1px solid var(--line, rgba(255, 255, 255, 0.14));
   border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 15px; color: var(--text, #fff);
@@ -934,7 +946,7 @@ body.at-home .draft-panel { display: none; }
 .steer-btn:active { background: rgba(255, 255, 255, 0.22); }
 @media (pointer: coarse) { .steer-btn { display: block; } }
 body.at-home .steer-btn { display: none; }
-@media (max-width: 560px) { .steer-btn { bottom: 274px; } }
+@media (max-width: 560px) { .steer-btn { bottom: calc(var(--footer-h, 120px) + 8px); } }
 .atmosphere-dialog { width: min(94vw, 480px); }
 .atmo-row { display: grid; gap: 6px; margin-top: 10px; font-size: 13px; color: var(--muted); }
 .atmo-row .seg { display: flex; flex-wrap: wrap; }
@@ -985,7 +997,7 @@ body.at-home .race-panel, body.at-home .race-count { display: none; }
 .rp-jersey.you span { color: #fff; font-weight: 700; }
 .rp-msg { margin-top: 8px; padding: 5px 8px; border-radius: 7px; background: rgba(255, 190, 40, 0.18); color: #ffe39a; font-weight: 600; }
 @media (max-width: 560px) {
-  .race-panel { top: auto; bottom: 238px; left: 8px; width: 214px; padding: 7px 9px; }
+  .race-panel { top: auto; bottom: calc(var(--footer-h, 120px) + 78px); left: 8px; width: 214px; padding: 7px 9px; }
   .rp-place strong { font-size: 28px; }
   .rp-groups .rp-group:not(.you), .rp-jerseys { display: none; }
   .rp-gap { margin-bottom: 4px; }
@@ -1066,36 +1078,42 @@ body.hud-left .minimap, body:has(#demo-panel:not([hidden])) .minimap { right: au
 body.at-home .minimap, body.at-home .climb-card { display: none; }
 @media (pointer: coarse) { .minimap { bottom: 196px; } }
 @media (max-height: 560px) { .minimap { width: 118px; height: 118px; } }
+@media (prefers-reduced-motion: reduce) { .wind-arrow { transition: none; } }
 
-.climb-card {
-  position: fixed; top: var(--below-hud, 150px); left: 50%; transform: translateX(-50%); z-index: 4;
-  width: min(290px, calc(100vw - 32px)); padding: 8px 12px 8px; border-radius: 14px;
+/* ---- The climb card and the KOM card (climbUi.ts, segmentUi.ts, cardDock.ts) ----
+   Docked at the screen edges, never the middle: the climb card on the left, the KOM card on the right (cardDock.ts picks
+   the side and the top, under whatever holds that edge). Each is a slim chip until opened. */
+.climb-card, .kom-card {
+  position: fixed; top: var(--below-hud, 150px); z-index: 4;
+  width: min(290px, calc(100vw - 32px)); padding: 8px 12px 9px; border-radius: 14px;
   background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
-.climb-card[hidden] { display: none; }
+.climb-card { left: 16px; padding-bottom: 8px; }
+.kom-card { right: 16px; font-size: 12px; color: var(--muted); }
+.climb-card[data-dock='right'], .kom-card[data-dock='right'] { left: auto; right: 16px; }
+.climb-card[data-dock='left'], .kom-card[data-dock='left'] { left: 16px; right: auto; }
+.climb-card[hidden], .kom-card[hidden] { display: none; }
 .climb-card[data-state='on'] { border-color: rgba(240, 138, 75, 0.7); }
+.kom-card[data-state='on'] { border-color: rgba(250, 204, 21, 0.65); }
+/* A card the rider opened sits over what is under it. */
+.climb-card[data-open='user'], .kom-card[data-open='user'] { z-index: 8; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+/* The toggle: a button over the whole card, so a click, a tap, Enter and Space all open and close it. */
+.card-toggle { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
+.card-toggle:hover:not(:disabled) { background: transparent; }
+.card-toggle:focus-visible { outline: 2px solid #8fb8ff; outline-offset: 2px; }
+.card-toggle::after { content: '▾'; position: absolute; right: 10px; top: 7px; font-size: 11px; color: var(--muted); }
+.card-toggle[aria-expanded='true']::after { content: '▴'; }
+@media (prefers-reduced-motion: no-preference) {
+  .climb-card:not([data-compact]) > :not(.card-toggle), .kom-card:not([data-compact]) > :not(.card-toggle) { animation: card-open 0.18s ease-out; }
+  @keyframes card-open { from { opacity: 0; } }
+}
+
 .cc-head { display: flex; flex-direction: column; gap: 1px; margin-bottom: 5px; }
 .cc-head strong { font-size: 14px; color: var(--text); }
 .cc-head span { font-size: 12px; color: var(--muted); }
 .climb-card canvas { display: block; width: 100%; height: 44px; border-radius: 6px; }
-@media (max-width: 560px) {
-  .climb-card { left: 12px; right: 128px; width: auto; transform: none; padding: 6px 9px; }
-  .cc-head strong { font-size: 13px; }
-  .climb-card canvas { height: 32px; }
-  .minimap { top: var(--below-hud, 170px); bottom: auto; right: 12px; width: 104px; height: 104px; }
-  body:has(#demo-panel:not([hidden])) .minimap, body.hud-left .minimap { left: auto; right: 12px; }
-}
-@media (prefers-reduced-motion: reduce) { .wind-arrow { transition: none; } }
+.chip-line { display: none; font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ---- KOM panel: the leaderboard of the segment ahead, and the live gap on it (segmentUi.ts) ---- */
-.kom-card {
-  position: fixed; top: var(--below-hud, 150px); left: 50%; transform: translateX(-50%); z-index: 4;
-  width: min(290px, calc(100vw - 32px)); padding: 8px 12px 9px; border-radius: 14px;
-  background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  font-size: 12px; color: var(--muted);
-}
-.kom-card[hidden] { display: none; }
-.kom-card[data-state='on'] { border-color: rgba(250, 204, 21, 0.65); }
 .kom-head { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
 .kom-head strong { font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kom-gap { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; }
@@ -1116,24 +1134,77 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 .kom-note { margin: 2px 0 0; }
 .kom-me { margin: 4px 0 0; padding-top: 4px; border-top: 1px solid var(--glass-border); color: var(--text); font-weight: 700; }
 body.at-home .kom-card { display: none; }
-/* Wide screens: beside the climb card, so the rider in the middle of the road stays clear. Left of it by default; right of it where the
-   left is taken (the race panel, the data blocks in a left column, the mini-map in demo) unless a workout panel holds the right. */
-@media (min-width: 561px) {
-  .kom-card { left: auto; right: calc(50% + 160px); transform: none; width: min(290px, calc(50vw - 175px)); }
-  body.hud-left .kom-card, body:has(#race-panel:not([hidden])) .kom-card, body:has(#demo-panel:not([hidden])) .kom-card { right: auto; left: calc(50% + 160px); }
-  body:has(#workout-panel:not([hidden])) .kom-card { left: auto; right: calc(50% + 160px); }
-}
+
+/* The chip: a line or two. The climb card keeps its one-line summary; the KOM card keeps its title and the live gap
+   (the number and "vs your best"), so a live effort is never hidden. */
+.climb-card[data-compact], .kom-card[data-compact] { width: auto; max-width: min(290px, calc(100vw - 32px)); padding: 6px 28px 6px 12px; }
+.climb-card[data-compact] .cc-head, .climb-card[data-compact] canvas { display: none; }
+.climb-card[data-compact] .chip-line { display: block; }
+.kom-card[data-compact] .kom-board, .kom-card[data-compact] .kom-note, .kom-card[data-compact] .kom-me, .kom-card[data-compact] .kom-gap-last { display: none; }
+.kom-card[data-compact] .kom-head { margin-bottom: 0; }
+.kom-card[data-compact] .kom-gap { margin: 1px 0 0; gap: 8px; }
+.kom-card[data-compact] .kom-gap-main { font-size: 22px; }
+.kom-card[data-compact] .kom-gap-lines > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-height: 640px) {
   .kom-gap-main { font-size: 34px; }
   .kom-card[data-state='on'] .kom-board li:nth-child(n + 4) { display: none; } /* on the climb the gap matters more than the list */
   .kom-card[data-state='on'] .kom-me { display: none; }
 }
+@media (min-width: 1800px) { .climb-card, .kom-card { zoom: 1.3; } }
+@media (min-width: 2600px) { .climb-card, .kom-card { zoom: 1.7; } }
+
+/* ---- Phones, portrait: chips left of the mini-map, a tidy bottom bar, the demo slider in flow ---- */
 @media (max-width: 560px) {
-  .kom-card { left: 12px; right: 128px; width: auto; transform: none; padding: 6px 9px 7px; }
-  .kom-head strong { font-size: 13px; }
+  .climb-card, .kom-card, .climb-card[data-compact], .kom-card[data-compact] { left: 12px; right: 128px; width: auto; max-width: none; padding: 5px 26px 5px 10px; }
+  .climb-card:not([data-compact]), .kom-card:not([data-compact]) { padding: 6px 10px 7px; }
+  .cc-head strong, .kom-head strong { font-size: 13px; }
+  .climb-card canvas { height: 32px; }
+  .minimap { top: var(--below-hud, 170px); bottom: auto; right: 12px; width: 104px; height: 104px; }
+  body:has(#demo-panel:not([hidden])) .minimap, body.hud-left .minimap { left: auto; right: 12px; }
   .kom-gap-main { font-size: 34px; }
+  .kom-card[data-compact] .kom-gap-main { font-size: 20px; }
   .kom-board li:nth-child(n + 5) { display: none; }
   .kom-card[data-state='on'] .kom-board li:nth-child(n + 4) { display: none; }
+
+  /* Bottom bar: the trainer status and the wind on one line, the stage's progress on its own line (each cut with an
+     ellipsis rather than wrapping into the next), then the demo slider, then the profile. */
+  .bottom { padding: 6px 12px 10px; }
+  .status { flex-wrap: wrap; gap: 2px 8px; margin-bottom: 4px; font-size: 12px; }
+  .trainer-status { flex: 1 1 0; }
+  .wind-chip { margin-left: 0; max-width: 62%; overflow: hidden; text-overflow: ellipsis; }
+  .stage-name { order: 3; flex: 0 0 100%; margin-left: 0; text-align: left; font-size: 12px; }
+  .demo-panel { position: static; width: auto; margin: 0 0 6px; padding: 5px 12px; display: flex; align-items: center; gap: 12px; border-radius: 12px; }
+  .demo-panel label { flex: none; gap: 8px; white-space: nowrap; font-size: 13px; }
+  .demo-panel input { flex: 1 1 auto; margin: 0; min-width: 0; }
+  .demo-panel p { display: none; }
+  #profile { height: 52px; }
+  .toast { bottom: calc(var(--footer-h, 120px) + 8px); }
+}
+
+/* ---- Phones, landscape (short screens): everything smaller so the road stays visible ---- */
+@media (max-height: 500px) and (min-width: 561px) {
+  .topbar { padding: 6px 12px; }
+  .brand { font-size: 16px; }
+  .actions button { padding: 5px 10px; font-size: 12px; }
+  .hud-wrap { top: 46px; }
+  .hud { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)) !important; gap: 4px; }
+  .tile { padding: 3px 8px; border-radius: 10px; }
+  .label { font-size: 9px; }
+  .value { font-size: 18px; line-height: 1.15; }
+  .value small { font-size: 10px; }
+  .tile.hero { grid-column: span 2; }
+  .tile.hero .value { font-size: 24px; line-height: 1.05; }
+  .tile .sub { font-size: 10px; }
+  body.hud-left .hud, body.hud-right .hud { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .bottom { padding: 4px 16px 8px; }
+  .status { margin-bottom: 3px; }
+  #profile { height: 44px; }
+  .demo-panel { bottom: 84px; padding: 6px 12px; width: 230px; }
+  .demo-panel input { margin: 4px 0 0; }
+  .demo-panel p { display: none; }
+  .minimap { bottom: 84px; width: 100px; height: 100px; }
+  .gear-panel, .draft-panel { bottom: 84px; }
+  .toast { bottom: 84px; }
 }
 
 /* ---- trust and safety: privacy page, account deletion, email verification (stream D) ---- */
@@ -1188,7 +1259,7 @@ body.at-home .kom-card { display: none; }
 .eb-main strong { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eb-main span { font-variant-numeric: tabular-nums; }
 .event-bar button { padding: 5px 12px; font-size: 12px; border-radius: 999px; flex: none; }
-@media (max-width: 560px) { .event-bar { top: auto; bottom: 84px; max-width: 94vw; } }
+@media (max-width: 560px) { .event-bar { top: auto; bottom: calc(var(--footer-h, 120px) - 36px); max-width: 94vw; } }
 .admin-event-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 14px; }
 .admin-event-form input[type='number'] { width: 70px; }
 /* ---- Garage & store, weekly challenges and the share card (src/garage) ---- */
@@ -1244,7 +1315,6 @@ body.at-home .kom-card { display: none; }
 /* ⏹ End: always on the ride screen (not the hub or sign-in page). On phones the top bar scrolls sideways, so it goes first. */
 .actions .end-ride { border-color: rgba(230, 57, 70, 0.55); }
 body.at-home .end-ride { display: none; }
-@media (max-width: 560px) { .actions .end-ride { order: -1; } }
 /* Small banner offering one-tap reconnection when a remembered device isn't connected. */
 .device-banner {
   position: fixed; left: 16px; bottom: 96px; z-index: 35; /* bottom left: clear of the data blocks, the menu and the toast */
