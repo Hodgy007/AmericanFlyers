@@ -1,5 +1,5 @@
 import './style.css';
-import { initMonitoring, setMonitoringContext, setMonitoringUser, startMonitoring } from './monitoring';
+import { captureError, initMonitoring, setMonitoringContext, setMonitoringUser, startMonitoring } from './monitoring';
 
 initMonitoring(); // first, so it catches errors while the app starts
 import { bluetoothAvailable, type Trainer, type TrainerReading } from './ble/trainer';
@@ -49,6 +49,11 @@ import { onboarded } from './onboardingState';
 import { workoutById } from './workouts/library';
 import type { OtherRider } from './world/others';
 import { Steering } from './steering';
+import { ignoreRideKey } from './rideKeys';
+import { RAF_CATCHUP_MS, RideClock, TICK_GAP_MS, type Limits } from './rideClock';
+import { startBackgroundTicker } from './tickWorker';
+import { LoopGuard } from './loopGuard';
+import { WakeLockKeeper, type WakeLockHost } from './wakeLock';
 import { kitString, onLookChange, playerLook, setPlayerKit, setTourJersey } from './kit';
 import { Garage, rewardText } from './garage/garage';
 import { attachShare, shareRide } from './garage/shareButton';
@@ -343,7 +348,11 @@ if (startKm > 0) {
 const TIME_SCALE = Math.min(20, Math.max(1, Number(new URLSearchParams(location.search).get('timescale')) || 1));
 // Trust and safety: demo-slider rides and ?timescale rides never get a leaderboard time (src/rideIntegrity.ts).
 const rideFlags: RideFlags = { usedDemo: false, timeScale: TIME_SCALE };
-let lastFrame = performance.now();
+// The ride is stepped from real elapsed time (src/rideClock.ts), not once per animation frame: a slow frame loses no ride
+// time, and a hidden tab (no animation frames) is stepped from a worker's ticks instead (see backgroundTick).
+const clock = new RideClock(TIME_SCALE);
+clock.reset(performance.now());
+let lastRender = performance.now();
 let lastHud = 0;
 // KOM segments (segments.ts, segmentUi.ts): your time up each big climb, with a live gap to your best and last attempts.
 // `?komtest` lets a demo or sped-up ride count for the times kept on this device (never sent to the account), for tests.
@@ -368,7 +377,8 @@ let lastHubDraw = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const phoneWidth = matchMedia('(max-width: 760px)');
 function hubFrame(now: number) {
-  lastFrame = now; // so the first ride frame after the hub doesn't see a long gap
+  clock.reset(performance.now()); // the hub pauses the ride: the first ride frame after it owes no time
+  lastRender = performance.now();
   const every = reducedMotion.matches || phoneWidth.matches ? 1000 : 33; // slow and cheap where it can't be seen well
   if (now - lastHubDraw < every) return;
   const dt = Math.min(1, (now - lastHubDraw) / 1000);
@@ -376,17 +386,65 @@ function hubFrame(now: number) {
   world.update({ distance: ride.distance, speedMs: 0, crankAngle: drivetrain.crankAngle, rock: 0 }, dt);
 }
 
-function frame(now: number) {
-  if (hub.isOpen()) {
-    hubFrame(now);
-    noteFirstFrame(); // the hub is usually the first screen: sign-in and prefetching hang off its first frame too
-    requestAnimationFrame(frame);
-    return;
-  }
-  // rAF timestamps can precede the load-time clock reading, so clamp at 0.
-  const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000)) * TIME_SCALE;
-  lastFrame = now;
+// One exception in a frame must not end the loop (and freeze the ride): each part is guarded, reported at a
+// limited rate, and the next frame is still scheduled (src/loopGuard.ts).
+const loopGuard = new LoopGuard({
+  report: (part, e) => { console.error(`Ride loop (${part}) failed:`, e); captureError(e, `ride-loop-${part}`); },
+  notify: () => toast('Something went wrong drawing the ride; your ride is still being recorded.', 8000),
+});
 
+function frame(rafNow: number) {
+  if (hub.isOpen()) {
+    loopGuard.run('hub', () => {
+      hubFrame(rafNow);
+      noteFirstFrame(); // the hub is usually the first screen: sign-in and prefetching hang off its first frame too
+    });
+  } else {
+    const now = performance.now();
+    loopGuard.run('sim', () => simulate(now, { maxCatchUpMs: RAF_CATCHUP_MS }));
+    loopGuard.run('render', () => {
+      const dt = Math.min(0.1, Math.max(0, (now - lastRender) / 1000)) * TIME_SCALE; // (what the world animates by: per drawn frame)
+      lastRender = now;
+      render(now, dt);
+    });
+  }
+  requestAnimationFrame(frame);
+}
+
+/** True while the page can't show frames (a background tab, a minimised window). */
+const pageHidden = () => document.hidden || document.visibilityState === 'hidden';
+
+/**
+ * A tick from the background worker. While the tab is hidden no animation frames come, so this keeps the ride going:
+ * distance, time, the recording and the workout all stay true to the wall clock (Bluetooth readings still arrive, and
+ * the 3 s stale check zeroes power if they stop). Nothing is drawn. While the tab is visible, frames do the stepping.
+ */
+function backgroundTick() {
+  if (!pageHidden() || document.body.classList.contains('at-home')) return;
+  loopGuard.run('trainer', controlTrainer); // the 1 s interval is throttled in a hidden tab
+  if (hub.isOpen()) return; // the hub pauses the ride
+  // A tick gap over 10 s means the machine slept or the page was frozen: that time is dropped, not simulated.
+  loopGuard.run('sim', () => simulate(performance.now(), { dropAboveMs: TICK_GAP_MS }));
+}
+startBackgroundTicker(backgroundTick);
+
+// The screen stays on while a ride is on screen (not in the hub or on the home page), src/wakeLock.ts.
+const wake = new WakeLockKeeper(navigator as unknown as WakeLockHost, () => !pageHidden());
+/** `hubOpen` is given by the hub's own callback (it can fire while the hub is still being created). */
+function syncWakeLock(hubOpen?: boolean) {
+  wake.setWanted(!(hubOpen ?? hub.isOpen()) && !document.body.classList.contains('at-home'));
+}
+document.addEventListener('visibilitychange', () => wake.visibilityChanged());
+new MutationObserver(() => syncWakeLock()).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+/** Runs the ride simulation up to `now` (a performance.now() reading) in substeps of at most 0.1 s. */
+function simulate(now: number, limits: Limits) {
+  const s = clock.advance(now, limits);
+  for (let i = 0; i < s.count; i++) simStep(s.dt, s.startMs + (i + 1) * s.realMs);
+}
+
+/** One simulation step: `dt` simulated seconds, ending at `now` (real clock). Everything that must be exact in wall-clock terms lives here. */
+function simStep(dt: number, now: number) {
   if (demo) {
     // In a workout the demo rider follows the target, with a little wobble.
     const target = player && !player.done && !player.paused ? player.targetWatts() : null;
@@ -500,10 +558,15 @@ function frame(now: number) {
     if (player.done) finishWorkout(); // reached the end, or skipped past the last step
     else if (!player.paused) intervalBeeps();
   }
+}
+
+/** The drawing and screen updates for one animation frame. `dt` is what the world animates by (the drawn frame's time). */
+function render(now: number, dt: number) {
+  const grade = gradeAt(ride.distance);
   sound.setRain(world.rainLevel);
   sound.update(dt, { speedMs: ride.speed, pedalling: live.power > 0 || live.cadence > 0, crowd: crowdNear(ride.distance), cassetteRevs: drivetrain.crankRate * drivetrain.ratio });
 
-  const others = liveRiders;
+  const others = roadRiders.slice(); // the riders on the road as of the last simulation step, plus the ghost below
   const g = race ? null : ghostRider(); // no ghost in a race
   if (g) others.push(g);
   else if (settings.ghost && !race) {
@@ -542,7 +605,6 @@ function frame(now: number) {
     }
     profileCanvas.classList.toggle('jumpable', canJump());
   }
-  requestAnimationFrame(frame);
 }
 
 /** Beeps at 3, 2, 1 seconds before a workout step ends, and a long one as it changes. */
@@ -1733,14 +1795,14 @@ $('wp-up').addEventListener('click', () => { player?.nudge(0.05); updateWorkoutP
 $('stage-name').textContent = currentStage().name;
 $<HTMLInputElement>('demo-power').addEventListener('input', (e) => setDemoPower(Number((e.target as HTMLInputElement).value)));
 window.addEventListener('keydown', (e) => {
-  if ((e.target as HTMLElement).closest('dialog')) return;
+  if (ignoreRideKey(e, document.body.classList.contains('at-home'))) return; // dialogs, typing, the home page, Ctrl/Cmd/Alt
   if (hub.isOpen()) return; // the hub has its own keys (Tab, arrows on the section tabs, Enter, Escape)
   if (e.key === 'c' || e.key === 'C') cycleCamera();
   if (e.key === 'm' || e.key === 'M') setSound(!settings.sound);
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
   if (e.key === 'ArrowLeft') { steering.press(-1); e.preventDefault(); }
   if (e.key === 'ArrowRight') { steering.press(1); e.preventDefault(); }
-  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) rideOnsUi.thumbsUpAhead();
+  if ((e.key === 'r' || e.key === 'R') && !e.repeat) rideOnsUi.thumbsUpAhead();
   if (e.key === '=' || e.key === '+' || e.key === ']') shift(1);
   if (e.key === '-' || e.key === '_' || e.key === '[') shift(-1);
   if (!demo) return;
@@ -1749,7 +1811,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
-  if ((e.target as HTMLElement).closest('dialog')) return;
+  if (ignoreRideKey(e, false, true)) return;
   if (e.key === 'ArrowLeft') steering.release(-1);
   if (e.key === 'ArrowRight') steering.release(1);
 });
@@ -2203,6 +2265,7 @@ const hub = initHub({
   garage,
   currentStageId: () => currentStage().id,
   onVisibility: (open) => {
+    syncWakeLock(open);
     if (open) komUi.reset(); // the hub pauses the ride: a segment effort in progress doesn't count
     world.setOrbit(open);
     // The "Reconnect <trainer>" banner sits in the hub's Ride panel while it's open, and floats over the ride otherwise.
@@ -2216,7 +2279,8 @@ const hub = initHub({
       world.setOthers([]);
       sound.update(0.1, { speedMs: 0, pedalling: false, crowd: 0, cassetteRevs: 0 }); // quiet while you choose
     } else {
-      lastFrame = performance.now();
+      clock.reset(performance.now());
+      lastRender = performance.now();
     }
   },
   start: startFromHub,
