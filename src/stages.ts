@@ -458,8 +458,8 @@ const alpe = buildClimb({
     const seven = at.hairpin('7'); // Huez village: its church stands on the outside of hairpin 7
     return [
       monumentAt('alpine-church', seven.d, seven.outside, 30, 26.6, { yaw: seven.outside * -0.3, clearance: 16 }),
-      monumentAt('ski-apartments', 13450, -1, 38, 14, { options: { seed: 1 }, yaw: 0.3, clearance: 30 }),
-      monumentAt('ski-apartments', 13700, 1, 42, 17, { options: { seed: 2 }, yaw: -0.3, clearance: 30 }),
+      monumentAt('ski-apartments', 13380, -1, 40, 15, { options: { seed: 1 }, yaw: 0.3, clearance: 32 }),
+      monumentAt('alpe-village', 13720, 1, 28, 17, { options: { seed: 1 }, yaw: 0.12, clearance: 48 }),
       colSign(14000, { style: 'fr', lines: ["ALPE D'HUEZ", '1850 m'] }),
     ];
   },

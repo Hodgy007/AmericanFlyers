@@ -6,6 +6,7 @@ export type MonumentId =
   | 'simpson-memorial'
   | 'chalet'
   | 'alpine-church'
+  | 'alpe-village'
   | 'ski-apartments'
   | 'geant-tourmalet'
   | 'pass-buildings'
