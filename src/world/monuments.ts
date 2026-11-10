@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildApartments, buildChalet, buildChurch, buildCrestHouseRuins, buildDiabloSummit, buildLogLodge, buildObservatory, buildPassBuildings, buildWashingtonSummit, buildWashingtonTower } from './monumentBuildings';
+import { buildAlpeVillage, buildApartments, buildChalet, buildChurch, buildCrestHouseRuins, buildDiabloSummit, buildLogLodge, buildObservatory, buildPassBuildings, buildWashingtonSummit, buildWashingtonTower } from './monumentBuildings';
 import { buildFlatirons } from './flatirons';
 import { buildBixbyBridge, buildCapitol, buildSkyline, buildTerrace } from './monumentCity';
 import { Kit, boardMaterial, finish, fitText } from './monumentKit';
@@ -209,6 +209,7 @@ const BUILDERS: Record<MonumentId, (o: MonumentOptions) => THREE.Group> = {
   'simpson-memorial': buildSimpsonMemorial,
   chalet: buildChalet,
   'alpine-church': buildChurch,
+  'alpe-village': buildAlpeVillage,
   'ski-apartments': buildApartments,
   'geant-tourmalet': buildGeant,
   'pass-buildings': buildPassBuildings,
