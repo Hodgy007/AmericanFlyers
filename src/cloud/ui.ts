@@ -9,6 +9,7 @@ import { achievements, weekIndex } from './achievements';
 import { mountEmailAuth, type RiderDetails } from './emailAuth';
 import { barChart, lineChart, statTiles } from './charts';
 import { toTcx } from './recorder';
+import { toFit } from './fit';
 import { mountVerifyBanner } from './verifyBanner';
 import { accountTab } from './accountTab';
 import { loadDebrief } from './aiApi';
@@ -422,14 +423,17 @@ export function initAccountDialogs(deps: Deps) {
       };
       charts.append(lineChart('Power (W)', series(samples.power), { unit: 'W', xLabel: mmss, height: 130 }));
       if (samples.hr.some((v) => v > 0)) charts.append(lineChart('Heart rate (bpm)', series(samples.hr).filter((p) => p.y > 0), { unit: 'bpm', xLabel: mmss, height: 110, color: '#e5383b', yMin: Math.max(0, Math.min(...samples.hr.filter((v) => v > 0)) - 10) }));
-      actions.prepend(button('⬇ Export .tcx', () => {
-        const blob = new Blob([toTcx(a, samples)], { type: 'application/vnd.garmin.tcx+xml' });
+      const download = (blob: Blob, ext: string) => {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `${a.title.replace(/[^\w\- ]+/g, '').trim() || 'ride'} ${a.started_at.slice(0, 10)}.tcx`;
+        link.download = `${a.title.replace(/[^\w\- ]+/g, '').trim() || 'ride'} ${a.started_at.slice(0, 10)}.${ext}`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      }));
+      };
+      actions.prepend(
+        button('⬇ Export .tcx', () => download(new Blob([toTcx(a, samples)], { type: 'application/vnd.garmin.tcx+xml' }), 'tcx')),
+        button('⬇ Export .fit', () => download(new Blob([toFit(a, samples)], { type: 'application/vnd.ant.fit' }), 'fit')),
+      );
     }).catch((e) => charts.replaceChildren(h('p', { class: 'error', text: errMsg(e) })));
     if (deps.shareRide) actions.append(button('📤 Share', () => deps.shareRide!(a)));
     actions.append(button('🗑 Delete ride', async () => {
