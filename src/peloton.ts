@@ -4,7 +4,8 @@
 // comedic near-misses of real ones; the riders are made up.
 
 import { gradeAt, headingAt, currentStage } from './course';
-import { DEFAULT_PARAMS, stepSpeed } from './physics';
+import { DEFAULT_PARAMS, airDensityAt, stepSpeed } from './physics';
+import { limitCornerSpeed } from './cornering';
 import type { OtherRider } from './world/others';
 import { RaceSim, type RaceCourse, type RosterEntry } from './raceSim';
 import { rng } from './world/noise';
@@ -44,6 +45,13 @@ const RIDER_KG = 68;
 const BIKE_KG = 7.5;
 const PACK_CDA = DEFAULT_PARAMS.cda * 0.72; // most of the bunch sits in the draft
 const ROW = 2.1; // metres between rows of the paceline
+
+/** One physics step for a group: thin air at its altitude, and the same braking into bends as the player. */
+function stepGroup(g: { distance: number; speed: number }, power: number, grade: number, dt: number): number {
+  const stage = currentStage();
+  const v = stepSpeed(g.speed, power, grade, dt, { massKg: RIDER_KG + BIKE_KG, cda: PACK_CDA, crr: DEFAULT_PARAMS.crr, airDensity: airDensityAt(stage, g.distance) }, windAtDistance(g.distance).head);
+  return limitCornerSpeed(v, g.distance, dt, { headingAt: stage.headingAt });
+}
 
 export interface Group {
   id: string;
@@ -120,7 +128,7 @@ export class Peloton {
       ride.t += 0.25;
       const grade = gradeAt(g.distance);
       const power = g.wkg * RIDER_KG * (grade < -0.04 ? 0.35 : 1);
-      g.speed = stepSpeed(g.speed, power, grade, 0.25, { massKg: RIDER_KG + BIKE_KG, cda: PACK_CDA, crr: DEFAULT_PARAMS.crr }, windAtDistance(g.distance).head);
+      g.speed = stepGroup(g, power, grade, 0.25);
       g.distance += g.speed * 0.25;
     }
   }
@@ -171,7 +179,7 @@ export class Peloton {
       // Steady effort with gentle surges; they soft-pedal steep descents.
       const surge = 1 + 0.05 * Math.sin(this.time / 23 + g.phase) + 0.03 * Math.sin(this.time / 7 + g.phase * 2);
       const power = g.wkg * RIDER_KG * surge * (grade < -0.04 ? 0.35 : 1);
-      g.speed = stepSpeed(g.speed, power, grade, dt, { massKg: RIDER_KG + BIKE_KG, cda: PACK_CDA, crr: DEFAULT_PARAMS.crr }, windAtDistance(g.distance).head);
+      g.speed = stepGroup(g, power, grade, dt);
       g.distance += g.speed * dt;
       // Over the line: they roll out and start the stage again.
       if (finish !== null && g.distance > finish + 120) {

@@ -8,6 +8,7 @@
 //   diesel       one steady power, never responds to a surge.
 // It uses the same power-to-speed physics as you (physics.ts). No DOM, no Three.js.
 
+import { limitCornerSpeed } from '../cornering';
 import { DEFAULT_PARAMS, stepSpeed } from '../physics';
 import type { OtherRider } from '../world/others';
 import type { RivalProfile } from './rivals';
@@ -21,6 +22,10 @@ export interface BotContext {
   finish: number | null;
   gradeAt(d: number): number;
   headwindAt(d: number): number;
+  /** Air density at a distance (physics.ts `airDensityAt`): the rival breathes the same thin air as you. Left out: sea level. */
+  airDensityAt?(d: number): number;
+  /** The road's heading (a stage's own `headingAt`) so the rival brakes for bends like you. Left out: no bends. */
+  headingAt?(d: number): number;
   ftp: number;
   /** Rider plus bike, kg. The rival weighs the same as you, so equal watts means equal speed. */
   massKg: number;
@@ -104,7 +109,8 @@ export class RivalBot {
     this.power = target * (grade < -0.04 ? 0.35 : 1);
     // Sheltering behind you within about eight metres saves the rival some drag.
     const draft = gap < 0 && gap > -8 ? 0.75 : 1;
-    this.speed = stepSpeed(this.speed, this.power, grade, dt, { massKg: c.massKg, cda: DEFAULT_PARAMS.cda * draft, crr: DEFAULT_PARAMS.crr }, c.headwindAt(this.distance));
+    this.speed = stepSpeed(this.speed, this.power, grade, dt, { massKg: c.massKg, cda: DEFAULT_PARAMS.cda * draft, crr: DEFAULT_PARAMS.crr, airDensity: c.airDensityAt?.(this.distance) }, c.headwindAt(this.distance));
+    if (c.headingAt) this.speed = limitCornerSpeed(this.speed, this.distance, dt, { headingAt: c.headingAt });
     this.distance += this.speed * dt;
     if (c.finish !== null && this.crossedAt === null && this.distance >= c.finish) this.crossedAt = this.time;
     return ev;
