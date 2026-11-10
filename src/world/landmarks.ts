@@ -17,6 +17,7 @@ import type { MonumentId } from './monumentTypes';
  */
 export const MONUMENT_GLB: Partial<Record<MonumentId, { file: string; yaw: number }>> = {
   'geant-tourmalet': { file: 'geant.glb', yaw: -Math.PI / 2 },
+  'ventoux-observatory': { file: 'ventoux-summit.glb', yaw: Math.PI },
 };
 
 const BEHIND = 250;

@@ -1263,11 +1263,16 @@ begin
     last_ride = now(), notes = excluded.notes;
 end $$;
 
+-- Notes are sanitised on the way out as well as in ai_claim_for: this is the copy the browser reads,
+-- so a note written before sanitize_prompt_text existed is cleaned here too.
 create or replace function public.my_rivals_for(me text) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
 begin
   if me is null then raise exception 'Sign in first' using errcode = '42501'; end if;
-  return (select coalesce(jsonb_agg(jsonb_build_object('rival', m.rival_id, 'wins', m.wins, 'losses', m.losses, 'rides', m.rides, 'last_ride', m.last_ride, 'notes', m.notes) order by m.rival_id), '[]'::jsonb)
+  return (select coalesce(jsonb_agg(jsonb_build_object('rival', m.rival_id, 'wins', m.wins, 'losses', m.losses, 'rides', m.rides, 'last_ride', m.last_ride,
+      'notes', (select coalesce(jsonb_agg(public.sanitize_prompt_text(n) order by o), '[]'::jsonb)
+                from jsonb_array_elements_text(m.notes) with ordinality as e(n, o)
+                where jsonb_typeof(m.notes) = 'array')) order by m.rival_id), '[]'::jsonb)
     from public.rival_memory m where m.user_id = me);
 end $$;
 

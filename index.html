@@ -141,6 +141,7 @@
             <button id="btn-rivals" role="menuitem" title="Ride with an AI rival who remembers you">🤺 Rivals</button>
             <hr />
             <button id="btn-sound" role="menuitem" title="Sound on/off (M)">🔊 Sound on</button>
+            <button id="btn-music" role="menuitemcheckbox" aria-checked="true" title="Music on/off (N)">🎵 Music on</button>
             <button id="btn-fullscreen" role="menuitem" title="Full screen (F)">⛶ Full screen</button>
             <button id="btn-install" role="menuitem" title="Install American Flyers as an app" hidden>⬇ Install app</button>
             <hr />
@@ -218,7 +219,7 @@
       <div id="demo-panel" class="demo-panel" hidden>
         <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
         <input id="demo-power" type="range" min="0" max="600" step="5" value="150" />
-        <p>Use ↑ / ↓ keys to adjust</p>
+        <p>Use Page Up / Page Down keys to adjust</p>
       </div>
       <div class="status">
         <span id="trainer-dot" class="dot"></span><span id="trainer-status" class="trainer-status">No trainer connected</span>
@@ -284,6 +285,7 @@
         <div id="finish-extra"></div>
         <p id="finish-note" class="finish-note"></p>
         <div id="finish-actions" class="dialog-actions"></div>
+        <button id="btn-ride-music" type="button" class="finish-music" title="Music on/off (N)">🎵 Music on</button>
       </div>
     </div>
 
@@ -392,7 +394,7 @@
           <span class="hint">On a stage you’ve finished, a see-through ghost of your fastest ride rides with you.</span>
         </label>
         <label class="check"><input name="autoSteer" type="checkbox" /> Auto-steer into the draft
-          <span class="hint">If you haven’t steered for a few seconds and a rider is just ahead, you ease onto their wheel. Steer with ← and → (or the on-screen ◀ ▶ buttons).</span>
+          <span class="hint">You ride the racing line: wide into a bend, along the inside at the apex, wide out. Steer with ← and → (or the on-screen ◀ ▶ buttons) to take over by hand; ↑ takes the racing line back. With auto-steer, if a rider is just ahead you ease onto their wheel instead.</span>
         </label>
         <label class="check"><input name="proTeams" type="checkbox" /> Pro teams on the road
           <span class="hint">Off is the Solo ride mode, on is “With pro teams”: computer-ridden teams riding the stage at different paces, not a race. Join one from 👥. You can also switch them in ☰ Menu or beside the Ride button in the hub.</span>
@@ -408,6 +410,9 @@
         </label>
         <label class="check"><input name="commentary" type="checkbox" /> Race commentary
           <span class="hint">A commentator calls the action in races: the start, attacks, the break, sprints and how you are doing. Needs sound on.</span>
+        </label>
+        <label class="check"><input name="music" type="checkbox" /> Music
+          <span class="hint">The American Flyers theme tune at home and in the hub, and a riding score that follows your speed and the road (quieter and sparser on the climbs). Also on or off from ☰ Menu → 🎵 Music, the finish card, or the N key. Needs sound on.</span>
         </label>
         <label class="check"><input name="rideTogether" type="checkbox" /> Ride together
           <span class="hint">Show me to other signed-in riders on the same stage, and show them to me.</span>
