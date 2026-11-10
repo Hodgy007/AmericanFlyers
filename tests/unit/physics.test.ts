@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARAMS, stepSpeed } from '../../src/physics';
+import { DEFAULT_PARAMS, airDensity, airDensityAt, stepSpeed } from '../../src/physics';
 
 /** Runs the integrator until speed settles (or `seconds` pass). */
 function settle(power: number, grade: number, from = 0, seconds = 600, p = DEFAULT_PARAMS) {
@@ -63,5 +63,49 @@ describe('stepSpeed', () => {
 
   it('ignores negative power', () => {
     expect(stepSpeed(5, -100, 0, 1)).toBeCloseTo(stepSpeed(5, 0, 0, 1), 10);
+  });
+});
+
+describe('airDensity', () => {
+  it('follows the ISA table', () => {
+    expect(airDensity(0)).toBeCloseTo(1.225, 3);
+    expect(airDensity(1000)).toBeCloseTo(1.112, 2);
+    expect(airDensity(2000)).toBeCloseTo(1.007, 2);
+    expect(airDensity(3000)).toBeCloseTo(0.909, 2);
+    expect(airDensity(4000)).toBeCloseTo(0.819, 2);
+  });
+
+  it('is clamped to a sensible range', () => {
+    expect(airDensity(-5000)).toBe(airDensity(-400));
+    expect(airDensity(50000)).toBe(airDensity(6000));
+    expect(airDensity(NaN)).toBeCloseTo(1.225, 3);
+  });
+
+  it('is worked out from a stage’s start altitude plus the climb so far', () => {
+    const stage = { baseAltitude: 3000, elevationAt: (d: number) => d / 10 };
+    expect(airDensityAt(stage, 10000)).toBeCloseTo(airDensity(4000), 10);
+    expect(airDensityAt({ elevationAt: () => 0 }, 0)).toBeCloseTo(1.225, 3);
+  });
+});
+
+describe('stepSpeed at altitude', () => {
+  it('leaves callers that give no density unchanged (sea level)', () => {
+    expect(settle(220, 0, 0, 120, { ...DEFAULT_PARAMS, airDensity: 1.225 })).toBeCloseTo(settle(220, 0, 0, 120), 10);
+  });
+
+  it('is faster on the flat at the same watts the higher you go', () => {
+    const sea = settle(250, 0);
+    const mile = settle(250, 0, 0, 600, { ...DEFAULT_PARAMS, airDensity: airDensity(1600) });
+    const high = settle(250, 0, 0, 600, { ...DEFAULT_PARAMS, airDensity: airDensity(4000) });
+    expect(mile).toBeGreaterThan(sea);
+    expect(high).toBeGreaterThan(mile);
+    expect(high / sea).toBeGreaterThan(1.1); // a third less air: about 12% faster at a steady 250 W
+  });
+
+  it('barely changes a steep climb, where drag is a small part of the load', () => {
+    const sea = settle(300, 0.1);
+    const high = settle(300, 0.1, 0, 600, { ...DEFAULT_PARAMS, airDensity: airDensity(4000) });
+    expect(high / sea).toBeGreaterThan(1);
+    expect(high / sea).toBeLessThan(1.02);
   });
 });

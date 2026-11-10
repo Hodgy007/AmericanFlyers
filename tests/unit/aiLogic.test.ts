@@ -336,4 +336,31 @@ describe('rival bot', () => {
     expect(r.tag).toContain('Sasha Frost');
     expect(bot.asRider(null).speech).toBeUndefined();
   });
+  it('rides in thin air when told the altitude, and brakes for a hairpin when given the road', () => {
+    const run = (extra: object, seconds: number, grade = 0) => {
+      const bot = new RivalBot(rivalById('wattson')!, 0, 250);
+      bot.started = true;
+      let top = 0;
+      for (let t = 0; t < seconds; t++) {
+        bot.update(1, { ...flat, finish: null, playerDistance: bot.distance, playerWatts: 200, gradeAt: () => grade, ...extra });
+        top = Math.max(top, bot.speed);
+      }
+      return { bot, top };
+    };
+    expect(run({ airDensityAt: () => 0.82 }, 400).bot.distance).toBeGreaterThan(run({}, 400).bot.distance);
+    // a descent into a 10 m radius hairpin at d = 800: the rival is held to about 32 km/h there instead of flying through
+    const headingAt = (d: number) => Math.min(Math.PI, Math.max(0, (d - 800) / 10));
+    const free = run({}, 120, -0.06);
+    const braking = run({ headingAt }, 120, -0.06);
+    expect(free.top).toBeGreaterThan(12);
+    let atBend = 0;
+    const bot = new RivalBot(rivalById('wattson')!, 0, 250);
+    bot.started = true;
+    for (let t = 0; t < 200 && bot.distance < 820; t++) {
+      bot.update(0.5, { ...flat, finish: null, playerDistance: bot.distance, playerWatts: 200, gradeAt: () => -0.06, headingAt });
+      if (bot.distance >= 810 && !atBend) atBend = bot.speed;
+    }
+    expect(atBend * 3.6).toBeLessThan(36);
+    expect(braking.bot.distance).toBeLessThan(free.bot.distance);
+  });
 });

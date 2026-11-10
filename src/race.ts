@@ -228,6 +228,6 @@ export class LiveRace {
 export function raceSetup(stage: Stage, seed: number) {
   return {
     roster: makeRoster(seed),
-    course: makeCourse({ finish: stage.finish!, elevationAt: stage.elevationAt, race: stage.race }),
+    course: makeCourse({ finish: stage.finish!, elevationAt: stage.elevationAt, race: stage.race, baseAltitude: stage.baseAltitude, headingAt: stage.headingAt }),
   };
 }

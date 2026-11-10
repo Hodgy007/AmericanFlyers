@@ -189,7 +189,7 @@ export function refWkg(ftp: number, riderKg: number) {
  */
 export function simulateStage(p: TourProgress, stageId: string, me: { ftp: number; riderKg: number; bikeKg: number }): ResultRow[] {
   const stage = stageById(stageId);
-  const course = makeCourse({ finish: stage.finish!, elevationAt: stage.elevationAt, race: stage.race });
+  const course = makeCourse({ finish: stage.finish!, elevationAt: stage.elevationAt, race: stage.race, baseAltitude: stage.baseAltitude, headingAt: stage.headingAt });
   const you: RosterEntry = {
     id: ME, name: 'You', team: 0, ability: 0.5, climb: 1, sprint: 2.0, leader: false,
     capW: me.ftp * 0.95, massKg: me.riderKg + me.bikeKg,

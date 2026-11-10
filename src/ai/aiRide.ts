@@ -4,6 +4,8 @@
 // beside it. The ride never waits on the AI: each request runs in the
 // background and falls back to the canned text (canned.ts) on any failure.
 
+import { currentStage } from '../course';
+import { airDensityAt } from '../physics';
 import { askAi, saveConsent, saveDebrief, type AiConsent } from '../cloud/aiApi';
 import type { OtherRider } from '../world/others';
 import { cannedPlan, cannedRivalLines, cannedRivalPost, cannedTip } from './canned';
@@ -280,6 +282,7 @@ export class AiRide {
     bot.update(f.dt, {
       playerDistance: f.distance, playerWatts: f.watts, playerMoving: f.movingTime > 0, finish: f.finish,
       gradeAt: this.host.gradeAt, headwindAt: this.host.headwindAt, ftp: s.ftp, massKg: s.riderKg + s.bikeKg,
+      airDensityAt: (d) => airDensityAt(currentStage(), d), headingAt: currentStage().headingAt,
     });
     const gap = bot.distance - f.distance;
     this.story.gap(gap);
