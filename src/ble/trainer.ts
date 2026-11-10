@@ -5,7 +5,15 @@
 // and lets us push the virtual road grade to the trainer as resistance.
 // Falls back to the Cycling Power Service (read-only) for older firmware.
 
+import {
+  ControlPoint, OP_SET_SIM_PARAMS, OP_SET_TARGET_POWER, RESULT_NOT_SENT, TrainerControl, isControlLostStatus,
+  type ControlResult, type ControlState,
+} from './control';
+import { CPS_SERVICE, CrankCadence, parseCyclingPower, subscribeCyclingPower } from './cyclingPower';
 import { onGattDrop } from './remembered';
+
+export { CrankCadence, parseCyclingPower };
+export type { ControlResult, ControlState };
 
 export interface TrainerReading {
   power?: number; // watts
@@ -18,30 +26,29 @@ export interface Trainer {
   readonly name: string;
   /** True when the trainer accepts resistance (grade) commands. */
   readonly canControl: boolean;
-  /** Grade in %, an optional wind-resistance factor (below 1 in a draft) and an optional headwind in m/s (negative: tailwind). */
-  setGrade(gradePercent: number, windFactor?: number, headwindMs?: number): Promise<void>;
-  /** ERG mode: the trainer holds this power regardless of cadence. */
-  setTargetPower(watts: number): Promise<void>;
+  /** "ok": resistance commands are taken; "lost": another app has control or the trainer stopped answering; "unavailable": it can't be controlled. */
+  readonly controlState: ControlState;
+  /**
+   * Grade in %, an optional wind-resistance factor (below 1 in a draft) and an optional headwind in m/s (negative: tailwind).
+   * Resolves with the outcome (`ok` false when the trainer refused, didn't answer, or is being left alone while control is lost); never rejects.
+   */
+  setGrade(gradePercent: number, windFactor?: number, headwindMs?: number): Promise<ControlResult>;
+  /** ERG mode: the trainer holds this power regardless of cadence. Resolves like `setGrade`. */
+  setTargetPower(watts: number): Promise<ControlResult>;
   disconnect(): void;
 }
 
 export interface TrainerCallbacks {
   onReading(reading: TrainerReading): void;
   onDisconnect(): void;
+  /** The trainer lost or regained control of its resistance (not called for the first state). */
+  onControlState?(state: ControlState): void;
 }
 
 const FTMS_SERVICE = 0x1826;
 const FTMS_INDOOR_BIKE_DATA = 0x2ad2;
 const FTMS_CONTROL_POINT = 0x2ad9;
-const CPS_SERVICE = 0x1818;
-const CPS_MEASUREMENT = 0x2a63;
-
-const OP_REQUEST_CONTROL = 0x00;
-const OP_START_RESUME = 0x07;
-const OP_SET_TARGET_POWER = 0x05;
-const OP_SET_SIM_PARAMS = 0x11;
-const OP_RESPONSE = 0x80;
-const RESULT_SUCCESS = 0x01;
+const FTMS_MACHINE_STATUS = 0x2ada;
 
 export function bluetoothAvailable(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
@@ -102,105 +109,80 @@ async function connectFtms(
 ): Promise<Trainer> {
   const bikeData = await service.getCharacteristic(FTMS_INDOOR_BIKE_DATA);
   bikeData.addEventListener('characteristicvaluechanged', () => {
-    cb.onReading(parseIndoorBikeData(bikeData.value!));
+    if (bikeData.value) cb.onReading(parseIndoorBikeData(bikeData.value));
   });
   await bikeData.startNotifications();
 
-  const control = new ControlPoint(await service.getCharacteristic(FTMS_CONTROL_POINT).catch(() => null));
+  const cp = new ControlPoint(await service.getCharacteristic(FTMS_CONTROL_POINT).catch(() => null));
+  const control = new TrainerControl(cp, { initial: 'unavailable', onState: (st) => cb.onControlState?.(st) });
   let canControl = false;
-  if (control.available) {
+  if (cp.available) {
     // Taking control is a bonus: if the control point won't play (another app holds control, or the
     // browser can't write to it), keep the connection for power and cadence rather than failing it.
     try {
-      await control.start();
-      canControl = await control.send(new Uint8Array([OP_REQUEST_CONTROL]));
-      if (canControl) await control.send(new Uint8Array([OP_START_RESUME]));
+      await cp.start();
+      canControl = await control.acquireInitially();
     } catch {
       canControl = false;
     }
   }
+  if (canControl) {
+    // The trainer says so at once when another app takes control (op 0xFF); don't wait for a command to fail.
+    try {
+      const status = await service.getCharacteristic(FTMS_MACHINE_STATUS);
+      status.addEventListener('characteristicvaluechanged', () => {
+        if (isControlLostStatus(status.value)) control.permissionLost();
+      });
+      await status.startNotifications();
+    } catch { /* no status characteristic: failed commands still tell us */ }
+  }
 
+  const notSent = async (): Promise<ControlResult> => ({ ok: false, code: RESULT_NOT_SENT });
   return {
     name: device.name ?? 'Smart trainer',
     canControl,
+    get controlState() { return control.state; },
     async setTargetPower(watts: number) {
-      if (!canControl) return;
+      if (!canControl) return notSent();
       const buf = new DataView(new ArrayBuffer(3));
       buf.setUint8(0, OP_SET_TARGET_POWER);
       buf.setInt16(1, Math.round(clamp(watts, 0, 2000)), true); // 1 W resolution
-      await control.send(new Uint8Array(buf.buffer));
+      return control.command(new Uint8Array(buf.buffer));
     },
     async setGrade(gradePercent: number, windFactor = 1, headwindMs = 0) {
-      if (!canControl) return;
+      if (!canControl) return notSent();
       const buf = new DataView(new ArrayBuffer(7));
       buf.setUint8(0, OP_SET_SIM_PARAMS);
       buf.setInt16(1, Math.round(clamp(headwindMs, -30, 30) * 1000), true); // wind speed, 0.001 m/s (positive: headwind)
       buf.setInt16(3, Math.round(clamp(gradePercent, -20, 20) * 100), true); // grade, 0.01 %
       buf.setUint8(5, 40); // rolling resistance coefficient, 0.0001 → 0.004
       buf.setUint8(6, Math.round(51 * clamp(windFactor, 0.3, 1))); // wind resistance coefficient, 0.01 kg/m → 0.51 (less in a draft)
-      await control.send(new Uint8Array(buf.buffer));
+      return control.command(new Uint8Array(buf.buffer));
     },
     disconnect: () => device.gatt?.disconnect(),
   };
 }
 
-/** Parses an FTMS Indoor Bike Data notification (Bluetooth FTMS spec §4.9). */
+/** Parses an FTMS Indoor Bike Data notification (Bluetooth FTMS spec §4.9). A short packet gives what could be read. */
 export function parseIndoorBikeData(view: DataView): TrainerReading {
-  const flags = view.getUint16(0, true);
   const out: TrainerReading = {};
+  if (view.byteLength < 2) return out;
+  const flags = view.getUint16(0, true);
+  const len = view.byteLength;
   let i = 2;
+  // Each field is read only if it fits; one that doesn't ends the parse (later offsets depend on it).
   // Bit 0 is "More Data": when it is CLEAR, instantaneous speed is present.
-  if (!(flags & 0x0001)) { out.speedKmh = view.getUint16(i, true) / 100; i += 2; }
+  if (!(flags & 0x0001)) { if (i + 2 > len) return out; out.speedKmh = view.getUint16(i, true) / 100; i += 2; }
   if (flags & 0x0002) i += 2; // average speed
-  if (flags & 0x0004) { out.cadence = view.getUint16(i, true) / 2; i += 2; }
+  if (flags & 0x0004) { if (i + 2 > len) return out; out.cadence = view.getUint16(i, true) / 2; i += 2; }
   if (flags & 0x0008) i += 2; // average cadence
   if (flags & 0x0010) i += 3; // total distance
   if (flags & 0x0020) i += 2; // resistance level
-  if (flags & 0x0040) { out.power = view.getInt16(i, true); i += 2; }
+  if (flags & 0x0040) { if (i + 2 > len) return out; out.power = view.getInt16(i, true); i += 2; }
   if (flags & 0x0080) i += 2; // average power
   if (flags & 0x0100) i += 5; // expended energy
-  if (flags & 0x0200) { out.heartRate = view.getUint8(i); i += 1; }
+  if (flags & 0x0200) { if (i + 1 > len) return out; out.heartRate = view.getUint8(i); i += 1; }
   return out;
-}
-
-/** Serialises writes to the FTMS control point and waits for each response. */
-class ControlPoint {
-  private queue: Promise<unknown> = Promise.resolve();
-  private pending: ((ok: boolean) => void) | null = null;
-
-  constructor(private readonly char: BluetoothRemoteGATTCharacteristic | null) {}
-
-  get available() { return this.char !== null; }
-
-  async start() {
-    if (!this.char) return;
-    this.char.addEventListener('characteristicvaluechanged', () => {
-      const v = this.char!.value!;
-      if (v.byteLength >= 3 && v.getUint8(0) === OP_RESPONSE) {
-        this.pending?.(v.getUint8(2) === RESULT_SUCCESS);
-        this.pending = null;
-      }
-    });
-    await this.char.startNotifications();
-  }
-
-  send(payload: Uint8Array<ArrayBuffer>): Promise<boolean> {
-    const run = async () => {
-      if (!this.char) return false;
-      const response = new Promise<boolean>((resolve) => {
-        this.pending = resolve;
-        setTimeout(() => { if (this.pending === resolve) { this.pending = null; resolve(false); } }, 3000);
-      });
-      // Bluefy and other iPhone Web Bluetooth browsers only have the older writeValue(), which also
-      // writes with a response. Chrome has both.
-      if (typeof this.char.writeValueWithResponse === 'function') await this.char.writeValueWithResponse(payload);
-      else await this.char.writeValue(payload);
-      return response;
-    };
-    const result = this.queue.then(run, run);
-    this.queue = result.catch(() => false);
-    return result;
-  }
 }
 
 // ------------------------------------------------------- Cycling Power ----
@@ -210,58 +192,16 @@ async function connectCyclingPower(
   service: BluetoothRemoteGATTService,
   cb: TrainerCallbacks,
 ): Promise<Trainer> {
-  const measurement = await service.getCharacteristic(CPS_MEASUREMENT);
-  const cadence = new CrankCadence();
-  measurement.addEventListener('characteristicvaluechanged', () => {
-    cb.onReading(parseCyclingPower(measurement.value!, cadence));
-  });
-  await measurement.startNotifications();
-
+  await subscribeCyclingPower(service, cb.onReading);
+  const notSent = async (): Promise<ControlResult> => ({ ok: false, code: RESULT_NOT_SENT });
   return {
     name: device.name ?? 'Power meter',
     canControl: false,
-    setGrade: async () => {},
-    setTargetPower: async () => {},
+    controlState: 'unavailable',
+    setGrade: notSent,
+    setTargetPower: notSent,
     disconnect: () => device.gatt?.disconnect(),
   };
-}
-
-/** Parses a Cycling Power Measurement notification; derives cadence from crank events. */
-export function parseCyclingPower(view: DataView, cadence: CrankCadence): TrainerReading {
-  const flags = view.getUint16(0, true);
-  const out: TrainerReading = { power: view.getInt16(2, true) };
-  let i = 4;
-  if (flags & 0x0001) i += 1; // pedal power balance
-  if (flags & 0x0004) i += 2; // accumulated torque
-  if (flags & 0x0010) i += 6; // wheel revolution data
-  if (flags & 0x0020) {
-    out.cadence = cadence.update(view.getUint16(i, true), view.getUint16(i + 2, true));
-  }
-  return out;
-}
-
-/** Turns cumulative crank revolutions + event time (1/1024 s) into rpm. */
-export class CrankCadence {
-  private lastRevs = -1;
-  private lastTime = 0;
-  private lastChange = 0;
-  private rpm = 0;
-
-  update(revs: number, eventTime: number, now = performance.now()): number {
-    if (this.lastRevs >= 0) {
-      const dRevs = (revs - this.lastRevs + 0x10000) & 0xffff;
-      const dTime = (eventTime - this.lastTime + 0x10000) & 0xffff;
-      if (dRevs > 0 && dTime > 0) {
-        this.rpm = (dRevs * 1024 * 60) / dTime;
-        this.lastChange = now;
-      } else if (now - this.lastChange > 2500) {
-        this.rpm = 0; // no new crank event for a while: stopped pedalling
-      }
-    }
-    this.lastRevs = revs;
-    this.lastTime = eventTime;
-    return Math.round(this.rpm);
-  }
 }
 
 function clamp(v: number, lo: number, hi: number) {

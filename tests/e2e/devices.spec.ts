@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
 
-// Trainer and heart rate in the ☰ Menu, remembered devices, one-tap reconnect, the
+// Trainer, heart rate and power meter in the ☰ Menu, remembered devices, one-tap reconnect, the
 // no-chooser reconnect on load (getDevices), and automatic reconnection after a drop.
 // navigator.bluetooth is replaced by a small mock, so no hardware is needed.
 
@@ -37,10 +37,11 @@ async function setup(page: Page, o: MockOptions) {
     const log = {
       requests: [] as unknown[],
       getDevicesCalls: 0,
-      connects: { 'trainer-1': 0, 'hr-1': 0 } as Record<string, number>,
+      connects: { 'trainer-1': 0, 'hr-1': 0, 'meter-1': 0 } as Record<string, number>,
       writes: [] as number[][],
       forgets: [] as string[],
       failNext: 0, // make the next N gatt.connect() calls fail
+      denyCommands: false, // the control point answers 'control not permitted' to power and grade commands (another app has control)
     };
     const devices: Record<string, any> = {};
 
@@ -82,15 +83,23 @@ async function setup(page: Page, o: MockOptions) {
             const bike = char();
             const control = char((data) => {
               log.writes.push(data);
-              setTimeout(() => control.emit([0x80, data[0], 0x01]), 0); // success response
+              const denied = log.denyCommands && (data[0] === 0x05 || data[0] === 0x11);
+              setTimeout(() => control.emit([0x80, data[0], denied ? 0x05 : 0x01]), 0); // success (or not permitted) response
             });
+            const status = char(); // Fitness Machine Status
             d.bikeData = bike;
-            return { getCharacteristic: async (u: number) => (u === 0x2ad2 ? bike : control) };
+            d.statusData = status;
+            return { getCharacteristic: async (u: number) => (u === 0x2ad2 ? bike : u === 0x2ada ? status : control) };
           }
           if (id === 'hr-1' && uuid === 0x180d) {
             const hr = char();
             d.hrData = hr;
             return { getCharacteristic: async () => hr };
+          }
+          if (id === 'meter-1' && uuid === 0x1818) {
+            const cps = char();
+            d.meterData = cps;
+            return { getCharacteristic: async () => cps };
           }
           throw new DOMException('Service not found', 'NotFoundError');
         },
@@ -103,6 +112,7 @@ async function setup(page: Page, o: MockOptions) {
     }
     makeDevice('trainer-1', 'KICKR Test');
     makeDevice('hr-1', 'Strap Test');
+    makeDevice('meter-1', 'Assioma Test');
 
     const bluetooth: any = {
       async requestDevice(options: any) {
@@ -112,6 +122,7 @@ async function setup(page: Page, o: MockOptions) {
         const f = options.filters?.[0] ?? {};
         const byName = Object.values(devices).find((d: any) => d.name === f.name);
         if (byName) return byName;
+        if (options.filters?.length === 1 && f.services?.includes(0x1818)) return devices['meter-1']; // the power-meter chooser (the trainer's lists FTMS too)
         if (f.services?.includes(0x1826)) return devices['trainer-1'];
         if (f.services?.includes(0x180d)) return devices['hr-1'];
         throw new DOMException('User cancelled the requestDevice() chooser.', 'NotFoundError');
@@ -134,6 +145,19 @@ async function setup(page: Page, o: MockOptions) {
         const send = () => { if (devices['trainer-1'].gatt.connected && devices['trainer-1'].bikeData) (window as any).__bt.pedal(power, cadence); };
         send();
         window.setInterval(send, 400);
+      },
+      /** A Cycling Power Measurement notification from the separate meter: power only (flags 0). */
+      meterPedal(power: number) {
+        const b = new DataView(new ArrayBuffer(4));
+        b.setUint16(0, 0, true); b.setInt16(2, power, true);
+        devices['meter-1'].meterData.emit([...new Uint8Array(b.buffer)]);
+      },
+      /** Returns a function that stops the meter's readings. */
+      meterWhileConnected(power: number) {
+        const send = () => { if (devices['meter-1'].gatt.connected && devices['meter-1'].meterData) (window as any).__bt.meterPedal(power); };
+        send();
+        const id = window.setInterval(send, 400);
+        (window as any).__stopMeter = () => window.clearInterval(id);
       },
       drop(id: string) { devices[id].gatt.disconnect(); },
     };
@@ -205,7 +229,7 @@ test('with getDevices: remembered devices reconnect on load without the chooser'
   const log = await bt(page);
   expect(log.requests).toEqual([]); // the chooser was never opened
   expect(log.getDevicesCalls).toBeGreaterThan(0);
-  expect(log.connects).toEqual({ 'trainer-1': 1, 'hr-1': 1 });
+  expect(log.connects).toEqual({ 'trainer-1': 1, 'hr-1': 1, 'meter-1': 0 });
   await expect(page.locator('#device-banner')).toBeHidden();
   await snap(page, 'devices-3-auto-connected');
 
@@ -325,4 +349,81 @@ test('a browser that refuses the two-filter trainer request falls back to listin
   const requests = (await bt(page)).requests;
   expect(requests).toHaveLength(2);
   expect(requests[1]).toEqual({ acceptAllDevices: true, optionalServices: [0x1826, 0x1818] });
+});
+
+test('a power meter beside the trainer: its watts win, the status names it, and the trainer takes over when it goes quiet', async ({ page }) => {
+  await setup(page, { getDevices: false });
+  await page.goto('/');
+  await ride(page);
+  await press(page, '#btn-menu-trainer');
+  await expect(page.locator('#trainer-status')).toContainText('KICKR Test · resistance follows the road');
+  await page.evaluate(() => (window as any).__bt.pedalWhileConnected(150, 85));
+  await expect(page.locator('#hud')).toContainText(/Power1[0-9]{2}W/);
+
+  await press(page, '#btn-meter');
+  await expect(page.locator('#btn-meter')).toContainText('Disconnect Assioma Test');
+  expect((await bt(page)).requests.at(-1)).toEqual({ filters: [{ services: [0x1818] }] });
+  await page.evaluate(() => (window as any).__bt.meterWhileConnected(260));
+  await expect(page.locator('#trainer-status')).toContainText('KICKR Test · resistance follows the road · power from Assioma Test');
+  // The meter's 260 W drives the HUD, not the trainer's 150 W.
+  await expect(page.locator('#hud')).toContainText(/Power2[0-9]{2}W/, { timeout: 15_000 });
+  expect(await stored(page)).toEqual({ trainer: { id: 'trainer-1', name: 'KICKR Test' }, meter: { id: 'meter-1', name: 'Assioma Test' } });
+  await snap(page, 'devices-meter-status');
+
+  // The meter stops sending (still connected): after 3 s the trainer's own power is used, and the rider is told once.
+  await page.evaluate(() => {
+    (window as any).__toastsSeen = [];
+    new MutationObserver(() => (window as any).__toastsSeen.push(document.getElementById('toast')!.textContent ?? '')).observe(document.getElementById('toast')!, { childList: true, characterData: true, subtree: true });
+    (window as any).__stopMeter();
+  });
+  await expect(page.locator('#trainer-status')).not.toContainText('power from', { timeout: 15_000 });
+  await expect.poll(() => page.evaluate(() => (window as any).__toastsSeen.some((t: string) => /Assioma Test stopped sending power/.test(t)))).toBe(true);
+  await expect(page.locator('#hud')).toContainText(/Power1[0-9]{2}W/, { timeout: 15_000 });
+  // ...and the meter is used again when it returns.
+  await page.evaluate(() => (window as any).__bt.meterWhileConnected(260));
+  await expect(page.locator('#trainer-status')).toContainText('power from Assioma Test');
+});
+
+test('the same device cannot be both the trainer and the power meter', async ({ page }) => {
+  await setup(page, { getDevices: false });
+  await page.goto('/');
+  await ride(page);
+  await press(page, '#btn-menu-trainer');
+  await expect(page.locator('#trainer-status')).toContainText('KICKR Test');
+  // Make the meter chooser hand back the trainer.
+  await page.evaluate(() => {
+    const bt = navigator.bluetooth as any;
+    const ask = bt.requestDevice.bind(bt);
+    bt.requestDevice = async (o: any) => (o.filters?.length === 1 && o.filters[0].services?.includes(0x1818) ? (window as any).__bt.devices['trainer-1'] : ask(o));
+  });
+  await press(page, '#btn-meter');
+  await expect(page.locator('#toast')).toContainText('That’s your trainer');
+  await expect(page.locator('#btn-meter')).not.toContainText('Disconnect');
+});
+
+test('when another app takes control, the rider is told once, and again when the trainer takes commands back', async ({ page }) => {
+  await setup(page, { getDevices: false });
+  await page.goto('/');
+  await ride(page);
+  await page.evaluate(() => {
+    (window as any).__toastsSeen = [];
+    new MutationObserver(() => (window as any).__toastsSeen.push(document.getElementById('toast')!.textContent ?? '')).observe(document.getElementById('toast')!, { childList: true, characterData: true, subtree: true });
+  });
+  await press(page, '#btn-menu-trainer');
+  await expect(page.locator('#trainer-status')).toContainText('KICKR Test · resistance follows the road');
+
+  // Another app grabs control: the trainer says so (Fitness Machine Status, op 0xFF) and refuses commands.
+  await page.evaluate(() => {
+    (window as any).__bt.log.denyCommands = true;
+    (window as any).__bt.devices['trainer-1'].statusData.emit([0xff]);
+  });
+  const toasts = () => page.evaluate(() => (window as any).__toastsSeen as string[]);
+  await expect(page.locator('#trainer-status')).toContainText('not taking resistance commands');
+  await expect.poll(async () => (await toasts()).some((t) => t.includes('stopped taking resistance commands: close other apps'))).toBe(true);
+
+  // It lets go again: commands are taken, and the rider is told.
+  await page.evaluate(() => { (window as any).__bt.log.denyCommands = false; });
+  await expect(page.locator('#trainer-status')).toContainText('resistance follows the road', { timeout: 30_000 });
+  await expect.poll(async () => (await toasts()).some((t) => t.includes('taking resistance commands again'))).toBe(true);
+  expect((await toasts()).filter((t) => t.includes('stopped taking resistance commands')).length).toBeGreaterThan(0);
 });

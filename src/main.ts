@@ -4,6 +4,7 @@ import { captureError, initMonitoring, setMonitoringContext, setMonitoringUser, 
 initMonitoring(); // first, so it catches errors while the app starts
 import { bluetoothAvailable, type Trainer, type TrainerReading } from './ble/trainer';
 import { initDevices } from './devicesUi';
+import { PowerMatch } from './ble/powerMatch';
 import { RideQueue } from './rideQueue'; // rides saved on this device while offline // ☰ Menu trainer and heart rate entries, remembered devices
 import { currentStage, elevationAt, gradeAt, headingAt, setStage } from './course';
 import type { Stage } from './stages';
@@ -196,9 +197,12 @@ const devices = initDevices({
     lastSentGrade = NaN; // a (re)connected trainer is sent the grade (or ERG watts) again at the next tick
     lastSentWatts = NaN;
     if (t && demo) setDemo(false);
-    if (!t) { live.power = 0; live.cadence = 0; } // the ride carries on; power falls to zero until it is back
+    // The ride carries on; power falls to zero until it is back (unless a separate power meter is still sending).
+    if (!t && devices.powerSource() !== 'meter') { live.power = 0; live.cadence = 0; }
   },
   hrChanged: (h) => { if (!h) live.heartRate = 0; },
+  meterChanged: (m) => { if (m && demo) setDemo(false); powerMatch.reset(); },
+  workoutActive: () => !!player && !player.done,
 });
 
 /** Wind into your face (head, m/s; negative is a tail wind) and across the road (cross, towards your right) at a distance on this stage. */
@@ -213,16 +217,28 @@ let lastSentGrade = NaN;
 let lastSentWatts = NaN;
 let lastSentWind = 1;
 let lastSentHeadwind = 0;
+const powerMatch = new PowerMatch(); // ERG with a separate power meter: gently corrects the target sent to the trainer
+let lastControlAt = 0;
 function controlTrainer() {
   if (!trainer?.canControl) return;
-  const watts = player && !player.done ? player.targetWatts() : null;
+  const now = performance.now();
+  const dt = lastControlAt ? Math.min(5, (now - lastControlAt) / 1000) : 0;
+  lastControlAt = now;
+  let watts = player && !player.done ? player.targetWatts() : null;
   if (watts !== null) {
+    // A separate power meter is the source of truth for watts: the trainer is asked for a few percent more or less
+    // so that the meter, not the trainer's own reading, sits on the target.
+    if (settings.powerMatch && devices.powerSource() === 'meter') {
+      watts = Math.round(powerMatch.update({ target: watts, meterWatts: live.power, pedalling: live.cadence > 0 && !player!.paused, dt }));
+    } else powerMatch.reset();
     if (Math.abs(watts - lastSentWatts) < 1) return;
     lastSentWatts = watts;
     lastSentGrade = NaN; // resend the grade when ERG ends
-    trainer.setTargetPower(watts).catch(() => { lastSentWatts = NaN; });
+    // A refused or unanswered command is sent again at the next tick (the trainer layer re-requests control, with a back-off).
+    trainer.setTargetPower(watts).then((r) => { if (!r.ok) lastSentWatts = NaN; }, () => { lastSentWatts = NaN; });
     return;
   }
+  powerMatch.reset();
   const road = gradeAt(ride.distance) * 100 * (settings.difficulty / 100);
   const gear = settings.virtualShifting ? gearGradeOffset(vGear) : 0;
   const target = Math.round(Math.max(-10, Math.min(20, road + gear)) * 10) / 10;
@@ -237,7 +253,7 @@ function controlTrainer() {
   lastSentWind = dragFactor;
   lastSentHeadwind = headwind;
   lastSentWatts = NaN;
-  trainer.setGrade(target, dragFactor, headwind).catch(() => { lastSentGrade = NaN; });
+  trainer.setGrade(target, dragFactor, headwind).then((r) => { if (!r.ok) lastSentGrade = NaN; }, () => { lastSentGrade = NaN; });
 }
 setInterval(controlTrainer, 1000);
 
@@ -1860,6 +1876,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
     rideTogether: data.get('rideTogether') === 'on',
     proTeams: data.get('proTeams') === 'on',
     autoSteer: data.get('autoSteer') === 'on',
+    powerMatch: data.get('powerMatch') === 'on',
     ghost: data.get('ghost') === 'on',
     virtualShifting: data.get('virtualShifting') === 'on',
     wind: data.get('wind') === 'on',
@@ -2115,7 +2132,7 @@ $('btn-weather').addEventListener('click', () => use(atmosphereUi, (u) => u.open
 
 let bluetoothNote = () => {};
 if (!bluetoothAvailable()) {
-  for (const id of ['btn-trainer', 'btn-menu-trainer', 'btn-hr']) {
+  for (const id of ['btn-trainer', 'btn-menu-trainer', 'btn-hr', 'btn-meter']) {
     const b = $<HTMLButtonElement>(id);
     b.disabled = true;
     b.title = 'Web Bluetooth is not available in this browser';
@@ -2147,7 +2164,7 @@ const accountUi = initAccountUi({
   context: () => ({
     stage: currentStage().name,
     workout: player?.workout.name ?? null,
-    trainer: trainer?.name ?? (demo ? 'demo' : null),
+    trainer: trainer ? `${trainer.name} (control ${trainer.controlState}${devices.powerSource() === 'meter' ? ', power from a separate meter' : ''})` : (demo ? 'demo' : devices.powerSource() === 'meter' ? 'no trainer, power meter only' : null),
     browser: navigator.userAgent,
     screen: `${window.innerWidth}×${window.innerHeight}`,
     version: import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev',
