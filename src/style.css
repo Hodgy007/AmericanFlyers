@@ -465,6 +465,18 @@ dialog h3 { font-size: 15px; margin: 18px 0 8px; }
 .finish-card { max-height: 92vh; overflow: auto; }
 .finish-card.wide { width: min(94vw, 560px); }
 .finish-note { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.finish-music {
+  margin-top: 10px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.finish-music:hover { color: inherit; }
 
 @media (max-width: 700px) {
   .charts-pair, .zones-pair { grid-template-columns: 1fr; }
@@ -1068,7 +1080,8 @@ body.at-home .minimap, body.at-home .climb-card { display: none; }
 @media (max-height: 560px) { .minimap { width: 118px; height: 118px; } }
 
 .climb-card {
-  position: fixed; top: var(--below-hud, 150px); left: 50%; transform: translateX(-50%); z-index: 4;
+  /* Left of centre: the road's vanishing point (and whatever stands on the summit skyline) is dead centre. */
+  position: fixed; top: var(--below-hud, 150px); left: 50%; transform: translateX(calc(-50% - 260px)); z-index: 4;
   width: min(290px, calc(100vw - 32px)); padding: 8px 12px 8px; border-radius: 14px;
   background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }

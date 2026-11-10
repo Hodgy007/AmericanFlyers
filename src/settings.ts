@@ -22,6 +22,7 @@ export interface Settings {
   rideTogether: boolean; // see, and be seen by, other riders on the same stage
   ghost: boolean; // race the ghost of your best ride on the stage
   sound: boolean; // wind, crowds, beeps
+  music: boolean; // the theme tune and the riding score (src/music.ts); also needs sound on
   virtualShifting: boolean; // choose your gear; the trainer's resistance follows it
   plan: PlanProgress | null; // the training plan being followed
   hudPosition: 'left' | 'center' | 'right'; // where the data blocks sit
@@ -56,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   rideTogether: true,
   ghost: true,
   sound: true,
+  music: true,
   virtualShifting: false,
   plan: null,
   hudPosition: 'center',

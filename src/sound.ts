@@ -1,14 +1,23 @@
 // Ride sounds, synthesised with Web Audio (no sound files): wind and tyre
 // hum that rise with speed, the freewheel ratchet when you stop pedalling
 // (src/freewheel.ts),
-// crowds on the hairpins and at the finish, beeps before workout intervals,
-// gear-change clicks and a finish fanfare.
+// crowds on the hairpins and at the finish, birdsong now and then, beeps
+// before workout intervals, gear-change clicks and a finish fanfare. Music
+// (src/music.ts: the theme tune and a riding score) plays through the same bus,
+// which dips while the commentator speaks.
 
 import { WHEEL_CIRCUMFERENCE } from './drivetrain';
 import { renderTick, tickRate } from './freewheel';
+import { Music } from './music';
+
+export type { Music } from './music';
 
 const WIND_MAX = 0.32;
-const HUM_MAX = 0.06;
+const HUM_MAX = 0.06; // the tyre's low rumble: the loudest part of the road noise
+const ROAD_MAX = 0.045; // the grit and tyre hiss over the tarmac
+const BIRD_PAUSE_S = 2.5; // shortest gap between bird calls
+const BIRD_SPREAD_S = 7; // plus up to this much more, so they arrive unevenly
+const MUSIC_LEVEL = 0.42; // the listener volume setting (▶ Music), one per device
 const CROWD_MAX = 0.22;
 const RAIN_MAX = 0.1;
 const FREEWHEEL_LEVEL = 0.075; // one tick at slow speed; quieter each as they blur into a buzz
@@ -29,6 +38,8 @@ export class Sound {
   private wind: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private hum: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private crowd: { gain: GainNode; swell: number } | null = null;
+  private road: { gain: GainNode; filter: BiquadFilterNode } | null = null;
+  private birds: GainNode | null = null;
   private rain: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private rainLevel = 0; // 0..1, set by the weather
   private noise: AudioBuffer | null = null;
@@ -36,7 +47,11 @@ export class Sound {
   private freewheel: GainNode | null = null;
   private nextTick = 0; // audio-clock time of the next pawl tick (0 = not ticking)
   private whistleAt = 0;
+  private birdAt = BIRD_PAUSE_S + Math.random() * BIRD_SPREAD_S;
   private on: boolean;
+  private musicOn = true;
+  /** The music closet: the theme tune and the riding score (src/music.ts); null until sound starts. */
+  music: Music | null = null;
   private unlocked = false; // the rider has clicked or pressed a key
 
   constructor(enabled: boolean) {
@@ -70,6 +85,13 @@ export class Sound {
     } else {
       this.ctx?.suspend();
     }
+    this.music?.setEnabled(on && this.musicOn);
+  }
+
+  /** Music on or off. Keeps playing (silently) when off, so switching back is instant. */
+  setMusic(on: boolean) {
+    this.musicOn = on;
+    this.music?.setEnabled(on && this.on);
   }
 
   private start() {
@@ -98,7 +120,14 @@ export class Sound {
     this.hum = this.noiseVoice('bandpass', 110, 6);
     const crowd = this.noiseVoice('bandpass', 1300, 0.9);
     this.crowd = { gain: crowd.gain, swell: 0 };
+    // Road noise: the gritty hiss of tyres over tarmac, above the hum.
+    this.road = this.noiseVoice('bandpass', 900, 0.7);
     this.rain = this.noiseVoice('highpass', 3200, 0.5);
+
+    // Birds sit outside the gravel: their own quiet bus, panned about.
+    this.birds = ctx.createGain();
+    this.birds.gain.value = 0.3;
+    this.birds.connect(this.master);
 
     // The freewheel: a few pre-rendered pawl ticks, played at the ratchet's rate.
     this.ticks = Array.from({ length: TICK_VARIANTS }, (_, i) => {
@@ -109,6 +138,11 @@ export class Sound {
     });
     this.freewheel = ctx.createGain();
     this.freewheel.connect(this.master);
+
+    // Music straight onto the master, so the commentator's duck reaches it too.
+    this.music = new Music(ctx, this.master);
+    this.music.setLevel(MUSIC_LEVEL);
+    this.music.setEnabled(this.on && this.musicOn);
   }
 
   /** How hard it's raining (0..1): a soft hiss that follows the weather. */
@@ -145,9 +179,11 @@ export class Sound {
     const w = Math.min(1, (v / 14) ** 2);
     glide(this.wind!.gain.gain, w * WIND_MAX);
     glide(this.wind!.filter.frequency, 250 + v * 55);
-    // Tyre hum: a low rumble that rises in pitch with speed.
+    // Road noise: the tyre hum and grit hiss, kept well under the wind.
     glide(this.hum!.gain.gain, Math.min(1, v / 6) * HUM_MAX);
     glide(this.hum!.filter.frequency, 70 + v * 9);
+    glide(this.road!.gain.gain, Math.min(1, (v / 9) ** 1.5) * ROAD_MAX);
+    glide(this.road!.filter.frequency, 600 + v * 45);
 
     // Rain: a steady hiss, a little brighter when it's heavy.
     if (this.rain) {
@@ -184,6 +220,56 @@ export class Sound {
         this.whistle(s.crowd);
         this.whistleAt = 1.5 + Math.random() * 4 / s.crowd;
       }
+    }
+
+    // Birds: the odd call from the side of the road. Fewer through a crowd's
+    // noise, and none in the rain when it's heavy.
+    this.birdAt -= dt;
+    if (this.birdAt <= 0) {
+      if (s.crowd < 0.6) this.bird();
+      const busy = 1 + Math.min(1, s.crowd) * 1.5 + this.rainLevel * 1.5;
+      this.birdAt = (BIRD_PAUSE_S + Math.random() * BIRD_SPREAD_S) * busy;
+    }
+  }
+
+  /** A short bird call: a few tiny whistled notes, panned to one side. */
+  private bird() {
+    const ctx = this.ctx!;
+    const t = ctx.currentTime + 0.02;
+    const base = 2300 + Math.random() * 1500;
+    const notes = 2 + Math.floor(Math.random() * 4);
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.65);
+    panner.connect(this.birds!);
+    const level = 0.05 + Math.random() * 0.05;
+    let at = t;
+    for (let i = 0; i < notes; i++) {
+      const f = base * (0.85 + Math.random() * 0.35);
+      const len = 0.05 + Math.random() * 0.07;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, at);
+      o.frequency.exponentialRampToValueAtTime(f * (0.9 + Math.random() * 0.4), at + len);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(level, at + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+      // A breath of noise on the attack softens the pure sine's whistle.
+      const n = ctx.createBufferSource();
+      n.buffer = this.noise;
+      const nf = ctx.createBiquadFilter();
+      nf.type = 'bandpass';
+      nf.frequency.value = f * 1.2;
+      nf.Q.value = 8;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(level * 0.35, at);
+      ng.gain.exponentialRampToValueAtTime(0.0001, at + 0.03);
+      o.connect(g).connect(panner);
+      n.connect(nf).connect(ng).connect(panner);
+      o.start(at);
+      o.stop(at + len + 0.02);
+      n.start(at, Math.random() * 1.5, 0.04);
+      at += len + 0.02 + Math.random() * 0.06;
     }
   }
 

@@ -61,7 +61,8 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Leaderboards and ghosts** (☰ Menu → 🏆): fastest whole-stage rides this week and all time, and see-through ghosts of your best ride or anyone's on the board.
 - **KOM segments**: the big climbs on each stage are timed. A panel shows the leaderboard as a climb approaches and your live gap to your best and last attempts on it, with a result banner at the top.
 - **Training plans** (📅 in Workouts): Get Started, FTP Builder, Hell of the West and American Climbs, with sessions that tick off as you ride.
-- **Sound**: wind, tyre hum, freewheel, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
+- **Sound**: wind, a soft tyre-and-road hum, freewheel, the odd bird from the roadside, crowds on the hairpins, interval beeps and a finish fanfare (☰ Menu or **M**).
+- **Music** (☰ Menu, **N**, or the finish card): the American Flyers theme tune at home and in the hub, and a riding score that follows your speed and the road; made in the browser with no files to download.
 - **Virtual shifting** (Settings): 24 virtual gears with on-screen −/+ buttons and keys; harder gears push back harder.
 - **First-ride setup**, **install as an app** (⬇ Install app, or Add to Home Screen), full screen (**F**), and bigger numbers on TVs.
 - **Tidy top bar**: Stage, Workouts, 👥, Connect trainer and your account stay in view; everything else is in the **☰ Menu**. The data blocks can sit across the top or in a column on the left or right (✎ → Position).
