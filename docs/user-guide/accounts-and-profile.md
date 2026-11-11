@@ -63,7 +63,7 @@ If you can't reach the server, the ride is kept on this device and uploads when 
 
 ## The profile
 
-Click your name (👤) to open your profile. It has these tabs:
+Click your name (the person icon) to open your profile. It has these tabs:
 
 ### Stats
 

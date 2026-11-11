@@ -610,7 +610,7 @@ button.icon { border-radius: 8px; }
   fill: none; stroke: currentColor; stroke-width: 1.9;
   stroke-linecap: round; stroke-linejoin: round;
 }
-.actions button:has(> .ico), #btn-account { display: inline-flex; align-items: center; gap: 7px; }
+.actions button:has(> .ico), #btn-account, #hub-account { display: inline-flex; align-items: center; gap: 7px; }
 #btn-riders { padding: 7px 9px; color: #eaf1ff; }
 #btn-riders.live { color: #4ade80; }
 /* How many other riders are here, in a small bright pill beside the icon. */

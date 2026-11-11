@@ -1,4 +1,4 @@
-// The always-present part of the account UI: the 👤 button in the top bar (its
+// The always-present part of the account UI: the account button in the top bar (its
 // name, and the admin button), and the three entry points that open the real
 // dialogs. The dialogs themselves (sign-in, profile with its charts, feedback,
 // the admin dashboard) are in ui.ts and load when one of these is used, or in a

@@ -1,4 +1,4 @@
-// The 👥 button and the "Riding now" list: who else is on this stage, how far
+// The Riders button and the "Riding now" list: who else is on this stage, how far
 // ahead or behind they are, and a button to start riding alongside them.
 
 import { account } from './cloud/account';

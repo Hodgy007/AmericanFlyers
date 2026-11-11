@@ -1,4 +1,4 @@
-// Ride-ons in the app: sending one (from the 👥 list, or R for the rider you're
+// Ride-ons in the app: sending one (from the Riders list, or R for the rider you're
 // drafting), showing the ones you get (a toast and an emoji floating over the
 // sender), and the pro team riders who give you one back now and then.
 

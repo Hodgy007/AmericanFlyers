@@ -215,7 +215,7 @@ The first visit downloads only what draws the first frame: the entry chunk (`mai
 | --- | --- | --- |
 | Neon SDK (`vendor-neon`) | `cloud/client.ts` | After the first frame (`restoreSession()`), or at the first database call. `neon` there is a small recording proxy: `neon.from(...).select(...)` and `neon.auth.getSession()` look and chain as before, and awaiting one loads the SDK and replays the calls on the real client. |
 | Sentry SDK | `monitoring.ts` | After the first frame (`startMonitoring()`). Until then two tiny listeners keep crashes, and hand them to Sentry once it is up. |
-| Sign-in, profile, feedback, admin dialogs | `cloud/ui.ts` (via `cloud/accountBar.ts`, which keeps the 👤 button and admin button) | First click on 👤, Admin, Feedback, or any `openSignIn()`. |
+| Sign-in, profile, feedback, admin dialogs | `cloud/ui.ts` (via `cloud/accountBar.ts`, which keeps the account button and admin button) | First click on the account button, Admin, Feedback, or any `openSignIn()`. |
 | Workout library and creator, `.zwo` import | `workouts/ui.ts` | First click on Workouts. |
 | Garage and store, with its 3D turntable | `garage/garageUi.ts`, `garage/preview.ts` | First click on Garage. |
 | Share card | `garage/shareUi.ts`, `shareCard.ts` (buttons in `garage/shareButton.ts`) | First press of a 📤 Share button. |
