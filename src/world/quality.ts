@@ -37,7 +37,7 @@ export interface TierSpec {
 export const TIER_SPECS: Record<Tier, TierSpec> = {
   low: { maxPixelRatio: 1, shadowSize: 1024, shadowRadius: 1, shadowBox: 30, cascade: null, post: false, bloom: 0, aa: 'none', ao: 0, ibl: false, cloudShadows: false, skyQuality: 0, scenery: SCENERY.low },
   medium: { maxPixelRatio: 1.5, shadowSize: 2048, shadowRadius: 1, shadowBox: 40, cascade: null, post: true, bloom: 0.5, aa: 'fxaa', ao: 0, ibl: false, cloudShadows: false, skyQuality: 1, scenery: SCENERY.medium },
-  high: { maxPixelRatio: 2, shadowSize: 2048, shadowRadius: 2, shadowBox: 30, cascade: { tile: 2048, ends: [22, 70], range: 190 }, post: true, bloom: 1, aa: 'smaa', ao: 0.5, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.high },
+  high: { maxPixelRatio: 2, shadowSize: 2048, shadowRadius: 2, shadowBox: 30, cascade: { tile: 2048, ends: [20, 60], range: 150 }, post: true, bloom: 1, aa: 'smaa', ao: 0.5, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.high },
   ultra: { maxPixelRatio: 2, shadowSize: 4096, shadowRadius: 1.6, shadowBox: 38, cascade: { tile: 2048, ends: [24, 75], range: 240 }, post: true, bloom: 2, aa: 'smaa', ao: 0.75, ibl: true, cloudShadows: true, skyQuality: 2, scenery: SCENERY.ultra },
 };
 
