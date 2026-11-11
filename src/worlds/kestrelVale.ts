@@ -183,7 +183,7 @@ const crestAt = (x: number, z: number) => {
   const ab = Math.abs(b);
   const envelope = Math.exp(-((a / 460) ** 2));
   // The ridge: low at the saddle where the road crosses, climbing to high ground either side; broken crags on top.
-  const crest = 175 * smoothstep(30, 300, ab) * (1 - 0.3 * smoothstep(900, 1900, ab));
+  const crest = 175 * smoothstep(30, 300, ab) * (1 - smoothstep(1000, 2100, ab));
   const crags = 55 * Math.max(0, fbm(a / 130 + 4, b / 130, 3) + 0.15) * smoothstep(150, 420, ab);
   const peaks = [-1, 1].reduce((m, s) => m + 70 * Math.exp(-(((a + 30) / 150) ** 2 + ((b - s * 360) / 170) ** 2)), 0);
   return (crest + crags + peaks) * envelope;

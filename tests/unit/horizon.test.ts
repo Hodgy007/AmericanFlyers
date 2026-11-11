@@ -22,6 +22,7 @@ describe('which horizon a stage gets', () => {
     'central-park': 'hills',
     'harrogate-worlds': 'hills',
     'pacific-coast': 'hills',
+    'kestrel-vale': 'hills', 'kestrel-vale-loop': 'hills', 'kestrel-vale-grand': 'hills',
     'hell-of-the-west': 'rockies',
     'hotw-morgul-bismark': 'rockies',
     'hotw-tour-of-the-moon': 'desert',

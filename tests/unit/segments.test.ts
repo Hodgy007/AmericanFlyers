@@ -36,6 +36,10 @@ const PINNED: Record<string, [string, string, number, number][]> = {
   ],
   'harrogate-worlds': [['harrogate-worlds:oak-beck-climb', 'Oak Beck climb', 9825, 10550]],
   'pacific-coast': [['pacific-coast:hurricane-point', 'Hurricane Point', 22025, 23450]],
+  // A world's routes share its segment ids: the climb is one leaderboard on the loop and the grand tour (and none on the free ride).
+  'kestrel-vale': [],
+  'kestrel-vale-loop': [['kestrel-vale:raven-scar', 'Raven Scar', 6025, 10175]],
+  'kestrel-vale-grand': [['kestrel-vale:raven-scar', 'Raven Scar', 6025, 10175]],
 };
 
 describe('segment detection on the built-in stages', () => {
@@ -70,7 +74,7 @@ describe('segment detection on the built-in stages', () => {
         expect(g.length, g.id).toBeGreaterThanOrEqual(circuit ? 300 : 750);
         expect(g.gain, g.id).toBeGreaterThanOrEqual(circuit ? 12 : 49);
         expect(g.shared).toBe(true);
-        expect(ids.has(g.id)).toBe(false);
+        if (!s.world) expect(ids.has(g.id)).toBe(false); // a world's routes share theirs (pinned above)
         ids.add(g.id);
       }
     }

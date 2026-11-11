@@ -21,6 +21,7 @@ describe('crowd cultures', () => {
       'hell-of-the-west': 'co', 'hotw-morgul-bismark': 'co', 'hotw-tour-of-the-moon': 'co',
       'mt-washington': 'us', 'mt-blue-sky': 'co', 'mt-diablo': 'us', flagstaff: 'co',
       'richmond-worlds': 'us', 'central-park': 'us', 'harrogate-worlds': 'gb', 'pacific-coast': 'us',
+      'kestrel-vale': 'gb', 'kestrel-vale-loop': 'gb', 'kestrel-vale-grand': 'gb',
     };
     for (const s of STAGES) expect(cultureOf(s), s.id).toBe(want[s.id]);
   });

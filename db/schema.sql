@@ -5,7 +5,7 @@
 -- The browser talks to these tables through the Neon Data API as the
 -- "authenticated" role; row-level security keeps each rider to their own rows.
 --
--- Schema version: 2026-11-09 rev-1
+-- Schema version: 2026-11-11 rev-1
 -- db/schema.sql is the source of truth for the database and is re-runnable:
 -- every change is written with "if not exists" / "create or replace" / guarded
 -- "do" blocks so applying it again on an existing branch is safe.
@@ -475,7 +475,9 @@ insert into public.stage_limits (stage_id, distance_m, min_finish_s, max_avg_kmh
   ('richmond-worlds', 32400, 2021, 58),
   ('central-park', 29400, 1831, 58),
   ('harrogate-worlds', 27800, 1858, 54),
-  ('pacific-coast', 39100, 2563, 55)
+  ('pacific-coast', 39100, 2563, 55),
+  ('kestrel-vale-loop', 15399, 1098, 51),
+  ('kestrel-vale-grand', 46196, 3286, 51)
 on conflict (stage_id) do update set distance_m = excluded.distance_m, min_finish_s = excluded.min_finish_s, max_avg_kmh = excluded.max_avg_kmh;
 
 -- Set by the app when a ride used the demo slider or ?timescale: such rides never count for times.
@@ -1401,7 +1403,8 @@ insert into public.segment_limits (segment_id, stage_id, length_m, min_s, max_av
   ('central-park:cat-hill', 'central-park', 1000, 68, 53),
   ('central-park:harlem-hill', 'central-park', 700, 55, 46),
   ('harrogate-worlds:oak-beck-climb', 'harrogate-worlds', 725, 87, 31),
-  ('pacific-coast:hurricane-point', 'pacific-coast', 1425, 151, 34)
+  ('pacific-coast:hurricane-point', 'pacific-coast', 1425, 151, 34),
+  ('kestrel-vale:raven-scar', 'kestrel-vale-loop', 4150, 476, 32) -- shared by every Kestrel Vale route with a finish (segment ids are scoped to the world)
 on conflict (segment_id) do update set stage_id = excluded.stage_id, length_m = excluded.length_m, min_s = excluded.min_s, max_avg_kmh = excluded.max_avg_kmh;
 
 -- Same idea as ride_is_plausible(): not a demo or sped-up effort, no average power above 2000 W, not under the floor,

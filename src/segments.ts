@@ -9,7 +9,7 @@ import type { Stage } from './stages';
 import { isClimb } from './world/roadside';
 
 export interface Segment {
-  /** Stable across builds: `<stageId>:<slug of the summit's name>` or `<stageId>:climb-<n>`. Pinned per built-in stage in tests/unit/segments.test.ts. */
+  /** Stable across builds: `<stageId>:<slug of the summit's name>` or `<stageId>:climb-<n>` (a world's routes share `<world id>:...`). Pinned per built-in stage in tests/unit/segments.test.ts. */
   id: string;
   stageId: string;
   name: string;
@@ -79,6 +79,8 @@ export function segmentsFor(stage: Stage): Segment[] {
 function findSegments(stage: Stage): Segment[] {
   const finish = stage.finish;
   if (finish === null) return [];
+  // A route inside a world scopes its segment ids to the world, so a climb ridden on two routes is one leaderboard (and one segment_limits row).
+  const scope = stage.world?.id ?? stage.id;
   const el = (d: number) => stage.elevationAt(d);
   const lap = stage.lapLength && stage.lapLength < finish ? stage.lapLength : undefined;
   const scanTo = lap ? lap + 400 : finish; // a circuit's climb can run over the lap line
@@ -115,7 +117,7 @@ function findSegments(stage: Stage): Segment[] {
     const length = end - first.start;
     if (length < SEGMENT_MIN_LENGTH || gain < SEGMENT_MIN_GAIN) return [];
     return [{
-      id: `${stage.id}:main`, stageId: stage.id, name: MAIN_NAMES[stage.id] ?? shortStageName(stage.name),
+      id: `${scope}:main`, stageId: stage.id, name: MAIN_NAMES[stage.id] ?? shortStageName(stage.name),
       start: first.start, end, length, gain, avg: gain / length, max: steepest(el, first.start, end, gain / length),
       passes: 1, shared: true,
     }];
@@ -183,7 +185,7 @@ function findSegments(stage: Stage): Segment[] {
     used.add(key);
     const { c } = p;
     return {
-      id: `${stage.id}:${key}`, stageId: stage.id, name,
+      id: `${scope}:${key}`, stageId: stage.id, name,
       start: c.start, end: c.end, length: c.end - c.start, gain: c.gain, avg: c.gain / (c.end - c.start),
       max: steepest(el, c.start, c.end, c.avg), lap, passes, shared: !stage.uploaded,
     };

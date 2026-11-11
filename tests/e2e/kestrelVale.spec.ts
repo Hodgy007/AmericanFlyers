@@ -3,15 +3,15 @@ import { expect, test } from '@playwright/test';
 import { mockNeon } from './mockNeon';
 
 // Kestrel Vale (src/worlds/kestrelVale.ts): the world's three routes are listed in the hub, and four places on the lap (the
-// village, the lakeshore, the climb and the Raven Gap cutting) load on Low and Medium without page or shader errors. Each
+// village, the lakeshore bend towards the water, the climb and the Raven Gap cutting) load on Low and Medium without page or shader errors. Each
 // place is saved as test-results/kestrel-<tier>-<km>.png for a human (or an agent) to look at: the village, the water, the
 // climb and the cutting should read as coherent places, with no floating road, no water over the road and no road under the ground.
 
 test.use({ viewport: { width: 800, height: 450 }, deviceScaleFactor: 1 });
 
 const IDS = ['kestrel-vale', 'kestrel-vale-loop', 'kestrel-vale-grand'];
-/** Start points, km along the first lap: the village's high street, the lakeshore, the climb's third hairpin and the cutting. */
-const SPOTS = [0.3, 2.5, 8, 10.4];
+/** Start points, km along the first lap: the village's high street, the lakeshore bend towards the water, the climb's third hairpin and the cutting. */
+const SPOTS = [0.3, 1.8, 8, 10.4];
 
 async function signedIn(page: import('@playwright/test').Page) {
   await mockNeon(page, { signedIn: true });
@@ -51,9 +51,11 @@ for (const tier of ['low', 'medium']) {
       await page.locator('#hub-go').evaluate((el) => (el as HTMLElement).click());
       await expect(page.locator('#hub')).toBeHidden();
       // The lazy chunks (the splatted ground, and by the village the code-built terraces and church) arrive after the first frame.
-      await expect.poll(() => fetched.some((f) => /^ground-/.test(f)) && (km > 3 || fetched.some((f) => /^monuments-/.test(f))), { timeout: 120_000 }).toBe(true);
+      await expect.poll(() => fetched.some((f) => /^ground-/.test(f)) && (km > 1 || fetched.some((f) => /^monuments-/.test(f))), { timeout: 120_000 }).toBe(true);
       await page.waitForTimeout(Number(process.env.KESTREL_SETTLE_MS ?? 25_000)); // terrain tiles build a few a frame, at one frame a second here
       mkdirSync('test-results', { recursive: true });
+      // Only the 3D scene: the HUD panels would cover the places being looked at.
+      await page.addStyleTag({ content: 'body * { visibility: hidden !important } #scene { visibility: visible !important }' });
       await page.screenshot({ path: `test-results/kestrel-${tier}-${km}.png` });
       expect(errors, errors.join('\n')).toEqual([]);
     });
