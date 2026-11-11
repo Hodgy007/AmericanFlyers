@@ -51,6 +51,7 @@ export function initRidersUi(o: Options) {
     badge.hidden = n === 0;
     btn.classList.toggle('live', n > 0);
     btn.title = n ? `${n} other rider${n === 1 ? '' : 's'} on this stage` : 'Riding together';
+    btn.setAttribute('aria-label', btn.title);
   };
 
   o.presence.onChange = (riders) => {

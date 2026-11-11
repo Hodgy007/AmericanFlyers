@@ -301,9 +301,8 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
 /* Leave room for it beside the heading (h2s carry the dialog's own top margin). A header row keeps its
    action buttons clear of the corner: it pads on the right so nothing runs under the ✕. Keyed on the
    injected button itself, since prepending it makes the header no longer the dialog's first child. */
-dialog > h2:first-child, dialog > form > h2:first-child { padding-right: 40px; }
 dialog:has(> .dialog-close) .dialog-head { padding-right: 46px; }
-dialog:has(> .dialog-close) > h2:first-child, dialog:has(> .dialog-close) > form > h2:first-child { padding-right: 40px; }
+dialog:has(> .dialog-close) > h2:first-of-type, dialog:has(> .dialog-close) > form > h2:first-child { padding-right: 40px; }
 dialog h2 { margin: 0 0 14px; font-size: 18px; }
 dialog label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
 dialog input[type='number'], dialog select {
