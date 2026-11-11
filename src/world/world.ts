@@ -7,6 +7,7 @@ import type { BikeStyle } from '../garage/style';
 import { Road, type MarkerConfig } from './road';
 import { Sky, HORIZON_COLOR } from './sky';
 import { Atmosphere } from './atmosphere';
+import { createCascadeLight, installCascades } from './cascades';
 import { installFog } from './fog';
 import { Graphics, probeSignals, wantsMsaa } from './graphics';
 import { TIER_SPECS, isChoice, type Tier } from './quality';
@@ -50,6 +51,7 @@ export class World {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
   private readonly sun = new THREE.DirectionalLight('#fff4e0', 2.6);
+  private readonly cascade = createCascadeLight();
   private readonly rider = new RiderModel();
   private readonly terrain: Terrain;
   private readonly road: Road;
@@ -82,6 +84,7 @@ export class World {
   constructor(canvas: HTMLCanvasElement, markers: MarkerConfig) {
     const signals = probeSignals(); // what the device is, for the graphics tier
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: wantsMsaa(signals), powerPreference: 'high-performance' });
+    installCascades(); // three cascades in the shadow chunk, with a bias that follows each one's texel size (High and Ultra)
     installFog(); // the height fog and cloud shadows are shader chunks: in place before any material compiles
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -97,7 +100,7 @@ export class World {
     s.left = -30; s.right = 30; s.top = 30; s.bottom = -30; s.near = 1; s.far = 400;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
-    this.scene.add(this.sun, this.sun.target);
+    this.scene.add(this.sun, this.sun.target, this.cascade); // (the cascaded sun stands in for the sun on High and Ultra; graphics.ts picks)
 
     this.road = new Road(this.renderer, markers);
     this.terrain = new Terrain(this.renderer);
@@ -109,7 +112,7 @@ export class World {
     this.atmosphere.restage(currentStage());
     this.water.restage(currentStage());
     // Graphics tier (Low to Ultra, Auto by default): shadows, post-processing, sky detail, render scale. See graphics.ts.
-    this.gfx = new Graphics({ renderer: this.renderer, scene: this.scene, camera: this.camera, sun: this.sun, sky: this.sky }, signals);
+    this.gfx = new Graphics({ renderer: this.renderer, scene: this.scene, camera: this.camera, sun: this.sun, cascade: this.cascade, sky: this.sky }, signals);
     this.gfx.attach(this.atmosphere);
     this.camera.layers.enable(COVER_LAYER);
     this.applyScenery();
