@@ -30,8 +30,13 @@ import harrogateRoute from './routes/real/harrogate-worlds';
 import pacificRoute from './routes/real/pacific-coast';
 import { sinkInto } from './world/waterTypes';
 import { skylineHeight, skylineTowers } from './world/skyline';
+import { KESTREL_ROUTES } from './worlds/kestrelVale';
+import { GANTRY, finishArch, monumentAt, namedPlaces, pchip, perLap, roadLocator, roadTrace, startArch, terraceRow } from './stageKit';
 
-interface LandmarkBase {
+// The helpers live in stageKit.ts (a world file imports them from there, not from here: see that file's header).
+export { GANTRY, finishArch, monumentAt, namedPlaces, pchip, roadLocator, roadTrace, startArch };
+
+export interface LandmarkBase {
   every: number; // metres between repeats
   first: number; // distance of the first one
   side: -1 | 0 | 1; // -1 left, 1 right, 0 on the road itself
@@ -162,6 +167,11 @@ export interface Stage {
   crowdSpots?: number[];
   /** False for a stage with named places but no climb to speak of (a circuit, a coast road): no painted words, campers or hairpin rails. */
   climb?: false;
+  /**
+   * Set for a route inside a world (worlds/types.ts): the world's id, this route's id and where it starts round the world's lap (m).
+   * Segment ids and limits are scoped to the world (`<world id>:<slug>`), so a climb ridden on two routes is one leaderboard.
+   */
+  world?: { id: string; route: string; start: number };
 }
 
 // --------------------------------------------------------------- helpers ----
@@ -193,10 +203,6 @@ export const FARM_LANDMARKS: LandmarkKind[] = [
 const lowlandHills = (x: number, z: number) =>
   6 + fbm(x / 850, z / 850, 4) * 105 + (1 - Math.abs(fbm(x / 320 + 41, z / 320 - 7, 3))) * 28;
 
-/** A code-built landmark standing once at course distance `d` (see world/monuments.ts). `size` is its height in metres. */
-export const monumentAt = (model: MonumentId, d: number, side: -1 | 1, offset: number, size: number, extra: Partial<LandmarkBase> & { options?: MonumentOptions } = {}): LandmarkKind =>
-  ({ model, first: d, every: 1e9, side, offset, size, clearance: 8, ...extra });
-
 /** A code-built landmark at a fixed place in the world (see `LandmarkBase.world`), in range the whole stage: `size` is its height in metres. */
 const monumentInWorld = (model: MonumentId, world: NonNullable<LandmarkBase['world']>, size: number, extra: Partial<LandmarkBase> & { options?: MonumentOptions } = {}): LandmarkKind =>
   ({ model, first: 0, every: 1e9, side: 0, offset: 0, size, clearance: 1, reach: 20000, world, ...extra });
@@ -204,9 +210,6 @@ const monumentInWorld = (model: MonumentId, world: NonNullable<LandmarkBase['wor
 /** The summit board at the top of a European climb, just before the finish line, on the right. */
 const colSign = (finish: number, options: MonumentOptions): LandmarkKind => monumentAt('col-sign', finish - 55, 1, 8.5, 2.6, { yaw: -0.35, clearance: 6, options });
 
-export const GANTRY: LandmarkKind = { file: 'gantry.glb', every: 5000, first: 30, side: 0, span: 'across', offset: 0, size: 13, clearance: 12 };
-export const startArch: LandmarkKind = { ...GANTRY, every: 1e9 };
-export const finishArch = (at: number): LandmarkKind => ({ ...GANTRY, first: at, every: 1e9 });
 
 // ------------------------------------------------------------- Heartland ----
 
@@ -858,37 +861,6 @@ export function fitPlane(pts: [number, number, number][]) {
 // loop and stage 2's road are the real ones (see routes/real/); stage 1's
 // elevation is shaped from published figures.
 
-/** Monotone cubic interpolation (Fritsch–Carlson) through (x, y) knots: no overshoot, no flat spots. */
-function pchip(knots: [number, number][]) {
-  const n = knots.length;
-  const h: number[] = [];
-  const dl: number[] = [];
-  for (let i = 0; i < n - 1; i++) {
-    h.push(knots[i + 1][0] - knots[i][0]);
-    dl.push((knots[i + 1][1] - knots[i][1]) / h[i]);
-  }
-  const m: number[] = new Array(n);
-  m[0] = dl[0];
-  m[n - 1] = dl[n - 2];
-  for (let i = 1; i < n - 1; i++) {
-    if (dl[i - 1] * dl[i] <= 0) m[i] = 0;
-    else {
-      const w1 = 2 * h[i] + h[i - 1];
-      const w2 = h[i] + 2 * h[i - 1];
-      m[i] = (w1 + w2) / (w1 / dl[i - 1] + w2 / dl[i]);
-    }
-  }
-  return (x: number) => {
-    if (x <= knots[0][0]) return knots[0][1];
-    if (x >= knots[n - 1][0]) return knots[n - 1][1];
-    let i = 0;
-    while (knots[i + 1][0] < x) i++;
-    const t = (x - knots[i][0]) / h[i];
-    const t2 = t * t, t3 = t2 * t;
-    return (2 * t3 - 3 * t2 + 1) * knots[i][1] + (t3 - 2 * t2 + t) * h[i] * m[i] + (-2 * t3 + 3 * t2) * knots[i + 1][1] + (t3 - t2) * h[i] * m[i + 1];
-  };
-}
-
 // ---- Stage 1: Morgul-Bismark ----
 //
 // The Morgul-Bismark loop around Superior, south of Boulder, used by the Red Zinger and Coors
@@ -1127,69 +1099,6 @@ function circuitGeometry(route: RealRouteData, lap: number, laps: number, maxGra
     elevationAt: (d) => lapElevation(((d % lap) + lap) % lap),
   };
 }
-
-/** The road's (x, z) every `step` metres from the course start (x east, z south), by integrating its heading. */
-function roadTrace(headingAt: (d: number) => number, length: number, step = 20): [number, number][] {
-  const out: [number, number][] = [[0, 0]];
-  let x = 0, z = 0;
-  for (let d = 0; d < length; d += step) {
-    const h = headingAt(d + step / 2);
-    x += Math.cos(h) * step;
-    z += Math.sin(h) * step;
-    out.push([x, z]);
-  }
-  return out;
-}
-
-/** The course distance and lateral offset (+ right, as terrain.ts measures it) of the nearest road point to (x, z): for ground beyond `Scenery.roadside`'s reach. */
-function roadLocator(trace: readonly [number, number][], step: number) {
-  const CELL = 300;
-  const grid = new Map<string, number[]>();
-  trace.forEach(([x, z], i) => {
-    const key = `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
-    const cell = grid.get(key);
-    if (cell) cell.push(i); else grid.set(key, [i]);
-  });
-  return (x: number, z: number): { d: number; lateral: number } => {
-    const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
-    let best = -1, bestD2 = Infinity;
-    for (let ring = 0; ring < 14 && best < 0; ring++) {
-      for (let i = cx - ring; i <= cx + ring; i++) {
-        for (let j = cz - ring; j <= cz + ring; j++) {
-          if (ring && Math.abs(i - cx) < ring && Math.abs(j - cz) < ring) continue;
-          for (const k of grid.get(`${i},${j}`) ?? []) {
-            const d2 = (trace[k][0] - x) ** 2 + (trace[k][1] - z) ** 2;
-            if (d2 < bestD2) { bestD2 = d2; best = k; }
-          }
-        }
-      }
-    }
-    if (best < 0) return { d: 0, lateral: 0 };
-    const a = trace[Math.max(0, best - 1)], b = trace[Math.min(trace.length - 1, best + 1)];
-    const vx = b[0] - a[0], vz = b[1] - a[1];
-    const len = Math.hypot(vx, vz) || 1;
-    return { d: best * step, lateral: ((trace[best][0] - x) * vz - (trace[best][1] - z) * vx) / len };
-  };
-}
-
-/** Spreads landmark kinds over every lap of a circuit: `first` and `until` are course distances within the lap. */
-const perLap = (kinds: LandmarkKind[], lap: number, laps: number): LandmarkKind[] =>
-  kinds.flatMap((k) => Array.from({ length: laps }, (_, i) => ({ ...k, first: k.first + i * lap, until: (k.until ?? lap) + i * lap })));
-
-/** A street of terraced houses along one side of the road from lap metre `from` to `to`: `seeds` alternate along it, so it is not one house repeated. */
-function terraceRow(from: number, to: number, side: -1 | 1, material: 'brick' | 'stone', seeds: number[], spacing = 44): LandmarkKind[] {
-  return seeds.map((seed, i) => ({
-    ...monumentAt('terrace', from + i * spacing, side, 21, TERRACE_HEIGHT, { options: { seed, material }, clearance: 16 }),
-    every: spacing * seeds.length,
-    until: to,
-  }));
-}
-/** A terrace's height as built (monumentCity.ts), so it is not stretched: about 14 m, chimneys included. */
-const TERRACE_HEIGHT = 14;
-
-/** Named places (announced as "next: ...", not drawn), for a circuit's every lap. */
-const namedPlaces = (places: [number, string][], lap: number, laps: number): StageSign[] =>
-  Array.from({ length: laps }, (_, i) => places.map(([d, name]) => ({ d: d + i * lap, label: '', name, style: 'hairpin' as const, numbered: false }))).flat();
 
 // ---- Richmond: the 2015 Worlds road-race circuit ----
 //
@@ -1500,7 +1409,7 @@ const pacificCoast: Stage = {
   },
 };
 
-export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan, mtWashington, mtBlueSky, mtDiablo, flagstaff, richmondWorlds, centralPark, harrogateWorlds, pacificCoast];
+export const STAGES: Stage[] = [heartland, route66, morgulBismark, tourOfTheMoon, hellOfTheWest, alpe, stelvio, ventoux, tourmalet, zoncolan, mtWashington, mtBlueSky, mtDiablo, flagstaff, richmondWorlds, centralPark, harrogateWorlds, pacificCoast, ...KESTREL_ROUTES];
 
 export function stageById(id: string | null): Stage {
   return STAGES.find((s) => s.id === id) ?? heartland;
