@@ -445,7 +445,9 @@ function frame(rafNow: number) {
     loopGuard.run('sim', () => simulate(now, { maxCatchUpMs: RAF_CATCHUP_MS }));
     loopGuard.run('snapshot', () => snapshotTick(now));
     loopGuard.run('render', () => {
-      const dt = Math.min(0.1, Math.max(0, (now - lastRender) / 1000)) * TIME_SCALE; // (what the world animates by: per drawn frame)
+      // What the world animates by, per drawn frame. Real elapsed time (up to a second), not a 0.1 s clamp: the ride itself now keeps
+      // real time on a slow device, so the chase camera's easing has to as well or the rider pulls away from it.
+      const dt = Math.min(1, Math.max(0, (now - lastRender) / 1000)) * TIME_SCALE;
       lastRender = now;
       render(now, dt);
     });

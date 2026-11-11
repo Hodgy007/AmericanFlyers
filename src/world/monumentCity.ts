@@ -9,7 +9,9 @@ import { DEFAULT_LOOP, skylineTowers } from './skyline';
 
 // --------------------------------------------------------------- skyline ----
 
-const FACADES = ['#8d8f93', '#a79f92', '#b3a48a', '#7e8794', '#9aa7b3', '#6f7a86', '#c0b4a0', '#8a8378'];
+// Darker and bluer than the stone they stand for: seen through a few hundred metres of haze against a pale sky, a mid-grey box vanishes.
+const FACADES = ['#5f6670', '#7a7468', '#857a66', '#4f5a6a', '#627486', '#44505e', '#8d8372', '#615c54'];
+const GLASS = '#1d2a38'; // the bands of windows
 const SKYLINE_SINK = 12; // the towers' feet go this far below the ground, so none floats
 
 /**
@@ -21,6 +23,9 @@ export function buildSkyline(o: MonumentOptions = {}): THREE.Group {
   for (const t of skylineTowers(o.loop ?? DEFAULT_LOOP, o.seed ?? 1)) {
     const col = FACADES[Math.min(FACADES.length - 1, Math.floor(t.tone * FACADES.length))];
     k.box(t.w, t.h + SKYLINE_SINK, t.d, t.x, -SKYLINE_SINK, t.z, col, t.ry, 0.8);
+    // Bands of windows: a dark belt every few storeys, a hair proud of the wall, so a tower reads as a building and not a block.
+    const every = t.h > 110 ? 30 : 22; // few and tall: the whole skyline stays near 15,000 triangles
+    for (let y = 10; y < t.h - 6; y += every) k.box(t.w + 0.5, every * 0.45, t.d + 0.5, t.x, y, t.z, mix(col, GLASS, 0.6), t.ry, 0.9);
     if (t.crown) {
       // Setbacks: the tall ones step in twice, like the prewar towers they stand for.
       k.box(t.w * 0.72, t.h * 0.12, t.d * 0.72, t.x, t.h, t.z, mix(col, '#ffffff', 0.12), t.ry, 1);

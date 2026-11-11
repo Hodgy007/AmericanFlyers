@@ -24,7 +24,8 @@ describe('every monument builder', () => {
       expect(meshes, 'draw calls: one merged mesh plus a few text boards').toBeLessThanOrEqual(3);
       const tris = triangleCount(g);
       expect(tris).toBeGreaterThan(20);
-      expect(tris).toBeLessThan(id === 'flatirons' ? 20000 : TRI_BUDGET);
+      // (the skyline is a whole city in one landmark: its window bands roughly double its boxes)
+      expect(tris).toBeLessThan(id === 'flatirons' ? 20000 : id === 'manhattan-skyline' ? 18000 : TRI_BUDGET);
       const box = bounds(g);
       expect([box.min.x, box.min.y, box.max.y, box.max.x].every(Number.isFinite)).toBe(true);
       expect(box.max.y, 'it has height').toBeGreaterThan(1);
