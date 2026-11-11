@@ -192,7 +192,8 @@ export class RiderModel {
     if (look.frame) this.frameMat = this.recolour(this.frameMat, M.frame, look.frame, { metalness: 0.35, roughness: 0.35 });
     if (look.jersey) this.jerseyMat = this.recolour(this.jerseyMat, M.jersey, look.jersey, { roughness: 0.7 });
     let dress = false;
-    if (look.kit !== undefined) { this.kit = look.kit; dress = true; }
+    // Compared by value: a pooled model is dressed again for every new rider, usually in the same kit.
+    if (look.kit !== undefined && (look.kit?.[0] !== this.kit?.[0] || look.kit?.[1] !== this.kit?.[1])) { this.kit = look.kit; dress = true; }
     if (look.style) {
       const next = cleanStyle(look.style);
       const changed = (Object.keys(next) as (keyof BikeStyle)[]).filter((k) => next[k] !== this.style[k]);
