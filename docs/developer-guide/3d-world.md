@@ -16,7 +16,7 @@ Source: [`src/world/`](../../src/world/).
 Lighting:
 
 - A **hemisphere light** (sky blue above, green-brown below, intensity 1.1). On High and Ultra the sky itself lights things (see image-based lighting below) and this is turned down to 0.4× by day, kept in full at night.
-- A **directional sun** (`#fff4e0`, intensity 2.6). Its shadow map is 1,024 to 4,096 px (by tier) and covers a 60 m box (76 m on Ultra) centred on the rider. Each frame `Graphics.fitShadow()` moves the box to the rider **snapped to whole shadow-map texels in light space**, so the shadow edges don't shimmer as you ride.
+- A **directional sun** (`#fff4e0`, intensity 2.6). On Low and Medium its shadow map (1,024 or 2,048 px) covers a 60 m box (80 m on Medium) centred on the rider. On High and Ultra a cascaded sun takes its place ([`cascades.ts`](../../src/world/cascades.ts)): three 2,048 px cascades fitted to the camera's view, out to 150 m (High) or 240 m (Ultra), built on three's `SunLight` add-on with our own fit; `?cascades=off` falls back to the box, for measuring. Each frame `Graphics.fitShadow()` moves the box to the rider **snapped to whole shadow-map texels in light space**, so the shadow edges don't shimmer as you ride.
 
 The distance fades into **height fog** (see [Haze and height fog](#haze-and-height-fog)). The hemisphere light, sun, fog and exposure above are the clear-day values; at other times of day and in other weather they are set by the atmosphere (see below).
 

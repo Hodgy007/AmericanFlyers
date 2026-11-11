@@ -27,7 +27,9 @@ Four things run on a timer or event, alongside the frame loop:
 
 | Timer | Period | What it does | Where |
 | --- | --- | --- | --- |
-| Frame loop | Every animation frame (`requestAnimationFrame`) | Advances the ride, updates the 3D scene, and redraws the elevation strip every 200 ms. | `frame()` in `src/main.ts` |
+| Frame loop | Every animation frame (`requestAnimationFrame`) | Steps the ride by the real time that has passed (`simulate()`), then draws the 3D scene and, every 200 ms, the HUD and the elevation strip (`render()`). | `frame()` in `src/main.ts` |
+| Background tick | 250 ms, from a Web Worker (`src/tickWorker.ts`) | While the tab is hidden: steps the ride (no drawing) and runs trainer control, so a ride carries on behind another tab. | `main.ts` |
+| Ride snapshot | About 20 s, and when the page is hidden | Keeps a copy of the ride in this browser for the hub's resume prompt. | `src/rideSnapshot.ts` |
 | Trainer control | 1 second, and at once after a gear change | Sends grade (plus the virtual gear and the draft's wind factor) or ERG target power to the trainer, if they've changed. | `controlTrainer()` in `src/main.ts` |
 | Riding together | 2 seconds | Sends your position and fetches the other riders on your stage. | `Presence` in `src/cloud/presence.ts` |
 | Ride-ons | 4 seconds | Fetches ride-ons other riders have sent you (only while signed in and riding). | `RideOns` in `src/cloud/rideOns.ts` |
@@ -165,7 +167,7 @@ The diagram shows the main dependencies. A few are worth knowing about:
 
 Each frame, `frame(now)` in `src/main.ts` does this, in order:
 
-1. Clamps the frame time to 0–0.1 s, so a tab that was in the background can't jump ahead.
+1. Works out how much real time has passed since the last step (`src/rideClock.ts`) and runs the simulation steps below in substeps of at most 0.1 s (a catch-up is capped at 5 s; a gap of more than 10 s with no tick at all is dropped). Each part of the frame runs inside a guard (`src/loopGuard.ts`), so an exception is reported and the next frame still runs. Steps 2 to 8 are the simulation (`simStep()`); 9 to 11 are drawn once per frame (`render()`).
 2. In demo mode, sets the power from the demo slider (or from the workout target, with a small wobble). Otherwise it checks the trainer's last reading, and zeroes power and cadence after 3 seconds of silence.
 3. Gets the other riders on the stage (predicted for now from their last update), runs steering and auto-steer (`steering.ts`, then `world.setLane()`), and works out the draft from the rider just ahead, scaled by how far across from their line you are (`draft.ts`).
 3. Gets the other riders on the stage (predicted for now from their last update) and works out the draft from the rider just ahead (`draft.ts`). In a race (see [Racing and the tour](racing-and-tour.md)) it first steps the race (`race.update()`), and the pro teams are the racers; during the countdown your speed is held at zero.
