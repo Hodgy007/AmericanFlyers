@@ -142,7 +142,8 @@ export class LiveRace {
   /** Lets the rest of the field finish (fast), then returns everyone's stage result, best first. */
   results(): ResultRow[] {
     if (this.done) return this.done;
-    this.field.sim.runToEnd();
+    // A scheduled event keeps the fixed step its history used, so its bots finish the same on every client.
+    this.field.sim.runToEnd(undefined, this.clock ? EVENT_STEP : 0.5);
     const rows: ResultRow[] = [];
     for (const r of stageResults(this.course.lines)) {
       if (r.time === null) continue;

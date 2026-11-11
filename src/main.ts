@@ -11,7 +11,7 @@ import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
 import { stepSpeed, DEFAULT_PARAMS } from './physics';
 import { drawProfile } from './profile';
 import { World, type CameraMode } from './world/world';
-import { loadSettings, migrateSettings, saveSettings, type Settings } from './settings';
+import { loadSettings, migrateSettings, normalizeSettings, saveSettings, type Settings } from './settings';
 import { proTeamsOnRoad, type RideMode } from './rideMode';
 import { formatTime, Hud, openDataBlocks } from './hud';
 import { RideStats } from './stats';
@@ -79,9 +79,15 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
  */
 function closeButtons() {
   for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
-    if (dialog.querySelector(':scope > .dialog-close')) continue;
-    // Some dialogs already carry their own ✕ in the header: don't give them a second one.
-    if (dialog.querySelector('.dialog-head [aria-label="Close"]')) continue;
+    if (dialog.querySelector('.dialog-close')) continue;
+    // Dialogs that already carry a ✕ in their header keep that button (and its own close value), styled
+    // as the same red circle, so every dialog has exactly one.
+    const existing = dialog.querySelector<HTMLButtonElement>('.dialog-head [aria-label="Close"]');
+    if (existing) {
+      existing.classList.add('dialog-close');
+      existing.title ||= 'Close (Esc)';
+      continue;
+    }
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'dialog-close';
@@ -211,14 +217,24 @@ let lastSentGrade = NaN;
 let lastSentWatts = NaN;
 let lastSentWind = 1;
 let lastSentHeadwind = 0;
+let trainerControlFails = 0;
+/** A rejected or unanswered trainer command must not look like success: it could leave a hard interval on. */
+function trainerControlFailed(err: unknown) {
+  lastSentGrade = NaN; // retry the whole command next second
+  lastSentWatts = NaN;
+  trainerControlFails++;
+  if (trainerControlFails === 3) {
+    toast(`⚠️ Your trainer isn’t accepting resistance changes (${(err as Error)?.message ?? 'no answer'}). Another app may be holding it.`, 8000);
+  }
+}
 function controlTrainer() {
-  if (!trainer?.canControl) return;
+  if (!trainer?.canControl) { trainerControlFails = 0; return; }
   const watts = player && !player.done ? player.targetWatts() : null;
   if (watts !== null) {
     if (Math.abs(watts - lastSentWatts) < 1) return;
     lastSentWatts = watts;
     lastSentGrade = NaN; // resend the grade when ERG ends
-    trainer.setTargetPower(watts).catch(() => { lastSentWatts = NaN; });
+    trainer.setTargetPower(watts).then(() => { trainerControlFails = 0; }, trainerControlFailed);
     return;
   }
   const road = gradeAt(ride.distance) * 100 * (settings.difficulty / 100);
@@ -234,7 +250,7 @@ function controlTrainer() {
   lastSentWind = dragFactor;
   lastSentHeadwind = headwind;
   lastSentWatts = NaN;
-  trainer.setGrade(target, dragFactor, headwind).catch(() => { lastSentGrade = NaN; });
+  trainer.setGrade(target, dragFactor, headwind).then(() => { trainerControlFails = 0; }, trainerControlFailed);
 }
 setInterval(controlTrainer, 1000);
 
@@ -794,6 +810,7 @@ function finishWorkout() {
 interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
 
 function showSummary(flag: string, title: string, items: [string, string][], actions: SummaryAction[], extra: Node[] = []) {
+  summaryVersion++;
   $('finish').querySelector('.finish-card')!.classList.toggle('wide', extra.length > 0);
   $('finish-extra').replaceChildren(...extra);
   $('finish-note').textContent = '';
@@ -889,51 +906,67 @@ function buildActivity(opts: SaveOpts = {}): Activity {
     race_place: ride.racePlace > 0 ? ride.racePlace : null, // weekly challenges: race wins and podiums
     race_size: ride.raceSize > 0 ? ride.raceSize : null,
     pro_m: ride.proM > 0 ? Math.round(ride.proM) : null, // metres ridden with a pro team
-    samples: rec.samples,
+    samples: {
+      power: [...rec.samples.power], cadence: [...rec.samples.cadence], hr: [...rec.samples.hr],
+      speed: [...rec.samples.speed], distance: [...rec.samples.distance], elevation: [...rec.samples.elevation],
+    },
   };
 }
 
 let lastSavedSeconds = 0;
+let rideUserId: string | null = account()?.id ?? null;
+let summaryVersion = 0;
 
 /**
  * Saves the current ride to the rider's account (the same ride is updated
  * on later saves). Updates the note on the summary card if it's showing.
  */
 async function saveRide(opts: SaveOpts = {}): Promise<boolean> {
+  if (stats.seconds < MIN_RIDE_S || !rideUserId) return false;
+  const userId = rideUserId;
+  const activity = buildActivity(opts);
+  const rideId = recorder.id;
+  const seconds = stats.seconds;
+  const gen = signInGen;
+  const summary = summaryVersion;
+  const sameAccount = () => account()?.id === userId && signInGen === gen;
+  const sameRide = () => sameAccount() && recorder.id === rideId;
   const note = $('finish-note');
   const showNote = !opts.quiet && !$('finish').hidden;
-  if (stats.seconds < MIN_RIDE_S) return false;
-  if (!account()) return false; // an account is required to ride, so this is only a ride that outlived its session
+  const noteCurrent = () => showNote && sameRide() && summaryVersion === summary && !$('finish').hidden;
+  const alreadyQueued = rideQueue.list().some((r) => r.userId === userId && r.activity.id === activity.id);
+  const kept = rideQueue.add(userId, activity); // durable before the first await, including Reset and sign-out
+  if (kept !== 'failed' && !opts.recursive) lastSavedSeconds = Math.max(lastSavedSeconds, seconds);
   if (showNote) note.textContent = 'Saving to your rides…';
   try {
-    await saveActivity(buildActivity(opts));
-    lastSavedSeconds = stats.seconds;
-    accountUi.invalidate();
-    hubNotify('ride');
-    if (showNote) note.textContent = '✓ Saved to your rides';
+    if (kept === 'failed') await saveActivity(activity, userId);
+    else {
+      const r = await rideQueue.flush(userId);
+      if (!r.uploaded.some((a) => a.id === activity.id) || rideQueue.list().some((r) => r.userId === userId && r.activity.id === activity.id)) {
+        throw new Error('The ride is waiting on this device');
+      }
+    }
+    if (sameRide() && !opts.recursive) lastSavedSeconds = Math.max(lastSavedSeconds, seconds);
+    if (sameAccount()) { accountUi.invalidate(); hubNotify('ride'); }
+    if (noteCurrent()) note.textContent = '✓ Saved to your rides';
     // Credits and levels come from the server's count of your saved rides.
-    garage.afterRide().then((r) => {
-      if (!r || opts.quiet) return;
+    if (sameRide()) garage.afterRide().then((r) => {
+      if (!r || opts.quiet || !sameRide() || summaryVersion !== summary) return;
       const text = rewardText(r);
-      if (text && showNote) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
+      if (text && noteCurrent()) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
       if (r.levelAfter > r.levelBefore) toast(`⭐ Level ${r.levelAfter}!`, 5000);
     }).catch(() => { /* credits are a bonus */ });
     return true;
   } catch (e) {
-    // No connection (or the server didn't answer): keep it on this device and upload it later (src/rideQueue.ts).
-    const me = account()?.id;
-    const activity = buildActivity(opts);
-    const alreadyQueued = rideQueue.list().some((r) => r.activity.id === activity.id);
-    const kept = me ? rideQueue.add(me, activity) : 'failed';
+    if (!sameAccount()) return false; // the captured owner's queue is untouched by a session transition
     if (kept !== 'failed') {
-      lastSavedSeconds = stats.seconds; // queued: the 5-minute autosave needn't retry it (a later save replaces the copy)
       const msg = kept === 'trimmed'
         ? '📶 Couldn’t reach the server. Saved on this device (the summary; the second-by-second detail didn’t fit). It uploads when you’re back online.'
         : '📶 Couldn’t reach the server. Saved on this device: it uploads as soon as you’re back online.';
-      if (showNote) note.textContent = msg;
+      if (noteCurrent()) note.textContent = msg;
       else if (!opts.quiet || !alreadyQueued) toast(msg, 6000); // quiet saves (back to the hub, autosave) say so once per ride
       hubNotify('ride');
-    } else if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
+    } else if (noteCurrent()) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
     else if (!opts.quiet) toast(`Couldn’t save your ride: ${(e as Error).message}`);
     return false;
   }
@@ -947,19 +980,22 @@ const rideQueue = new RideQueue(
   (() => { try { return localStorage; } catch { return null; } })(),
   saveActivity,
   () => navigator.onLine !== false,
+  (userId) => account()?.id === userId,
 );
 
-async function uploadQueuedRides() {
+async function uploadQueuedRides(retry = false) {
   const me = account()?.id;
   if (!me || !rideQueue.count(me)) return;
-  const r = await rideQueue.flush(me);
+  const gen = signInGen;
+  const r = await rideQueue.flush(me, retry);
+  if (account()?.id !== me || signInGen !== gen) return;
   if (r.uploaded.length) {
     accountUi.invalidate();
     hubNotify('ride');
     garage.refresh(); // credits and levels for the uploaded rides
     toast(r.uploaded.length === 1 ? `✓ Uploaded your ride “${r.uploaded[0].title}” (saved while offline).` : `✓ Uploaded ${r.uploaded.length} rides saved while offline.`, 5000);
   }
-  for (const a of r.givenUp) toast(`Couldn’t upload “${a.title}” (${new Date(a.started_at).toLocaleDateString()}) after several tries, so it was removed from this device.`, 8000);
+  for (const a of r.paused) toast(`“${a.title}” is still saved on this device. Automatic uploads are paused after several tries; retry from your profile’s Activities tab.`, 8000);
 }
 window.addEventListener('online', () => { void uploadQueuedRides(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void uploadQueuedRides(); });
@@ -990,14 +1026,15 @@ setInterval(() => {
  * there by an older visit is still saved once at sign-in, then deleted, so it isn't lost.
  */
 async function savePendingRide() {
+  const me = account()?.id;
+  if (!me) return;
   let raw: string | null = null;
   try { raw = localStorage.getItem(OLD_PENDING_KEY); } catch { /* storage blocked */ }
   if (!raw) return;
   try {
-    await saveActivity(JSON.parse(raw) as Activity);
-    localStorage.removeItem(OLD_PENDING_KEY);
-    accountUi.invalidate();
-    toast('Your ride was saved to your profile.');
+    if (rideQueue.add(me, JSON.parse(raw) as Activity) === 'failed') throw new Error('This device has no room to keep your earlier ride safely');
+    if (localStorage.getItem(OLD_PENDING_KEY) === raw) localStorage.removeItem(OLD_PENDING_KEY);
+    await uploadQueuedRides();
   } catch (e) {
     toast(`Couldn’t save your earlier ride: ${(e as Error).message}`);
   }
@@ -1069,10 +1106,11 @@ function leaveRaceAndEvent() {
 }
 
 function resetRide() {
+  if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) void saveRide({ quiet: true });
   ai?.newRide();
   ensureAi();
-  if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) saveRide({ quiet: true });
   recorder = new RideRecorder();
+  rideUserId = account()?.id ?? null;
   workoutRecorder = null; // a new ride: any workout started on the last one is not part of this
   rideFlags.usedDemo = false;
   lastSavedSeconds = 0;
@@ -1105,6 +1143,7 @@ function stageClimbing(stage: Stage) {
 }
 
 function chooseStage(stage: Stage) {
+  resetRide(); // capture the outgoing stage before replacing the course
   setStage(stage);
   setMonitoringContext({ stage: stage.id });
   const url = new URL(location.href);
@@ -1113,7 +1152,6 @@ function chooseStage(stage: Stage) {
   history.replaceState(null, '', url);
   world.restage(markerConfig());
   updateTourJersey();
-  resetRide();
   presence.restage();
   peloton.reset(0);
   ghost = null;
@@ -1333,7 +1371,8 @@ async function joinEvent(row: EventRow) {
   const clock = () => secondsSinceStart(ev, serverNow());
   if (ev.kind === 'race') {
     const { roster, course } = raceSetup(stage, ev.seed);
-    const field = peloton.startRace(course, roster, EVENT_REF_WKG, ev.seed);
+    // A scheduled event runs in shared conditions: the same field on every client, whatever the rider's weather.
+    const field = peloton.startRace(course, roster, EVENT_REF_WKG, ev.seed, 'event');
     race = new LiveRace(stage, field, new Map(), null);
     race.useEventClock(clock);
     attachRace(race);
@@ -1530,14 +1569,17 @@ function showFinish() {
       textContent: vsGhost < 0 ? `🏆 ${raceTime(-vsGhost)} faster than ${who}` : `${raceTime(vsGhost)} behind ${who}`,
     }));
   }
-  saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); showRank(); });
+  saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved && recorder.id === rideId) showRank(); });
 }
 
 /** After a whole-stage ride is saved: where it puts you on the leaderboard. */
 async function showRank() {
   if (!account() || !ride.finishTime || !leaderboardEligible(rideFlags)) return;
+  const rideId = recorder.id;
+  const gen = signInGen;
   try {
     const rows = await stageLeaderboard(currentStage().id);
+    if (recorder.id !== rideId || signInGen !== gen) return;
     const me = rows.find((r) => r.is_me);
     if (!me) return;
     const total = rows.length;
@@ -1823,9 +1865,20 @@ $('wp-down').addEventListener('click', () => { player?.nudge(-0.05); updateWorko
 $('wp-up').addEventListener('click', () => { player?.nudge(0.05); updateWorkoutPanel(); });
 $('stage-name').textContent = currentStage().name;
 $<HTMLInputElement>('demo-power').addEventListener('input', (e) => setDemoPower(Number((e.target as HTMLInputElement).value)));
+/** Ride shortcuts must never eat typing: not on the home page's sign-in form, nor in any field. */
+function editing(e: Event) {
+  if (document.body.classList.contains('at-home')) return true; // no ride to control there
+  const t = e.target as HTMLElement | null;
+  if (!t) return false;
+  if (t.isContentEditable) return true;
+  return !!t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]');
+}
+
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('dialog')) return;
   if (hub.isOpen()) return; // the hub has its own keys (Tab, arrows on the section tabs, Enter, Escape)
+  if (editing(e) || e.isComposing) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return; // leave browser and OS shortcuts alone
   if (e.key === 'c' || e.key === 'C') cycleCamera();
   if (e.key === 'm' || e.key === 'M') setSound(!settings.sound);
   if (e.key === 'n' || e.key === 'N') setMusic(!settings.music); // N: music, M: the ride sounds
@@ -1843,6 +1896,7 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   if ((e.target as HTMLElement).closest('dialog')) return;
+  if (editing(e)) return;
   if (e.key === 'ArrowLeft') steering.release(-1);
   if (e.key === 'ArrowRight') steering.release(1);
 });
@@ -1896,6 +1950,7 @@ const accountUi = initAccountUi({
   toast,
   // Signing out ends the ride (an account is required to ride): keep a ride worth keeping first.
   beforeSignOut: async () => { if (stats.seconds >= MIN_RIDE_S && stats.seconds > lastSavedSeconds) await saveRide({ quiet: true }); },
+  queuedRides: { count: () => rideQueue.count(account()?.id), retry: () => uploadQueuedRides(true) },
   // 📤 Share on a ride in your profile.
   shareRide: (a) => { import('./garage/shareUi').then((m) => shareRide(m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined), toast)); },
   context: () => ({
@@ -1965,7 +2020,9 @@ $('btn-rivals').addEventListener('click', () => {
 });
 /** After sign-in the database has the last word on the AI opt-in. Read it without loading the controller; that loads only if the rider has opted in. */
 function syncAiConsent() {
-  aiApiLazy.get().then((m) => m.loadConsent()).then((c) => {
+  const gen = signInGen;
+  aiApiLazy.get().then((m) => gen === signInGen && account() ? m.loadConsent() : null).then((c) => {
+    if (gen !== signInGen || !account()) return;
     if (c) patchAiSettings({ aiCoach: c.coach, aiRivals: c.rivals });
     ensureAi();
   }).catch(() => {});
@@ -2174,11 +2231,19 @@ initRidersUi({
 let signInGen = 0;
 onAccountChange(async (a) => {
   const gen = ++signInGen;
+  if ((a?.id ?? null) !== rideUserId) {
+    rideQueue.stop();
+    const hadOwner = !!rideUserId;
+    abandonRide(); // queues any unsaved outgoing ride under its original owner, never the new account
+    rideUserId = a?.id ?? null;
+    if (hadOwner) forgetLocalCopies();
+    ghost = null;
+    ghostSeq++;
+  }
   setMonitoringUser(a?.id ?? null);
   world.setRiderName(a?.name); // painted on the road on the big climbs ("ALLEZ SAM")
   if (!a) {
-    abandonRide(); // no account, no ride (the home page replaces the hub in src/home.ts)
-    forgetLocalCopies();
+    // The identity change above already ended any ride and cleared the previous owner's local copies.
     ghost = null;
     garage.refresh(); // signed out: back to the starter kit and no wallet
     return;
@@ -2189,7 +2254,8 @@ onAccountChange(async (a) => {
     if (gen !== signInGen) return;
     if (remote) {
       const migrated = migrateSettings(remote); // an account saved before the ride-mode choice moves to Solo once, too
-      settings = { ...settings, ...migrated };
+      // The account's copy is only a record: read it through the same bounds (and unknown-key) checks as local storage.
+      settings = normalizeSettings({ ...settings, ...migrated });
       saveSettings(settings);
       if (migrated !== remote) pushSettings(settings);
       updateProTeamsMenu();
@@ -2202,6 +2268,9 @@ onAccountChange(async (a) => {
       placeWorkoutPanel();
       lastSentGrade = NaN;
       setSound(settings.sound);
+      sound.setMusic(settings.music); // (settings was replaced above, so setMusic() would skip as "unchanged")
+      updateMusicMenu();
+      syncMusic();
       updateGearPanel();
       updateMapMenu();
       applyHudPosition(settings.hudPosition);
@@ -2223,7 +2292,7 @@ onAccountChange(async (a) => {
     syncAiConsent(); // the AI coach and rivals follow what the account agreed to (the database has the last word)
     toast(`Signed in as ${a.name}`);
   } catch (e) {
-    toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
+    if (gen === signInGen) toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
   }
 });
 // The hub (src/hub): sign-in leads here, and so does opening the app as a signed-in rider. Ride starts from here.

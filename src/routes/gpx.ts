@@ -16,6 +16,16 @@ const MIN_SPACING = 5; // metres between kept points
 const STEP = 5; // resampling step along the route, metres
 const MAX_GRADE = 0.25;
 
+/** Bounds on imported routes: enough for any real ride, small enough that a malformed file can't exhaust memory. */
+export const ROUTE_LIMITS = {
+  nodes: 200_000, // points in the file before thinning
+  points: 200_000, // kept points
+  distance: 500_000, // metres (500 km)
+  jump: 5_000, // metres between consecutive points before it is treated as a GPS glitch
+  samples: 100_001, // resampled points at STEP metres
+  elevation: 9_000, // metres above or below sea level
+} as const;
+
 // ----------------------------------------------------------------- parse ----
 
 export function parseGpx(fileName: string, text: string): StoredRoute {
@@ -25,22 +35,32 @@ export function parseGpx(fileName: string, text: string): StoredRoute {
   let nodes = Array.from(doc.getElementsByTagNameNS('*', 'trkpt'));
   if (nodes.length < 2) nodes = Array.from(doc.getElementsByTagNameNS('*', 'rtept'));
   if (nodes.length < 2) throw new Error('No track or route points found in this GPX file.');
+  if (nodes.length > ROUTE_LIMITS.nodes) throw new Error(`This route has too many points (at most ${ROUTE_LIMITS.nodes.toLocaleString()}).`);
 
   const raw = nodes.map((n): [number, number, number] => {
     const ele = n.getElementsByTagNameNS('*', 'ele')[0]?.textContent;
     return [Number(n.getAttribute('lat')), Number(n.getAttribute('lon')), ele ? Number(ele) : NaN];
-  }).filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+  }).filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 85 && Math.abs(lon) <= 180);
   const hasElevation = raw.filter((p) => Number.isFinite(p[2])).length > raw.length * 0.8;
 
   // Thin out points closer than MIN_SPACING and fill missing elevations.
   const points: [number, number, number][] = [];
   let lastEle = raw.find((p) => Number.isFinite(p[2]))?.[2] ?? 0;
+  let total = 0;
   for (const [lat, lon, ele] of raw) {
     const e = hasElevation && Number.isFinite(ele) ? ele : hasElevation ? lastEle : 0;
     lastEle = e;
     const prev = points[points.length - 1];
-    if (prev && haversine(prev[0], prev[1], lat, lon) < MIN_SPACING) continue;
+    if (prev) {
+      const d = haversine(prev[0], prev[1], lat, lon);
+      if (d < MIN_SPACING) continue;
+      if (d > ROUTE_LIMITS.jump) throw new Error('This GPX file jumps between distant points; it may not be a single continuous route.');
+      total += d;
+      if (total > ROUTE_LIMITS.distance) throw new Error(`This route is longer than ${ROUTE_LIMITS.distance / 1000} km.`);
+    }
+    if (Math.abs(e) > ROUTE_LIMITS.elevation) throw new Error('This GPX file has an out-of-range elevation.');
     points.push([round(lat, 6), round(lon, 6), round(e, 1)]);
+    if (points.length > ROUTE_LIMITS.points) throw new Error(`This route has too many points (at most ${ROUTE_LIMITS.points.toLocaleString()}).`);
   }
   if (points.length < 2) throw new Error('This route is too short.');
 
@@ -64,9 +84,34 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 const round = (v: number, dp: number) => Math.round(v * 10 ** dp) / 10 ** dp;
 
+/** Checks a stored or uploaded route's shape and size before it is built or saved. */
+export function validateRoute(route: StoredRoute): void {
+  if (!route || typeof route !== 'object' || typeof route.id !== 'string' || !route.id.trim() || !route.id.length ||
+      typeof route.name !== 'string' || !Array.isArray(route.points)) {
+    throw new Error('Invalid route.');
+  }
+  if (route.points.length < 2) throw new Error('This route is too short.');
+  if (route.points.length > ROUTE_LIMITS.points) throw new Error(`This route has too many points (at most ${ROUTE_LIMITS.points.toLocaleString()}).`);
+  let total = 0;
+  let prev: [number, number, number] | null = null;
+  for (const p of route.points) {
+    if (!Array.isArray(p) || p.length !== 3 || !p.every((v) => Number.isFinite(v))) throw new Error('Invalid route point.');
+    if (Math.abs(p[0]) > 85 || Math.abs(p[1]) > 180) throw new Error('This route is outside the map’s latitude and longitude range.');
+    if (Math.abs(p[2]) > ROUTE_LIMITS.elevation) throw new Error('This route has an out-of-range elevation.');
+    if (prev) {
+      const d = haversine(prev[0], prev[1], p[0], p[1]);
+      if (d > ROUTE_LIMITS.jump) throw new Error('This route jumps between distant points.');
+      total += d;
+      if (total > ROUTE_LIMITS.distance) throw new Error(`This route is longer than ${ROUTE_LIMITS.distance / 1000} km.`);
+    }
+    prev = p as [number, number, number];
+  }
+}
+
 // ------------------------------------------------------------------ build ----
 
 export function routeToStage(route: StoredRoute): Stage {
+  validateRoute(route);
   const pts = route.points;
   // Local flat projection: x = east, z = south (so turns aren't mirrored in the world).
   const [lat0, lon0] = pts[0];
@@ -82,7 +127,7 @@ export function routeToStage(route: StoredRoute): Stage {
   const length = ds[ds.length - 1];
 
   // Resample every STEP metres along the route.
-  const n = Math.max(2, Math.floor(length / STEP) + 1);
+  const n = Math.max(2, Math.min(ROUTE_LIMITS.samples, Math.floor(length / STEP) + 1));
   const X = new Float64Array(n), Z = new Float64Array(n), E = new Float64Array(n);
   for (let i = 0, j = 0; i < n; i++) {
     const d = Math.min(i * STEP, length);
@@ -138,7 +183,9 @@ export function routeToStage(route: StoredRoute): Stage {
   const plane = planePts.length >= 3 ? fitPlane(planePts) : () => 0;
   const hilliness = Math.max(0.15, Math.min(1, range / 900));
   const wildHeight = (wx: number, wz: number) => {
-    const base = Math.max(lo - 40, Math.min(hi + 150, plane(wx, wz)));
+    // A degenerate plane (a perfectly straight route, or identical samples) mustn't turn every vertex into NaN.
+    const planeH = plane(wx, wz);
+    const base = Math.max(lo - 40, Math.min(hi + 150, Number.isFinite(planeH) ? planeH : (lo + hi) / 2));
     return base + 20 + fbm(wx / 1300, wz / 1300, 4) * 260 * hilliness + (1 - Math.abs(fbm(wx / 420 + 7, wz / 420 - 3, 3))) * 170 * hilliness;
   };
 

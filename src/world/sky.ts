@@ -46,7 +46,7 @@ export class Sky {
   private horizon: HorizonChoice = 'none';
   private horizonStage = '';
   private mountainScale = 1;
-  private horizonKey = ''; // what is loaded or loading: `${kind}|${low}`
+  private horizonKey = ''; // loaded, loading or failed: `${kind}|${low}`
   private horizonGen = 0;
   private readonly shared = {
     zenith: { value: ZENITH_COLOR },
@@ -98,6 +98,7 @@ export class Sky {
   setQuality(q: number) {
     if (q === this.quality) return;
     this.quality = q;
+    this.invalidateHorizon();
     const m = this.dome.material as THREE.ShaderMaterial;
     m.defines = { CLOUD_OCT: 3 + q };
     m.needsUpdate = true;
@@ -105,6 +106,7 @@ export class Sky {
 
   /** Per stage: which panorama stands on the horizon and how tall the mountains are. The panorama loads on the next frame; until it has (or if it can't), the procedural ring shows. */
   setHorizon(horizon: HorizonChoice, mountainScale: number, stageId: string) {
+    if (horizon !== this.horizon || stageId !== this.horizonStage) this.invalidateHorizon();
     this.horizon = horizon;
     this.horizonStage = stageId;
     this.mountainScale = mountainScale;
@@ -171,8 +173,14 @@ export class Sky {
         this.bandTex = tex;
         this.buildBand();
       },
-      () => { if (gen === this.horizonGen) this.horizonKey = ''; }, // offline or missing: keep the ring, try again next stage
+      () => { /* keep the failed key and procedural ring until the stage or quality changes */ },
     );
+  }
+
+  private invalidateHorizon() {
+    this.horizonKey = '';
+    ++this.horizonGen; // invalidate pending loads before another frame can accept them
+    this.dropBand();
   }
 
   private dropBand() {

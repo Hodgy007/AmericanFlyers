@@ -124,7 +124,7 @@ export function createPost(renderer: THREE.WebGLRenderer, scene: THREE.Scene, ca
         bloom.threshold = grade.bloomThreshold;
         bloom.radius = grade.bloomRadius;
       }
-      const u = GRADE_SHADER.uniforms;
+      const u = gradePass.uniforms;
       u.sat.value = grade.saturation;
       u.contrast.value = grade.contrast;
       u.vignette.value = grade.vignette;

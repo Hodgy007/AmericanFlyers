@@ -42,20 +42,21 @@ export interface DataApi {
   fetch: typeof fetch;
 }
 
-async function rpc(api: DataApi, name: string, args: Record<string, unknown>, token: string) {
+async function rpc(api: DataApi, name: string, args: Record<string, unknown>, token: string, signal?: AbortSignal, timeoutMs = 8000) {
+  signal?.throwIfAborted();
   return api.fetch(`${api.url.replace(/\/$/, '')}/rpc/${name}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${token}` },
     body: JSON.stringify(args),
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
   });
 }
 
 /** Calls ai_claim with the rider's JWT. A token the database rejects is "sign in again"; anything odd is "unavailable". */
-export async function claim(api: DataApi, token: string, kind: string, rival: string | null): Promise<ClaimResult> {
+export async function claim(api: DataApi, token: string, kind: string, rival: string | null, signal?: AbortSignal): Promise<ClaimResult> {
   let res: Response;
   try {
-    res = await rpc(api, 'ai_claim', { p_kind: kind, p_rival: rival }, token);
+    res = await rpc(api, 'ai_claim', { p_kind: kind, p_rival: rival }, token, signal);
   } catch {
     return { kind: 'unavailable' };
   }
@@ -73,9 +74,9 @@ export async function claim(api: DataApi, token: string, kind: string, rival: st
 }
 
 /** After a rival ride that counts: adds the result and the note to the rider's memory of that rival. Failures are only logged. */
-export async function recordRival(api: DataApi, token: string, rival: string, won: boolean, note: string): Promise<boolean> {
+export async function recordRival(api: DataApi, token: string, rival: string, won: boolean, note: string, signal?: AbortSignal): Promise<boolean> {
   try {
-    const res = await rpc(api, 'rival_record', { p_rival: rival, p_won: won, p_note: note }, token);
+    const res = await rpc(api, 'rival_record', { p_rival: rival, p_won: won, p_note: note }, token, signal, 2000);
     return res.ok;
   } catch {
     return false;

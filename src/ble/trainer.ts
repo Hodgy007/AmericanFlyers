@@ -6,6 +6,7 @@
 // Falls back to the Cycling Power Service (read-only) for older firmware.
 
 import { onGattDrop } from './remembered';
+import { notificationView } from './notification';
 
 export interface TrainerReading {
   power?: number; // watts
@@ -101,8 +102,12 @@ async function connectFtms(
   cb: TrainerCallbacks,
 ): Promise<Trainer> {
   const bikeData = await service.getCharacteristic(FTMS_INDOOR_BIKE_DATA);
-  bikeData.addEventListener('characteristicvaluechanged', () => {
-    cb.onReading(parseIndoorBikeData(bikeData.value!));
+  bikeData.addEventListener('characteristicvaluechanged', (event) => {
+    const view = notificationView(event, bikeData);
+    if (!view) return;
+    let reading: TrainerReading;
+    try { reading = parseIndoorBikeData(view); } catch { return; }
+    cb.onReading(reading);
   });
   await bikeData.startNotifications();
 
@@ -113,8 +118,9 @@ async function connectFtms(
     // browser can't write to it), keep the connection for power and cadence rather than failing it.
     try {
       await control.start();
-      canControl = await control.send(new Uint8Array([OP_REQUEST_CONTROL]));
-      if (canControl) await control.send(new Uint8Array([OP_START_RESUME]));
+      await control.send(new Uint8Array([OP_REQUEST_CONTROL]));
+      await control.send(new Uint8Array([OP_START_RESUME]));
+      canControl = true;
     } catch {
       canControl = false;
     }
@@ -166,7 +172,7 @@ export function parseIndoorBikeData(view: DataView): TrainerReading {
 /** Serialises writes to the FTMS control point and waits for each response. */
 class ControlPoint {
   private queue: Promise<unknown> = Promise.resolve();
-  private pending: ((ok: boolean) => void) | null = null;
+  private pending: { opcode: number; respond(result: number): void } | null = null;
 
   constructor(private readonly char: BluetoothRemoteGATTCharacteristic | null) {}
 
@@ -174,29 +180,50 @@ class ControlPoint {
 
   async start() {
     if (!this.char) return;
-    this.char.addEventListener('characteristicvaluechanged', () => {
-      const v = this.char!.value!;
-      if (v.byteLength >= 3 && v.getUint8(0) === OP_RESPONSE) {
-        this.pending?.(v.getUint8(2) === RESULT_SUCCESS);
-        this.pending = null;
+    this.char.addEventListener('characteristicvaluechanged', (event) => {
+      const v = notificationView(event, this.char!);
+      if (v && v.byteLength >= 3 && v.getUint8(0) === OP_RESPONSE && this.pending?.opcode === v.getUint8(1)) {
+        this.pending.respond(v.getUint8(2));
       }
     });
     await this.char.startNotifications();
   }
 
-  send(payload: Uint8Array<ArrayBuffer>): Promise<boolean> {
-    const run = async () => {
-      if (!this.char) return false;
-      const response = new Promise<boolean>((resolve) => {
-        this.pending = resolve;
-        setTimeout(() => { if (this.pending === resolve) { this.pending = null; resolve(false); } }, 3000);
-      });
-      // Bluefy and other iPhone Web Bluetooth browsers only have the older writeValue(), which also
-      // writes with a response. Chrome has both.
-      if (typeof this.char.writeValueWithResponse === 'function') await this.char.writeValueWithResponse(payload);
-      else await this.char.writeValue(payload);
-      return response;
-    };
+  send(payload: Uint8Array<ArrayBuffer>): Promise<void> {
+    const run = () => new Promise<void>((resolve, reject) => {
+      const char = this.char;
+      if (!char) { reject(new Error('Trainer control is unavailable.')); return; }
+      const command = `Trainer command 0x${payload[0].toString(16).padStart(2, '0')}`;
+      let done = false;
+      let written = false;
+      let result: number | undefined;
+      const finish = (error?: unknown) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        if (this.pending === pending) this.pending = null;
+        if (error !== undefined) reject(error);
+        else resolve();
+      };
+      const complete = () => {
+        if (!written || result === undefined) return;
+        finish(result === RESULT_SUCCESS ? undefined : new Error(`${command} failed (FTMS result 0x${result.toString(16).padStart(2, '0')}).`));
+      };
+      const pending = {
+        opcode: payload[0],
+        respond: (code: number) => { if (result === undefined) { result = code; complete(); } },
+      };
+      this.pending = pending;
+      const timer = setTimeout(() => finish(new Error(`${command} timed out after 3 s.`)), 3000);
+      // Wait for both the write and its matching indication before starting another GATT write.
+      Promise.resolve().then(() => {
+        if (typeof char.writeValueWithResponse === 'function') return char.writeValueWithResponse(payload);
+        return char.writeValue(payload); // older iPhone Web Bluetooth browsers
+      }).then(() => {
+        written = true;
+        complete();
+      }, finish);
+    });
     const result = this.queue.then(run, run);
     this.queue = result.catch(() => false);
     return result;
@@ -212,8 +239,12 @@ async function connectCyclingPower(
 ): Promise<Trainer> {
   const measurement = await service.getCharacteristic(CPS_MEASUREMENT);
   const cadence = new CrankCadence();
-  measurement.addEventListener('characteristicvaluechanged', () => {
-    cb.onReading(parseCyclingPower(measurement.value!, cadence));
+  measurement.addEventListener('characteristicvaluechanged', (event) => {
+    const view = notificationView(event, measurement);
+    if (!view) return;
+    let reading: TrainerReading;
+    try { reading = parseCyclingPower(view, cadence); } catch { return; }
+    cb.onReading(reading);
   });
   await measurement.startNotifications();
 

@@ -5,37 +5,37 @@
 -- The browser talks to these tables through the Neon Data API as the
 -- "authenticated" role; row-level security keeps each rider to their own rows.
 --
--- Schema version: 2026-11-09 rev-1
+-- Schema version: 2026-11-11 rev-1
 -- db/schema.sql is the source of truth for the database and is re-runnable:
 -- every change is written with "if not exists" / "create or replace" / guarded
 -- "do" blocks so applying it again on an existing branch is safe.
 
 -- ------------------------------------------------------------ riders ----
 
-create table public.profiles (
+create table if not exists public.profiles (
   user_id text primary key default auth.user_id(),
   settings jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
-create table public.workouts (
+create table if not exists public.workouts (
   id text primary key,
   user_id text not null default auth.user_id(),
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
-create index workouts_user_idx on public.workouts (user_id);
+create index if not exists workouts_user_idx on public.workouts (user_id);
 
-create table public.routes (
+create table if not exists public.routes (
   id text primary key,
   user_id text not null default auth.user_id(),
   name text not null,
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
-create index routes_user_idx on public.routes (user_id);
+create index if not exists routes_user_idx on public.routes (user_id);
 
-create table public.activities (
+create table if not exists public.activities (
   id uuid primary key default gen_random_uuid(),
   user_id text not null default auth.user_id(),
   started_at timestamptz not null,
@@ -64,22 +64,23 @@ create table public.activities (
   finish_s integer check (finish_s > 0), -- moving time to the finish line, for rides of a whole stage
   created_at timestamptz not null default now()
 );
-create index activities_user_started_idx on public.activities (user_id, started_at desc);
+create index if not exists activities_user_started_idx on public.activities (user_id, started_at desc);
 
-create table public.ftp_history (
+create table if not exists public.ftp_history (
   id bigint generated always as identity primary key,
   user_id text not null default auth.user_id(),
   ftp integer not null check (ftp between 30 and 800),
   source text not null default 'manual' check (source in ('manual', 'ramp_test', 'signup')),
   recorded_at timestamptz not null default now()
 );
-create index ftp_history_user_idx on public.ftp_history (user_id, recorded_at);
+create index if not exists ftp_history_user_idx on public.ftp_history (user_id, recorded_at);
 
 do $$
 declare t text;
 begin
   foreach t in array array['profiles', 'workouts', 'routes', 'activities', 'ftp_history'] loop
     execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists %I on public.%I', t || '_owner', t);
     execute format('create policy %I on public.%I for all to authenticated using (user_id = (select auth.user_id())) with check (user_id = (select auth.user_id()))', t || '_owner', t);
     execute format('grant select, insert, update, delete on public.%I to authenticated', t);
     execute format('revoke all on public.%I from anonymous', t);
@@ -107,9 +108,9 @@ alter table public.profiles validate constraint profiles_settings_size;
 
 -- ------------------------------------------------------------- admin ----
 
-create table public.admins (email text primary key);
+create table if not exists public.admins (email text primary key);
 alter table public.admins enable row level security; -- no grants: only security-definer functions read it
-insert into public.admins values ('sirhodgson@gmail.com');
+insert into public.admins values ('sirhodgson@gmail.com') on conflict (email) do nothing;
 
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = '' as $$
@@ -122,7 +123,7 @@ $$;
 
 -- ---------------------------------------------------------- feedback ----
 
-create table public.feedback (
+create table if not exists public.feedback (
   id uuid primary key default gen_random_uuid(),
   user_id text not null default auth.user_id(),
   category text not null check (category in ('idea', 'bug', 'other')),
@@ -133,7 +134,7 @@ create table public.feedback (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create index feedback_user_idx on public.feedback (user_id, created_at desc);
+create index if not exists feedback_user_idx on public.feedback (user_id, created_at desc);
 
 -- Riders can't pick their status or reply; admins can't rewrite the message.
 create or replace function public.feedback_on_insert() returns trigger
@@ -146,7 +147,7 @@ begin
   new.updated_at := now();
   return new;
 end $$;
-create trigger feedback_on_insert before insert on public.feedback for each row execute function public.feedback_on_insert();
+create or replace trigger feedback_on_insert before insert on public.feedback for each row execute function public.feedback_on_insert();
 
 create or replace function public.feedback_on_update() returns trigger
 language plpgsql set search_path = '' as $$
@@ -158,13 +159,20 @@ begin
   new.updated_at := now();
   return new;
 end $$;
-create trigger feedback_on_update before update on public.feedback for each row execute function public.feedback_on_update();
+create or replace trigger feedback_on_update before update on public.feedback for each row execute function public.feedback_on_update();
 
 alter table public.feedback enable row level security;
-create policy feedback_insert_own on public.feedback for insert to authenticated with check (user_id = (select auth.user_id()));
-create policy feedback_read on public.feedback for select to authenticated using (user_id = (select auth.user_id()) or (select public.is_admin()));
-create policy feedback_admin_update on public.feedback for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
-create policy feedback_admin_delete on public.feedback for delete to authenticated using ((select public.is_admin()));
+do $$
+begin
+  drop policy if exists feedback_insert_own on public.feedback;
+  drop policy if exists feedback_read on public.feedback;
+  drop policy if exists feedback_admin_update on public.feedback;
+  drop policy if exists feedback_admin_delete on public.feedback;
+  create policy feedback_insert_own on public.feedback for insert to authenticated with check (user_id = (select auth.user_id()));
+  create policy feedback_read on public.feedback for select to authenticated using (user_id = (select auth.user_id()) or (select public.is_admin()));
+  create policy feedback_admin_update on public.feedback for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+  create policy feedback_admin_delete on public.feedback for delete to authenticated using ((select public.is_admin()));
+end $$;
 grant select, insert, update, delete on public.feedback to authenticated;
 revoke all on public.feedback from anonymous;
 
@@ -262,7 +270,7 @@ grant execute on function public.is_admin(), public.admin_overview(), public.adm
 -- hashed), with the kit (jersey, accent and frame colours) each is wearing.
 -- No direct table access.
 
-create table public.live_riders (
+create table if not exists public.live_riders (
   user_id text primary key,
   stage_id text not null,
   distance real not null,
@@ -272,7 +280,7 @@ create table public.live_riders (
   kit text, -- "#jersey,#accent,#frame", validated by ride_presence(); null = the default kit
   updated_at timestamptz not null default now()
 );
-create index live_riders_stage_idx on public.live_riders (stage_id, updated_at);
+create index if not exists live_riders_stage_idx on public.live_riders (stage_id, updated_at);
 alter table public.live_riders enable row level security; -- no grants: only the functions below touch it
 
 create or replace function public.short_name(full_name text) returns text
@@ -335,15 +343,17 @@ grant execute on function public.ride_presence(text, real, real, integer, intege
 -- among riders seen in the last 15 s). Limits: one per target per 20 s, 20 a minute.
 -- No direct table access; my_ride_ons() also clears rows older than a day.
 
-create table public.ride_ons (
+create table if not exists public.ride_ons (
   id bigserial primary key,
   from_user text not null,
   to_user text not null,
+  from_id text, -- stage-scoped sender id at send time; null on historical rows
   emote text not null check (emote in ('👍','🔥','💪','👋')),
   created_at timestamptz not null default now()
 );
-create index ride_ons_to_idx on public.ride_ons (to_user, created_at);
-create index ride_ons_from_idx on public.ride_ons (from_user, created_at);
+alter table public.ride_ons add column if not exists from_id text;
+create index if not exists ride_ons_to_idx on public.ride_ons (to_user, created_at);
+create index if not exists ride_ons_from_idx on public.ride_ons (from_user, created_at);
 alter table public.ride_ons enable row level security; -- no grants: only the functions below touch it
 revoke all on public.ride_ons from public, anonymous, authenticated;
 revoke all on sequence public.ride_ons_id_seq from public, anonymous, authenticated;
@@ -357,6 +367,7 @@ declare
 begin
   if me is null then raise exception 'Sign in to send ride-ons' using errcode = '42501'; end if;
   if p_emote is null or p_emote not in ('👍','🔥','💪','👋') then raise exception 'Unknown ride-on'; end if;
+  perform pg_advisory_xact_lock(hashtext('ride-ons:' || me));
   -- Presence ids are stage-scoped: resolve the target only on the stage the caller is on.
   select l.stage_id into my_stage from public.live_riders l where l.user_id = me;
   if my_stage is null then raise exception 'That rider isn''t riding right now'; end if;
@@ -374,7 +385,8 @@ begin
   if (select count(*) from public.ride_ons where from_user = me and created_at > now() - interval '1 minute') >= 20 then
     raise exception 'Easy there: too many ride-ons this minute';
   end if;
-  insert into public.ride_ons (from_user, to_user, emote) values (me, target, p_emote);
+  insert into public.ride_ons (from_user, to_user, from_id, emote)
+  values (me, target, md5(me || ':' || my_stage), p_emote);
 end $$;
 
 create or replace function public.my_ride_ons(p_since timestamptz default null)
@@ -385,8 +397,9 @@ declare me text := auth.user_id();
 begin
   if me is null then raise exception 'Sign in to get ride-ons' using errcode = '42501'; end if;
   delete from public.ride_ons where created_at < now() - interval '1 day';
+  -- Old rows have no stage snapshot: keep their toast without publishing a global rider id.
   return query
-    select r.id, md5(r.from_user), public.short_name(u.name), r.emote, r.created_at
+    select r.id, coalesce(r.from_id, ''), public.short_name(u.name), r.emote, r.created_at
     from public.ride_ons r
     left join neon_auth."user" u on u.id::text = r.from_user
     where r.to_user = me and r.created_at > coalesce(p_since, now() - interval '1 minute') and not coalesce(u.banned, false)
@@ -403,7 +416,7 @@ grant execute on function public.send_ride_on(text, text), public.my_ride_ons(ti
 -- rider can race the ghost of a leaderboard ride: only its distance trace is
 -- shared.
 
-create index activities_stage_finish_idx on public.activities (stage_id, finish_s) where finish_s is not null;
+create index if not exists activities_stage_finish_idx on public.activities (stage_id, finish_s) where finish_s is not null;
 
 create or replace function public.stage_leaderboard(p_stage text, p_since timestamptz default null)
 returns table (rank bigint, activity_id uuid, name text, finish_s integer, avg_power real, ridden_at timestamptz, is_me boolean)
@@ -500,8 +513,7 @@ begin
   end if;
   return new;
 end $$;
-drop trigger if exists activities_sanitize on public.activities;
-create trigger activities_sanitize before insert or update on public.activities
+create or replace trigger activities_sanitize before insert or update on public.activities
   for each row execute function public.activities_sanitize();
 
 create or replace function public.ride_is_plausible(p_stage text, p_finish_s integer, p_avg_power real, p_demo boolean)

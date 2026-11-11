@@ -33,35 +33,39 @@ export interface ClaudeRequest<T> {
   system: string;
   user: string;
   schema: z.ZodType<T>;
+  signal?: AbortSignal;
 }
 
 export type ClaudeRunner = <T>(req: ClaudeRequest<T>) => Promise<ClaudeOutcome<T>>;
 
 export function makeClient(apiKey: string) {
-  // One retry on top of the 20 s timeout keeps the worst case well inside the function's time limit.
-  return new Anthropic({ apiKey, timeout: CALL_TIMEOUT_MS, maxRetries: 1 });
+  // The handler owns the total budget; SDK backoff and Retry-After must not extend it.
+  return new Anthropic({ apiKey, timeout: CALL_TIMEOUT_MS, maxRetries: 0 });
 }
 
 export function makeRunner(client: Anthropic): ClaudeRunner {
   return async <T>(req: ClaudeRequest<T>): Promise<ClaudeOutcome<T>> => {
+    req.signal?.throwIfAborted();
     let message;
     try {
       message = await client.beta.messages.parse({
-      model: req.model,
-      max_tokens: MAX_TOKENS,
-      betas: [FALLBACK_BETA],
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: zodOutputFormat(req.schema) },
-      system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: req.user }],
-      });
+        model: req.model,
+        max_tokens: MAX_TOKENS,
+        betas: [FALLBACK_BETA],
+        fallbacks: 'default',
+        output_config: { effort: 'low', format: zodOutputFormat(req.schema) },
+        system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: req.user }],
+      }, { signal: req.signal, timeout: CALL_TIMEOUT_MS, maxRetries: 0 });
     } catch (e) {
+      req.signal?.throwIfAborted();
       // A reply that isn't valid JSON (e.g. cut off) throws a plain AnthropicError; API and network errors are APIErrors and go up.
       if (e instanceof Anthropic.AnthropicError && !(e instanceof Anthropic.APIError)) {
         return { status: 'unusable', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, model: req.model };
       }
       throw e;
     }
+    req.signal?.throwIfAborted();
     const u = message.usage;
     const usage: ClaudeUsage = {
       input_tokens: u?.input_tokens ?? 0,

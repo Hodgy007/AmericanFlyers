@@ -92,9 +92,9 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const saved = JSON.parse(raw) as Partial<Settings>;
-      const migrated = migrateSettings(saved);
-      const settings = { ...DEFAULT_SETTINGS, ...migrated };
+      const saved = JSON.parse(raw) as unknown;
+      const migrated = migrateSettings(isObject(saved) ? saved as Partial<Settings> : {});
+      const settings = normalizeSettings(migrated);
       if (migrated !== saved) saveSettings(settings); // so the one-off change happens once
       return settings;
     }
@@ -102,6 +102,89 @@ export function loadSettings(): Settings {
     // Storage unavailable (private mode etc.): fall back to defaults.
   }
   return { ...DEFAULT_SETTINGS };
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * A saved copy (this browser's, or the account's) as settings we can trust. Anything missing or malformed
+ * keeps the default; unknown keys are dropped, and nested records only survive if they have the right shape,
+ * so a hand-edited or older copy can't put `NaN` grades or a broken plan into the ride.
+ */
+export function normalizeSettings(value: unknown, defaults: Settings = DEFAULT_SETTINGS): Settings {
+  const s = isObject(value) ? value : {};
+  const num = (v: unknown, fallback: number, min: number, max: number) =>
+    typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : fallback;
+  const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+  const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(v as T) ? (v as T) : fallback);
+  const fields = Array.isArray(s.dataFields)
+    ? [...new Set(s.dataFields.filter((f): f is string => typeof f === 'string' && HUD_FIELD_IDS.has(f)))].slice(0, MAX_FIELDS)
+    : [...defaults.dataFields];
+
+  return {
+    settingsVersion: SETTINGS_VERSION,
+    riderKg: num(s.riderKg, defaults.riderKg, 30, 200),
+    bikeKg: num(s.bikeKg, defaults.bikeKg, 5, 30),
+    ftp: num(s.ftp, defaults.ftp, 50, 600),
+    maxHr: num(s.maxHr, defaults.maxHr, 120, 230),
+    units: oneOf(s.units, ['metric', 'imperial'] as const, defaults.units),
+    difficulty: num(s.difficulty, defaults.difficulty, 0, 100),
+    dataFields: fields,
+    rideTogether: bool(s.rideTogether, defaults.rideTogether),
+    ghost: bool(s.ghost, defaults.ghost),
+    sound: bool(s.sound, defaults.sound),
+    music: bool(s.music, defaults.music),
+    virtualShifting: bool(s.virtualShifting, defaults.virtualShifting),
+    plan: validPlan(s.plan) ?? defaults.plan,
+    hudPosition: oneOf(s.hudPosition, ['left', 'center', 'right'] as const, defaults.hudPosition),
+    proTeams: bool(s.proTeams, defaults.proTeams),
+    autoSteer: bool(s.autoSteer, defaults.autoSteer),
+    timeOfDay: oneOf(s.timeOfDay, ['auto', 'dawn', 'day', 'dusk', 'night'] as const, defaults.timeOfDay),
+    weather: oneOf(s.weather, ['auto', 'clear', 'cloudy', 'rain'] as const, defaults.weather),
+    kit: validKit(s.kit) ?? defaults.kit,
+    tour: validTour(s.tour) ?? defaults.tour,
+    wind: bool(s.wind, defaults.wind),
+    miniMap: bool(s.miniMap, defaults.miniMap),
+    komPanel: bool(s.komPanel, defaults.komPanel),
+    commentary: bool(s.commentary, defaults.commentary),
+    loadout: validLoadout(s.loadout) ?? defaults.loadout,
+    aiCoach: bool(s.aiCoach, defaults.aiCoach),
+    aiRivals: bool(s.aiRivals, defaults.aiRivals),
+    coachVoice: bool(s.coachVoice, defaults.coachVoice),
+  };
+}
+
+const HUD_FIELD_IDS = new Set([
+  'power', 'power1s', 'wkg', 'avgPower', 'np', 'maxPower', 'target', 'intervalLeft', 'workoutLeft',
+  'cadence', 'avgCadence', 'speed', 'avgSpeed', 'hr', 'avgHr', 'maxHr', 'distance', 'toGo', 'time',
+  'grade', 'climbed', 'elevation', 'kj', 'tss',
+]); // the ids in src/hud.ts FIELDS (kept here to avoid a settings → hud dependency)
+const MAX_FIELDS = 12;
+
+function validPlan(v: unknown): PlanProgress | null {
+  if (!isObject(v) || typeof v.id !== 'string' || !v.id || typeof v.started !== 'string' || !Array.isArray(v.done)) return null;
+  const done = v.done.filter((n): n is number => Number.isInteger(n) && n >= 0 && n < 10_000);
+  return { id: v.id, started: v.started, done: [...new Set(done)] };
+}
+
+function validKit(v: unknown): Kit | null {
+  if (!isObject(v)) return null;
+  const colour = (c: unknown) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : null);
+  const jersey = colour(v.jersey), accent = colour(v.accent), frame = colour(v.frame);
+  return jersey && accent && frame ? { jersey, accent, frame } : null;
+}
+
+function validTour(v: unknown): TourProgress | null {
+  if (!isObject(v) || typeof v.id !== 'string' || !v.id || !Number.isInteger(v.seed) || typeof v.stage !== 'number' ||
+      !Number.isInteger(v.stage) || v.stage < 0 || v.stage > 8 || !Array.isArray(v.results)) return null;
+  return v as unknown as TourProgress;
+}
+
+function validLoadout(v: unknown): Partial<Loadout> | null {
+  if (!isObject(v)) return null;
+  const out: Record<string, string> = {};
+  for (const [k, item] of Object.entries(v)) if (typeof item === 'string' && item.length <= 100) out[k] = item;
+  return Object.keys(out).length ? out : null;
 }
 
 export function saveSettings(s: Settings) {
