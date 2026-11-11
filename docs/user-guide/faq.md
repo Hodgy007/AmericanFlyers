@@ -72,7 +72,7 @@ Use the **💬** button while signed in. See [Feedback](feedback.md).
 
 ## Can I ride with my friends?
 
-Yes. Both sign in, pick the same stage, and you'll see each other on the road. Open 👥 and press **Ride with** to start next to them. See [Riding together](riding-together.md).
+Yes. Both sign in, pick the same stage, and you'll see each other on the road. Open **Riders** and press **Ride with** to start next to them. See [Riding together](riding-together.md).
 
 ## Is there drafting?
 
