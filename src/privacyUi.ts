@@ -18,7 +18,7 @@ export function initPrivacyUi() {
   if (!dialog || !body) return;
 
   function open(trigger: Element) {
-    use(text, (html) => {
+    void use(text, (html) => {
       if (!body!.childElementCount) body!.innerHTML = html;
       if (!dialog!.open) dialog!.showModal();
     }, trigger);

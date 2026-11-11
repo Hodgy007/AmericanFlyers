@@ -9,6 +9,7 @@ import { achievements, weekIndex } from './achievements';
 import { mountEmailAuth, type RiderDetails } from './emailAuth';
 import { barChart, lineChart, statTiles } from './charts';
 import { toTcx } from './recorder';
+import { toFit } from './fit';
 import { mountVerifyBanner } from './verifyBanner';
 import { accountTab } from './accountTab';
 import { loadDebrief } from './aiApi';
@@ -145,7 +146,7 @@ export function initAccountDialogs(deps: Deps) {
   }
 
   onAccountChange(() => {
-    checkAdmin();
+    void checkAdmin();
     if (account()) {
       if (signinDialog.open) signinDialog.close();
       const then = pendingAfterSignIn;
@@ -153,7 +154,7 @@ export function initAccountDialogs(deps: Deps) {
       then?.();
     } else if (profileDialog.open) profileDialog.close();
   });
-  checkAdmin();
+  void checkAdmin();
 
   // ----------------------------------------------------------- profile ----
 
@@ -182,8 +183,8 @@ export function initAccountDialogs(deps: Deps) {
     const tabs = $('profile-tabs');
     tabs.querySelector<HTMLElement>('[data-tab=admin]')!.hidden = !admin;
     if (!profileDialog.open) profileDialog.showModal();
-    showTab(admin || tab !== 'admin' ? tab : 'stats');
-    if (!admin) checkAdmin(); // ask again, in case the first check failed
+    void showTab(admin || tab !== 'admin' ? tab : 'stats');
+    if (!admin) void checkAdmin(); // ask again, in case the first check failed
   }
 
   // Enter in a search box mustn't submit (and so close) the profile.
@@ -193,7 +194,7 @@ export function initAccountDialogs(deps: Deps) {
 
   $('profile-tabs').addEventListener('click', (e) => {
     const t = (e.target as HTMLElement).closest<HTMLElement>('[data-tab]');
-    if (t) showTab(t.dataset.tab as Tab);
+    if (t) void showTab(t.dataset.tab as Tab);
   });
 
   let tabToken = 0;
@@ -422,14 +423,17 @@ export function initAccountDialogs(deps: Deps) {
       };
       charts.append(lineChart('Power (W)', series(samples.power), { unit: 'W', xLabel: mmss, height: 130 }));
       if (samples.hr.some((v) => v > 0)) charts.append(lineChart('Heart rate (bpm)', series(samples.hr).filter((p) => p.y > 0), { unit: 'bpm', xLabel: mmss, height: 110, color: '#e5383b', yMin: Math.max(0, Math.min(...samples.hr.filter((v) => v > 0)) - 10) }));
-      actions.prepend(button('⬇ Export .tcx', () => {
-        const blob = new Blob([toTcx(a, samples)], { type: 'application/vnd.garmin.tcx+xml' });
+      const download = (blob: Blob, ext: string) => {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `${a.title.replace(/[^\w\- ]+/g, '').trim() || 'ride'} ${a.started_at.slice(0, 10)}.tcx`;
+        link.download = `${a.title.replace(/[^\w\- ]+/g, '').trim() || 'ride'} ${a.started_at.slice(0, 10)}.${ext}`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      }));
+      };
+      actions.prepend(
+        button('⬇ Export .tcx', () => download(new Blob([toTcx(a, samples)], { type: 'application/vnd.garmin.tcx+xml' }), 'tcx')),
+        button('⬇ Export .fit', () => download(new Blob([toFit(a, samples)], { type: 'application/vnd.ant.fit' }), 'fit')),
+      );
     }).catch((e) => charts.replaceChildren(h('p', { class: 'error', text: errMsg(e) })));
     if (deps.shareRide) actions.append(button('📤 Share', () => deps.shareRide!(a)));
     actions.append(button('🗑 Delete ride', async () => {
@@ -515,7 +519,7 @@ export function initAccountDialogs(deps: Deps) {
           try {
             await adminSetBan(x.id, !x.banned, reason || undefined);
             deps.toast(x.banned ? `${x.name} unbanned` : `${x.name} banned`);
-            showTab('admin');
+            void showTab('admin');
           } catch (e) {
             deps.toast(errMsg(e));
           }
@@ -562,7 +566,7 @@ export function initAccountDialogs(deps: Deps) {
         for (const e of events) {
           const del = e.results ? '' : button('Remove', async () => {
             if (!confirm(`Remove “${e.title}”? The daily schedule may add it back if it is one of the automatic events.`)) return;
-            try { await adminDeleteEvent(e.id); deps.toast('Event removed'); draw(); } catch (err) { deps.toast(errMsg(err)); }
+            try { await adminDeleteEvent(e.id); deps.toast('Event removed'); void draw(); } catch (err) { deps.toast(errMsg(err)); }
           });
           body.append(h('tr', {}, h('td', { text: new Date(e.starts_at).toLocaleString() }), h('td', { text: e.title }), h('td', { text: e.kind === 'race' ? 'Race' : 'Group ride' }), h('td', { text: String(e.results) }), h('td', {}, del)));
         }
@@ -593,7 +597,7 @@ export function initAccountDialogs(deps: Deps) {
         await adminCreateEvent(kind.value as EventKind, stage.value, new Date(starts.value), title.value.trim(), kind.value === 'group_ride' ? Number(pace.value) : undefined);
         deps.toast('Event added');
         title.value = '';
-        draw();
+        void draw();
       } catch (err) { deps.toast(errMsg(err)); }
     }, 'primary');
     box.append(list, h('div', { class: 'admin-event-form' }, kind, stage, starts, title, h('label', { class: 'muted small', text: 'W/kg ' }, pace), add));
@@ -655,7 +659,7 @@ export function initAccountDialogs(deps: Deps) {
     form.reset();
     $('feedback-error').textContent = '';
     if (!feedbackDialog.open) feedbackDialog.showModal();
-    drawMyFeedback();
+    void drawMyFeedback();
   }
 
   async function drawMyFeedback() {
@@ -693,7 +697,7 @@ export function initAccountDialogs(deps: Deps) {
       await submitFeedback(data.get('category') as FeedbackCategory, message.slice(0, 4000), deps.context());
       form.reset();
       deps.toast('Thanks! Your feedback has been sent.');
-      drawMyFeedback();
+      void drawMyFeedback();
     } catch (err) {
       $('feedback-error').textContent = errMsg(err);
     } finally {

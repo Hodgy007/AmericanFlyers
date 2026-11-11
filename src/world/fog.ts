@@ -125,9 +125,14 @@ export function installFog() {
   const lights = C.lights_fragment_begin;
   const at = lights.indexOf('DirectionalLight directionalLight;');
   const call = lights.indexOf('RE_Direct( directLight, geometryPosition', at);
-  if (at >= 0 && call >= 0) {
-    C.lights_fragment_begin = lights.slice(0, call) + '\n#ifdef USE_FOG\n\t\tdirectLight.color *= afCloudShade( cameraPosition + transpose( mat3( viewMatrix ) ) * geometryPosition );\n#endif\n\t\t' + lights.slice(call);
-  }
+  const shade = '\n#ifdef USE_FOG\n\t\tdirectLight.color *= afCloudShade( cameraPosition + transpose( mat3( viewMatrix ) ) * geometryPosition );\n#endif\n\t\t';
+  // The cascaded sun (SunLight, cascades.ts) has its own loop just above the directional one: dim it the same way.
+  const sunAt = lights.indexOf('SunLight sunLight;');
+  const sunCall = lights.indexOf('RE_Direct( directLight, geometryPosition', sunAt);
+  let out = lights;
+  if (at >= 0 && call >= 0) out = out.slice(0, call) + shade + out.slice(call);
+  if (sunAt >= 0 && sunCall >= 0 && sunCall < at) out = out.slice(0, sunCall) + shade + out.slice(sunCall);
+  C.lights_fragment_begin = out;
   // Every built-in shader that has fog gets the shared uniform.
   const lib = THREE.ShaderLib as unknown as Record<string, { uniforms: Record<string, THREE.IUniform> }>;
   for (const key of Object.keys(lib)) {

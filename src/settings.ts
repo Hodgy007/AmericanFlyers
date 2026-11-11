@@ -27,6 +27,7 @@ export interface Settings {
   plan: PlanProgress | null; // the training plan being followed
   hudPosition: 'left' | 'center' | 'right'; // where the data blocks sit
   proTeams: boolean; // the ride mode "With pro teams": computer-ridden pro teams on the road (off = Solo; Race is chosen per ride, never stored)
+  powerMatch: boolean; // ERG with a separate power meter: nudge the trainer's target so the meter's watts sit on it (ble/powerMatch.ts)
   autoSteer: boolean; // ease into the draft of a rider just ahead when you haven't steered
   timeOfDay: TimeOfDay; // 'auto' starts at the stage's usual time and slowly moves on
   weather: Weather; // 'auto' uses the stage's weather, changing now and then
@@ -62,6 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {
   plan: null,
   hudPosition: 'center',
   proTeams: false, // Solo is the default: routes are rides, not races
+  powerMatch: true,
   autoSteer: true,
   timeOfDay: 'auto',
   weather: 'auto',

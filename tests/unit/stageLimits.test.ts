@@ -10,12 +10,18 @@ import { STAGES } from '../../src/stages';
 
 const PARAMS = { ...DEFAULT_PARAMS, massKg: 68, cda: 0.25 };
 const POWER_W = 6.5 * 60;
+/**
+ * The rows were worked out at sea level, before the ride's physics thinned the air with altitude. Riding the real
+ * stages now takes the reference rider 0 to 6% less time (Mount Blue Sky the most), so the sea-level floors are a
+ * little conservative: still 15% or more under an honest 6.5 W/kg ride. Set this to true after re-running the rows.
+ */
+const AT_ALTITUDE = false;
 const FINISH_STAGES = STAGES.filter((s) => s.finish !== null);
 
 /** The limits the schema comment describes, worked out through the app's physics. */
 export function limitsFor(stage: (typeof STAGES)[number]) {
   const distanceM = Math.round(stage.finish!);
-  const minFinishS = Math.round(0.8 * stageSeconds(stage, POWER_W, PARAMS));
+  const minFinishS = Math.round(0.8 * stageSeconds(stage, POWER_W, PARAMS, AT_ALTITUDE));
   return { distanceM, minFinishS, maxAvgKmh: Math.ceil((distanceM / minFinishS) * 3.6) };
 }
 

@@ -110,8 +110,8 @@ export interface Scenery {
   clearing?(d: number): boolean;
 }
 
-/** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings) or 'park' (solid double yellow, red chip seal). */
-export type RoadStyle = 'us-highway' | 'alpine' | 'lane' | 'park';
+/** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings), 'park' (solid double yellow, red chip seal) or 'city-park' (granite kerbs, white edge and lane lines). */
+export type RoadStyle = 'us-highway' | 'alpine' | 'lane' | 'park' | 'city-park';
 
 export interface StageSign {
   d: number;
@@ -1317,7 +1317,7 @@ const centralPark: Stage = {
     fields: false,
     mountainScale: 0.4,
     horizon: 'hills',
-    road: 'lane',
+    road: 'city-park', // a granite kerb, white edge and lane lines
     water: CP_WATER,
   },
   landmarks: [

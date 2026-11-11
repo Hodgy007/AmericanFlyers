@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { leaderboardEligible, leaderboardNote } from '../../src/rideIntegrity';
+import { isDemoRide, leaderboardEligible, leaderboardNote } from '../../src/rideIntegrity';
 import { isCompleteCode, isNotVerifiedError, normaliseCode, resendSecondsLeft, signUpNeedsCode, explainVerifyError } from '../../src/cloud/verification';
 import { DELETE_PHRASE, confirmsDeletion, dataFileName, tidyDataExport } from '../../src/cloud/privacy';
 
@@ -13,6 +13,15 @@ describe('leaderboard eligibility', () => {
     expect(leaderboardNote({ usedDemo: false, timeScale: 1 })).toBeNull();
     expect(leaderboardNote({ usedDemo: true, timeScale: 1 })).toMatch(/demo/i);
     expect(leaderboardNote({ usedDemo: false, timeScale: 4 })).toMatch(/sped-up/i);
+  });
+  it('keeps a ride that included a workout off the whole-stage leaderboard, but not off the KOM times', () => {
+    const split = { usedDemo: false, timeScale: 1, splitByWorkout: true };
+    expect(leaderboardEligible(split)).toBe(false);
+    expect(isDemoRide(split)).toBe(false); // saved as a normal ride (not `demo`), just without a finish time
+    expect(leaderboardNote(split)).toMatch(/included a workout/i);
+    expect(leaderboardNote({ ...split, usedDemo: true })).toMatch(/demo/i); // the demo reason wins
+    expect(isDemoRide({ usedDemo: true, timeScale: 1 })).toBe(true);
+    expect(isDemoRide({ usedDemo: false, timeScale: 2 })).toBe(true);
   });
 });
 

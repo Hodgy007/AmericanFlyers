@@ -83,7 +83,7 @@ export function initHome(opts: {
   const emailToggle = document.getElementById('home-email-toggle')!;
   let emailMounted = false;
   emailToggle.addEventListener('click', () => {
-    use(emailAuth, (m) => {
+    void use(emailAuth, (m) => {
       if (!emailMounted) { emailMounted = true; m.mountEmailAuth(emailBox, { onDetails: opts.onRiderDetails, defaults: opts.defaults }); }
       emailToggle.hidden = true;
       emailBox.hidden = false;
@@ -177,7 +177,7 @@ function heroRotator(home: HTMLElement) {
   let prefetchTimer = 0;
 
   if (moving) {
-    firstFrame.then(() => {
+    void firstFrame.then(() => {
       videosReady = true;
       for (const s of slides.values()) s.video ??= makeVideo(s.id, s.el);
       if (playing) slides.get(cycle[step])!.video?.play().catch(() => {});

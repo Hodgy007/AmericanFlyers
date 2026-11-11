@@ -39,7 +39,7 @@ export function initAccountUi(deps: Deps) {
     // on some systems and vanishes against the top bar).
     (document.getElementById('account-label') ?? accountBtn).textContent = a ? a.name.split(' ')[0] : 'Sign in';
     accountBtn.title = a ? `${a.name} (${a.email}): profile & stats` : 'Sign in or create a free account';
-    checkAdmin();
+    void checkAdmin();
   }
   onAccountChange(refreshAccountButton);
   refreshAccountButton();
@@ -51,7 +51,7 @@ export function initAccountUi(deps: Deps) {
 
   return {
     /** Opens the sign-in dialog; `then` runs once the rider is signed in. */
-    openSignIn: (reason?: string, then?: () => void) => { use(dialogs, (u) => u.openSignIn(reason, then)); },
+    openSignIn: (reason?: string, then?: () => void) => { void use(dialogs, (u) => u.openSignIn(reason, then)); },
     /** Forget cached rides so the profile reloads them (after a save). Nothing to do if it hasn't been opened. */
     invalidate: () => dialogs.peek()?.invalidate(),
     /** Re-asks whether this is an admin (after the session settles). */

@@ -113,18 +113,20 @@
     <header class="topbar">
       <button type="button" class="brand" id="btn-home" title="Home"><span class="star">★</span> American Flyers</button>
       <nav class="actions">
-        <button id="btn-stage" title="Choose a stage">🏁 Stage</button>
-        <button id="btn-workouts" title="Workouts">🏋 Workouts</button>
+        <button id="btn-stage" title="Choose a stage">🏁<span class="lbl"> Stage</span></button>
+        <button id="btn-workouts" title="Workouts">🏋<span class="lbl"> Workouts</span></button>
         <button id="btn-riders" title="Riders and pro teams" aria-label="Riders and pro teams"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 19c0-3.4 2.8-5.6 6.2-5.6s6.2 2.2 6.2 5.6"/><circle cx="17.2" cy="9" r="2.6"/><path d="M15.4 13.6c3 0 5.6 1.9 5.6 4.9"/></svg></button>
         <button id="btn-trainer" class="primary">Connect trainer</button>
         <div class="menu-wrap">
-          <button id="btn-menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu" title="More">☰ Menu</button>
+          <button id="btn-menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu" title="More">☰<span class="lbl"> Menu</span></button>
           <div id="menu" class="menu" role="menu" hidden>
-            <!-- Trainer and heart rate: labels are filled in by src/devicesUi.ts (connected, remembered, reconnecting). -->
+            <!-- Trainer, heart rate and power meter: labels are filled in by src/devicesUi.ts (connected, remembered, reconnecting). -->
             <button id="btn-menu-trainer" role="menuitem"><span class="mi-label">🔌 Connect trainer</span><small class="mi-sub"></small></button>
             <button id="btn-hr" role="menuitem"><span class="mi-label">❤️ Heart rate</span><small class="mi-sub"></small></button>
+            <button id="btn-meter" role="menuitem"><span class="mi-label">⚡ Power meter</span><small class="mi-sub"></small></button>
             <button id="btn-forget-trainer" role="menuitem" hidden>✕ Forget trainer</button>
             <button id="btn-forget-hr" role="menuitem" hidden>✕ Forget heart rate strap</button>
+            <button id="btn-forget-meter" role="menuitem" hidden>✕ Forget power meter</button>
             <button id="btn-reset" role="menuitem" title="Finish this ride and see its summary">⏹ End ride</button>
             <button id="btn-menu-hub" role="menuitem" title="Back to the hub: route, training, plan, achievements, garage and stats">🏠 Hub</button>
             <button id="btn-demo" role="menuitem">🎮 Demo ride</button>
@@ -153,6 +155,8 @@
         </div>
         <button id="btn-end" class="end-ride" title="End this ride and see its summary" aria-label="End ride">⏹ End</button>
         <button id="btn-account" title="Sign in or create a free account"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.6"/><path d="M4.8 20c0-3.9 3.2-6.3 7.2-6.3s7.2 2.4 7.2 6.3"/></svg><span id="account-label">Sign in</span></button>
+        <!-- Phones: forces the second row of the top bar (CSS only). -->
+        <span class="bar-break" aria-hidden="true"></span>
       </nav>
     </header>
 
@@ -212,15 +216,15 @@
       <button type="button" id="eb-leave">Leave</button>
     </aside>
 
-    <div id="demo-panel" class="demo-panel" hidden>
-      <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
-      <input id="demo-power" type="range" min="0" max="600" step="5" value="150" />
-      <p>Use Page Up / Page Down keys to adjust</p>
-    </div>
-
     <footer class="bottom">
+      <!-- The demo slider: fixed at the bottom right on wide screens, in flow above the profile strip on phones. -->
+      <div id="demo-panel" class="demo-panel" hidden>
+        <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
+        <input id="demo-power" type="range" min="0" max="600" step="5" value="150" />
+        <p>Use Page Up / Page Down keys to adjust</p>
+      </div>
       <div class="status">
-        <span id="trainer-dot" class="dot"></span><span id="trainer-status">No trainer connected</span>
+        <span id="trainer-dot" class="dot"></span><span id="trainer-status" class="trainer-status">No trainer connected</span>
         <span id="stage-name" class="stage-name"></span>
         <!-- Wind: an arrow (up is the way you ride) and the speed; see windUi.ts -->
         <span id="wind-chip" class="wind-chip" hidden><span id="wind-arrow" class="wind-arrow" aria-hidden="true">↑</span><span id="wind-text"></span></span>
@@ -230,9 +234,12 @@
 
     <!-- Mini-map (miniMap.ts) and climb preview (climbUi.ts) -->
     <button type="button" id="minimap" class="minimap" hidden aria-label="Route mini-map. Press to switch between the whole route and your heading."><canvas id="minimap-canvas"></canvas></button>
+    <!-- Both cards sit at the screen edges (cardDock.ts), shrink to a one-line chip after a few seconds and open again on hover or a tap. -->
     <aside id="climb-card" class="climb-card" hidden aria-live="off">
       <div class="cc-head"><strong id="cc-title"></strong><span id="cc-sub"></span></div>
+      <div id="cc-chip" class="chip-line"></div>
       <canvas id="cc-profile"></canvas>
+      <button type="button" class="card-toggle" id="cc-toggle" aria-expanded="false" aria-controls="climb-card" aria-label="Climb details"></button>
     </aside>
     <!-- KOM panel (segmentUi.ts): the board for the segment ahead, and your live gap on it -->
     <aside id="kom-card" class="kom-card" hidden aria-live="off">
@@ -244,6 +251,7 @@
       <ol id="kom-board" class="kom-board"></ol>
       <p id="kom-note" class="kom-note" hidden></p>
       <p id="kom-me" class="kom-me"></p>
+      <button type="button" class="card-toggle" id="kom-toggle" aria-expanded="false" aria-controls="kom-card" aria-label="KOM details"></button>
     </aside>
 
     <div id="toast" class="toast" role="status"></div>
@@ -376,9 +384,12 @@
           </select>
           <span class="hint" id="graphics-note"></span>
         </label>
+        <label class="check"><input name="powerMatch" type="checkbox" /> Match my power meter in workouts
+          <span class="hint">With a separate power meter, ERG nudges the trainer’s target a few percent so your meter’s watts, not the trainer’s, sit on the workout target. Only applies while a power meter is connected.</span>
+        </label>
         <div class="dev-box settings-wide">
           <strong>Remembered devices</strong>
-          <span class="hint">This browser remembers the trainer and heart rate strap you last connected, so next time they reconnect without searching. Forgetting one only removes it from this browser.</span>
+          <span class="hint">This browser remembers the trainer, heart rate strap and power meter you last connected, so next time they reconnect without searching. Forgetting one only removes it from this browser.</span>
           <div id="settings-devices"></div>
         </div>
         <label class="check"><input name="virtualShifting" type="checkbox" /> Virtual shifting
@@ -525,7 +536,7 @@
         </section>
         <section class="ob-step" hidden>
           <h2>Your trainer</h2>
-          <p class="muted">Wake your smart trainer by pedalling a few strokes, then connect. Any Bluetooth FTMS trainer works (Wahoo KICKR, Tacx, Elite, Saris, Zwift Hub and more). American Flyers remembers your trainer and strap on this browser, so you won’t have to connect them again next time.</p>
+          <p class="muted">Wake your smart trainer by pedalling a few strokes, then connect. Any Bluetooth FTMS trainer works (Wahoo KICKR, Tacx, Elite, Saris, Zwift Hub and more). American Flyers remembers your trainer and strap on this browser, so you won’t have to connect them again next time. Own a crank or pedal power meter? Add it later from the ☰ Menu to use its watts.</p>
           <div class="ob-devices">
             <button type="button" id="ob-trainer" class="primary">🚲 Connect trainer</button>
             <button type="button" id="ob-hr">❤️ Connect heart rate strap</button>
@@ -731,6 +742,19 @@
         <div class="dialog-actions">
           <button value="keep" id="hub-leave-keep" autofocus>Keep riding</button>
           <button value="leave" id="hub-leave-go" class="primary">Save and go to the hub</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- A ride interrupted by a crash or a closed tab (src/hub/resume.ts, src/rideSnapshot.ts). -->
+    <dialog id="hub-resume" class="signin-dialog hub-leave">
+      <form method="dialog">
+        <h2 id="hub-resume-title">Pick up your ride?</h2>
+        <p id="hub-resume-text"></p>
+        <div class="dialog-actions">
+          <button value="discard" id="hub-resume-discard">Discard</button>
+          <button value="save" id="hub-resume-save">Save it and start fresh</button>
+          <button value="resume" id="hub-resume-go" class="primary" autofocus>Resume</button>
         </div>
       </form>
     </dialog>

@@ -17,7 +17,7 @@ export function attachShare(parent: HTMLElement, ride: () => ShareRide, toast: (
   b.type = 'button';
   b.textContent = '📤 Share';
   b.title = 'Make a picture of this ride to share';
-  b.addEventListener('click', () => { b.disabled = true; shareRide(ride(), toast, b).finally(() => { b.disabled = false; }); });
+  b.addEventListener('click', () => { b.disabled = true; void shareRide(ride(), toast, b).finally(() => { b.disabled = false; }); });
   if (where === 'start') parent.prepend(b);
   else parent.append(b);
   return b;

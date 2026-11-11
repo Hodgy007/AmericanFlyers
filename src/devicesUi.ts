@@ -1,4 +1,4 @@
-// Trainer and heart-rate connections in the ☰ Menu, and the remembered devices.
+// Trainer, heart-rate and power-meter connections in the ☰ Menu, and the remembered devices.
 //
 // One `Link` per device kind owns its connection life cycle:
 //   - connect from the chooser (top bar, menu) or from a remembered name (one tap);
@@ -10,12 +10,14 @@
 // main.ts keeps the ride state; it hears about changes through the callbacks below.
 
 import { openHeartRate, requestHeartRateDevice, type HeartRateMonitor } from './ble/heartRate';
+import { openPowerMeter, requestPowerMeterDevice, type PowerMeter } from './ble/powerMeter';
+import { METER_FRESH_MS, controlToast, pickPowerSource, trainerReadingFor, trainerStatusText, type PowerSource } from './ble/powerSource';
 import {
   Reconnector, canReconnectSilently, findPermittedDevice, forgetBrowserPermission, forgetRemembered,
-  loadRemembered, menuLabel, rememberDevice, waitForAdvertisement,
+  DEVICE_ICON, loadRemembered, menuLabel, rememberDevice, waitForAdvertisement,
   type DeviceKind, type LinkState, type RememberedDevices,
 } from './ble/remembered';
-import { CHOOSER_SHOWN_MS, bluetoothAvailable, openTrainer, requestTrainerDevice, type Trainer, type TrainerReading } from './ble/trainer';
+import { CHOOSER_SHOWN_MS, bluetoothAvailable, openTrainer, requestTrainerDevice, type ControlState, type Trainer, type TrainerReading } from './ble/trainer';
 
 export interface DevicesDeps {
   toast(msg: string, ms?: number): void;
@@ -26,6 +28,10 @@ export interface DevicesDeps {
   /** The connected trainer changed: a new one, or null when it is gone. (main resends the grade after a new one.) */
   trainerChanged(t: Trainer | null): void;
   hrChanged(h: HeartRateMonitor | null): void;
+  /** The optional power meter changed: connected, or null when it is gone. */
+  meterChanged(m: PowerMeter | null): void;
+  /** True while a workout's power target is on (the wording of "the trainer stopped taking commands" differs). */
+  workoutActive(): boolean;
 }
 
 interface Connectable { readonly name: string; disconnect(): void }
@@ -187,6 +193,9 @@ class Link<T extends Connectable> {
     }
   }
 
+  /** The Bluetooth id of the connected device, if any (a trainer and a meter must not be the same device). */
+  get deviceId(): string | undefined { return this.current ? this.device?.id : undefined; }
+
   /** Stops retrying and forgets the connection handle (used when the device is forgotten). */
   forgetHandle() {
     this.reconnector.stop();
@@ -214,19 +223,82 @@ export function initDevices(deps: DevicesDeps) {
     changed: () => refresh(),
   };
 
+  // ---- where the ride's watts come from: a connected, sending power meter beats the trainer's own ----
+  let trainerAt = 0; // when the trainer last sent a reading
+  let meterAt = 0;
+  let meterCadenceAt = 0;
+  let lastSource: PowerSource = 'none';
+  let fellBack = false; // the meter went quiet and the trainer's power took over (told once; told again when it is back)
+
+  const sourceNow = (now = performance.now()): PowerSource =>
+    pickPowerSource({ now, meterAt: meter.current ? meterAt : null, trainerAt: trainer.current ? trainerAt : null });
+
+  function onTrainerReading(r: TrainerReading) {
+    const now = performance.now();
+    trainerAt = now;
+    const meterHasCadence = meter.current !== null && now - meterCadenceAt <= METER_FRESH_MS;
+    deps.onReading(trainerReadingFor(sourceNow(now), r, meterHasCadence));
+  }
+
+  function onMeterReading(r: TrainerReading) {
+    const now = performance.now();
+    meterAt = now;
+    if (r.cadence !== undefined) meterCadenceAt = now;
+    deps.onReading({ power: r.power, cadence: r.cadence });
+    watchSource();
+  }
+
+  /** Notices the meter going quiet or coming back, once each, and keeps the status line naming the source. */
+  function watchSource() {
+    const source = sourceNow();
+    if (source === lastSource) return;
+    const prev = lastSource;
+    lastSource = source;
+    if (meter.current) {
+      if (prev === 'meter' && source === 'trainer') { fellBack = true; deps.toast(`${meter.current.name} stopped sending power. Using the trainer’s own power until it’s back.`, 5000); }
+      else if (source === 'meter' && fellBack) { fellBack = false; deps.toast(`Power from ${meter.current.name} again.`, 3500); }
+    }
+    describeTrainer();
+  }
+  window.setInterval(watchSource, 1000);
+
+  function onControlState(state: ControlState) {
+    const t = trainer.current;
+    const msg = controlToast(state, t?.name ?? remembered.trainer?.name ?? 'The trainer', deps.workoutActive());
+    if (msg) deps.toast(msg, state === 'lost' ? 9000 : 4000);
+    describeTrainer();
+  }
+
+  /** The status line under the data blocks. */
+  function describeTrainer() {
+    const state = trainer.state;
+    const t = trainer.current;
+    const name = remembered.trainer?.name;
+    const meterName = meter.current?.name ?? null;
+    if (state === 'connected' && t) {
+      deps.setStatus(trainerStatusText({
+        trainerName: t.name, canControl: t.canControl, controlState: t.controlState, meterName, source: sourceNow(), erg: deps.workoutActive(),
+      }), 'on');
+    }
+    else if (state === 'connecting') deps.setStatus(name ? `Looking for ${name}…` : 'Searching…', 'pending');
+    else if (state === 'reconnecting') deps.setStatus(`Lost ${name ?? 'the trainer'}. Reconnecting…`, 'pending');
+    else if (meterName) deps.setStatus(trainerStatusText({ trainerName: null, canControl: false, controlState: 'unavailable', meterName, source: sourceNow(), erg: false }), 'on');
+    else deps.setStatus('No trainer connected', 'off');
+  }
+
+  const SAME_DEVICE = (what: string) => new Error(`That’s your ${what}. Pick a different device from the list.`);
+
   const trainer = new Link<Trainer>(
     {
       kind: 'trainer',
       noun: 'trainer',
       request: requestTrainerDevice,
-      open: (device, onDrop) => openTrainer(device, { onReading: deps.onReading, onDisconnect: onDrop }),
-      changed: (t) => deps.trainerChanged(t),
-      describe: (state, t, name) => {
-        if (state === 'connected' && t) deps.setStatus(`${t.name} · ${t.canControl ? 'resistance follows the road' : 'power only (no resistance control)'}`, 'on');
-        else if (state === 'connecting') deps.setStatus(name ? `Looking for ${name}…` : 'Searching…', 'pending');
-        else if (state === 'reconnecting') deps.setStatus(`Lost ${name ?? 'the trainer'}. Reconnecting…`, 'pending');
-        else deps.setStatus('No trainer connected', 'off');
+      open: (device, onDrop) => {
+        if (meter.deviceId === device.id) throw SAME_DEVICE('power meter');
+        return openTrainer(device, { onReading: onTrainerReading, onDisconnect: onDrop, onControlState });
       },
+      changed: (t) => deps.trainerChanged(t),
+      describe: describeTrainer,
     },
     { ...shared, remember: (name, id) => remember('trainer', name, id) },
   );
@@ -257,7 +329,22 @@ export function initDevices(deps: DevicesDeps) {
     { ...shared, remember: (name, id) => remember('hr', name, id) },
   );
 
-  const links: Record<DeviceKind, Link<Trainer> | Link<HeartRateMonitor>> = { trainer, hr };
+  const meter = new Link<PowerMeter>(
+    {
+      kind: 'meter',
+      noun: 'power meter',
+      request: requestPowerMeterDevice,
+      open: (device, onDrop) => {
+        if (trainer.deviceId === device.id) throw SAME_DEVICE('trainer');
+        return openPowerMeter(device, onMeterReading, onDrop);
+      },
+      changed: (m) => { deps.meterChanged(m); if (!m) fellBack = false; watchSource(); },
+      describe: describeTrainer,
+    },
+    { ...shared, remember: (name, id) => remember('meter', name, id) },
+  );
+
+  const links: Record<DeviceKind, Link<Trainer> | Link<HeartRateMonitor> | Link<PowerMeter>> = { trainer, hr, meter };
 
   function remember(kind: DeviceKind, name: string, id: string) {
     remembered = rememberDevice(kind, { id, name });
@@ -275,7 +362,7 @@ export function initDevices(deps: DevicesDeps) {
 
   // ---------------------------------------------------------------- DOM ----
 
-  const menuButtons: Record<DeviceKind, HTMLElement | null> = { trainer: $('btn-menu-trainer'), hr: $('btn-hr') };
+  const menuButtons: Record<DeviceKind, HTMLElement | null> = { trainer: $('btn-menu-trainer'), hr: $('btn-hr'), meter: $('btn-meter') };
 
   function setMenuItem(kind: DeviceKind) {
     const el = menuButtons[kind];
@@ -296,7 +383,7 @@ export function initDevices(deps: DevicesDeps) {
     const box = $('settings-devices');
     if (!box) return;
     box.replaceChildren();
-    const rows: [DeviceKind, string][] = [['trainer', '🔌 Trainer'], ['hr', '❤️ Heart rate']];
+    const rows: [DeviceKind, string][] = [['trainer', '🔌 Trainer'], ['hr', '❤️ Heart rate'], ['meter', '⚡ Power meter']];
     for (const [kind, label] of rows) {
       const row = document.createElement('div');
       row.className = 'dev-row';
@@ -324,7 +411,7 @@ export function initDevices(deps: DevicesDeps) {
   document.body.append(banner);
 
   function renderBanner() {
-    const pending = (['trainer', 'hr'] as DeviceKind[]).filter((k) => remembered[k] && links[k].state === 'idle');
+    const pending = (['trainer', 'hr', 'meter'] as DeviceKind[]).filter((k) => remembered[k] && links[k].state === 'idle');
     const show = supported && !bannerDismissed && pending.length > 0;
     banner.hidden = !show;
     if (!show) { banner.replaceChildren(); return; }
@@ -342,7 +429,7 @@ export function initDevices(deps: DevicesDeps) {
       b.type = 'button';
       b.className = 'primary';
       b.dataset.reconnect = k;
-      b.textContent = `${k === 'trainer' ? '🔌' : '❤️'} Reconnect ${remembered[k]!.name}`;
+      b.textContent = `${DEVICE_ICON[k]} Reconnect ${remembered[k]!.name}`;
       actions.append(b);
     }
     const close = document.createElement('button');
@@ -358,6 +445,7 @@ export function initDevices(deps: DevicesDeps) {
   function refresh() {
     setMenuItem('trainer');
     setMenuItem('hr');
+    setMenuItem('meter');
     const tb = $('btn-trainer');
     if (tb) tb.textContent = trainer.current ? 'Disconnect' : 'Connect trainer';
     renderSettings();
@@ -375,8 +463,10 @@ export function initDevices(deps: DevicesDeps) {
   $('btn-trainer')?.addEventListener('click', () => { if (trainer.current) trainer.disconnect(); else void trainer.connect(); });
   menuButtons.trainer?.addEventListener('click', () => menuAction('trainer'));
   menuButtons.hr?.addEventListener('click', () => menuAction('hr'));
+  menuButtons.meter?.addEventListener('click', () => menuAction('meter'));
   $('btn-forget-trainer')?.addEventListener('click', () => forget('trainer'));
   $('btn-forget-hr')?.addEventListener('click', () => forget('hr'));
+  $('btn-forget-meter')?.addEventListener('click', () => forget('meter'));
   $('settings-devices')?.addEventListener('click', (e) => {
     const kind = (e.target as HTMLElement).closest<HTMLElement>('[data-forget]')?.dataset.forget as DeviceKind | undefined;
     if (kind) forget(kind);
@@ -396,10 +486,13 @@ export function initDevices(deps: DevicesDeps) {
       if (!supported) return;
       void trainer.autoConnect();
       void hr.autoConnect();
+      void meter.autoConnect();
     },
     /** The first-ride guide's buttons: connect (or reconnect) and say whether it worked. */
     async connectTrainer() { return trainer.current ? true : trainer.connect(); },
     async connectHeartRate() { return hr.current ? true : hr.connect(); },
     refresh,
+    /** Where power comes from right now: the power meter, the trainer, or nothing. */
+    powerSource: () => sourceNow(),
   };
 }

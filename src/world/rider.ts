@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { gltfLoader } from './gltf';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { cleanStyle, DEFAULT_STYLE, type BikeStyle } from '../garage/style';
 import { applyKitStyle, buildHelmetShell, buildWheel, groundGlow, haloMat, neonMat, tronBody, WHEEL_R } from './bikeParts';
@@ -77,7 +78,7 @@ function ik(root: THREE.Vector3, end: THREE.Vector3, l1: number, l2: number, ben
 /** The rigged rider, loaded once and cloned for every rider on the road. */
 let riderGltf: Promise<GLTF | null> | null = null;
 function loadRiderModel() {
-  riderGltf ??= new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/rider.glb`).catch(() => {
+  riderGltf ??= gltfLoader().loadAsync(`${import.meta.env.BASE_URL}models/rider.glb`).catch(() => {
     console.info('Rider model not found: models/rider.glb (using the built-in rider)');
     return null;
   });
@@ -154,7 +155,7 @@ export class RiderModel {
     this.buildRider();
     if (look.ghost) makeGhost(this.body, true);
     // Swap in the rigged 3D rider when it loads; the primitive rider stays as a fallback.
-    loadRiderModel().then((gltf) => {
+    void loadRiderModel().then((gltf) => {
       if (!gltf || this.disposed) return;
       this.rig = new Rig(cloneSkinned(gltf.scene));
       if (look.ghost) makeGhost(this.rig.root, true);
@@ -192,7 +193,8 @@ export class RiderModel {
     if (look.frame) this.frameMat = this.recolour(this.frameMat, M.frame, look.frame, { metalness: 0.35, roughness: 0.35 });
     if (look.jersey) this.jerseyMat = this.recolour(this.jerseyMat, M.jersey, look.jersey, { roughness: 0.7 });
     let dress = false;
-    if (look.kit !== undefined) { this.kit = look.kit; dress = true; }
+    // Compared by value: a pooled model is dressed again for every new rider, usually in the same kit.
+    if (look.kit !== undefined && (look.kit?.[0] !== this.kit?.[0] || look.kit?.[1] !== this.kit?.[1])) { this.kit = look.kit; dress = true; }
     if (look.style) {
       const next = cleanStyle(look.style);
       const changed = (Object.keys(next) as (keyof BikeStyle)[]).filter((k) => next[k] !== this.style[k]);

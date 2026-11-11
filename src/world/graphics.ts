@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { SunLight } from 'three/addons/lights/SunLight.js';
+import type { CascadeShadow } from './cascades';
 import type { Atmosphere } from './atmosphere';
 import { setGlowGain } from './bikeParts';
 import type { Post, SkyEnvironment } from './post';
@@ -20,6 +22,7 @@ export interface GraphicsParts {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   sun: THREE.DirectionalLight;
+  cascade: SunLight; // the cascaded sun for High and Ultra (cascades.ts): takes the sun's place, copying its colour and strength
   sky: Sky;
 }
 
@@ -36,10 +39,17 @@ export interface GraphicsInfo {
   change: string;
   remembered: string; // the tier Auto read from this device's memory ('' if none)
   retest: boolean; // Auto started one tier above the remembered one this session
+  stats: FrameStats; // draw calls and triangles of the last frame, and of its shadow pass (for measuring)
 }
+
+export interface FrameStats { calls: number; tris: number; shadowCalls: number; shadowTris: number; shadowMs: number }
 
 /** `?softgpu=off`: for tests only. Pretends the software renderer is a real GPU, so Auto starts on Ultra like it does on a real device. */
 const softGpuOff = new URLSearchParams(location.search).get('softgpu') === 'off';
+
+/** `?cascades=off`: for measuring. High and Ultra keep the single shadow box round the rider, as before the cascades. */
+const cascadesOff = new URLSearchParams(location.search).get('cascades') === 'off';
+const cascadePlan = (t: Tier) => (cascadesOff ? null : TIER_SPECS[t].cascade);
 
 /** `?jank=60` (ms of busy loop in every frame) or `?jank=120/8` (120 ms in every 8th frame): for testing the step-down. */
 function parseJank(): { ms: number; every: number } | null {
@@ -123,6 +133,7 @@ export class Graphics {
   private jankFrame = 0;
   private lastSaved = -Infinity; // performance.now() of the last saveAutoMemory
   private dirty = false; // a save the throttle has held back
+  private stats: FrameStats = { calls: 0, tris: 0, shadowCalls: 0, shadowTris: 0, shadowMs: 0 };
 
   constructor(private readonly p: GraphicsParts, signals: Signals) {
     this.signals = signals;
@@ -133,6 +144,7 @@ export class Graphics {
     this.autoTier = this.start.tier;
     this.tier = this.choice === 'auto' ? this.autoTier : this.choice;
     this.makeAdapter();
+    this.countShadowPass();
     document.addEventListener('visibilitychange', () => this.adapter?.hold(performance.now(), 1500)); // the frames after a tab switch are slow and say nothing
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') this.flushMemory(); });
     window.addEventListener('pagehide', () => this.flushMemory());
@@ -207,8 +219,28 @@ export class Graphics {
   info(): GraphicsInfo {
     return {
       tier: this.tier, choice: this.choice, autoTier: this.autoTier, scale: SCALES[this.scaleIdx], pixelRatio: this.pr,
-      fps: Math.round(10000 / this.fpsMs) / 10, post: !!this.post, shadows: this.p.sun.castShadow, gpu: this.signals.gpu ?? '', change: this.lastChange,
-      remembered: this.start.remembered ?? '', retest: this.start.retest,
+      fps: Math.round(10000 / this.fpsMs) / 10, post: !!this.post, shadows: this.p.sun.castShadow || this.p.cascade.castShadow, gpu: this.signals.gpu ?? '', change: this.lastChange,
+      remembered: this.start.remembered ?? '', retest: this.start.retest, stats: this.stats,
+    };
+  }
+
+  /** Counts the draw calls and triangles of each frame, and of the shadow pass alone (shown in `__afGraphics.stats`). */
+  private countShadowPass() {
+    const { renderer } = this.p;
+    const info = renderer.info;
+    info.autoReset = false; // the post chain renders several times a frame: count them all, reset in render()
+    const sm = renderer.shadowMap;
+    const draw = sm.render.bind(sm);
+    const timed = new URLSearchParams(location.search).get('shadowtime') === '1'; // dev: wait for the GPU after the shadow pass to time it (slows the frame)
+    const gl = renderer.getContext();
+    sm.render = (...a: Parameters<typeof draw>) => {
+      const c = info.render.calls, t = info.render.triangles;
+      const t0 = timed ? performance.now() : 0;
+      draw(...a);
+      if (info.render.calls > c) {
+        this.stats.shadowCalls = info.render.calls - c; this.stats.shadowTris = info.render.triangles - t;
+        if (timed) { gl.finish(); this.stats.shadowMs += (performance.now() - t0 - this.stats.shadowMs) * 0.2; }
+      }
     };
   }
 
@@ -229,9 +261,22 @@ export class Graphics {
     this.adapter?.hold(performance.now());
   }
 
-  /** Puts the sun's shadow box round `centre`, snapped to whole shadow-map texels so the shadows don't shimmer as you ride. */
+  /** True when the cascaded sun is the one drawing shadows (High and Ultra, shadows not given up). */
+  private get cascaded() { return !!cascadePlan(this.tier) && !this.noShadows; }
+
+  /**
+   * Low and Medium: puts the sun's shadow box round `centre`, snapped to whole shadow-map texels so the
+   * shadows don't shimmer as you ride. High and Ultra: hands the cascaded sun the sun's light (the
+   * cascades fit themselves to the camera each frame, snapped the same way).
+   */
   fitShadow(centre: THREE.Vector3, lightDir: THREE.Vector3) {
-    const { sun } = this.p;
+    const { sun, cascade } = this.p;
+    if (this.cascaded) {
+      cascade.position.copy(lightDir).multiplyScalar(200);
+      cascade.color.copy(sun.color);
+      cascade.intensity = sun.intensity;
+      return;
+    }
     const texel = (this.shadowBox * 2) / this.shadowSize;
     _r.set(0, 1, 0).cross(lightDir).normalize();
     _u.crossVectors(lightDir, _r);
@@ -245,9 +290,25 @@ export class Graphics {
   // -------------------------------------------------------------- applying ----
 
   private applyTier() {
-    const { renderer, sun, sky, scene } = this.p;
+    const { renderer, sun, cascade, sky, scene } = this.p;
     const spec = TIER_SPECS[this.tier];
-    sun.castShadow = !this.noShadows;
+    const cascaded = this.cascaded;
+    sun.visible = !cascaded; // one sun light at a time: the box light, or the cascaded one
+    sun.castShadow = !this.noShadows && !cascaded;
+    cascade.visible = cascaded;
+    cascade.castShadow = cascaded;
+    // Only the light that is drawing shadows keeps a map (about 100 MB for the cascades), so a tier change frees the other's.
+    if (cascaded) { sun.shadow.map?.dispose(); sun.shadow.map = null; } else { cascade.shadow.map?.dispose(); cascade.shadow.map = null; }
+    const plan = cascadePlan(this.tier);
+    if (plan) {
+      const cs = cascade.shadow as CascadeShadow;
+      if (cs.plan.tile !== plan.tile) { cs.map?.dispose(); cs.map = null; }
+      cs.plan = plan;
+      cs.radius = spec.shadowRadius;
+      cs.bias = sun.shadow.bias;
+      cs.normalBias = sun.shadow.normalBias;
+      cs.camera.far = plan.range;
+    }
     this.shadowSize = spec.shadowSize;
     this.shadowBox = spec.shadowBox;
     const sh = sun.shadow;
@@ -300,7 +361,7 @@ export class Graphics {
     this.noShadows = ev.noShadows;
     this.lastChange = `${ev.reason}${ev.fast ? ' (fast)' : ''}: ${this.tier} ${SCALES[this.scaleIdx]}${this.noShadows ? ' no-shadows' : ''}`;
     if (tierChanged && this.choice === 'auto' && this.gate.allow(performance.now())) this.notify?.(tierNote(this.tier, ev.reason === 'slow' ? 'lowered' : 'raised'));
-    if (tierChanged || this.p.sun.castShadow === this.noShadows) this.applyTier();
+    if (tierChanged || (this.p.sun.castShadow || this.p.cascade.castShadow) === this.noShadows) this.applyTier();
     else this.resize(this.cssW, this.cssH);
   }
 
@@ -331,12 +392,14 @@ export class Graphics {
   /** Draws the frame, and keeps count of how long frames take. */
   render(dt: number) {
     const t0 = performance.now();
+    this.p.renderer.info.reset();
     if (this.env && this.atmosphere && this.env.maintain(t0, this.atmosphere.skyKey, this.tier === 'ultra' ? 256 : 128, this.p.scene, this.p.sky)) this.atmosphere.hemiScale = 0.4; // the sky lights things now; keep a little of the hemisphere's ground bounce
     if (this.env && this.atmosphere && this.p.scene.environment) { const v = 0.75 * this.atmosphere.skyLight; if (this.p.scene.environmentIntensity !== v) this.p.scene.environmentIntensity = v; }
     if (this.post) this.post.render(dt);
     else this.p.renderer.render(this.p.scene, this.p.camera);
     if (this.jank && ++this.jankFrame % this.jank.every === 0) { const end = performance.now() + this.jank.ms; while (performance.now() < end) { /* busy: a slow or hitchy device, for testing */ } }
     const work = performance.now() - t0;
+    this.stats.calls = this.p.renderer.info.render.calls; this.stats.tris = this.p.renderer.info.render.triangles;
     if (this.orbiting || document.hidden) { this.lastT = 0; return; }
     if (this.lastT > 0) {
       const frame = t0 - this.lastT;

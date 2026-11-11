@@ -48,7 +48,9 @@ The `ControlPoint` class:
 
 - queues writes, so only one command is in flight at a time,
 - writes each command with a response, and
-- waits for the matching response, with a **3-second timeout**. On timeout, the command resolves as failed.
+- waits for the matching response (byte 1 must be the opcode in flight, so a late answer to a timed-out command can't resolve the next one), with a **3-second timeout**. On timeout, the command resolves as failed.
+
+Results carry the FTMS code (1 success, 2 opcode not supported, 3 invalid parameter, 4 operation failed, 5 control not permitted) or our own −1 timeout, −2 write failed, −3 not sent. `ControlPoint` and `TrainerControl` are in [`src/ble/control.ts`](../../src/ble/control.ts).
 
 ## Commands
 
@@ -116,7 +118,17 @@ Flags bit 0 selects the format: when set, heart rate is a `uint16` at byte 1; ot
 1. **ERG takes priority.** If a workout is running and not finished, it reads the target watts. It sends them only if they differ from the last value by at least 1 W. When ERG ends, it clears the last grade so the grade is sent again.
 2. **Otherwise, grade.** The target is the road grade at the rider's distance, multiplied by the **Trainer difficulty** (0–100%), plus the virtual gear's offset when virtual shifting is on, clamped to −10…+20% and rounded to 0.1%. It's sent with the draft's wind factor, and only if the grade differs from the last value by at least 0.1% or the wind factor has changed.
 
-The loop only sends on change, so the trainer keeps the last setting. If the write itself throws, the last value is cleared, so the next tick tries again. A response timeout resolves as `false` without throwing, so it doesn't trigger a retry.
+The loop only sends on change, so the trainer keeps the last setting. `setGrade` and `setTargetPower` resolve a `ControlResult` (`{ ok, code }`) and never reject; a result that isn't `ok` clears the last value, so the next tick tries again.
+
+### Losing and regaining control
+
+`TrainerControl` tracks `controlState`: `ok`, `lost` or `unavailable`. "Control not permitted", or three failures in a row, re-requests control (Request Control, then Start/Resume) and resends once. If that fails the state becomes `lost` and nothing is sent until a back-off (2, 5, 10, then 30 s) has passed. The Fitness Machine Status characteristic (`0x2ADA`) is subscribed when present: op `0xFF` (control permission lost) marks control lost at once. The rider gets one toast when control is lost and one when it returns, and the status line says so.
+
+## Power meter
+
+A separate power meter (Cycling Power Service, `0x1818`) can be connected from the ☰ Menu ([`src/ble/powerMeter.ts`](../../src/ble/powerMeter.ts); the parsing is shared in `cyclingPower.ts`). It is remembered under the kind `meter` and reconnects like the heart-rate strap. `pickPowerSource()` ([`src/ble/powerSource.ts`](../../src/ble/powerSource.ts)) decides whose watts drive the ride: the meter if it sent something in the last 3 s, else the trainer, else none; the trainer keeps its heart-rate relay and its control either way. In an ERG workout with the meter as the source, `PowerMatch` ([`src/ble/powerMatch.ts`](../../src/ble/powerMatch.ts)) adjusts the watts sent to the trainer by a slow integral of target minus meter power, within ±10% of the target (Settings: *Match my power meter in workouts*).
+
+None of this has been tried on real hardware: the tests use a mocked Web Bluetooth.
 
 ## Staleness
 
