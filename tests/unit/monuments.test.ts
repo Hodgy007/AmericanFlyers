@@ -138,6 +138,16 @@ describe('where the stages put monuments', () => {
     }
   });
 
+  it('puts the Alpe summit village above the last hairpins, right of the road and near the finish', () => {
+    const alpe = stageById('alpe-dhuez');
+    const [village] = modelsOn('alpe-dhuez', 'alpe-village');
+    expect(village.side).toBe(1);
+    expect(village.first).toBeGreaterThan(13000);
+    expect(village.first).toBeLessThan(alpe.finish!);
+    expect(village.offset, 'it stands off the road, not on it').toBeGreaterThan(village.size);
+    expect(village.clearance, 'the trees are cleared for the whole cluster').toBeGreaterThan(village.size * 2);
+  });
+
   const modelsOn = (id: string, model: MonumentId): LandmarkKind[] => stageById(id).landmarks.filter((k) => k.model === model);
 
   it("the Alpe's church stands on the outside of hairpin 7, found from the stage's own signs", () => {

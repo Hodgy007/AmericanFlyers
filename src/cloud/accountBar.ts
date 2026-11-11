@@ -35,7 +35,9 @@ export function initAccountUi(deps: Deps) {
 
   function refreshAccountButton() {
     const a = account();
-    accountBtn.textContent = a ? `👤 ${a.name.split(' ')[0]}` : '👤 Sign in';
+    // Only the label changes: the button keeps the person icon beside it (no emoji, which renders dark purple
+    // on some systems and vanishes against the top bar).
+    (document.getElementById('account-label') ?? accountBtn).textContent = a ? a.name.split(' ')[0] : 'Sign in';
     accountBtn.title = a ? `${a.name} (${a.email}): profile & stats` : 'Sign in or create a free account';
     void checkAdmin();
   }

@@ -40,9 +40,18 @@ export function initRidersUi(o: Options) {
 
   const label = () => {
     const n = o.presence.count;
-    btn.textContent = n ? `👥 ${n}` : '👥';
+    // The button holds the riders icon, so only its count badge changes: rewriting textContent would delete the icon.
+    let badge = btn.querySelector<HTMLElement>('.riders-count');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'riders-count';
+      btn.append(badge);
+    }
+    badge.textContent = n ? String(n) : '';
+    badge.hidden = n === 0;
     btn.classList.toggle('live', n > 0);
     btn.title = n ? `${n} other rider${n === 1 ? '' : 's'} on this stage` : 'Riding together';
+    btn.setAttribute('aria-label', btn.title);
   };
 
   o.presence.onChange = (riders) => {

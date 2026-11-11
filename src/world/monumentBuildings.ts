@@ -173,6 +173,147 @@ export function buildApartments(o: MonumentOptions = {}): THREE.Group {
   return finish(k.build());
 }
 
+// ------------------------------------------------------ the summit village ----
+
+const VILLAGE_WALLS = ['#e9e0cb', '#dcc7a4', '#cbb094', '#f0e9d9'];
+const VILLAGE_ROOFS = ['#6b4a3c', '#5c4640', '#4c4f55', '#7a5340'];
+const SHUTTERS = '#6e3f2e';
+
+/** A chalet: a stone ground floor, a timbered upper storey, shutters and a steep gabled roof with a chimney. */
+function chalet(k: Kit, x: number, z: number, w: number, d: number, floors: number, seed: number) {
+  const FLOOR = 2.7;
+  const BASE = 2.9;
+  const h = BASE + (floors - 1) * FLOOR;
+  const wall = VILLAGE_WALLS[Math.floor(rnd(seed, 11) * VILLAGE_WALLS.length)];
+  const roof = VILLAGE_ROOFS[Math.floor(rnd(seed, 12) * VILLAGE_ROOFS.length)];
+  const cols = Math.max(2, Math.round(w / 2.8));
+  const rise = 1.0 + w * (0.2 + rnd(seed, 13) * 0.18); // each roof a different pitch
+  k.box(w + 0.6, 3, d + 0.6, x, -3, z, '#7c776d'); // footing
+  k.box(w, BASE, d, x, 0, z, '#9a9183'); // stone ground floor
+  k.box(w, h - BASE, d, x, BASE, z, mix(wall, TIMBER, 0.28));
+  k.box(w + 0.3, 0.22, d + 0.3, x, BASE - 0.11, z, TIMBER_DARK); // floor band
+  roofOver(k, w, d, rise, 0.9, x, h, z, roof, mix(wall, '#ffffff', 0.35));
+  // A stone chimney standing proud of the roof, with a cap.
+  const cx = x + w * 0.3;
+  const cz = z - d * 0.16;
+  k.box(0.9, 1.2, 0.9, cx, h + rise * 0.62, cz, '#b3aa9a');
+  k.box(1.15, 0.22, 1.15, cx, h + rise * 0.62 + 1.2, cz, '#9a9183', 0, 1);
+  windows(k, x, z + d / 2, 0, cols, w / cols, 1, 1.0, 0, 1.0, 1.4, GLASS, SHUTTERS);
+  if (floors > 1) windows(k, x, z + d / 2, 0, cols, w / cols, floors - 1, BASE + 1.0, FLOOR, 1.0, 1.3, GLASS, SHUTTERS);
+  if (floors > 2) balcony(k, x, BASE + FLOOR - 0.18, z + d / 2, w * 0.62, 0.9, TIMBER_DARK); // a timber gallery on the tallest
+  k.box(1.1, 2.0, 0.18, x - w * 0.3, 0, z + d / 2 + 0.02, TIMBER_DARK, 0, 1); // door
+  k.box(1.5, 0.22, 0.65, x - w * 0.3, 0, z + d / 2 + 0.3, '#9a9183', 0, 1); // doorstep
+}
+
+/** The village hotel: four storeys of balconied rooms in render under a broad roof, with dormers and stone quoins. */
+function villageHotel(k: Kit, x: number, z: number, w: number, d: number, floors: number, seed: number) {
+  const FLOOR = 3;
+  const h = floors * FLOOR;
+  const wall = VILLAGE_WALLS[Math.floor(rnd(seed, 21) * VILLAGE_WALLS.length)];
+  const roof = VILLAGE_ROOFS[Math.floor(rnd(seed, 22) * VILLAGE_ROOFS.length)];
+  const cols = Math.max(3, Math.round(w / 3.4));
+  const rise = 3.2 + w * 0.1;
+  k.box(w + 0.6, 4, d + 0.6, x, -4, z, '#7c776d'); // footing
+  k.box(w, h, d, x, 0, z, wall);
+  k.box(w + 0.06, 1.5, d + 0.06, x, 0, z, '#9a9183'); // stone base storey
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.box(0.55, h, 0.55, x + sx * w / 2, 0, z + sz * d / 2, '#9a9183'); // quoins
+  roofOver(k, w, d, rise, 1.1, x, h, z, roof, wall);
+  // Dormers in the front pitch, and two chimneys on the ridge.
+  for (const dx of [-6, 0, 6]) {
+    const dz = z + d / 2 - 1.9;
+    k.box(1.8, 1.4, 1.2, x + dx, h + 1.6, dz, wall);
+    k.gable(2.1, 1.5, 0.8, x + dx, h + 3.0, dz, roof, wall);
+    k.box(0.85, 0.75, 0.2, x + dx, h + 1.75, dz + 0.62, GLASS, 0, 1);
+  }
+  for (const cx of [-5.5, 3.5]) {
+    k.box(0.9, 1.9, 0.9, x + cx, h + rise - 0.4, z, '#b3aa9a');
+    k.box(1.15, 0.2, 1.15, x + cx, h + rise + 1.5, z, '#9a9183', 0, 1);
+  }
+  windows(k, x, z + d / 2, 0, cols, w / cols, 1, 1.1, 0, 1.3, 1.8);
+  windows(k, x, z + d / 2, 0, cols, w / cols, floors - 1, FLOOR + 1.0, FLOOR, 1.2, 1.5);
+  for (let f = 1; f < floors; f++) balcony(k, x, f * FLOOR - 0.12, z + d / 2, w * 0.76, 1.3, TIMBER_DARK);
+  k.box(2.0, 2.4, 0.2, x, 0, z + d / 2 + 0.06, '#4b3322', 0, 1); // entrance
+  k.box(2.6, 0.3, 1.6, x, 2.4, z + d / 2 + 0.7, '#6b4a3c'); // canopy
+}
+
+/** The village chapel: a whitewashed nave with a square bell tower, a slate spire, a gold cross and a timber porch. */
+function villageChapel(k: Kit, x: number, z: number) {
+  const WALL = '#f2ece0';
+  const w = 5.4;
+  const d = 8;
+  const tx = x + w / 2 + 1.7;
+  const tz = z + d / 2 - 1.6;
+  k.box(w + 0.8, 3, d + 0.8, x, -3, z, '#7c776d'); // footing
+  k.box(w, 4.4, d, x, 0, z, WALL); // nave
+  roofOver(k, w, d, 2.6, 0.6, x, 4.4, z, '#6b4a3c', WALL, false);
+  k.box(3.2, 11, 3.2, tx, 0, tz, mix(WALL, '#d6cdb4', 0.35)); // tower
+  k.box(3.8, 0.45, 3.8, tx, 11, tz, '#a89f8a', 0, 1);
+  k.pyramid(3.0, 3.0, 2.6, tx, 11.45, tz, '#4a5058');
+  k.box(0.12, 1.4, 0.12, tx, 14.05, tz, '#d8b24a', 0, 1); // cross
+  k.box(0.7, 0.12, 0.12, tx, 14.8, tz, '#d8b24a', 0, 1);
+  k.box(0.75, 1.5, 0.12, tx, 9.3, tz + 1.62, '#2f3238', 0, 1); // bell openings
+  k.box(0.12, 1.5, 0.75, tx + 1.62, 9.3, tz, '#2f3238', 0, 1);
+  windows(k, x, z + d / 2, 0, 2, 1.7, 1, 1.7, 0, 0.7, 1.8);
+  k.box(1.2, 2.3, 0.18, x, 0, z + d / 2 + 0.02, '#4b3322', 0, 1); // door
+  k.box(0.9, 0.75, 0.14, x, 3.32, z + d / 2 + 0.03, '#a89f8a', 0, 1); // oculus over the porch
+  k.box(0.7, 0.55, 0.16, x, 3.42, z + d / 2 + 0.08, GLASS, 0, 1);
+  // A timber porch on two posts, with its own little gable.
+  for (const px of [-1.05, 1.05]) k.box(0.22, 2.5, 0.22, x + px, 0, z + d / 2 + 1.1, TIMBER);
+  k.gable(2.7, 1.7, 0.65, x, 2.5, z + d / 2 + 0.95, '#6b4a3c', '#6b4a3c');
+  k.box(2.6, 0.18, 1.1, x, 0, z + d / 2 + 1.0, '#a89f8a', 0, 1); // step
+}
+
+/**
+ * The village at the top of Alpe d'Huez, above the last hairpins: a hotel, four timbered chalets
+ * either side of it, a chapel with a bell tower and the stone walls of the square in front.
+ * `seed` varies the colours and so the look of the village.
+ */
+export function buildAlpeVillage(o: MonumentOptions = {}): THREE.Group {
+  const seed = o.seed ?? 1;
+  const k = new Kit();
+  villageHotel(k, -3, 0, 18, 12, 4, seed + 1);
+  chalet(k, -27, 3, 9, 8, 3, seed + 2);
+  chalet(k, -37, 1, 8, 7, 2, seed + 3);
+  chalet(k, 19, 3, 10, 8, 3, seed + 4);
+  chalet(k, 30, 1, 8, 7, 2, seed + 5);
+  villageChapel(k, 8, 2);
+  // The square in front of the hotel: a raised terrace under the balconies, a low stone wall along
+  // its edge with a flight of steps down the middle, and the square's furniture.
+  const STONE = '#a89f8a';
+  k.box(20, 0.5, 4.6, -3, -0.05, 8.6, '#b3aa95'); // terrace
+  k.box(7.5, 1.0, 0.6, -9.25, -0.5, 10.9, STONE); // wall left of the steps
+  k.box(7.5, 1.0, 0.6, 3.25, -0.5, 10.9, STONE);
+  k.box(0.7, 1.5, 0.7, -5.9, -0.25, 10.9, '#8f8674'); // piers flanking the steps
+  k.box(0.7, 1.5, 0.7, -0.1, -0.25, 10.9, '#8f8674');
+  for (let i = 0; i < 3; i++) k.box(5, 0.16, 0.6, -3, 0.32 - i * 0.16, 11.25 + i * 0.55, '#bdb4a0', 0, 1); // steps
+  k.box(2.6, 0.45, 0.9, -3, 0.12, 6.6, STONE, 0, 1); // step to the hotel door
+  // A stone fountain with a spout.
+  k.box(2.8, 0.55, 1.7, -10.2, 0.45, 8.9, '#9a9183');
+  k.box(3.1, 0.18, 2.0, -10.2, 1.0, 8.9, '#b3aa95', 0, 1);
+  k.cyl(0.22, 0.17, 1.3, -10.2, 1.1, 8.9, '#8f8674', 8);
+  k.box(0.5, 0.12, 0.12, -10.2, 2.3, 8.9, '#8f8674', 0, 1);
+  // Two benches looking out over the valley.
+  for (const bx of [2.2, 5.0]) {
+    k.box(1.8, 0.12, 0.5, bx, 0.65, 9.9, TIMBER);
+    k.box(1.8, 0.5, 0.1, bx, 0.75, 10.12, TIMBER_DARK, 0, 1);
+    for (const lx of [-0.72, 0.72]) k.box(0.12, 0.45, 0.42, bx + lx, 0.42, 9.9, '#4a4a4a');
+  }
+  // Lamp posts on the piers, planters by the door, and the flag.
+  for (const lx of [-5.9, -0.1]) {
+    k.cyl(0.12, 0.09, 2.6, lx, 1.25, 10.9, '#3a4046', 6);
+    k.box(0.46, 0.46, 0.46, lx, 3.85, 10.9, '#3a4046', 0, 1);
+    k.box(0.34, 0.34, 0.34, lx, 3.91, 10.9, '#f2d98a', 0, 1);
+    k.pyramid(0.6, 0.6, 0.3, lx, 4.31, 10.9, '#2f353a');
+  }
+  for (const px of [-6.4, 0.4]) {
+    k.box(1.1, 0.5, 0.7, px, 0.45, 7.3, '#b3aa95');
+    k.box(0.9, 0.35, 0.5, px, 0.95, 7.3, '#4f7d3a', 0, 1);
+  }
+  k.cyl(0.07, 0.05, 8.5, 11.5, 0, 8.4, '#c9ccd0', 6);
+  ['#1f4fa3', '#f4f4f4', '#d0222d'].forEach((c, j) => k.box(0.42, 0.9, 0.06, 11.78 + j * 0.42, 7.0, 8.4, c, 0, 1));
+  return finish(k.build());
+}
+
 // ------------------------------------------------------------- the passes ----
 
 const ROW_WALLS = ['#d8c9a8', '#c98b6a', '#e9e2d0', '#b8b09a', '#d3b98e'];

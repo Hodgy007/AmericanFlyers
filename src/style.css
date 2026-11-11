@@ -156,6 +156,13 @@ button.icon { padding: 3px 8px; border-radius: 8px; font-size: 13px; }
 .dialog-head h2 { margin: 0; }
 .head-actions { display: flex; gap: 8px; }
 dialog .hint code { color: var(--text); }
+
+/* Settings: two columns of switches on a wide screen, one on a phone. The form is a grid, so the
+   sections that must span the full width (devices, AI fieldset, actions) say so by class. */
+.settings-dialog { width: min(96vw, 940px); max-height: 92vh; overflow-y: auto; }
+.settings-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; align-items: start; }
+.settings-form > .settings-wide { grid-column: 1 / -1; }
+@media (max-width: 760px) { .settings-form { grid-template-columns: 1fr; } }
 .file-button {
   display: inline-flex !important;
   align-items: center;
@@ -274,8 +281,29 @@ dialog {
   color: var(--text);
   padding: 20px 22px;
   width: min(92vw, 380px);
+  position: relative; /* the close button sits in the top-right corner */
 }
 dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+/* Every dialog gets a red ✕ in its top-right corner (added by closeButtons() in main.ts), so any of them
+   can be dismissed with one click, not just the ones with a Cancel button. The inset glow keeps it legible
+   over whatever happens to be behind it. */
+.dialog-close {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  display: grid; place-items: center;
+  width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: var(--red); color: #fff;
+  font-size: 17px; font-weight: 700; line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.dialog-close:hover { filter: brightness(1.15); }
+.dialog-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* Leave room for it beside the heading (h2s carry the dialog's own top margin). A header row keeps its
+   action buttons clear of the corner: it pads on the right so nothing runs under the ✕. Keyed on the
+   injected button itself, since prepending it makes the header no longer the dialog's first child. */
+dialog:has(> .dialog-close) .dialog-head { padding-right: 46px; }
+dialog:has(> .dialog-close) > h2:first-of-type, dialog:has(> .dialog-close) > form > h2:first-child { padding-right: 40px; }
 dialog h2 { margin: 0 0 14px; font-size: 18px; }
 dialog label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
 dialog input[type='number'], dialog select {
@@ -586,6 +614,20 @@ button.icon { border-radius: 8px; }
 .actions button.primary { background: linear-gradient(180deg, var(--red-hi), #b51b2b); }
 .actions button.active { background: linear-gradient(180deg, #4b88ff, #2a5fd1); }
 .hud-edit { border-radius: 50%; }
+
+/* Inline icons in buttons: stroked line art in the button's own text colour, so they stay bright and match
+   the label (emoji glyphs render dark purple on some systems and disappear on the dark bar). */
+.ico {
+  width: 17px; height: 17px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.9;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.actions button:has(> .ico), #btn-account { display: inline-flex; align-items: center; gap: 7px; }
+#btn-riders { padding: 7px 9px; color: #eaf1ff; }
+#btn-riders.live { color: #4ade80; }
+/* How many other riders are here, in a small bright pill beside the icon. */
+.riders-count { min-width: 16px; padding: 0 4px; border-radius: 999px; background: #4ade80; color: #0b1020; font-size: 11px; font-weight: 800; line-height: 16px; text-align: center; }
+.riders-count[hidden] { display: none; }
 
 /* Fields */
 dialog input[type='number'], dialog input[type='search'], dialog select, dialog textarea, .creator-meta input, dialog .block-field input[type] {

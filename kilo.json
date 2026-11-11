@@ -1,0 +1,14 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "mcp": {
+    "higgsfield": {
+      "type": "remote",
+      "url": "https://mcp.higgsfield.ai/mcp",
+      "enabled": true,
+      "timeout": 300000
+    }
+  },
+  "permission": {
+    "higgsfield_*": "ask"
+  }
+}

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { gltfLoader } from './gltf';
 import { currentStage, gradeAt, roadPoint } from '../course';
 import type { LandmarkKind } from '../stages';
-import { heightAt } from './terrain';
+import { groundSampler } from './terrain';
 import type { MonumentId } from './monumentTypes';
 
 // Roadside landmarks: GLB models from public/models/, or monuments built in code
@@ -71,6 +71,7 @@ export class Landmarks {
   readonly group = new THREE.Group();
   private readonly sources = new Map<string, THREE.Object3D | null>(); // file → loaded scene
   private readonly prepared = new Map<LandmarkKind, THREE.Object3D>(); // kind → scaled model
+  private readonly footprint = new Map<LandmarkKind, { x: number; z: number }>(); // kind → half the model's width and depth
   private readonly placed = new Map<string, THREE.Object3D>();
 
   private readonly loader = gltfLoader();
@@ -183,18 +184,45 @@ export class Landmarks {
       return;
     }
     const p = roadPoint(site.d);
-    const y = kind.side === 0 ? p.y : heightAt(site.x, site.z, { dist: kind.offset, d: site.d });
-    obj.position.set(site.x, y - 0.4, site.z); // sink slightly so slopes don't show a gap
+    let yaw = 0;
+    if (kind.side === 0) {
+      // Face back down the road towards the approaching rider.
+      yaw = Math.atan2(-Math.cos(p.heading), -Math.sin(p.heading));
+    } else {
+      // Face the road, then turn a little towards oncoming riders.
+      yaw = Math.atan2(kind.side * Math.sin(p.heading), -kind.side * Math.cos(p.heading)) + (kind.yaw ?? 0) * kind.side;
+    }
+    // The terrain mesh is shaped from each point's nearest road (the cut beside it, and the leg of
+    // the next hairpin above); a fixed `offset` misses both, which leaves a big model hanging over
+    // the slope. Sample the real ground under the turned footprint, and stand on its lowest corner so
+    // the downhill edge meets the ground (the uphill side settles into the slope).
+    let y = p.y;
+    if (kind.side !== 0) {
+      let half = this.footprint.get(kind);
+      if (half === undefined) {
+        const box = new THREE.Box3().setFromObject(obj);
+        half = { x: (box.max.x - box.min.x) / 2, z: (box.max.z - box.min.z) / 2 };
+        this.footprint.set(kind, half);
+      }
+      // Corners of the footprint in local space, turned into the world. `x` is the road direction.
+      const cos = Math.cos(yaw), sin = Math.sin(yaw);
+      const corners = [[-half.x, -half.z], [half.x, -half.z], [-half.x, half.z], [half.x, half.z]];
+      const reach = Math.min(Math.max(half.x, half.z), 120);
+      const ground = groundSampler(site.x - reach, site.x + reach, site.z - reach, site.z + reach);
+      y = ground(site.x, site.z);
+      for (const [lx, lz] of corners) {
+        const dx = lx * cos + lz * sin;
+        const dz = -lx * sin + lz * cos;
+        y = Math.min(y, ground(site.x + dx, site.z + dz));
+      }
+    }
+    const place = (kind.span === 'along' ? p.y + (kind.lift ?? 0) : y - 0.4); // sink slightly so slopes don't show a gap
+    obj.position.set(site.x, place, site.z);
     if (kind.span === 'along') {
       // Long axis follows the road, pitched to match the grade.
       obj.rotation.set(0, -p.heading, Math.atan(gradeAt(site.d)), 'YXZ');
-      obj.position.y = p.y + (kind.lift ?? 0); // sits on the road, not sunk
-    } else if (kind.side === 0) {
-      // Face back down the road towards the approaching rider.
-      obj.rotation.y = Math.atan2(-Math.cos(p.heading), -Math.sin(p.heading));
     } else {
-      // Face the road, then turn a little towards oncoming riders.
-      obj.rotation.y = Math.atan2(kind.side * Math.sin(p.heading), -kind.side * Math.cos(p.heading)) + (kind.yaw ?? 0) * kind.side;
+      obj.rotation.y = yaw;
     }
   }
 }

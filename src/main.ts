@@ -81,6 +81,32 @@ import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChang
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
+/**
+ * A red ✕ in the top-right corner of every dialog, so any of them closes with one click (they all
+ * close on Escape and most on a backdrop click, but not all have a Cancel button). The button carries
+ * type="button" and no name, so a dialog's own <form method="dialog"> never sees it as a submit and
+ * close() leaves returnValue as the dialog set it: Settings saves only on its own Save button.
+ */
+function closeButtons() {
+  for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
+    if (dialog.querySelector(':scope > .dialog-close')) continue;
+    // Some dialogs already carry their own ✕ in the header: don't give them a second one.
+    if (dialog.querySelector('.dialog-head [aria-label="Close"]')) continue;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'dialog-close';
+    close.setAttribute('aria-label', 'Close');
+    close.title = 'Close (Esc)';
+    close.textContent = '✕';
+    close.addEventListener('click', () => dialog.close());
+    dialog.prepend(close);
+  }
+}
+closeButtons();
+// A dialog's own content can be rebuilt (the workout library, the garage), and a new dialog could be
+// added later: catch any that turns up without a close button as soon as one is opened.
+document.addEventListener('toggle', (e) => { if (e.target instanceof HTMLDialogElement && e.target.open) closeButtons(); }, true);
+
 const STALE_MS = 3000; // treat trainer as idle if no data for this long
 const KM_PER_MI = 1.609344;
 
