@@ -120,11 +120,13 @@
         <div class="menu-wrap">
           <button id="btn-menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu" title="More">☰ Menu</button>
           <div id="menu" class="menu" role="menu" hidden>
-            <!-- Trainer and heart rate: labels are filled in by src/devicesUi.ts (connected, remembered, reconnecting). -->
+            <!-- Trainer, heart rate and power meter: labels are filled in by src/devicesUi.ts (connected, remembered, reconnecting). -->
             <button id="btn-menu-trainer" role="menuitem"><span class="mi-label">🔌 Connect trainer</span><small class="mi-sub"></small></button>
             <button id="btn-hr" role="menuitem"><span class="mi-label">❤️ Heart rate</span><small class="mi-sub"></small></button>
+            <button id="btn-meter" role="menuitem"><span class="mi-label">⚡ Power meter</span><small class="mi-sub"></small></button>
             <button id="btn-forget-trainer" role="menuitem" hidden>✕ Forget trainer</button>
             <button id="btn-forget-hr" role="menuitem" hidden>✕ Forget heart rate strap</button>
+            <button id="btn-forget-meter" role="menuitem" hidden>✕ Forget power meter</button>
             <button id="btn-reset" role="menuitem" title="Finish this ride and see its summary">⏹ End ride</button>
             <button id="btn-menu-hub" role="menuitem" title="Back to the hub: route, training, plan, achievements, garage and stats">🏠 Hub</button>
             <button id="btn-demo" role="menuitem">🎮 Demo ride</button>
@@ -376,9 +378,12 @@
           </select>
           <span class="hint" id="graphics-note"></span>
         </label>
+        <label class="check"><input name="powerMatch" type="checkbox" /> Match my power meter in workouts
+          <span class="hint">With a separate power meter, ERG nudges the trainer’s target a few percent so your meter’s watts, not the trainer’s, sit on the workout target. Only applies while a power meter is connected.</span>
+        </label>
         <div class="dev-box">
           <strong>Remembered devices</strong>
-          <span class="hint">This browser remembers the trainer and heart rate strap you last connected, so next time they reconnect without searching. Forgetting one only removes it from this browser.</span>
+          <span class="hint">This browser remembers the trainer, heart rate strap and power meter you last connected, so next time they reconnect without searching. Forgetting one only removes it from this browser.</span>
           <div id="settings-devices"></div>
         </div>
         <label class="check"><input name="virtualShifting" type="checkbox" /> Virtual shifting
@@ -525,7 +530,7 @@
         </section>
         <section class="ob-step" hidden>
           <h2>Your trainer</h2>
-          <p class="muted">Wake your smart trainer by pedalling a few strokes, then connect. Any Bluetooth FTMS trainer works (Wahoo KICKR, Tacx, Elite, Saris, Zwift Hub and more). American Flyers remembers your trainer and strap on this browser, so you won’t have to connect them again next time.</p>
+          <p class="muted">Wake your smart trainer by pedalling a few strokes, then connect. Any Bluetooth FTMS trainer works (Wahoo KICKR, Tacx, Elite, Saris, Zwift Hub and more). American Flyers remembers your trainer and strap on this browser, so you won’t have to connect them again next time. Own a crank or pedal power meter? Add it later from the ☰ Menu to use its watts.</p>
           <div class="ob-devices">
             <button type="button" id="ob-trainer" class="primary">🚲 Connect trainer</button>
             <button type="button" id="ob-hr">❤️ Connect heart rate strap</button>

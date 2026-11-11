@@ -174,3 +174,19 @@ describe('menuLabel', () => {
     expect(menuLabel({ kind: 'hr', state: 'connected', connectedName: 'Strap', remembered }).label).toBe('❤️ Disconnect Strap');
   });
 });
+
+describe('power meter kind', () => {
+  it('is remembered and forgotten like the others', () => {
+    const store = memory();
+    rememberDevice('meter', { id: 'm1', name: 'Assioma' }, store);
+    rememberDevice('trainer', { id: 't1', name: 'KICKR' }, store);
+    expect(loadRemembered(store)).toEqual({ trainer: { id: 't1', name: 'KICKR' }, meter: { id: 'm1', name: 'Assioma' } });
+    expect(forgetRemembered('meter', store)).toEqual({ trainer: { id: 't1', name: 'KICKR' } });
+  });
+
+  it('has its own menu labels', () => {
+    expect(menuLabel({ kind: 'meter', state: 'idle' }).label).toBe('⚡ Power meter');
+    expect(menuLabel({ kind: 'meter', state: 'idle', remembered: { id: 'm', name: 'Assioma' } }).label).toBe('⚡ Reconnect Assioma');
+    expect(menuLabel({ kind: 'meter', state: 'connected', connectedName: 'Assioma' }).label).toBe('⚡ Disconnect Assioma');
+  });
+});
