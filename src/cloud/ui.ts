@@ -35,6 +35,8 @@ export interface Deps {
   beforeSignOut?: () => Promise<void>;
   /** Makes a share card for a ride (src/garage/shareUi.ts). */
   shareRide?: (a: Activity) => void;
+  /** Rides saved on this device but not yet uploaded (src/rideQueue.ts), for the Activities tab. */
+  queuedRides?: { count: () => number; retry: () => void };
 }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -146,6 +148,11 @@ export function initAccountDialogs(deps: Deps) {
   }
 
   onAccountChange(() => {
+    // Everything below belongs to the rider who was signed in a moment ago: drop it, and let any
+    // in-flight tab render be discarded (tabToken) rather than painting one rider's rides under another's name.
+    activities = null;
+    tabToken++;
+    focusRide = null;
     void checkAdmin();
     if (account()) {
       if (signinDialog.open) signinDialog.close();
@@ -342,6 +349,14 @@ export function initAccountDialogs(deps: Deps) {
     const u = units(s);
     const acts = await loadActivities();
     const root = h('div', { class: 'activity-list' });
+    const pending = deps.queuedRides?.count() ?? 0;
+    if (pending) {
+      const note = h('div', { class: 'pending-rides' },
+        h('span', { text: pending === 1 ? '1 ride is saved on this device but not uploaded yet.' : `${pending} rides are saved on this device but not uploaded yet.` }),
+        button('Retry now', () => { deps.queuedRides!.retry(); deps.toast('Trying again…'); }),
+      );
+      root.append(note);
+    }
     if (!acts.length) {
       root.append(h('p', { class: 'muted', text: 'No rides saved yet. Rides save automatically when you finish a stage or workout, or press Reset after riding for a minute or more.' }));
       return root;

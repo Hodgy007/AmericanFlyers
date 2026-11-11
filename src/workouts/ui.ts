@@ -4,7 +4,7 @@ import { formatTime } from '../hud';
 import { parseWorkoutFile, toZwo, newId } from './files';
 import { drawWorkout } from './graph';
 import { allWorkouts, deleteWorkout, saveWorkout } from './library';
-import { estimateTss, expand, totalDuration, type Block, type Workout } from './model';
+import { estimateTss, expand, totalDuration, validateWorkout, WORKOUT_LIMITS, type Block, type Workout } from './model';
 
 export interface WorkoutUiHooks {
   ftp(): number;
@@ -103,6 +103,9 @@ export function initWorkoutUi(hooks: WorkoutUiHooks) {
 
   function openCreator(w: Workout) {
     draft = w;
+    // A dialog remembers its returnValue: without this, closing a reopened creator replayed the last
+    // Save & ride (a second save and a second ride). Every way out now starts from "cancelled".
+    creator.returnValue = '';
     const form = creator.querySelector('form')!;
     (form.elements.namedItem('name') as HTMLInputElement).value = w.name;
     (form.elements.namedItem('description') as HTMLInputElement).value = w.description;
@@ -138,7 +141,7 @@ export function initWorkoutUi(hooks: WorkoutUiHooks) {
         case 'steady': time('Time', 'duration'); pct('% FTP', 'power'); break;
         case 'ramp': time('Time', 'duration'); pct('From %', 'from'); pct('To %', 'to'); break;
         case 'intervals':
-          field(fields, 'Repeats', String(b.repeats), 'number', (v) => { const n = Math.round(Number(v)); if (n >= 1) { b.repeats = n; changed(); } });
+          field(fields, 'Repeats', String(b.repeats), 'number', (v) => { const n = Math.round(Number(v)); if (n >= 1) { b.repeats = Math.min(WORKOUT_LIMITS.repeats, n); changed(); } });
           time('On', 'onDuration'); pct('On %', 'onPower'); time('Off', 'offDuration'); pct('Off %', 'offPower');
           break;
         case 'free': time('Time', 'duration'); break;
@@ -167,14 +170,20 @@ export function initWorkoutUi(hooks: WorkoutUiHooks) {
   }
 
   function preview() {
-    const steps = expand(draft.blocks);
-    drawWorkout($<HTMLCanvasElement>('creator-graph'), steps);
-    const T = totalDuration(steps);
-    const ftp = hooks.ftp();
-    const avg = T ? steps.reduce((a, s) => a + ((s.free ? 0.5 : (s.start + s.end) / 2) * s.duration), 0) / T : 0;
-    $('creator-summary').textContent = draft.blocks.length
-      ? `${formatTime(T)} · TSS ${estimateTss(steps)} · average ${Math.round(avg * ftp)} W at your FTP of ${ftp} W`
-      : 'Add some blocks below to build your workout.';
+    // A half-typed draft can be out of bounds (a huge repeat count, a 30-hour interval). Say so in the
+    // summary instead of throwing out of the input handler and losing the creator.
+    try {
+      const steps = expand(draft.blocks);
+      drawWorkout($<HTMLCanvasElement>('creator-graph'), steps);
+      const T = totalDuration(steps);
+      const ftp = hooks.ftp();
+      const avg = T ? steps.reduce((a, s) => a + ((s.free ? 0.5 : (s.start + s.end) / 2) * s.duration), 0) / T : 0;
+      $('creator-summary').textContent = draft.blocks.length
+        ? `${formatTime(T)} · TSS ${estimateTss(steps)} · average ${Math.round(avg * ftp)} W at your FTP of ${ftp} W`
+        : 'Add some blocks below to build your workout.';
+    } catch (e) {
+      $('creator-summary').textContent = (e as Error).message;
+    }
   }
 
   creator.querySelectorAll<HTMLButtonElement>('[data-add]').forEach((btn) => btn.addEventListener('click', () => {
@@ -205,6 +214,12 @@ export function initWorkoutUi(hooks: WorkoutUiHooks) {
     if (action !== 'save' && action !== 'ride') return;
     readMeta();
     if (!draft.blocks.length) { hooks.toast('A workout needs at least one block.'); return; }
+    try {
+      validateWorkout(draft);
+    } catch (e) {
+      hooks.toast(`This workout can’t be saved: ${(e as Error).message}`, 6000);
+      return; // (the dialog is already closed; nothing is saved or started)
+    }
     if (!saveWorkout(draft)) hooks.toast('Couldn’t save to this browser’s storage; the workout is available until you reload.');
     if (action === 'ride') hooks.ride(draft);
     else { hooks.toast(`Saved "${draft.name}"`); openLibrary(); }

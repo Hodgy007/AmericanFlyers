@@ -256,18 +256,20 @@ export function classifyError(e: unknown): PerplexityFailure {
 
 // -------------------------------------------------------------- runner ----
 
-export type PerplexityRunner = (req: GatewayRequest) => Promise<PerplexityAnswer>;
+export type PerplexityRunner = (req: GatewayRequest, signal?: AbortSignal) => Promise<PerplexityAnswer>;
 
 /** Calls the gateway with plain fetch. Failures are thrown as PerplexityFailure (kind, status, Retry-After), never with the response text. */
 export function makeRunner(token: string, fetcher: typeof fetch = fetch, url: string = GATEWAY_URL): PerplexityRunner {
-  return async (req) => {
+  return async (req, signal) => {
+    const requestSignal = AbortSignal.any([AbortSignal.timeout(CALL_TIMEOUT_MS), ...(signal ? [signal] : [])]);
     let res: Response;
     try {
+      requestSignal.throwIfAborted();
       res = await fetcher(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify(req),
-        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        signal: requestSignal,
       });
     } catch (e) {
       throw classifyError(e);

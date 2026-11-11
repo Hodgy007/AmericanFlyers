@@ -14,6 +14,8 @@ export interface KeyEventLike {
   ctrlKey?: boolean;
   metaKey?: boolean;
   altKey?: boolean;
+  /** True while an input method (IME) is composing text: those keys belong to it. */
+  isComposing?: boolean;
 }
 
 const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
@@ -34,6 +36,7 @@ export function ignoreRideKey(e: KeyEventLike, atHome: boolean, release = false)
   if (target?.closest?.('dialog')) return true;
   if (isTypingTarget(target)) return true;
   if (release) return false;
+  if (e.isComposing) return true;
   if (atHome) return true;
   return !!(e.ctrlKey || e.metaKey || e.altKey);
 }

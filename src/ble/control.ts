@@ -3,6 +3,8 @@
 // Another app (Zwift, the Wahoo app) can take control mid-ride, or the trainer can stop answering. The
 // pieces here notice that, ask for control again with a growing wait, and report the state so the rider is told.
 
+import { notificationView } from './notification';
+
 export const OP_REQUEST_CONTROL = 0x00;
 export const OP_SET_TARGET_POWER = 0x05;
 export const OP_START_RESUME = 0x07;
@@ -52,8 +54,8 @@ export class ControlPoint {
 
   async start() {
     if (!this.char) return;
-    this.char.addEventListener('characteristicvaluechanged', () => {
-      const v = this.char!.value;
+    this.char.addEventListener('characteristicvaluechanged', (event) => {
+      const v = notificationView(event, this.char!);
       if (!v || v.byteLength < 3 || v.getUint8(0) !== OP_RESPONSE) return;
       // Only the response to the request in flight counts: a late answer to a request that already
       // timed out must not resolve the next one.

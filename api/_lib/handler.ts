@@ -23,6 +23,8 @@ import type { AiError, AiKind, AiReply, AiResults } from '../../src/ai/types.js'
 import { buildClimbRaw, buildClimbRequest, classifyError, DEFAULT_MODEL as DEFAULT_CLIMB_MODEL, type PerplexityRunner } from './perplexity.js';
 
 export const MAX_BODY_BYTES = 24_000;
+// Leave time to return an error before the browser's 38 s and Vercel's 40 s deadlines.
+export const AI_BUDGET_MS = 35_000;
 
 export interface AiDeps {
   /** Null when ANTHROPIC_API_KEY isn't set. */
@@ -74,29 +76,53 @@ const limiter = new WindowLimiter();
 const clientKey = (req: Request) => (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown';
 
 /** Reads the body as text, aborting (null) as soon as it would pass `cap` bytes. */
-async function readCapped(req: Request, cap: number): Promise<string | null> {
+async function readCapped(req: Request, cap: number, signal: AbortSignal): Promise<string | null> {
+  signal.throwIfAborted();
   if (!req.body) return '';
   const reader = req.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > cap) {
-      await reader.cancel().catch(() => {});
-      return null;
+  const cancel = () => { void reader.cancel(signal.reason).catch(() => {}); };
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      signal.throwIfAborted();
+      if (done) break;
+      total += value.byteLength;
+      if (total > cap) {
+        await reader.cancel().catch(() => {});
+        return null;
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+    const all = new Uint8Array(total);
+    let at = 0;
+    for (const c of chunks) { all.set(c, at); at += c.byteLength; }
+    return new TextDecoder().decode(all);
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    reader.releaseLock();
   }
-  const all = new Uint8Array(total);
-  let at = 0;
-  for (const c of chunks) { all.set(c, at); at += c.byteLength; }
-  return new TextDecoder().decode(all);
 }
 
 
 export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(new DOMException('AI deadline exceeded', 'TimeoutError')), AI_BUDGET_MS);
+  const signal = AbortSignal.any([req.signal, deadline.signal]);
+  try {
+    return await handleRequest(req, deps, signal);
+  } catch (e) {
+    if (signal.aborted) return fail(504, 'unavailable', 'The AI took too long. Your ride carries on with the built-in tips.');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function handleRequest(req: Request, deps: AiDeps, signal: AbortSignal): Promise<Response> {
+  signal.throwIfAborted();
   const log = deps.log ?? (() => {});
   const started = Date.now();
   if (req.method !== 'POST') return fail(405, 'bad_request', 'Use POST.');
@@ -115,7 +141,7 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
 
   const declared = Number(req.headers.get('content-length') ?? 0);
   if (declared > MAX_BODY_BYTES) return fail(413, 'bad_request', 'That request is too big.');
-  const text = await readCapped(req, MAX_BODY_BYTES);
+  const text = await readCapped(req, MAX_BODY_BYTES, signal);
   if (text === null) return fail(413, 'bad_request', 'That request is too big.');
 
   let raw: unknown;
@@ -131,7 +157,8 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
 
   // The gate: sign-in, opt-in, ban and quota, all decided by the database with the rider's own token.
   const rival: string | null = kind === 'rival_pre' || kind === 'rival_post' ? payload.rival : null;
-  const gate = await claim(deps.dataApi, token, kind, rival);
+  const gate = await claim(deps.dataApi, token, kind, rival, signal);
+  signal.throwIfAborted();
   if (gate.kind === 'sign_in') return fail(401, 'sign_in', 'Please sign in again to use the AI.');
   if (gate.kind === 'unavailable') return fail(503, 'unavailable', 'The AI is taking a break. Try again in a bit.');
   if (gate.kind === 'denied') {
@@ -143,12 +170,14 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
   const today = (deps.now?.() ?? new Date()).toISOString().slice(0, 10);
   const model = deps.model || DEFAULT_MODEL;
 
-  if (kind === 'coach_climb') return climbGuide(deps, payload as ClimbPayload, c, today, started);
+  if (kind === 'coach_climb') return climbGuide(deps, payload as ClimbPayload, c, today, started, signal);
 
   let outcome: ClaudeOutcome<unknown>;
   try {
-    outcome = await run(kind, payload, c, today, model, deps.runner as ClaudeRunner);
+    outcome = await run(kind, payload, c, today, model, deps.runner as ClaudeRunner, signal);
+    signal.throwIfAborted();
   } catch (e) {
+    signal.throwIfAborted();
     log(JSON.stringify({ ai: true, kind, error: isAnthropicError(e) ? (e as Error).name : 'unexpected', status: (e as { status?: number }).status ?? null, ms: Date.now() - started }));
     return fail(503, 'unavailable', 'The AI is busy right now. Your ride carries on with the built-in tips.');
   }
@@ -159,11 +188,13 @@ export async function handleAi(req: Request, deps: AiDeps): Promise<Response> {
   let data = outcome.status === 'ok' ? finish(kind, outcome.data, payload) : null;
   if (!data) { source = 'canned'; data = canned(kind, payload); }
 
-  if (kind === 'rival_post' && payload.counts) {
+  if (kind === 'rival_post' && payload.counts && !signal.aborted) {
     const note = (data as AiResults['rival_post']).note;
-    const saved = await recordRival(deps.dataApi, token, payload.rival, payload.result === 'won', note);
+    // Memory is optional and gets at most 2 s; do not discard a completed reply if that write times out.
+    const saved = await recordRival(deps.dataApi, token, payload.rival, payload.result === 'won', note, signal);
     if (!saved) log(JSON.stringify({ ai: true, kind, warning: 'rival_record failed' }));
   }
+  req.signal.throwIfAborted();
   return json(200, { ok: true, kind, source, data, remaining: Math.max(0, c.limit - c.used) } as AiReply);
 }
 
@@ -173,7 +204,7 @@ type ClimbPayload = { stageId: string; topic: ClimbTopic };
  * The Climb guide: one Perplexity Sonar call (web search) through the Vercel AI Gateway. The question is built from our own stage table, so
  * the body only chooses a stage and a topic. Failures are logged without the key, the prompt or the provider's message.
  */
-async function climbGuide(deps: AiDeps, p: ClimbPayload, c: Claim, today: string, started: number): Promise<Response> {
+async function climbGuide(deps: AiDeps, p: ClimbPayload, c: Claim, today: string, started: number, signal: AbortSignal): Promise<Response> {
   const log = deps.log ?? (() => {});
   const climb = climbById(p.stageId);
   if (!climb || !deps.perplexity) return fail(400, 'bad_request', 'The ride details weren’t valid.');
@@ -181,8 +212,10 @@ async function climbGuide(deps: AiDeps, p: ClimbPayload, c: Claim, today: string
   const remaining = Math.max(0, c.limit - c.used);
   let answer;
   try {
-    answer = await deps.perplexity(buildClimbRequest(climb, p.topic, today, climbModel));
+    answer = await deps.perplexity(buildClimbRequest(climb, p.topic, today, climbModel), signal);
+    signal.throwIfAborted();
   } catch (e) {
+    signal.throwIfAborted();
     const f = classifyError(e);
     log(JSON.stringify({ ai: true, kind: 'coach_climb', provider: 'perplexity-gateway', model: climbModel, error: f.kind, status: f.status, ...(f.retryAfter ? { retryAfter: f.retryAfter } : {}), ms: Date.now() - started }));
     return f.kind === 'timeout'
@@ -196,13 +229,13 @@ async function climbGuide(deps: AiDeps, p: ClimbPayload, c: Claim, today: string
   return json(200, { ok: true, kind: 'coach_climb', source: 'web', data, remaining } as AiReply);
 }
 
-async function run(kind: AiKind, p: Record<string, any>, c: Claim, today: string, model: string, runner: ClaudeRunner): Promise<ClaudeOutcome<unknown>> {
+async function run(kind: AiKind, p: Record<string, any>, c: Claim, today: string, model: string, runner: ClaudeRunner, signal: AbortSignal): Promise<ClaudeOutcome<unknown>> {
   switch (kind) {
-    case 'coach_plan': return runner({ model, system: COACH_SYSTEM, user: planUser(p as never, c, today), schema: S.PlanOut });
-    case 'coach_tip': return runner({ model, system: COACH_SYSTEM, user: tipUser(p as never, c, today), schema: S.TipOut });
-    case 'coach_debrief': return runner({ model, system: COACH_SYSTEM, user: debriefUser(p as never, c, today), schema: S.DebriefOut });
-    case 'rival_pre': return runner({ model, system: RIVAL_SYSTEM, user: rivalPreUser(p as never, c, today), schema: S.RivalPreOut });
-    case 'rival_post': return runner({ model, system: RIVAL_SYSTEM, user: rivalPostUser(p as never, c, today), schema: S.RivalPostOut });
+    case 'coach_plan': return runner({ model, system: COACH_SYSTEM, user: planUser(p as never, c, today), schema: S.PlanOut, signal });
+    case 'coach_tip': return runner({ model, system: COACH_SYSTEM, user: tipUser(p as never, c, today), schema: S.TipOut, signal });
+    case 'coach_debrief': return runner({ model, system: COACH_SYSTEM, user: debriefUser(p as never, c, today), schema: S.DebriefOut, signal });
+    case 'rival_pre': return runner({ model, system: RIVAL_SYSTEM, user: rivalPreUser(p as never, c, today), schema: S.RivalPreOut, signal });
+    case 'rival_post': return runner({ model, system: RIVAL_SYSTEM, user: rivalPostUser(p as never, c, today), schema: S.RivalPostOut, signal });
     case 'coach_climb': throw new Error('coach_climb is not a Claude request');
   }
 }

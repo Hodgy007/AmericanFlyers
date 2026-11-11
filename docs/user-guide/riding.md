@@ -10,11 +10,11 @@ Buttons across the top of the screen, from left to right:
 | --- | --- |
 | **🏁 Stage** | Opens the stage picker. See [Stages and routes](stages-and-routes.md). |
 | **🏋 Workouts** | Opens the workout library and training plans. See [Workouts](workouts.md) and [Training plans](training-plans.md). |
-| **👥** | Who else is riding this stage. See [Riding together](riding-together.md). |
+| **Riders** (two-people icon) | Who else is riding this stage. See [Riding together](riding-together.md). |
 | **Connect trainer** / **Disconnect** | Connects or disconnects your trainer. The same is in **☰ Menu → 🔌**, along with **❤️ Heart rate**; both remember your devices. See [Connecting devices](connecting-devices.md). |
 | **⏹ End** | Ends the ride. See below. Always on the ride screen; on a phone it is the first button in the row. |
 | **☰ Menu** | Everything else, listed below. Click outside it or press Escape to close it. |
-| **👤 Your first name** | Opens your profile. |
+| **Your first name** (person icon, or **Sign in**) | Opens your profile. |
 
 The **☰ Menu** holds:
 

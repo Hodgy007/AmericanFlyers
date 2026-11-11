@@ -14,7 +14,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25 # the Playwright suite runs serially (70 tests, about 13 minutes on CI)
     steps:
       - uses: actions/checkout@v4
 

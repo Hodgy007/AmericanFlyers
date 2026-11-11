@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
 
 // The ride mode choice in the hub's Ride panel: Solo (the default), With pro teams, and Race.
-// The teams on the road show in 👥 (Riders) under "Pro teams on the road", and in ☰ Menu → Pro teams.
+// The teams on the road show in Riders under "Pro teams on the road", and in ☰ Menu → Pro teams.
 
 const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
@@ -43,7 +43,7 @@ async function open(page: Page, seed?: Record<string, unknown>, accountMigrated 
   return errors;
 }
 
-/** How many pro team groups the 👥 dialog lists (it closes the dialog again). */
+/** How many pro team groups the Riders dialog lists (it closes the dialog again). */
 async function teamsOnRoad(page: Page) {
   await press(page, '#btn-riders');
   await expect(page.locator('#riders[open]')).toBeVisible();

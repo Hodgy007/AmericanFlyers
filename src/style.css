@@ -284,10 +284,10 @@ dialog {
   position: relative; /* the close button sits in the top-right corner */
 }
 dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
-/* Every dialog gets a red ✕ in its top-right corner (added by closeButtons() in main.ts), so any of them
-   can be dismissed with one click, not just the ones with a Cancel button. The inset glow keeps it legible
-   over whatever happens to be behind it. */
-.dialog-close {
+/* Every dialog has a red ✕ in its top-right corner: one click to dismiss any of them, not just the ones with a
+   Cancel button. Dialogs with an existing header ✕ keep that button (main.ts adds this class to it, so it also
+   keeps its own close value), and the rest get one injected. Specificity covers `button.icon`. */
+dialog button.dialog-close {
   position: absolute; top: 10px; right: 10px; z-index: 2;
   display: grid; place-items: center;
   width: 30px; height: 30px; padding: 0;
@@ -297,13 +297,11 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
   cursor: pointer;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.4);
 }
-.dialog-close:hover { filter: brightness(1.15); }
-.dialog-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-/* Leave room for it beside the heading (h2s carry the dialog's own top margin). A header row keeps its
-   action buttons clear of the corner: it pads on the right so nothing runs under the ✕. Keyed on the
-   injected button itself, since prepending it makes the header no longer the dialog's first child. */
-dialog:has(> .dialog-close) .dialog-head { padding-right: 46px; }
-dialog:has(> .dialog-close) > h2:first-of-type, dialog:has(> .dialog-close) > form > h2:first-child { padding-right: 40px; }
+dialog button.dialog-close:hover { filter: brightness(1.15); }
+dialog button.dialog-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* Leave room for it beside the heading. A header row keeps its action buttons clear of the corner. */
+dialog:has(.dialog-close) .dialog-head { padding-right: 46px; }
+dialog:has(.dialog-close) > h2:first-of-type, dialog:has(.dialog-close) > form > h2:first-child { padding-right: 40px; }
 dialog h2 { margin: 0 0 14px; font-size: 18px; }
 dialog label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
 dialog input[type='number'], dialog select {
@@ -457,6 +455,13 @@ dialog h3 { font-size: 15px; margin: 18px 0 8px; }
 
 /* Rides */
 .activity-list { display: grid; gap: 8px; }
+/* Rides kept on this device because the upload failed: a plain, calm notice with a retry. */
+.pending-rides {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: 12px;
+  background: rgba(245, 185, 66, 0.12); border: 1px solid rgba(245, 185, 66, 0.35);
+  font-size: 13px;
+}
 .activity { background: #0f1830; border-radius: 12px; padding: 8px 12px; }
 .activity summary { display: grid; grid-template-columns: 170px 1fr auto; gap: 10px; align-items: center; cursor: pointer; list-style: none; }
 .activity summary::-webkit-details-marker { display: none; }
@@ -622,7 +627,7 @@ button.icon { border-radius: 8px; }
   fill: none; stroke: currentColor; stroke-width: 1.9;
   stroke-linecap: round; stroke-linejoin: round;
 }
-.actions button:has(> .ico), #btn-account { display: inline-flex; align-items: center; gap: 7px; }
+.actions button:has(> .ico), #btn-account, #hub-account { display: inline-flex; align-items: center; gap: 7px; }
 #btn-riders { padding: 7px 9px; color: #eaf1ff; }
 #btn-riders.live { color: #4ade80; }
 /* How many other riders are here, in a small bright pill beside the icon. */

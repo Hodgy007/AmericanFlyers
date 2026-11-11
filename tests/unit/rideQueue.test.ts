@@ -69,13 +69,38 @@ describe('RideQueue', () => {
     expect(q.list().map((x) => x.attempts)).toEqual([1, 0]); // online: only the first was tried
   });
 
-  it('gives a ride up after repeated failures while online', async () => {
+  it('pauses automatic retries after repeated failures while online, keeping the ride', async () => {
     const q = new RideQueue(memoryStore(), async () => { throw new Error('rejected'); }, () => true);
     q.add('u1', ride('a'));
-    let givenUp = 0;
-    for (let i = 0; i < MAX_ATTEMPTS; i++) givenUp += (await q.flush('u1')).givenUp.length;
-    expect(givenUp).toBe(1);
-    expect(q.count('u1')).toBe(0);
+    let paused = 0;
+    for (let i = 0; i < MAX_ATTEMPTS; i++) paused += (await q.flush('u1')).paused.length;
+    expect(paused).toBe(1);
+    expect(q.count('u1')).toBe(1); // still here: a failed upload must never lose the ride
+    // An explicit retry clears the count and tries again.
+    expect((await q.flush('u1', true)).paused).toEqual([]);
+    expect(q.list()[0].attempts).toBe(1);
+  });
+
+  it('stops uploading when the signed-in rider changes mid-flush', async () => {
+    const sent: [string, string][] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let current = 'u1';
+    const q = new RideQueue(
+      memoryStore(),
+      async (a, userId) => { sent.push([a.id, userId]); if (a.id === 'a') await gate; },
+      () => true,
+      (userId) => userId === current,
+    );
+    q.add('u1', ride('a'));
+    q.add('u1', ride('b'));
+    const flushing = q.flush('u1');
+    current = 'u2'; // sign out of u1 and into u2 while the first upload is in flight
+    q.stop();
+    release();
+    await flushing;
+    expect(sent).toEqual([['a', 'u1']]);
+    expect(q.list().map((r) => r.activity.id)).toEqual(['b']); // still u1's, never sent as u2
   });
 
   it('drops the samples when a long ride will not fit in storage', () => {
@@ -85,12 +110,13 @@ describe('RideQueue', () => {
     expect(q.list()[0].activity.duration_s).toBe(3600);
   });
 
-  it(`keeps at most ${MAX_QUEUED} rides (the newest)`, () => {
+  it(`keeps at most ${MAX_QUEUED} rides (refusing a new one rather than dropping an unsent ride)`, () => {
     const q = new RideQueue(memoryStore(), async () => {});
-    for (let i = 0; i < MAX_QUEUED + 3; i++) q.add('u1', ride(`r${i}`, 0));
+    for (let i = 0; i < MAX_QUEUED; i++) expect(q.add('u1', ride(`r${i}`, 0))).toBe('saved');
+    expect(q.add('u1', ride('extra', 0))).toBe('failed');
     const ids = q.list().map((r) => r.activity.id);
     expect(ids).toHaveLength(MAX_QUEUED);
-    expect(ids[0]).toBe('r3');
+    expect(ids[0]).toBe('r0'); // nothing was discarded
   });
 
   it('runs one flush at a time', async () => {

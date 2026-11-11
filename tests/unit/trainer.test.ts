@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CrankCadence, parseCyclingPower, parseIndoorBikeData } from '../../src/ble/trainer';
+import { CrankCadence, openTrainer, parseCyclingPower, parseIndoorBikeData } from '../../src/ble/trainer';
+import { notificationView } from '../../src/ble/notification';
 
 /** A DataView over the given little-endian bytes (as Bluetooth notifications arrive). */
 function view(bytes: number[]): DataView {
@@ -140,5 +141,103 @@ describe('short packets', () => {
     expect(parseCyclingPower(view([0x00, 0x00, 0xc8]), c)).toEqual({});
     // crank data flagged but only half there: power is still reported, cadence is not
     expect(parseCyclingPower(view([0x20, 0x00, 0xc8, 0x00, 0x01]), c)).toEqual({ power: 200 });
+  });
+});
+
+// ---------------------------------------------------- fake FTMS device ----
+
+/** A characteristic that records writes and can raise notifications, like a real one. */
+function fakeChar() {
+  const listeners: ((e: Event) => void)[] = [];
+  const c = {
+    value: null as DataView | null,
+    writes: [] as Uint8Array[],
+    addEventListener: (_: string, fn: (e: Event) => void) => listeners.push(fn),
+    startNotifications: async () => c,
+    writeValueWithResponse: async (p: Uint8Array) => { c.writes.push(p); },
+    /** Sends a notification; `target` can be another object, as Bluefy does. */
+    notify(bytes: number[], target?: object) {
+      const data = new DataView(new Uint8Array(bytes).buffer);
+      c.value = data;
+      const event = { target: target ?? c } as unknown as Event;
+      for (const fn of listeners) fn(event);
+    },
+  };
+  return c;
+}
+
+describe('FTMS control', () => {
+  async function connect(autoAck: boolean) {
+    const bike = fakeChar();
+    const control = fakeChar();
+    control.writes = [];
+    const respond = (p: Uint8Array) => { if (autoAck) queueMicrotask(() => control.notify([0x80, p[0], 0x01])); };
+    const write = control.writeValueWithResponse;
+    control.writeValueWithResponse = async (p: Uint8Array) => { await write(p); respond(p); };
+    const service = {
+      getCharacteristic: async (id: number) => (id === 0x2ad2 ? bike : control),
+    };
+    const device = {
+      name: 'Fake KICKR', id: 'fake',
+      gatt: {
+        connect: async () => ({ getPrimaryService: async () => service }),
+        disconnect: () => {},
+      },
+      addEventListener: () => {}, removeEventListener: () => {},
+    } as unknown as BluetoothDevice;
+    const trainer = await openTrainer(device, { onReading: () => {}, onDisconnect: () => {} });
+    return { trainer, control };
+  }
+
+  it('takes control when the trainer acknowledges, and shows power', async () => {
+    const { trainer } = await connect(true);
+    expect(trainer.canControl).toBe(true);
+  });
+
+  it('reports a refused command instead of pretending it worked', async () => {
+    const { trainer, control } = await connect(true);
+    expect(trainer.canControl).toBe(true);
+    // Stop the automatic success acknowledgement: this command gets a refusal instead (0x04 = not supported).
+    control.writeValueWithResponse = async () => {};
+    const p = trainer.setTargetPower(100);
+    await new Promise((r) => setTimeout(r, 0)); // let the queued command register its pending response
+    control.notify([0x80, 0x05, 0x04]);
+    await expect(p).resolves.toEqual({ ok: false, code: 0x04 });
+  });
+
+  it('reports a command the trainer never answers', async () => {
+    const { trainer, control } = await connect(true);
+    control.writeValueWithResponse = async () => {}; // accepted by the browser, no answer follows
+    await expect(trainer.setTargetPower(120)).resolves.toEqual({ ok: false, code: -1 }); // RESULT_TIMEOUT
+  }, 10_000);
+
+  it('reads an FTMS notification delivered through another target (Bluefy)', async () => {
+    const bike = fakeChar();
+    const control = fakeChar();
+    const service = { getCharacteristic: async (id: number) => (id === 0x2ad2 ? bike : control) };
+    const device = {
+      name: 'Fake', id: 'fake2',
+      gatt: { connect: async () => ({ getPrimaryService: async () => service }), disconnect: () => {} },
+      addEventListener: () => {}, removeEventListener: () => {},
+    } as unknown as BluetoothDevice;
+    const readings: number[] = [];
+    // No control point: power-only trainer.
+    service.getCharacteristic = async (id: number) => {
+      if (id === 0x2ad9) throw new Error('no control point');
+      return bike;
+    };
+    await openTrainer(device, { onReading: (r) => { if (r.power !== undefined) readings.push(r.power); }, onDisconnect: () => {} });
+    // More Data + power (0x0041): no speed field, then 200 W.
+    bike.notify([0x41, 0x00, 200, 0], { value: new DataView(new Uint8Array([0x41, 0x00, 200, 0]).buffer) });
+    expect(readings).toEqual([200]);
+  });
+});
+
+describe('notificationView', () => {
+  it('accepts a DataView, raw bytes and a missing value', () => {
+    const captured = { value: new DataView(new Uint8Array([1, 2]).buffer) };
+    expect(notificationView({ target: null } as unknown as Event, captured)?.byteLength).toBe(2);
+    expect(notificationView({ target: { value: new Uint8Array([3]) } } as unknown as Event, captured)?.getUint8(0)).toBe(3);
+    expect(notificationView({ target: null } as unknown as Event, { value: undefined })).toBeNull();
   });
 });

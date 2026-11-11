@@ -42,7 +42,6 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
   flex-direction: column;
   gap: 20px;
 }
-}
 .hub-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* ----------------------------------------------------------- top bar ---- */

@@ -1,4 +1,4 @@
-// The 👥 button and the "Riding now" list: who else is on this stage, how far
+// The Riders button and the "Riding now" list: who else is on this stage, how far
 // ahead or behind they are, and a button to start riding alongside them.
 
 import { account } from './cloud/account';
@@ -127,7 +127,8 @@ export function initRidersUi(o: Options) {
       note.textContent = 'Riding together is switched off in Settings, so nobody sees you and you don’t see them.';
       return;
     }
-    const riders = o.presence.riders().sort((a, b) => b.distance - a.distance);
+    // Sort a copy: Presence.riders() is a live view whose order must stay in step with its own state.
+    const riders = [...o.presence.riders()].sort((a, b) => b.distance - a.distance);
     note.textContent = riders.length
       ? `Everyone signed in and riding ${me.stageName} right now. They see you too.`
       : `Nobody else is riding ${me.stageName} right now. Share the link and ride together: anyone on this stage appears on the road with you.`;
@@ -151,7 +152,7 @@ export function initRidersUi(o: Options) {
   /** The pro teams, with their pace in watts for you, and a Join button. */
   function renderTeams(me: ReturnType<Options['me']>) {
     const teamsEl = document.getElementById('riders-teams')!;
-    const teams = o.teams().sort((a, b) => b.distance - a.distance);
+    const teams = [...o.teams()].sort((a, b) => b.distance - a.distance);
     (document.getElementById('riders-teams-head') as HTMLElement).hidden = !teams.length;
     syncRows(teamsEl, teams.map((t) => {
       const kmh = t.speedMs * 3.6;

@@ -603,8 +603,8 @@ export class RaceSim {
   }
 
   /** Runs on in big steps until everyone has finished (for results and "simulate this stage"). */
-  runToEnd(maxSeconds = 4 * 3600) {
-    while (!this.allFinished && this.t < maxSeconds) this.step(0.5);
+  runToEnd(maxSeconds = 4 * 3600, step = 0.5) {
+    while (!this.allFinished && this.t < maxSeconds) this.step(step);
   }
 
   // --------------------------------------------------------- readouts ----

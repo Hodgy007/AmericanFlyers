@@ -33,8 +33,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          if (res.ok) caches.open(VERSION).then((c) => c.put('/', copy));
+          if (res.ok) {
+            const copy = res.clone();
+            event.waitUntil(caches.open(VERSION).then((c) => c.put('/', copy)).catch(() => {}));
+          }
           return res;
         })
         .catch(() => caches.match('/').then((r) => r ?? Response.error())),
@@ -46,14 +48,18 @@ self.addEventListener('fetch', (event) => {
   // icons: serve the cached copy and refresh it in the background.
   const immutable = url.pathname.startsWith('/assets/');
   event.respondWith(
-    caches.open(VERSION).then(async (cache) => {
-      const hit = await cache.match(req);
-      const refresh = fetch(req).then((res) => {
-        if (res.ok) cache.put(req, res.clone());
+    caches.open(VERSION).catch(() => null).then(async (cache) => {
+      if (!cache) return fetch(req);
+      const hit = await cache.match(req).catch(() => undefined);
+      if (hit && immutable) return hit;
+      const refresh = fetch(req).then(async (res) => {
+        if (res.ok) {
+          try { await cache.put(req, res.clone()); } catch { /* caching is best effort */ }
+        }
         return res;
       });
       if (hit) {
-        if (!immutable) refresh.catch(() => {});
+        event.waitUntil(refresh.catch(() => {}));
         return hit;
       }
       return refresh;
