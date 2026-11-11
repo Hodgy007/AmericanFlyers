@@ -9,7 +9,7 @@
 // The remembered ids live in this browser's localStorage only (not synced to the
 // account): a Bluetooth device id means nothing on another browser or computer.
 
-export type DeviceKind = 'trainer' | 'hr';
+export type DeviceKind = 'trainer' | 'hr' | 'meter';
 export interface RememberedDevice { id: string; name: string }
 export type RememberedDevices = Partial<Record<DeviceKind, RememberedDevice>>;
 
@@ -43,8 +43,10 @@ export function loadRemembered(store: Store | null = defaultStore()): Remembered
     const out: RememberedDevices = {};
     const trainer = cleanDevice(parsed.trainer);
     const hr = cleanDevice(parsed.hr);
+    const meter = cleanDevice(parsed.meter);
     if (trainer) out.trainer = trainer;
     if (hr) out.hr = hr;
+    if (meter) out.meter = meter;
     return out;
   } catch {
     return {};
@@ -212,10 +214,23 @@ export interface MenuLabelInput {
   remembered?: RememberedDevice;
 }
 
+export const DEVICE_ICON: Record<DeviceKind, string> = { trainer: '🔌', hr: '❤️', meter: '⚡' };
+const DEVICE_THING: Record<DeviceKind, string> = { trainer: 'trainer', hr: 'heart rate', meter: 'power meter' };
+const IDLE_LABEL: Record<DeviceKind, (icon: string) => string> = {
+  trainer: (icon) => `${icon} Connect trainer`,
+  hr: (icon) => `${icon} Heart rate`,
+  meter: (icon) => `${icon} Power meter`,
+};
+const IDLE_SUB: Record<DeviceKind, string> = {
+  trainer: 'Wahoo, Tacx, Elite, Saris and other FTMS trainers',
+  hr: 'A Bluetooth heart rate strap',
+  meter: 'Optional: crank or pedals, for your own watts',
+};
+
 /** The ☰ Menu item for a device: its label and a smaller line under it. */
 export function menuLabel(i: MenuLabelInput): { label: string; sub: string } {
-  const icon = i.kind === 'trainer' ? '🔌' : '❤️';
-  const thing = i.kind === 'trainer' ? 'trainer' : 'heart rate';
+  const icon = DEVICE_ICON[i.kind];
+  const thing = DEVICE_THING[i.kind];
   const name = i.remembered?.name;
   switch (i.state) {
     case 'connected':
@@ -227,6 +242,6 @@ export function menuLabel(i: MenuLabelInput): { label: string; sub: string } {
     default:
       return name
         ? { label: `${icon} Reconnect ${name}`, sub: 'One tap. Remembered on this browser.' }
-        : { label: i.kind === 'trainer' ? `${icon} Connect trainer` : `${icon} Heart rate`, sub: i.kind === 'trainer' ? 'Wahoo, Tacx, Elite, Saris and other FTMS trainers' : 'A Bluetooth heart rate strap' };
+        : { label: IDLE_LABEL[i.kind](icon), sub: IDLE_SUB[i.kind] };
   }
 }

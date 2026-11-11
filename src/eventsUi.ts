@@ -165,13 +165,13 @@ export function initEventsUi(o: Options) {
 
   el('btn-events').addEventListener('click', () => {
     dialog.showModal();
-    render();
+    void render();
     window.clearInterval(tick);
     // Countdowns tick every second; the list itself refreshes every 30 s.
     let n = 0;
     tick = window.setInterval(() => {
       if (!dialog.open) { window.clearInterval(tick); return; }
-      if (++n % 30 === 0) { render(); return; }
+      if (++n % 30 === 0) { void render(); return; }
       const now = serverNow();
       for (const c of list.querySelectorAll<HTMLElement>('.event-card')) {
         const start = Number(c.dataset.start);

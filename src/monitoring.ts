@@ -74,6 +74,13 @@ export function startMonitoring() {
   }).catch(() => { starting = false; /* offline: the safety net doesn't repeat; reports are skipped */ });
 }
 
+/** Reports a caught error (for example one swallowed to keep the ride loop going). Held for Sentry if it hasn't loaded yet; does nothing without a DSN. */
+export function captureError(error: unknown, where?: string) {
+  if (!__SENTRY_DSN__ || import.meta.env.DEV) return;
+  if (sentry) sentry.captureException(error, where ? { tags: { where } } : undefined);
+  else if (early.length < 20) early.push(error);
+}
+
 /** Tags reports with the signed-in rider's account id (never their name or email). */
 export function setMonitoringUser(id: string | null) {
   if (sentry) sentry.setUser(id ? { id } : null);

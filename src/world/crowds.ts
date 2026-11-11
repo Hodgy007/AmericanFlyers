@@ -92,18 +92,32 @@ export function spectatorGeometry(flag: boolean, detailed = false): THREE.Buffer
     return n;
   };
   const armWave = (y: number) => Math.min(1, Math.max(0, (y - 1.38) / 0.45));
+  // A low-poly person in the world's faceted style (tapered limbs and torso, not boxes): the same height, the same
+  // shoulder and arm pivots and the same part ids as the box figure it replaces, so the shader's colours and waving are unchanged.
+  const sides = detailed ? 7 : 5;
   // An arm raised and angled out from the shoulder (so it reads as a wave, not rabbit ears); `side` is -1 left, +1 right.
-  const arm = (side: number, tilt = 0.45) => new THREE.BoxGeometry(0.12, 0.45, 0.12).translate(0, 0.225, 0).rotateZ(-side * tilt).translate(side * 0.27, 1.38, 0);
+  const arm = (side: number, tilt = 0.45) => new THREE.CylinderGeometry(0.042, 0.058, 0.45, sides).translate(0, 0.225, 0).rotateZ(-side * tilt).translate(side * 0.25, 1.36, 0);
+  const hand = (side: number, tilt = 0.45) => new THREE.IcosahedronGeometry(0.058, 0).translate(0, 0.49, 0).rotateZ(-side * tilt).translate(side * 0.25, 1.36, 0);
+  const leg = (side: number) => new THREE.CylinderGeometry(0.085, 0.062, 0.8, sides).translate(side * 0.085, 0.4, 0);
+  const shoe = (side: number) => new THREE.BoxGeometry(0.11, 0.07, 0.24).translate(side * 0.085, 0.035, 0.05);
   const parts = [
-    part(new THREE.BoxGeometry(0.28, 0.8, 0.22).translate(0, 0.4, 0), 2),
-    part(new THREE.BoxGeometry(0.5, 0.62, 0.28).translate(0, 1.1, 0), 1),
-    part(new THREE.IcosahedronGeometry(0.16, 1).translate(0, 1.58, 0), 0),
-    part(arm(-1), 0, armWave), // arms up
-    part(arm(1), 0, armWave),
+    part(leg(-1), 2),
+    part(leg(1), 2),
+    part(shoe(-1), 2),
+    part(shoe(1), 2),
+    part(new THREE.CylinderGeometry(0.15, 0.155, 0.16, sides + 1).scale(1, 1, 0.72).translate(0, 0.85, 0), 2), // hips
+    part(new THREE.CylinderGeometry(0.235, 0.16, 0.5, sides + 1).scale(1, 1, 0.62).translate(0, 1.16, 0), 1), // the torso, wider at the shoulders
+    part(new THREE.CylinderGeometry(0.1, 0.235, 0.08, sides + 1).scale(1, 1, 0.62).translate(0, 1.45, 0), 1), // shoulders sloping to the neck
+    part(new THREE.CylinderGeometry(0.052, 0.058, 0.09, sides).translate(0, 1.5, 0), 0), // neck
+    part(new THREE.IcosahedronGeometry(0.15, 1).scale(0.92, 1.08, 1).translate(0, 1.64, 0), 0),
+    part(arm(-1), 1, armWave), // arms up, in shirt sleeves
+    part(arm(1), 1, armWave),
+    part(hand(-1), 0, armWave),
+    part(hand(1), 0, armWave),
   ];
   if (detailed) {
-    parts.push(part(new THREE.CylinderGeometry(0.15, 0.17, 0.09, 8).translate(0, 1.71, 0), 5)); // a cap with a peak
-    parts.push(part(new THREE.BoxGeometry(0.2, 0.02, 0.15).translate(0, 1.68, 0.2), 5));
+    parts.push(part(new THREE.CylinderGeometry(0.135, 0.155, 0.09, 8).translate(0, 1.775, 0), 5)); // a cap with a peak
+    parts.push(part(new THREE.BoxGeometry(0.2, 0.02, 0.15).translate(0, 1.745, 0.19), 5));
   }
   if (flag) {
     const w = detailed ? 1.1 : 0.85;

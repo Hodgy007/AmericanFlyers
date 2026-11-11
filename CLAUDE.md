@@ -11,6 +11,7 @@ Browser-based 3D indoor cycling app (Vite + TypeScript + Three.js) that connects
 ## Commands
 
 - `npm run dev` — local dev server (Chrome on http://localhost:5173; Web Bluetooth needs localhost or https)
+- `npm run lint` — ESLint (also a CI step)
 - `npm run build` — type-check the app, `api/` and the tests, then build to `dist/` (`npm run typecheck:tests` checks the tests alone)
 
 ## Deployment

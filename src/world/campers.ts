@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { gltfLoader } from './gltf';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { roadPoint } from '../course';
 import type { Stage } from '../stages';
@@ -272,7 +272,7 @@ let vanPromise: Promise<VanModel | null> | null = null;
 
 /** Fetches camper.glb once. Null if it is missing or broken (the code-built vans stay). */
 export function loadVanModel(): Promise<VanModel | null> {
-  vanPromise ??= new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/camper.glb`).then(
+  vanPromise ??= gltfLoader().loadAsync(`${import.meta.env.BASE_URL}models/camper.glb`).then(
     (g) => vanFromScene(g.scene),
     () => { console.info('Camper model not found: models/camper.glb (box vans kept)'); return null; },
   );

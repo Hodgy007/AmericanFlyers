@@ -12,6 +12,7 @@ import {
   type Effort, type Segment,
 } from './segments';
 import type { Stage } from './stages';
+import { layoutCards, registerCard } from './cardDock';
 
 export interface SegmentUiDeps {
   stage(): Stage;
@@ -67,7 +68,9 @@ export function initSegmentUi(els: { card: HTMLElement; climbCard: HTMLElement }
   let drawnKey = '';
   let lastSecond = -1;
   const cache = new Map<HTMLElement, string>();
-  const narrow = matchMedia('(max-width: 560px)');
+  const dock = registerCard('kom', els.card, $('kom-toggle') as HTMLButtonElement, 250);
+  let sign = '';
+  let seen = ''; // the segment, its state and the sign of the live gap: a change opens the card for a few seconds
 
   const set = (el: HTMLElement, text: string) => {
     if (cache.get(el) !== text) { cache.set(el, text); el.textContent = text; }
@@ -89,7 +92,7 @@ export function initSegmentUi(els: { card: HTMLElement; climbCard: HTMLElement }
   }
 
   function hide() {
-    if (shown) { els.card.hidden = true; shown = false; drawnKey = ''; lastSecond = -1; }
+    if (shown) { els.card.hidden = true; shown = false; drawnKey = ''; lastSecond = -1; seen = ''; dock.gone(); }
   }
 
   function drawBoard(seg: Segment, board: Board | undefined) {
@@ -216,9 +219,6 @@ export function initSegmentUi(els: { card: HTMLElement; climbCard: HTMLElement }
       const seg = status.segment;
       load(seg);
       const board = boards.get(seg.id);
-      // On a phone the two cards stack: under the climb card when that is showing (on wider screens they sit side by side).
-      const below = els.climbCard.hidden || !narrow.matches ? null : els.climbCard.getBoundingClientRect().bottom + 6;
-      els.card.style.top = below === null ? '' : `${Math.round(below)}px`;
       const key = `${seg.id}|${status.state}|${version}|${board?.state}|${account() ? 1 : 0}`;
       if (key !== drawnKey) {
         drawnKey = key;
@@ -235,6 +235,12 @@ export function initSegmentUi(els: { card: HTMLElement; climbCard: HTMLElement }
         drawGap(seg);
       }
       if (!shown) { els.card.hidden = false; shown = true; }
+      const g = gap.dataset.state;
+      if (status.state !== 'on') sign = '';
+      else if (g === 'ahead' || g === 'behind') sign = g; // "level" is not a flip: no flicker while you hover around zero
+      const now = `${seg.id}|${status.state}|${sign}`;
+      if (now !== seen) { seen = now; dock.notify(); }
+      layoutCards(); // docks the card at the edge, under the climb card on a phone
     },
   };
 }

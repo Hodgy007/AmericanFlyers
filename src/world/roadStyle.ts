@@ -165,7 +165,32 @@ function park(): RoadPaintLayout {
   };
 }
 
-const LAYOUTS: Record<RoadStyle, () => RoadPaintLayout> = { 'us-highway': usHighway, alpine, lane, park };
+/** A city park's drive (Central Park): a granite kerb each side, white edge lines, and white lines splitting it into its walking, cycling and service lanes. */
+function cityPark(): RoadPaintLayout {
+  const line = (x: number, w = 6): Mark => ({ x, y: 0, w, h: SQUARE, color: 'rgba(234, 236, 238, 0.88)' });
+  // The cycling lane's line is dashed: 3 m on, 6.2 m off (one per repeat).
+  const dash: Mark = { x: 338, y: 0, w: 6, h: Math.round(3 * PX_PER_M), color: 'rgba(234, 236, 238, 0.88)' };
+  const wear: Mark[] = [];
+  for (let i = 0; i < 18; i++) {
+    const h = Math.round(5 + hash2(i, 81) * 14);
+    const m: Mark = { x: 30, y: Math.round(hash2(i, 82) * (SQUARE - h)), w: 6, h, color: 'rgba(52, 54, 58, 0.6)' };
+    wear.push(i % 2 === 0 ? m : mirror(m));
+  }
+  return {
+    style: 'city-park',
+    height: SQUARE,
+    repeatM: 9.2,
+    fallback: '#3b3d42',
+    tint: 'rgba(14, 16, 20, 0.14)',
+    surface: asphaltRepairs(SQUARE, 9),
+    edge: { bands: [{ from: 0, to: 16, color: 'rgba(168, 166, 160, 0.95)' }, { from: 16, to: 20, color: 'rgba(40, 40, 42, 0.6)' }], flat: true },
+    ragged: null,
+    paint: [line(30), mirror(line(30)), line(168), dash],
+    wear,
+  };
+}
+
+const LAYOUTS: Record<RoadStyle, () => RoadPaintLayout> = { 'us-highway': usHighway, alpine, lane, park, 'city-park': cityPark };
 const cache = new Map<RoadStyle, RoadPaintLayout>();
 
 /** The paint layout of a road style (cached: it never changes). */

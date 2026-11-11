@@ -7,6 +7,7 @@ import { currentStage, elevationAt } from './course';
 import { drawProfile } from './profile';
 import { findClimbs, climbStatus, type Climb } from './climb';
 import type { Stage } from './stages';
+import { layoutCards, registerCard } from './cardDock';
 
 const KM_PER_MI = 1.609344;
 const FT_PER_M = 3.28084;
@@ -27,6 +28,9 @@ export function initClimbUi(els: { card: HTMLElement; title: HTMLElement; sub: H
   let climbs: Climb[] = [];
   let scannedAt = -Infinity;
   let shown = false;
+  let seen = ''; // which climb and state the card last showed: a change opens the card for a few seconds
+  const chip = document.getElementById('cc-chip')!;
+  const dock = registerCard('climb', els.card, document.getElementById('cc-toggle') as HTMLButtonElement, 112);
 
   const climbsFor = (d: number): Climb[] => {
     const s = currentStage();
@@ -44,7 +48,7 @@ export function initClimbUi(els: { card: HTMLElement; title: HTMLElement; sub: H
   };
 
   function hide() {
-    if (shown) { els.card.hidden = true; shown = false; }
+    if (shown) { els.card.hidden = true; shown = false; seen = ''; dock.gone(); }
   }
 
   return {
@@ -54,9 +58,12 @@ export function initClimbUi(els: { card: HTMLElement; title: HTMLElement; sub: H
       if (!status) return hide();
       const c = status.climb;
       const steepest = `max ${(c.max * 100).toFixed(0)}%`;
+      const key = `${c.start}|${status.state}`;
+      const fresh = key !== seen;
       if (status.state === 'ahead') {
         els.title.textContent = `Next climb in ${dist(status.toStart, imperial)}`;
         els.sub.textContent = `${dist(c.length, imperial)} at ${pct(c.avg)}, ${steepest}`;
+        chip.textContent = `⛰ Climb in ${dist(status.toStart, imperial)} · ${pct(c.avg)}`;
         els.card.dataset.state = 'ahead';
         els.card.hidden = false;
         shown = true;
@@ -66,11 +73,14 @@ export function initClimbUi(els: { card: HTMLElement; title: HTMLElement; sub: H
         const left = imperial ? `${Math.round(rise * FT_PER_M)} ft` : `${Math.round(rise)} m`;
         els.title.textContent = `${dist(status.toTop, imperial)} to the top`;
         els.sub.textContent = `${pct(status.avgLeft)} average from here, ${left} to climb`;
+        chip.textContent = `⛰ ${dist(status.toTop, imperial)} to the top · ${pct(status.avgLeft)}`;
         els.card.dataset.state = 'on';
         els.card.hidden = false;
         shown = true;
         drawProfile(els.canvas, distance, [Math.max(0, Math.min(distance - 150, c.start - 100)), c.end]);
       }
+      if (fresh) { seen = key; dock.notify(); }
+      layoutCards();
     },
   };
 }

@@ -46,12 +46,12 @@ export class Presence {
     this.timer = window.setInterval(() => this.tick(), INTERVAL_MS);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') this.leave();
-      else this.tick();
+      else void this.tick();
     });
     window.addEventListener('pagehide', () => this.leave());
     onAccountChange((a) => {
       if (!a) this.clear();
-      else this.tick();
+      else void this.tick();
     });
   }
 
@@ -122,7 +122,7 @@ export class Presence {
   /** Call when the stage changes, so riders from the old stage vanish at once. */
   restage() {
     this.clear();
-    this.tick();
+    void this.tick();
   }
 
   private clear() {

@@ -44,6 +44,26 @@ test('a visitor with no account sees the home page and has no way past it', asyn
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
+test('typing in the home sign-up form does not fire the ride shortcuts', async ({ page }) => {
+  await mockNeon(page);
+  await slowFrames(page);
+  await page.goto('/');
+  await press(page, '#home-email-toggle');
+  const name = page.locator('#home-email input[name=name]');
+  await expect(name).toBeVisible();
+  const labels = () => page.evaluate(() => ['#btn-sound', '#btn-music', '#btn-camera'].map((s) => document.querySelector(s)?.textContent ?? null));
+  const before = await labels();
+  await name.focus();
+  await page.keyboard.type('mcnf');
+  await expect(name).toHaveValue('mcnf');
+  expect(await labels()).toEqual(before);
+  // Not even with the focus elsewhere on the home page.
+  await name.blur();
+  await page.keyboard.type('mcf');
+  expect(await labels()).toEqual(before);
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+});
+
 test('a stale signed-in hint with no session ends on the home page, not the hub', async ({ page }) => {
   await mockNeon(page); // the session is gone
   await slowFrames(page);

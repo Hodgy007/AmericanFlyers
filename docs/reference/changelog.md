@@ -6,6 +6,46 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Code review follow-ups
+
+From a full review of the app (pull request #47).
+
+**Ride reliability**
+
+- **Shortcuts no longer fire while you type.** Typing in the home page's sign-up form toggled sound, music and the camera (and saved it). `ignoreRideKey()` (`src/rideKeys.ts`) ignores dialogs, form fields, the home page and Ctrl/Cmd/Alt combinations.
+- **The ride runs on real time.** The simulation (`simulate()` / `simStep()` in `main.ts`, paced by `src/rideClock.ts`) steps by the real time that has passed, in substeps of at most 0.1 s, so a slow frame no longer slows the ride. In a hidden or minimised tab a small Web Worker (`src/tickWorker.ts`) keeps it going: distance, time, the recording, the workout and the trainer's target all carry on. A gap of more than 10 s with no tick (the machine slept) is dropped. The world animates by real elapsed time too, so the chase camera keeps up at low frame rates.
+- **A frame that fails no longer freezes the ride** (`src/loopGuard.ts`): the error is reported (at most once every 5 s) and the next frame still runs.
+- **The screen stays awake** while a ride is on screen (`src/wakeLock.ts`, the Screen Wake Lock API).
+- **Workouts are their own activity.** Starting a workout saves the ride so far, the workout is saved separately with its own distance and climbing, and what you ride afterwards is a new activity (`src/rideActivity.ts`), so nothing is counted twice. A ride that included a workout doesn't get a whole-stage leaderboard time (`RideFlags.splitByWorkout`).
+- **Pick a ride back up.** A copy of the ride is kept in this browser about every 20 s (`src/rideSnapshot.ts`, `americanflyers.rideSnapshot`). After a crash or a closed tab the hub offers **Resume**, **Save it and start fresh** or **Discard** (under 3 hours old; races and scheduled events are not kept).
+
+**Physics**
+
+- **Thin air.** Air density follows altitude (`airDensity()` in `physics.ts`): about 18% thinner at 2,000 m and 33% at 4,300 m, for you, the pro teams, the race field, the AI rival and the trainer's wind resistance. The high stages ride 1 to 6% faster at the same watts. The database's plausibility floors were checked and still hold.
+- **Braking into bends** (`src/cornering.ts`). Riders slow before a tight bend (about 32 km/h round a 10 m hairpin, less in the wet) and accelerate out. Climbs are unaffected, apart from two flat bends in the Stelvio's first kilometre.
+
+**Trainer and devices**
+
+- **Trainer control is watched** (`src/ble/control.ts`). If another app takes over the trainer, or it stops accepting commands, you are told, control is asked for again with a growing wait, and the grade or ERG target is resent. Responses are matched to the command they answer; the parsers no longer fail on short packets.
+- **A separate power meter** (☰ Menu): its watts and cadence drive the ride while it is sending, with the trainer's own power as the fallback. In ERG workouts a gentle **power match** (Settings, on by default) nudges the trainer's target by up to 10% so the meter's watts sit on the target. Remembered and reconnected like the heart-rate strap.
+
+**On screen**
+
+- **The climb and KOM cards dock at the screen edges** and shrink to a chip a few seconds after they appear (`src/cardDock.ts`); hover, click or tap opens them.
+- **Phone layout:** a two-row top bar, a bottom bar that no longer overlaps, the demo slider above the profile strip, and a compact landscape layout.
+- **Shadows reach further.** High and Ultra use three shadow cascades fitted to the camera (`src/world/cascades.ts`), to 150 m and 240 m; Medium's box is 40 m.
+- **Water looks like water** (`src/world/water.ts`): a moving swell, deeper colours and less haze, so the Pacific keeps its colour and a horizon. **Central Park** has a marked drive with granite kerbs (the new `city-park` road style) and a skyline with windows.
+- **Spectators are low-poly people**, not boxes.
+- **Other riders' models are pooled** (`src/world/riderPool.ts`): a rider coming into view takes a pooled model and is re-skinned.
+- **Smaller downloads.** The landmark models are packed with Meshopt and WebP: 10.3 MB to 5.0 MB (`src/world/gltf.ts`, `public/models/README.md`).
+
+**Export, code and CI**
+
+- **`.fit` export** next to `.tcx` on a saved ride (`src/cloud/fit.ts`), written in the browser.
+- `updateSettings()` in `main.ts` replaces the repeated change-save-push blocks. **ESLint** (`npm run lint`, a CI step) with `no-floating-promises`.
+- Tests: unit suites for the ride clock, loop guard, wake lock, ride activity, ride snapshot, ride keys, cornering, control point, power source, power match, FIT and the rider pool; e2e `workoutSplit.spec.ts`, `rideSnapshot.spec.ts` and additions to `home`, `devices` and `kom`.
+- Not tested on real hardware: the trainer control recovery and the power meter (mocked Web Bluetooth only).
+
 ### A new rider
 
 - **New rider model** (`public/models/rider.glb`), designed with Higgsfield from front, side and back views and built from all of them, so the back you see from the chase camera is modelled, not guessed: a vented helmet, wraparound glasses, gloves, a panelled jersey with a white chest band, bib shorts and cycling shoes. Rigged with the same skeleton, so pedalling, team kits, jersey patterns and socks work as before. 0.9 MB (was 1.4 MB).

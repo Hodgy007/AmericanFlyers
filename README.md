@@ -37,14 +37,16 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Data blocks** (✎ next to the numbers): choose which of 24 fields to show (power, 1 s power, W/kg, average, normalized and max power, workout target, interval and workout time left, cadence, speed, heart rate, distance, km to go, time, grade, climbing, elevation, energy, TSS) and their order. The first one is shown large. Saved in the browser.
 - **Workouts** (🏋 button): ride structured workouts in ERG mode, where the trainer holds the target power. Built-ins include Endurance, Sweet Spot, VO2 max, Over-Unders and a Ramp FTP test that estimates your FTP. Upload Zwift `.zwo`, `.erg` or `.mrc` files. While riding: pause, skip, ±5 % intensity, a workout graph with your power trace, and a summary (avg/normalized power, TSS, kJ) at the end.
 - **Workout creator**: build workouts from steady, ramp, interval and free-ride blocks with a live preview, TSS estimate and watts at your FTP; save them to your library or export as `.zwo`.
-- **Heart-rate strap** support (optional).
+- **Heart-rate strap** support (optional), and an optional **separate power meter** (crank or pedals): its watts drive the ride while the trainer provides the resistance, with a power match in ERG workouts.
+- **Trainer control is watched:** if another app takes over your trainer you are told, and control is taken back when it is free.
+- **Rides don't get lost:** the ride keeps real time in a hidden tab, the screen stays awake, and after a crash or a closed tab you can pick the ride back up.
 - **Demo ride** mode for trying it without a trainer: set power with a slider or the ↑/↓ keys.
 - Metric and imperial units. Settings are saved in the browser (and in your account when signed in).
 - **Accounts** (person-icon button): sign in with Google, or create a free account with your email (rider name, email, password, weight and optional FTP; never a phone number or address), with password reset by email (and an optional 6-digit email verification step, off for now). Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
 - **Profile:**
   - *Stats*: totals, personal bests (5 s, 1, 5 and 20 min power), distance per week, FTP progress, and time in heart-rate and power zones across all rides.
   - *Achievements*: badges for finishing the stages, distance and climbing milestones, streaks, power targets, ramp tests and FTP gains.
-  - *Rides*: every saved ride with power and heart-rate graphs, zones, best efforts, `.tcx` export (for Strava, TrainingPeaks, Garmin Connect) and delete.
+  - *Rides*: every saved ride with power and heart-rate graphs, zones, best efforts, `.tcx` and `.fit` export (for Strava, TrainingPeaks, Garmin Connect) and delete.
 - **Heart-rate and power zones** after every ride, based on your max HR (5 zones) and FTP (6 zones), both set in ⚙ Settings.
 - **FTP history**: every change (by hand, from a ramp test, or at sign-up) is recorded and charted.
 - **Feedback** (💬 button): riders send ideas and bug reports and see the status and any reply.
@@ -107,6 +109,7 @@ To pick a stage or start partway along it, add `?stage=` and `?start=` (km), e.g
 ## Tests
 
 ```bash
+npm run lint      # ESLint
 npm test          # unit tests (Vitest): physics, drafting, stages, workouts, GPX, race engine, tour...
 npm run test:e2e  # builds, then a headless-browser smoke test (Playwright)
 ```

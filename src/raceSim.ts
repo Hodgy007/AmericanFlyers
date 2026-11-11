@@ -9,7 +9,8 @@
 // a few dozen riders, in a few groups, each moved with the same power-to-speed
 // physics as the player.
 
-import { DEFAULT_PARAMS, stepSpeed } from './physics';
+import { DEFAULT_PARAMS, SEA_LEVEL_AIR_DENSITY, airDensity, stepSpeed } from './physics';
+import { limitCornerSpeed } from './cornering';
 import { rng } from './world/noise';
 import type { RacePoints } from './stages';
 import { draftShift, SHIFT_MAX } from './world/wind';
@@ -46,6 +47,12 @@ export interface RaceCourse {
   finish: number;
   grade(d: number): number;
   lines: RaceLine[];
+  /** Metres above sea level at distance `d`: the field rides in the same thin air you do. Left out: sea level. */
+  altitudeAt?(d: number): number;
+  /** The road's heading (a stage's own `headingAt`): the field brakes for bends like you. Left out: no bends. */
+  headingAt?(d: number): number;
+  /** Whether the road is wet right now. Left out: dry, so a field shared between riders (events) or simulated (skipped stages) doesn't depend on one rider's weather. */
+  wet?(): boolean;
 }
 
 export const SPRINT_POINTS = [8, 5, 3, 2, 1];
@@ -91,7 +98,7 @@ export function detectSummits(elevationAt: (d: number) => number, finish: number
 }
 
 /** Sprint banners, summits and the finish of a stage, in order along the road. */
-export function makeCourse(stage: { finish: number; elevationAt(d: number): number; race?: RacePoints }): RaceCourse {
+export function makeCourse(stage: { finish: number; elevationAt(d: number): number; race?: RacePoints; baseAltitude?: number; headingAt?(d: number): number }): RaceCourse {
   const finish = stage.finish;
   const lines: RaceLine[] = [];
   const sprints = stage.race?.sprints ?? [{ d: Math.round(finish * 0.5), name: 'Intermediate sprint' }];
@@ -100,7 +107,14 @@ export function makeCourse(stage: { finish: number; elevationAt(d: number): numb
   for (const s of summits) lines.push({ kind: 'summit', d: s.d, name: s.name, cat: s.cat, crossings: [] });
   lines.push({ kind: 'finish', d: finish, name: 'Finish', crossings: [] });
   lines.sort((a, b) => a.d - b.d || (a.kind === 'finish' ? 1 : 0) - (b.kind === 'finish' ? 1 : 0));
-  return { finish, grade: (d) => (stage.elevationAt(d + 2) - stage.elevationAt(d - 2)) / 4, lines };
+  const base = stage.baseAltitude;
+  return {
+    finish,
+    grade: (d) => (stage.elevationAt(d + 2) - stage.elevationAt(d - 2)) / 4,
+    lines,
+    altitudeAt: base === undefined ? undefined : (d) => base + stage.elevationAt(d),
+    headingAt: stage.headingAt,
+  };
 }
 
 // ------------------------------------------------------------ the sim ----
@@ -469,7 +483,10 @@ export class RaceSim {
 
     const cda = DEFAULT_PARAMS.cda * (n === 1 ? g.draft : n >= 10 ? 0.9 : n >= 5 ? 0.93 : 0.95);
     const mass = g.riders.reduce((a, r) => a + r.mass, 0) / n;
-    g.speed = stepSpeed(g.speed, P, grade, dt, { massKg: mass, cda, crr: DEFAULT_PARAMS.crr }, this.windAt?.(g.front).head ?? 0);
+    const rho = this.course.altitudeAt ? airDensity(this.course.altitudeAt(g.front)) : SEA_LEVEL_AIR_DENSITY;
+    g.speed = stepSpeed(g.speed, P, grade, dt, { massKg: mass, cda, crr: DEFAULT_PARAMS.crr, airDensity: rho }, this.windAt?.(g.front).head ?? 0);
+    const bends = this.course.headingAt;
+    if (bends) g.speed = limitCornerSpeed(g.speed, g.front, dt, { headingAt: bends, wet: this.course.wet?.() ?? false });
     g.speed = Math.max(g.speed, 1.3); // even the steepest ramp is climbed, if only by weaving
     g.front += g.speed * dt;
 
@@ -479,12 +496,12 @@ export class RaceSim {
       // (not today's speed, which may be momentum from the last descent).
       const theta = Math.atan(grade);
       const a = mass * 9.81 * (Math.sin(theta) + DEFAULT_PARAMS.crr * Math.cos(theta));
-      const b = 0.5 * 1.225 * cda;
+      const b = 0.5 * rho * cda;
       let v = Math.max(1, g.speed);
       for (let k = 0; k < 5; k++) v = Math.min(30, Math.max(1, v - (a * v + b * v * v * v - P * 0.976) / (a + 3 * b * v * v)));
       v = Math.min(v, g.speed + 0.5);
       const base = (a * v) / 0.976;
-      const drag = (0.5 * 1.225 * DEFAULT_PARAMS.cda * v * v * v) / 0.976;
+      const drag = (0.5 * rho * DEFAULT_PARAMS.cda * v * v * v) / 0.976;
       const shelter = n >= 10 ? 0.7 : n >= 5 ? 0.78 : 0.86;
       const cracked: RR[] = [];
       g.riders.forEach((r, i) => {

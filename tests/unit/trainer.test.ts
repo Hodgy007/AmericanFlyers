@@ -127,6 +127,23 @@ describe('CrankCadence', () => {
   });
 });
 
+describe('short packets', () => {
+  it('parseIndoorBikeData returns what it could read instead of throwing', () => {
+    expect(parseIndoorBikeData(view([]))).toEqual({});
+    expect(parseIndoorBikeData(view([0x44, 0x00]))).toEqual({}); // flags only: speed, cadence and power all missing
+    // speed present, cadence flagged but cut off
+    expect(parseIndoorBikeData(ftms(0x0044, ...u16([], 2000), 0x10))).toEqual({ speedKmh: 20 });
+  });
+
+  it('parseCyclingPower returns what it could read instead of throwing', () => {
+    const c = new CrankCadence();
+    expect(parseCyclingPower(view([0x00]), c)).toEqual({});
+    expect(parseCyclingPower(view([0x00, 0x00, 0xc8]), c)).toEqual({});
+    // crank data flagged but only half there: power is still reported, cadence is not
+    expect(parseCyclingPower(view([0x20, 0x00, 0xc8, 0x00, 0x01]), c)).toEqual({ power: 200 });
+  });
+});
+
 // ---------------------------------------------------- fake FTMS device ----
 
 /** A characteristic that records writes and can raise notifications, like a real one. */
@@ -177,22 +194,21 @@ describe('FTMS control', () => {
     expect(trainer.canControl).toBe(true);
   });
 
-it('rejects a refused command instead of pretending it worked', async () => {
+  it('reports a refused command instead of pretending it worked', async () => {
     const { trainer, control } = await connect(true);
     expect(trainer.canControl).toBe(true);
     // Stop the automatic success acknowledgement: this command gets a refusal instead (0x04 = not supported).
     control.writeValueWithResponse = async () => {};
     const p = trainer.setTargetPower(100);
-    await Promise.resolve(); // let the queued command register its pending response
-    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0)); // let the queued command register its pending response
     control.notify([0x80, 0x05, 0x04]);
-    await expect(p).rejects.toThrow(/failed/);
+    await expect(p).resolves.toEqual({ ok: false, code: 0x04 });
   });
 
-  it('rejects a command the trainer never answers', async () => {
+  it('reports a command the trainer never answers', async () => {
     const { trainer, control } = await connect(true);
     control.writeValueWithResponse = async () => {}; // accepted by the browser, no answer follows
-    await expect(trainer.setTargetPower(120)).rejects.toThrow(/timed out/);
+    await expect(trainer.setTargetPower(120)).resolves.toEqual({ ok: false, code: -1 }); // RESULT_TIMEOUT
   }, 10_000);
 
   it('reads an FTMS notification delivered through another target (Bluefy)', async () => {

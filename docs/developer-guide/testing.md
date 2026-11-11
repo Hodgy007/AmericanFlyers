@@ -7,6 +7,7 @@ This page covers what the repository checks automatically (the type check, the b
 Every pull request and every push to `main` runs [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) on GitHub Actions:
 
 1. `npm ci`.
+1. **`npm run lint`.** ESLint (`eslint.config.js`): typescript-eslint's recommended rules plus `no-floating-promises` on `src/` and `api/`.
 2. **`npm run build`.** This type-checks the app (`tsc --noEmit` on everything under `src/`: strict mode, unused-variable checks, the Web Bluetooth types), the serverless functions (`tsc -p api --noEmit`) and the tests (`tsc -p tsconfig.test.json --noEmit`), then runs `vite build`.
 3. **`npm test`.** The unit tests (Vitest), below.
 4. **The smoke test.** `npx playwright install --with-deps chromium`, then `npx playwright test`: the built app in headless Chromium, below. On failure the workflow uploads the Playwright report and traces.

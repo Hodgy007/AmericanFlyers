@@ -67,8 +67,8 @@ export class Sound {
     window.addEventListener('keydown', start);
     document.addEventListener('visibilitychange', () => {
       if (!this.ctx) return;
-      if (document.visibilityState === 'hidden') this.ctx.suspend();
-      else if (this.on) this.ctx.resume();
+      if (document.visibilityState === 'hidden') void this.ctx.suspend();
+      else if (this.on) void this.ctx.resume();
     });
   }
 
@@ -81,9 +81,9 @@ export class Sound {
     if (on) {
       if (!this.unlocked) return; // starts on the first click or key press
       this.start();
-      this.ctx?.resume();
+      void this.ctx?.resume();
     } else {
-      this.ctx?.suspend();
+      void this.ctx?.suspend();
     }
     this.music?.setEnabled(on && this.musicOn);
   }

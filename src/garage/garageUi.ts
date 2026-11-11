@@ -96,7 +96,7 @@ export function initGarageUi(o: Options) {
       b.setAttribute('aria-selected', String(t.id === tab));
       b.setAttribute('aria-controls', body.id);
       b.tabIndex = t.id === tab ? 0 : -1;
-      b.addEventListener('click', () => { tab = t.id; tried = null; render(); if (tab === 'week') loadWeek(); });
+      b.addEventListener('click', () => { tab = t.id; tried = null; render(); if (tab === 'week') void loadWeek(); });
       b.addEventListener('keydown', (e) => tabKeys(e, tabs, i));
       return b;
     }));
@@ -115,7 +115,7 @@ export function initGarageUi(o: Options) {
     tab = tabs[i].id;
     tried = null;
     render();
-    if (tab === 'week') loadWeek();
+    if (tab === 'week') void loadWeek();
     document.getElementById(`garage-tab-${tab}`)?.focus();
   }
 
@@ -296,8 +296,8 @@ export function initGarageUi(o: Options) {
       dialog.showModal();
       preview.start();
       render();
-      garage.refresh().then(() => { if (dialog.open) { render(); if (tab === 'week') loadWeek(); } });
-      if (tab === 'week') loadWeek();
+      void garage.refresh().then(() => { if (dialog.open) { render(); if (tab === 'week') void loadWeek(); } });
+      if (tab === 'week') void loadWeek();
     },
     refresh: render,
   };

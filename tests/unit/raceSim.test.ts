@@ -223,3 +223,32 @@ describe('RaceSim: live player and events', () => {
     }
   });
 });
+
+describe('the field rides in the same air and bends as you', () => {
+  const base = (id: string) => { const s = stageById(id); return { finish: s.finish!, elevationAt: s.elevationAt, race: s.race }; };
+  const finishTime = (c: ReturnType<typeof makeCourse>) => {
+    const sim = new RaceSim(c, makeRoster(3), { refWkg: 3.5, seed: 3, startFront: 0 });
+    sim.runToEnd();
+    return Math.min(...stageTimes(c.lines).values());
+  };
+
+  it('is faster up a high stage than the same stage at sea level', () => {
+    const s = stageById('mt-blue-sky');
+    const sea = finishTime(makeCourse(base('mt-blue-sky')));
+    const high = finishTime(makeCourse({ ...base('mt-blue-sky'), baseAltitude: s.baseAltitude }));
+    expect(high).toBeLessThan(sea);
+  });
+
+  it('gets no altitude when the course has none (unchanged for callers that do not say)', () => {
+    expect(makeCourse(base('alpe-dhuez')).altitudeAt).toBeUndefined();
+    expect(makeCourse({ ...base('alpe-dhuez'), baseAltitude: 723 }).altitudeAt?.(0)).toBe(723);
+  });
+
+  it('brakes for bends: a descending field is slower with the stage’s road than without', () => {
+    const s = stageById('hotw-tour-of-the-moon');
+    const free = finishTime(makeCourse(base('hotw-tour-of-the-moon')));
+    const braking = finishTime(makeCourse({ ...base('hotw-tour-of-the-moon'), headingAt: s.headingAt }));
+    expect(braking).toBeGreaterThan(free);
+    expect(braking / free).toBeLessThan(1.05); // a tenth of a percent here and there, not a different race
+  });
+});

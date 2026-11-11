@@ -2,12 +2,12 @@
 // the ride uses: watts saved at 40 km/h on the flat, and seconds gained or lost
 // up Alpe d'Huez at your threshold-ish power.
 
-import { DEFAULT_PARAMS, stepSpeed, type RiderParams } from '../physics';
+import { DEFAULT_PARAMS, SEA_LEVEL_AIR_DENSITY, airDensityAt, stepSpeed, type RiderParams } from '../physics';
 import { stageById, type Stage } from '../stages';
 import { equipmentEffects, NO_EFFECTS, type EquipmentEffects, type Loadout, type StoreItem } from './catalogue';
 
 const G = 9.81;
-const AIR_DENSITY = 1.225;
+const AIR_DENSITY = SEA_LEVEL_AIR_DENSITY;
 const DRIVETRAIN_EFFICIENCY = 0.976;
 
 /** Who the numbers are for. */
@@ -29,19 +29,22 @@ export function paramsFor(ctx: Pick<RiderContext, 'riderKg' | 'bikeKg'>, eq: Equ
 /** Steady power (watts at the pedals) to hold `speedMs` on a grade, in still air. Matches what stepSpeed settles to. */
 export function powerToHold(speedMs: number, grade: number, p: RiderParams): number {
   const theta = Math.atan(grade);
-  const resist = p.massKg * G * Math.sin(theta) + p.crr * p.massKg * G * Math.cos(theta) + 0.5 * AIR_DENSITY * p.cda * speedMs * speedMs;
+  const resist = p.massKg * G * Math.sin(theta) + p.crr * p.massKg * G * Math.cos(theta) + 0.5 * (p.airDensity ?? AIR_DENSITY) * p.cda * speedMs * speedMs;
   return (resist * speedMs) / DRIVETRAIN_EFFICIENCY;
 }
 
-/** Seconds to ride a stage from the start to its finish at a steady power (the ride's own momentum maths). */
-export function stageSeconds(stage: Stage, powerW: number, p: RiderParams): number {
+/**
+ * Seconds to ride a stage from the start to its finish at a steady power (the ride's own momentum maths, thin mountain
+ * air included). Pass `atAltitude = false` for the old sea-level figure.
+ */
+export function stageSeconds(stage: Stage, powerW: number, p: RiderParams, atAltitude = true): number {
   const end = stage.finish ?? 10000;
   const grade = (d: number) => (stage.elevationAt(d + 2) - stage.elevationAt(d - 2)) / 4;
   let d = 0;
   let v = 0;
   let t = 0;
   while (d < end && t < 4 * 3600) {
-    v = stepSpeed(v, powerW, grade(d), 1, p);
+    v = stepSpeed(v, powerW, grade(d), 1, atAltitude ? { ...p, airDensity: airDensityAt(stage, d) } : p);
     d += v;
     t += 1;
   }

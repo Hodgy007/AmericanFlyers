@@ -6,7 +6,7 @@ import { averageGrade, milestoneText, signStyleOf } from '../../src/world/milest
 import { PX_PER_M, RAGGED_ROW, raggedEdge, roadPaintLayout, roadStyleOf, ROAD_TEX_WIDTH, type RoadPaintLayout } from '../../src/world/roadStyle';
 import type { RoadStyle } from '../../src/stages';
 
-const STYLES: RoadStyle[] = ['us-highway', 'alpine', 'lane', 'park'];
+const STYLES: RoadStyle[] = ['us-highway', 'alpine', 'lane', 'park', 'city-park'];
 
 describe('which stage has which road', () => {
   it('gives the right style to every stage', () => {
@@ -26,7 +26,7 @@ describe('which stage has which road', () => {
       'mt-diablo': 'park',
       flagstaff: 'us-highway',
       'richmond-worlds': 'us-highway',
-      'central-park': 'lane',
+      'central-park': 'city-park',
       'harrogate-worlds': 'alpine',
       'pacific-coast': 'us-highway',
     };
@@ -92,6 +92,15 @@ describe('road paint layout', () => {
       expect(m.color).toContain('232, 184, 60'); // yellow
     }
     expect(park.edge?.flat).toBe(true);
+  });
+  it('gives the city park drive a kerb, white edge lines and lane lines', () => {
+    const l = roadPaintLayout('city-park');
+    const solid = l.paint.filter((m) => m.h === l.height);
+    expect(solid).toHaveLength(3); // two edge lines and the walking lane's line
+    expect(l.paint.filter((m) => m.h < l.height)).toHaveLength(1); // the dashed cycling-lane line
+    for (const m of l.paint) expect(m.color).toContain('234, 236, 238'); // white
+    expect(l.edge?.flat).toBe(true); // stone kerb
+    expect(l.ragged).toBeNull();
   });
 });
 
