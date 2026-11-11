@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { gltfLoader } from './gltf';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { cleanStyle, DEFAULT_STYLE, type BikeStyle } from '../garage/style';
 import { applyKitStyle, buildHelmetShell, buildWheel, groundGlow, haloMat, neonMat, tronBody, WHEEL_R } from './bikeParts';
@@ -77,7 +78,7 @@ function ik(root: THREE.Vector3, end: THREE.Vector3, l1: number, l2: number, ben
 /** The rigged rider, loaded once and cloned for every rider on the road. */
 let riderGltf: Promise<GLTF | null> | null = null;
 function loadRiderModel() {
-  riderGltf ??= new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/rider.glb`).catch(() => {
+  riderGltf ??= gltfLoader().loadAsync(`${import.meta.env.BASE_URL}models/rider.glb`).catch(() => {
     console.info('Rider model not found: models/rider.glb (using the built-in rider)');
     return null;
   });

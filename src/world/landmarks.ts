@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { gltfLoader } from './gltf';
 import { currentStage, gradeAt, roadPoint } from '../course';
 import type { LandmarkKind } from '../stages';
 import { heightAt } from './terrain';
@@ -73,7 +73,7 @@ export class Landmarks {
   private readonly prepared = new Map<LandmarkKind, THREE.Object3D>(); // kind → scaled model
   private readonly placed = new Map<string, THREE.Object3D>();
 
-  private readonly loader = new GLTFLoader();
+  private readonly loader = gltfLoader();
   private readonly requested = new Set<string>(); // files already being fetched
   private monuments: typeof import('./monuments') | null = null; // the lazy chunk, once it has arrived
   private monumentsRequested = false;
