@@ -47,6 +47,11 @@ test('approaching Alpe d’Huez shows the KOM panel with the board, then the liv
   const card = page.locator('#kom-card');
   await expect(card).toBeVisible();
   await expect(page.locator('#kom-title')).toHaveText('Alpe d\'Huez');
+  // The card shrinks to a chip after a few seconds: open it the way a rider does (the click or tap on the card) to read the board.
+  await expect(async () => { // it may close by itself between the check and the click: look again
+    if ((await page.locator('#kom-toggle').getAttribute('aria-expanded')) !== 'true') await page.locator('#kom-toggle').click();
+    await expect(page.locator('#kom-toggle')).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
   // The top 5 from the (mocked) shared board, the leader crowned, and your own rank below.
   await expect(page.locator('#kom-board li:visible')).toHaveCount(5);
   await expect(page.locator('#kom-board li').first()).toContainText('👑');

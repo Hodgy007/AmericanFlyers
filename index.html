@@ -113,12 +113,12 @@
     <header class="topbar">
       <button type="button" class="brand" id="btn-home" title="Home"><span class="star">★</span> American Flyers</button>
       <nav class="actions">
-        <button id="btn-stage" title="Choose a stage">🏁 Stage</button>
-        <button id="btn-workouts" title="Workouts">🏋 Workouts</button>
+        <button id="btn-stage" title="Choose a stage">🏁<span class="lbl"> Stage</span></button>
+        <button id="btn-workouts" title="Workouts">🏋<span class="lbl"> Workouts</span></button>
         <button id="btn-riders" title="Riders and pro teams">👥</button>
         <button id="btn-trainer" class="primary">Connect trainer</button>
         <div class="menu-wrap">
-          <button id="btn-menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu" title="More">☰ Menu</button>
+          <button id="btn-menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu" title="More">☰<span class="lbl"> Menu</span></button>
           <div id="menu" class="menu" role="menu" hidden>
             <!-- Trainer, heart rate and power meter: labels are filled in by src/devicesUi.ts (connected, remembered, reconnecting). -->
             <button id="btn-menu-trainer" role="menuitem"><span class="mi-label">🔌 Connect trainer</span><small class="mi-sub"></small></button>
@@ -155,6 +155,8 @@
         </div>
         <button id="btn-end" class="end-ride" title="End this ride and see its summary" aria-label="End ride">⏹ End</button>
         <button id="btn-account" title="Sign in or create a free account">👤 Sign in</button>
+        <!-- Phones: forces the second row of the top bar (CSS only). -->
+        <span class="bar-break" aria-hidden="true"></span>
       </nav>
     </header>
 
@@ -214,15 +216,15 @@
       <button type="button" id="eb-leave">Leave</button>
     </aside>
 
-    <div id="demo-panel" class="demo-panel" hidden>
-      <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
-      <input id="demo-power" type="range" min="0" max="600" step="5" value="150" />
-      <p>Use Page Up / Page Down keys to adjust</p>
-    </div>
-
     <footer class="bottom">
+      <!-- The demo slider: fixed at the bottom right on wide screens, in flow above the profile strip on phones. -->
+      <div id="demo-panel" class="demo-panel" hidden>
+        <label for="demo-power">Demo power <strong id="demo-power-value">150 W</strong></label>
+        <input id="demo-power" type="range" min="0" max="600" step="5" value="150" />
+        <p>Use Page Up / Page Down keys to adjust</p>
+      </div>
       <div class="status">
-        <span id="trainer-dot" class="dot"></span><span id="trainer-status">No trainer connected</span>
+        <span id="trainer-dot" class="dot"></span><span id="trainer-status" class="trainer-status">No trainer connected</span>
         <span id="stage-name" class="stage-name"></span>
         <!-- Wind: an arrow (up is the way you ride) and the speed; see windUi.ts -->
         <span id="wind-chip" class="wind-chip" hidden><span id="wind-arrow" class="wind-arrow" aria-hidden="true">↑</span><span id="wind-text"></span></span>
@@ -232,9 +234,12 @@
 
     <!-- Mini-map (miniMap.ts) and climb preview (climbUi.ts) -->
     <button type="button" id="minimap" class="minimap" hidden aria-label="Route mini-map. Press to switch between the whole route and your heading."><canvas id="minimap-canvas"></canvas></button>
+    <!-- Both cards sit at the screen edges (cardDock.ts), shrink to a one-line chip after a few seconds and open again on hover or a tap. -->
     <aside id="climb-card" class="climb-card" hidden aria-live="off">
       <div class="cc-head"><strong id="cc-title"></strong><span id="cc-sub"></span></div>
+      <div id="cc-chip" class="chip-line"></div>
       <canvas id="cc-profile"></canvas>
+      <button type="button" class="card-toggle" id="cc-toggle" aria-expanded="false" aria-controls="climb-card" aria-label="Climb details"></button>
     </aside>
     <!-- KOM panel (segmentUi.ts): the board for the segment ahead, and your live gap on it -->
     <aside id="kom-card" class="kom-card" hidden aria-live="off">
@@ -246,6 +251,7 @@
       <ol id="kom-board" class="kom-board"></ol>
       <p id="kom-note" class="kom-note" hidden></p>
       <p id="kom-me" class="kom-me"></p>
+      <button type="button" class="card-toggle" id="kom-toggle" aria-expanded="false" aria-controls="kom-card" aria-label="KOM details"></button>
     </aside>
 
     <div id="toast" class="toast" role="status"></div>
