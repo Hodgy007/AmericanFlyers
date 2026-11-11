@@ -74,7 +74,7 @@ export function loadOnClick(button: HTMLElement | null, l: Lazy<unknown>) {
   const stub = () => {
     button.removeEventListener('click', stub);
     if (l.peek()) return; // already built (prefetched): its own handler runs next in this same click
-    use(l, () => button.click(), button).then(() => {
+    void use(l, () => button.click(), button).then(() => {
       // A failed load: put the stub back so the next click tries again.
       if (!l.peek()) button.addEventListener('click', stub);
     });

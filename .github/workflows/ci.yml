@@ -1,6 +1,6 @@
 name: CI
 
-# Type-check and build, run the unit tests, then a headless-browser smoke test
+# Lint, type-check and build, run the unit tests, then a headless-browser smoke test
 # of the built app. Vercel still does the deploy; this is the safety net.
 on:
   pull_request:
@@ -24,6 +24,9 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build (type-check + bundle)
         run: npm run build

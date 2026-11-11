@@ -43,7 +43,7 @@ export function initLeaderboardUi(o: Options) {
       b.type = 'button';
       b.className = 'link';
       b.textContent = 'Ride without a ghost';
-      b.addEventListener('click', () => { o.clearGhost(); render(); });
+      b.addEventListener('click', () => { o.clearGhost(); void render(); });
       ghostNote.append(b);
     }
     if (stage.finish === null) {
@@ -105,14 +105,14 @@ export function initLeaderboardUi(o: Options) {
     return el;
   }
 
-  for (const t of tabs) t.addEventListener('click', () => { range = t.dataset.lbRange as 'week' | 'all'; render(); });
+  for (const t of tabs) t.addEventListener('click', () => { range = t.dataset.lbRange as 'week' | 'all'; void render(); });
   document.getElementById('btn-leaderboard')!.addEventListener('click', () => {
     if (!account()) {
       o.openSignIn('Sign in (free) to see the leaderboards and race other riders’ ghosts.');
       return;
     }
     dialog.showModal();
-    render();
+    void render();
   });
 
   return { open: () => document.getElementById('btn-leaderboard')!.click() };

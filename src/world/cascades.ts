@@ -115,7 +115,7 @@ export class CascadeShadow extends SunLightShadow {
       let r2 = 0;
       let minZ = Infinity;
       for (const c of corners) { r2 = Math.max(r2, c.distanceToSquared(centre)); minZ = Math.min(minZ, c.z); }
-      let radius = Math.sqrt(r2) / (1 - 1 / res); // half a texel of room, so snapping never clips a corner
+      const radius = Math.sqrt(r2) / (1 - 1 / res); // half a texel of room, so snapping never clips a corner
       const texel = (2 * radius) / res;
       centre.x = Math.round(centre.x / texel) * texel;
       centre.y = Math.round(centre.y / texel) * texel;

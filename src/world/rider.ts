@@ -155,7 +155,7 @@ export class RiderModel {
     this.buildRider();
     if (look.ghost) makeGhost(this.body, true);
     // Swap in the rigged 3D rider when it loads; the primitive rider stays as a fallback.
-    loadRiderModel().then((gltf) => {
+    void loadRiderModel().then((gltf) => {
       if (!gltf || this.disposed) return;
       this.rig = new Rig(cloneSkinned(gltf.scene));
       if (look.ghost) makeGhost(this.rig.root, true);

@@ -86,6 +86,13 @@ const KM_PER_MI = 1.609344;
 
 let settings = loadSettings();
 
+/** Changes settings: keeps them in this browser and, signed in, in the account (the push is debounced in cloud/sync.ts). */
+function updateSettings(patch: Partial<Settings>) {
+  settings = { ...settings, ...patch };
+  saveSettings(settings);
+  pushSettings(settings);
+}
+
 // ---------------------------------------------------------------- state ----
 
 let trainer: Trainer | null = null;
@@ -370,9 +377,7 @@ setPlayerKit(settings.kit);
 const garage = new Garage({
   saved: () => settings.loadout,
   save: (l) => {
-    settings = { ...settings, loadout: l };
-    saveSettings(settings);
-    pushSettings(settings);
+    updateSettings({ loadout: l });
   },
   toast: (m, ms) => toast(m, ms),
 });
@@ -700,9 +705,7 @@ function applyHudPosition(pos: Settings['hudPosition']) {
 applyHudPosition(settings.hudPosition);
 document.querySelectorAll<HTMLButtonElement>('[data-hud-pos]').forEach((b) => b.addEventListener('click', () => {
   const pos = b.dataset.hudPos as Settings['hudPosition'];
-  settings = { ...settings, hudPosition: pos };
-  saveSettings(settings);
-  pushSettings(settings);
+  updateSettings({ hudPosition: pos });
   applyHudPosition(pos);
 }));
 
@@ -897,7 +900,7 @@ function finishWorkout() {
   stopWorkoutUi();
   closeWorkoutSpan(); // the workout is its own activity; a fresh ride window starts after it
   showSummary('💪', `${w.name}: complete!`, items, actions, [...(coach ? [coach.node] : []), ...zones]);
-  saveSpan(sp).then((saved) => coach?.rideSaved(saved ? sp.rec.id : null));
+  void saveSpan(sp).then((saved) => coach?.rideSaved(saved ? sp.rec.id : null));
 }
 
 interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
@@ -944,9 +947,7 @@ function zoneSummary(st: RideStats) {
 
 function setFtp(ftp: number, source: 'manual' | 'ramp_test') {
   if (ftp === settings.ftp && source === 'manual') return;
-  settings = { ...settings, ftp };
-  saveSettings(settings);
-  pushSettings(settings);
+  updateSettings({ ftp });
   recordFtp(ftp, source).catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
 }
 
@@ -1122,7 +1123,7 @@ async function saveInterrupted(snap: RideSnapshot) {
     await saveActivity(row);
     accountUi.invalidate();
     hubNotify('ride');
-    garage.refresh();
+    void garage.refresh();
     toast('Saved your interrupted ride to your rides.', 5000);
   } catch {
     if (keepOffline(row).result !== 'failed') { hubNotify('ride'); toast('📶 Couldn’t reach the server. Your interrupted ride is saved on this device and uploads when you’re back online.', 6000); }
@@ -1207,7 +1208,7 @@ async function uploadQueuedRides() {
   if (r.uploaded.length) {
     accountUi.invalidate();
     hubNotify('ride');
-    garage.refresh(); // credits and levels for the uploaded rides
+    void garage.refresh(); // credits and levels for the uploaded rides
     toast(r.uploaded.length === 1 ? `✓ Uploaded your ride “${r.uploaded[0].title}” (saved while offline).` : `✓ Uploaded ${r.uploaded.length} rides saved while offline.`, 5000);
   }
   for (const a of r.givenUp) toast(`Couldn’t upload “${a.title}” (${new Date(a.started_at).toLocaleDateString()}) after several tries, so it was removed from this device.`, 8000);
@@ -1235,7 +1236,7 @@ function aiDebriefInput(sp: Span, title: string, mode: RideSummaryInput['mode'],
 // Save long rides every few minutes, so a closed tab doesn't lose them.
 setInterval(() => {
   const sp = span();
-  if (account() && sp.st.seconds >= MIN_RIDE_S && sp.st.seconds - sp.saved > 60) saveRide({ quiet: true });
+  if (account() && sp.st.seconds >= MIN_RIDE_S && sp.st.seconds - sp.saved > 60) void saveRide({ quiet: true });
 }, 5 * 60 * 1000);
 
 /**
@@ -1313,10 +1314,10 @@ function endRide() {
     { label: 'Start a new ride', primary: true, onClick: resetRide },
   ], [...(coach ? [coach.node] : []), ...zoneSummary(stats)]);
   const rideId = sp.rec.id;
-  if (ride.movingTime >= 180) ai?.rideEnded({ distance: ride.distance, finish: null, finishS: null, movingTime: ride.movingTime, lengthKm: null }, (n) => $('finish-extra').prepend(n));
+  if (ride.movingTime >= 180) void ai?.rideEnded({ distance: ride.distance, finish: null, finishS: null, movingTime: ride.movingTime, lengthKm: null }, (n) => $('finish-extra').prepend(n));
   const split = rideFlags.splitByWorkout && !sp.workout ? 'Part of this trip was a workout, saved as its own activity; these numbers are the ride since.' : '';
   if (split) $('finish-extra').prepend(Object.assign(document.createElement('p'), { className: 'finish-ghost', textContent: `ℹ️ ${split}` }));
-  saveSpan(sp).then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); });
+  void saveSpan(sp).then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); });
 }
 
 /** Ends a race and leaves a group ride, keeping the ride's own numbers. */
@@ -1374,7 +1375,7 @@ function chooseStage(stage: Stage) {
   presence.restage();
   peloton.reset(0);
   ghost = null;
-  loadMyGhost();
+  void loadMyGhost();
   $('stage-name').textContent = stage.name;
   toast(`${stage.name}: ${stage.tagline}`, 5000);
   hubNotify('stage');
@@ -1512,14 +1513,12 @@ const tourUi = lazy(() => import('./tourUi').then((m) => m.initTourUi({
   },
   imperial: () => settings.units === 'imperial',
 })));
-function openTour() { use(tourUi, (u) => u.open(), $('btn-tour')); }
+function openTour() { void use(tourUi, (u) => u.open(), $('btn-tour')); }
 $('btn-tour').addEventListener('click', openTour);
 // Progress is saved with the settings, so it follows the account.
 loadTour(settings.tour);
 onTourChange((p) => {
-  settings = { ...settings, tour: p };
-  saveSettings(settings);
-  pushSettings(settings);
+  updateSettings({ tour: p });
   updateTourJersey();
 });
 
@@ -1541,7 +1540,7 @@ const eventsUi = lazy(() => import('./eventsUi').then((m) => {
     if (was) toast(`You left ${was.title}.`);
   });
   m.initEventsUi({
-    join: (row) => { joinEvent(row); },
+    join: (row) => { void joinEvent(row); },
     stageName: (id) => stageById(id).name,
     openSignIn: (why) => accountUi.openSignIn(why),
     currentEventId: () => eventState?.ev.id ?? null,
@@ -1565,7 +1564,7 @@ function attachRace(r: LiveRace) {
   raceUiModule.prefetch();
   raceCommentary = null;
   // The commentator is normally loaded already (prefetched after the first frame); if not, it joins in a moment.
-  use(commentary, ({ m, commentator }) => {
+  void use(commentary, ({ m, commentator }) => {
     if (race !== r) return; // the race ended or changed while it loaded
     commentator.reset();
     raceCommentary = new m.RaceCommentary(commentator);
@@ -1690,7 +1689,7 @@ function eventFinishPanel(ev: ActiveEvent, rows: ResultRow[], myTime: number, av
       if (!eligible) box.append(note);
     } catch { /* results are a bonus */ }
   };
-  (async () => {
+  void (async () => {
     if (eligible) {
       try { await submitEventResult(ev.id, myTime, avgPower); } catch (e) { note.textContent = `Couldn’t send your result: ${(e as Error).message}`; box.append(note); }
     }
@@ -1699,7 +1698,7 @@ function eventFinishPanel(ev: ActiveEvent, rows: ResultRow[], myTime: number, av
     let n = 0;
     const timer = window.setInterval(() => {
       if ($('finish').hidden || ++n > 40) { window.clearInterval(timer); return; }
-      refresh();
+      void refresh();
     }, 15000);
   })();
   return box;
@@ -1769,7 +1768,7 @@ function showFinish() {
   $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
   const rideId = sp.rec.id;
   const rideLen = currentStage().finish;
-  ai?.rideEnded({ distance: ride.distance, finish: rideLen, finishS: ride.finishTime || null, movingTime: ride.movingTime, lengthKm: rideLen ? Math.round(rideLen / 100) / 10 : null }, (n) => $('finish-extra').prepend(n));
+  void ai?.rideEnded({ distance: ride.distance, finish: rideLen, finishS: ride.finishTime || null, movingTime: ride.movingTime, lengthKm: rideLen ? Math.round(rideLen / 100) / 10 : null }, (n) => $('finish-extra').prepend(n));
   const offBoard = leaderboardNote(rideFlags);
   if (offBoard) $('finish-extra').prepend(Object.assign(document.createElement('p'), { className: 'finish-ghost off-board', textContent: `ℹ️ ${offBoard}` }));
   // 📤 Share: a picture of the ride (route, numbers, place, your colours).
@@ -1794,7 +1793,7 @@ function showFinish() {
       textContent: vsGhost < 0 ? `🏆 ${raceTime(-vsGhost)} faster than ${who}` : `${raceTime(vsGhost)} behind ${who}`,
     }));
   }
-  saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); showRank(); });
+  void saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); void showRank(); });
 }
 
 /** After a whole-stage ride is saved: where it puts you on the leaderboard. */
@@ -1806,7 +1805,7 @@ async function showRank() {
     if (!me) return;
     const total = rows.length;
     toast(me.rank === 1 ? `🥇 You’re the fastest ever on ${currentStage().name}!` : `🏆 You’re ${ordinal(me.rank)} on the ${currentStage().name} leaderboard${total > 25 ? '' : ` of ${total}`}.`, 7000);
-    if (settings.ghost && (!ghost || ghost.isMe)) loadMyGhost(); // race your new best next time
+    if (settings.ghost && (!ghost || ghost.isMe)) void loadMyGhost(); // race your new best next time
   } catch { /* leaderboard is a bonus */ }
 }
 
@@ -1906,7 +1905,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
   syncMusic();
   if (!settings.rideTogether) presence.leave();
   if (!settings.ghost) ghost = null;
-  else if (!ghost) loadMyGhost();
+  else if (!ghost) void loadMyGhost();
   presence.restage();
 });
 $('settings').querySelector<HTMLInputElement>('[name=difficulty]')!.addEventListener('input', (e) => {
@@ -1920,9 +1919,7 @@ function updateMapMenu() {
   if (!settings.miniMap) climbUi.update(0, false, false, false);
 }
 $('btn-minimap').addEventListener('click', () => {
-  settings = { ...settings, miniMap: !settings.miniMap };
-  saveSettings(settings);
-  pushSettings(settings);
+  updateSettings({ miniMap: !settings.miniMap });
   updateMapMenu();
 });
 updateMapMenu();
@@ -1939,9 +1936,7 @@ function applyProTeams(on: boolean, was: boolean) {
 function setProTeams(on: boolean) {
   const was = settings.proTeams;
   if (on === was) return;
-  settings = { ...settings, proTeams: on };
-  saveSettings(settings);
-  pushSettings(settings);
+  updateSettings({ proTeams: on });
   applyProTeams(on, was);
 }
 /** ☰ Menu → Pro teams on/off mirrors the Settings checkbox and the hub's ride mode. In a race or group ride the field is the pro teams, so it says so. */
@@ -1978,9 +1973,7 @@ function setSound(on: boolean) {
   sound.setMusic(settings.music); // sound on again restores the music unless it's off itself
   $('btn-sound').textContent = on ? '🔊 Sound on' : '🔇 Sound off';
   if (on !== settings.sound) {
-    settings = { ...settings, sound: on };
-    saveSettings(settings);
-    pushSettings(settings);
+    updateSettings({ sound: on });
   }
   syncMusic();
 }
@@ -1994,9 +1987,7 @@ function updateMusicMenu() {
 }
 function setMusic(on: boolean) {
   if (on === settings.music) return;
-  settings = { ...settings, music: on };
-  saveSettings(settings);
-  pushSettings(settings);
+  updateSettings({ music: on });
   sound.setMusic(on);
   updateMusicMenu();
   syncMusic();
@@ -2074,9 +2065,7 @@ $<HTMLInputElement>('route-upload').addEventListener('change', async (e) => {
 $('btn-workouts').addEventListener('click', () => use(workoutUi, (u) => u.openLibrary(), $('btn-workouts')));
 $('btn-data').addEventListener('click', () =>
   openDataBlocks($<HTMLDialogElement>('data-blocks'), settings.dataFields, (ids) => {
-    settings = { ...settings, dataFields: ids };
-    saveSettings(settings);
-    pushSettings(settings);
+    updateSettings({ dataFields: ids });
     hud.setFields(ids);
     placeWorkoutPanel();
   }),
@@ -2124,9 +2113,7 @@ for (const [id, dir] of [['steer-left', -1], ['steer-right', 1]] as const) {
 const atmosphereUi = lazy(() => import('./atmosphereUi').then((m) => m.initAtmosphereUi({
   current: () => ({ timeOfDay: settings.timeOfDay, weather: settings.weather }),
   choose: (patch) => {
-    settings = { ...settings, ...patch };
-    saveSettings(settings);
-    pushSettings(settings);
+    updateSettings({ ...patch });
     world.setAtmosphere(settings.timeOfDay, settings.weather);
   },
 })));
@@ -2162,7 +2149,7 @@ const accountUi = initAccountUi({
   // Signing out ends the ride (an account is required to ride): keep a ride worth keeping first.
   beforeSignOut: async () => { await saveUnsaved(); },
   // 📤 Share on a ride in your profile.
-  shareRide: (a) => { import('./garage/shareUi').then((m) => shareRide(m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined), toast)); },
+  shareRide: (a) => { void import('./garage/shareUi').then((m) => shareRide(m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined), toast)); },
   context: () => ({
     stage: currentStage().name,
     workout: player?.workout.name ?? null,
@@ -2180,7 +2167,7 @@ const stageLines = () => {
   if (race) return race.course.lines;
   return [...(st.race?.sprints ?? []).map((l) => ({ kind: 'sprint' as const, d: l.d, name: l.name })), ...(st.race?.summits ?? []).map((l) => ({ kind: 'summit' as const, d: l.d, name: l.name }))];
 };
-const patchAiSettings = (p: Partial<Pick<Settings, 'aiCoach' | 'aiRivals'>>) => { settings = { ...settings, ...p }; saveSettings(settings); pushSettings(settings); };
+const patchAiSettings = (p: Partial<Pick<Settings, 'aiCoach' | 'aiRivals'>>) => { updateSettings({ ...p }); };
 function aiHost(): AiHostBase {
   return {
     settings: () => settings,
@@ -2270,9 +2257,7 @@ function rideWith(distance: number, name: string, speedMs = 0) {
 // ------------------------------------------------------ training plans ----
 
 function setPlan(plan: Settings['plan']) {
-  settings = { ...settings, plan };
-  saveSettings(settings);
-  pushSettings(settings);
+  updateSettings({ plan });
   hubNotify('plan');
 }
 
@@ -2301,7 +2286,7 @@ function rideSession(session: Session) {
 
 const plansUi = lazy(() => import('./plansUi').then((m) => m.initPlansUi({ progress: () => settings.plan, setProgress: setPlan, ride: rideSession, toast })));
 const openPlans = (from?: Element | null) => use(plansUi, (u) => u.open(), from);
-$('btn-plans').addEventListener('click', () => { $<HTMLDialogElement>('workouts').close(); openPlans($('btn-plans')); });
+$('btn-plans').addEventListener('click', () => { $<HTMLDialogElement>('workouts').close(); void openPlans($('btn-plans')); });
 $('btn-menu-plans').addEventListener('click', () => openPlans($('btn-menu-plans')));
 
 // ---------------------------------------------------------- first ride ----
@@ -2310,9 +2295,7 @@ const onboarding = lazy(() => import('./onboarding').then((m) => m.initOnboardin
   settings: () => settings,
   save: (patch) => {
     const oldFtp = settings.ftp;
-    settings = { ...settings, ...patch };
-    saveSettings(settings);
-    pushSettings(settings);
+    updateSettings({ ...patch });
     if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch(() => {});
     world.setMarkers(markerConfig());
   },
@@ -2322,10 +2305,10 @@ const onboarding = lazy(() => import('./onboarding').then((m) => m.initOnboardin
   startDemo: () => { if (!demo) setDemo(true); },
   rampTest: () => { const w = workoutById(RAMP_TEST_ID); if (w) startWorkout(w); },
   rideStage: (id) => rideSession({ title: '', note: '', stage: id }),
-  openPlans: () => { openPlans(); },
+  openPlans: () => { void openPlans(); },
 })));
 const openOnboarding = (from?: Element | null) => use(onboarding, (u) => u.open(), from);
-$('btn-setup-guide').addEventListener('click', () => { $<HTMLDialogElement>('settings').close(); openOnboarding($('btn-setup-guide')); });
+$('btn-setup-guide').addEventListener('click', () => { $<HTMLDialogElement>('settings').close(); void openOnboarding($('btn-setup-guide')); });
 
 // ---------------------------------------------------- ghosts & leaderboards ----
 
@@ -2400,9 +2383,7 @@ const rideOnsUi = initRideOnsUi({
 const kitUi = lazy(() => import('./kitUi').then((m) => m.initKitUi({
   current: () => settings.kit,
   save: (kit) => {
-    settings = { ...settings, kit };
-    saveSettings(settings);
-    pushSettings(settings);
+    updateSettings({ kit });
     setPlayerKit(kit);
     toast(kit ? 'Kit saved. You’re riding in your colours.' : 'Back in the American Flyers stars and stripes.');
   },
@@ -2446,10 +2427,10 @@ onAccountChange(async (a) => {
     abandonRide(); // no account, no ride (the home page replaces the hub in src/home.ts)
     forgetLocalCopies();
     ghost = null;
-    garage.refresh(); // signed out: back to the starter kit and no wallet
+    void garage.refresh(); // signed out: back to the starter kit and no wallet
     return;
   }
-  garage.refresh(); // level, credits and what you own (this also applies your loadout)
+  void garage.refresh(); // level, credits and what you own (this also applies your loadout)
   try {
     const remote = await syncOnSignIn(settings);
     if (gen !== signInGen) return;
@@ -2483,9 +2464,9 @@ onAccountChange(async (a) => {
     if (gen !== signInGen) return;
     await uploadQueuedRides(); // rides saved on this device while offline
     if (gen !== signInGen) return;
-    garage.refresh(); // a ride saved just now may have earned credits
-    accountUi.checkAdmin(); // the session is settled now
-    loadMyGhost();
+    void garage.refresh(); // a ride saved just now may have earned credits
+    void accountUi.checkAdmin(); // the session is settled now
+    void loadMyGhost();
     syncAiConsent(); // the AI coach and rivals follow what the account agreed to (the database has the last word)
     toast(`Signed in as ${a.name}`);
   } catch (e) {
@@ -2646,7 +2627,7 @@ function afterFirstFrame() {
   afterFirstFrameDone = true;
   markFirstFrame();
   // If the signed-in hint was stale (no account), drop the hub's cached numbers and show the home page.
-  restoreSession().then((a) => { hub.sessionSettled(a); home.sessionSettled(a); });
+  void restoreSession().then((a) => { hub.sessionSettled(a); home.sessionSettled(a); });
   startMonitoring();
   prefetchPrivacy();
   ensureAi(); // a rider who opted in gets the coach and rivals ready for the ride
