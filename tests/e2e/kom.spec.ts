@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
-import { slowFrames } from './slowFrames';
 
 // KOM segments: approaching a big climb shows the panel with the leaderboard, riding it shows the live gap to a
 // stored previous attempt (best and last), the top gives a result toast, and the Settings switch hides the panel.
@@ -16,13 +15,10 @@ const steady = (length: number, seconds: number, at: number) => {
   return { t: seconds, p: 280, s, at };
 };
 
-async function setup(page: Page, o: { stored?: Record<string, { best?: unknown; last?: unknown }>; settings?: Record<string, unknown>; fullFps?: boolean } = {}) {
+async function setup(page: Page, o: { stored?: Record<string, { best?: unknown; last?: unknown }>; settings?: Record<string, unknown> } = {}) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await mockNeon(page, { signedIn: true });
-  // Frames 250 ms apart: the panel and the clock run off real time, so this skips most of the software rendering. Not 1 s: at one
-  // frame a second the demo rider's power fades and the ride stalls (seen on CI in this test, see slowFrames.ts); the long rides below keep full frame rate.
-  if (!o.fullFps) await slowFrames(page, 250);
   await page.addInitScript((seed) => {
     localStorage.setItem('americanflyers.signedIn', '1');
     localStorage.setItem('americanflyers.onboarded', '1');
@@ -92,7 +88,7 @@ test('on a first attempt it says so and shows the elapsed time; the Settings swi
 
 test('the top of Morgul-Bismark’s wall gives a result toast with your rank, and the effort is kept for next time', async ({ page }) => {
   test.setTimeout(240_000);
-  const errors = await setup(page, { fullFps: true, stored: { 'hotw-morgul-bismark:the-wall': { best: steady(956, 400, 1), last: steady(956, 400, 1) } } });
+  const errors = await setup(page, { stored: { 'hotw-morgul-bismark:the-wall': { best: steady(956, 400, 1), last: steady(956, 400, 1) } } });
   await page.goto('/?stage=hotw-morgul-bismark&start=19.7&timescale=20&komtest');
   await startDemo(page, 600);
   await expect(page.locator('#kom-title')).toContainText('The Wall');
@@ -108,7 +104,7 @@ test('the top of Morgul-Bismark’s wall gives a result toast with your rank, an
 
 test('without ?komtest a demo ride is timed but never kept: the toast says so and nothing is stored', async ({ page }) => {
   test.setTimeout(240_000);
-  const errors = await setup(page, { fullFps: true });
+  const errors = await setup(page);
   await page.goto('/?stage=hotw-morgul-bismark&start=19.7&timescale=20');
   await startDemo(page, 600);
   await expect(page.locator('#toast')).toContainText('Demo ride, not saved', { timeout: 150_000 });
