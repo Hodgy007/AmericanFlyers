@@ -22,7 +22,7 @@ export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 150_000,
   expect: { timeout: 15_000 },
-  fullyParallel: false,
+  fullyParallel: true, // lets CI shard by test, not by file (see ci.yml); `workers: 1` still runs them one at a time
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',

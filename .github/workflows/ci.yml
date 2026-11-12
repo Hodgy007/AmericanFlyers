@@ -1,7 +1,13 @@
 name: CI
 
-# Lint, type-check and build, run the unit tests, then a headless-browser smoke test
+# Lint, type-check and build, run the unit tests, then the headless-browser tests
 # of the built app. Vercel still does the deploy; this is the safety net.
+#
+# The browser tests are almost all of the time (85 tests, about 14 minutes run one
+# after another, because the 3D scene renders in software here), so they are split
+# by file across parallel shards, each of which builds the app for itself. The
+# final `test` job is the one status branch protection checks: it passes only when
+# the checks and every shard have passed.
 on:
   pull_request:
   push:
@@ -12,9 +18,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  checks:
+    name: Lint, build and unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25 # the Playwright suite runs serially (70 tests, about 13 minutes on CI)
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -34,11 +41,45 @@ jobs:
       - name: Unit tests
         run: npm test
 
+  e2e:
+    name: Browser tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false # let every shard finish, so one run shows every failure
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Vite only: the checks job already type-checks.
+      - name: Bundle the app
+        run: npx vite build
+
+      # The browser download is cached per installed Playwright version; the system
+      # libraries still come from apt each time (they live outside the cache).
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: End-to-end smoke test
-        run: npx playwright test
+      - name: Browser tests
+        run: npx playwright test --shard=${{ matrix.shard }}/4
         env:
           CI: 'true'
 
@@ -46,8 +87,20 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report
             test-results
           retention-days: 7
+
+  test:
+    name: test
+    if: always()
+    needs: [checks, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every check and shard passed
+        run: |
+          echo "checks: ${{ needs.checks.result }}, browser tests: ${{ needs.e2e.result }}"
+          test "${{ needs.checks.result }}" = success && test "${{ needs.e2e.result }}" = success
