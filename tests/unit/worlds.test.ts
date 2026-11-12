@@ -13,6 +13,7 @@ import { fieldWallGeometry } from '../../src/world/fieldWalls';
 import { triangleCount } from '../../src/world/monumentKit';
 import * as THREE from 'three';
 import { VIADUCT } from '../../src/world/monumentTypes';
+import { buildTerrace } from '../../src/world/monumentCity';
 import { KESTREL_ROUTE_DEFS, KESTREL_ROUTES, KESTREL_VALE, KV, KV_BECK, KV_LAKE, KV_LAP } from '../../src/worlds/kestrelVale';
 import { closeLoop, routeStage } from '../../src/worlds/types';
 
@@ -774,5 +775,186 @@ describe("the standalone landmarks: the market cross, the viaduct and the jetty"
     expect(k.first).toBeLessThan(KV.sprint); // just before the sprint's banner
     expect(KV.sprint - k.first).toBeLessThan(600);
     expect(k.size).toBeCloseTo(5.08, 2);
+  });
+});
+
+describe('the hero models (milestone 5): Raven Keep, the Kestrel Water boathouse and the Hollins Cross Inn', () => {
+  const file = (f: string) => KESTREL_VALE.landmarks.find((k) => k.file === f)!;
+  const inn = file('hollins-cross-inn.glb'), boathouse = file('kestrel-boathouse.glb'), keep = file('raven-keep.glb');
+  /** How many of a kind a stage puts out (from `first` every `every`, to `until` or the finish). */
+  const count = (s: Stage, f: string) => s.landmarks.filter((k) => k.file === f).reduce((n, k) => {
+    const last = Math.min(k.until ?? Infinity, s.finish ?? 1e9);
+    return n + (k.first > last ? 0 : Math.floor((last - k.first) / k.every + 1e-9) + 1);
+  }, 0);
+  /** Distance from a point in a rectangle's own frame (half sizes hw, hd) to the rectangle. */
+  const rectDist = (lx: number, lz: number, hw: number, hd: number) => Math.hypot(Math.max(Math.abs(lx) - hw, 0), Math.max(Math.abs(lz) - hd, 0));
+  /** A footprint's corners and the middles of its sides, in the world: the model's +z (its front) faces (sin yaw, cos yaw). */
+  const outline = (cx: number, cz: number, yaw: number, w: number, d: number) => {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const pts: [number, number][] = [];
+    for (const lx of [-w / 2, 0, w / 2]) for (const lz of [-d / 2, 0, d / 2]) pts.push([cx + lx * c + lz * s, cz - lx * s + lz * c]);
+    return pts;
+  };
+
+  it('has each once a lap: one kind a lap long, so the Vale Loop has one of each, the Grand Vale three and the free ride one every lap', () => {
+    for (const f of ['hollins-cross-inn.glb', 'kestrel-boathouse.glb', 'raven-keep.glb']) {
+      expect(file(f).every, f).toBe(KV_LAP);
+      expect(count(stageById('kestrel-vale-loop'), f), `${f} on the loop`).toBe(1);
+      expect(count(stageById('kestrel-vale-grand'), f), `${f} on the grand tour`).toBe(3);
+      const free = stageById('kestrel-vale');
+      expect(free.landmarks.filter((k) => k.file === f), `${f} on the free ride`).toHaveLength(1);
+      expect(free.landmarks.find((k) => k.file === f)!.until).toBeUndefined();
+    }
+  });
+
+  it('puts them on the partway routes only where the route goes, moved by the start: Raven Scar has the keep, the Lakeside Sprint the inn and the boathouse', () => {
+    const scar = stageById('kestrel-vale-raven-scar'), lakeside = stageById('kestrel-vale-lakeside');
+    expect(count(scar, 'raven-keep.glb')).toBe(1);
+    expect(count(scar, 'hollins-cross-inn.glb')).toBe(0);
+    expect(count(scar, 'kestrel-boathouse.glb')).toBe(0);
+    expect(count(lakeside, 'hollins-cross-inn.glb')).toBe(1);
+    expect(count(lakeside, 'kestrel-boathouse.glb')).toBe(1);
+    expect(count(lakeside, 'raven-keep.glb')).toBe(0);
+    expect(scar.landmarks.find((k) => k.file === 'raven-keep.glb')!.first).toBeCloseTo(keep.first - 5900, 6);
+    expect(lakeside.landmarks.find((k) => k.file === 'hollins-cross-inn.glb')!.first).toBeCloseTo(inn.first - 14000 + KV_LAP, 6);
+    expect(lakeside.landmarks.find((k) => k.file === 'kestrel-boathouse.glb')!.first).toBeCloseTo(boathouse.first - 14000 + KV_LAP, 6);
+    // A world landmark moves with the route's origin (the start's point and height).
+    const P = KV.roadPoint(5900), P2 = KV.roadPoint(14000);
+    const kScar = scar.landmarks.find((k) => k.file === 'raven-keep.glb')!;
+    expect(kScar.world!.x).toBeCloseTo(keep.world!.x - P.x, 6);
+    expect(kScar.world!.z).toBeCloseTo(keep.world!.z - P.z, 6);
+    expect(kScar.world!.y).toBeCloseTo(keep.world!.y - e(5900), 6);
+    expect(kScar.within).toBe(keep.within);
+    const kBoat = lakeside.landmarks.find((k) => k.file === 'kestrel-boathouse.glb')!;
+    expect(kBoat.world!.x).toBeCloseTo(boathouse.world!.x - P2.x, 6);
+    expect(kBoat.world!.z).toBeCloseTo(boathouse.world!.z - P2.z, 6);
+    expect(kBoat.world!.y).toBeCloseTo(boathouse.world!.y - e(14000), 6);
+  });
+
+  it('keeps every footprint at least 8 m from the road, and trees away (a clear zone round each that covers its footprint)', () => {
+    const boat = KV.boathouse, kp = KV.keep;
+    const boatPts = outline(boat.x, boat.z, boat.yaw, boat.footprint.w, boat.footprint.d);
+    const keepPts = outline(kp.x, kp.z, kp.yaw, kp.footprint.w, kp.footprint.d);
+    for (const [x, z] of boatPts) expect(roadNear(x, z).dist, 'boathouse').toBeGreaterThan(8);
+    for (const [x, z] of keepPts) expect(roadNear(x, z).dist, 'keep').toBeGreaterThan(60);
+    // The inn: its front is 16.5 m from the centreline, on the left of the straight high street.
+    expect(KV.inn.offset - KV.inn.footprint.d / 2).toBeGreaterThanOrEqual(16.4);
+    expect(inn.side).toBe(-1);
+    for (const k of [boathouse, keep]) expect(k.within, `${k.file} is kept clear of trees by position`).toBeDefined();
+    for (const [x, z] of boatPts) expect(Math.hypot(x - boathouse.world!.x, z - boathouse.world!.z)).toBeLessThan(boathouse.clearance);
+    for (const [x, z] of keepPts) expect(Math.hypot(x - keep.world!.x, z - keep.world!.z)).toBeLessThan(keep.clearance);
+    expect(inn.clearance).toBeGreaterThanOrEqual(16);
+  });
+
+  it('sizes them like real buildings: the inn about 10.5 m, the boathouse about 8.5 m and the keep, rock base and all, about 20 m', () => {
+    expect(inn.size).toBeGreaterThanOrEqual(10);
+    expect(inn.size).toBeLessThanOrEqual(11);
+    expect(boathouse.size).toBeGreaterThanOrEqual(8);
+    expect(boathouse.size).toBeLessThanOrEqual(9);
+    expect(keep.size).toBeGreaterThanOrEqual(18);
+    expect(keep.size).toBeLessThanOrEqual(22);
+  });
+
+  it('stands the boathouse at the water’s edge: its door faces the lake, the front half over the water line and the back on the bank, clear of the jetty', () => {
+    const b = KV.boathouse;
+    const { w, d } = b.footprint;
+    const front = outline(b.x, b.z, b.yaw, w, d).filter((_, i) => i % 3 === 2); // lz = +d/2: the front's left, middle and right
+    const back = outline(b.x, b.z, b.yaw, w, d).filter((_, i) => i % 3 === 0);
+    const all = outline(b.x, b.z, b.yaw, w, d);
+    expect(Math.min(...all.map(([x, z]) => pondDistance(KV_LAKE, x, z))), 'part of it is in the lake').toBeLessThan(-2);
+    expect(Math.max(...all.map(([x, z]) => pondDistance(KV_LAKE, x, z))), 'part of it is on the land').toBeGreaterThan(3);
+    const mean = (pts: [number, number][]) => pts.reduce((n, [x, z]) => n + pondDistance(KV_LAKE, x, z), 0) / pts.length;
+    expect(mean(front), 'the front is in the water').toBeLessThan(0);
+    expect(mean(back), 'the back is on the bank').toBeGreaterThan(4);
+    // The way the door faces (sin yaw, cos yaw) points into the lake: the pond distance falls along it.
+    const ahead = pondDistance(KV_LAKE, b.x + Math.sin(b.yaw) * 20, b.z + Math.cos(b.yaw) * 20);
+    expect(ahead).toBeLessThan(pondDistance(KV_LAKE, b.x, b.z) - 10);
+    // The origin is the plinth's foot, level with the water.
+    expect(boathouse.world!.y).toBeCloseTo(KV_LAKE.level, 0);
+    // Seen from the road, near the shore's closest point, and clear of the jetty (a deck 24 m long and 3 m wide).
+    expect(roadNear(b.x, b.z).dist).toBeLessThan(60);
+    const j = KV.jetty;
+    for (let t = 0; t <= 24; t += 2) {
+      const jx = j.x + Math.sin(j.yaw) * t - b.x, jz = j.z + Math.cos(j.yaw) * t - b.z;
+      const lx = jx * Math.cos(b.yaw) - jz * Math.sin(b.yaw), lz = jx * Math.sin(b.yaw) + jz * Math.cos(b.yaw);
+      expect(rectDist(lx, lz, w / 2, d / 2), `jetty at ${t} m`).toBeGreaterThan(20);
+    }
+    expect(Math.abs(boathouse.first - KV.jetty.offset)).toBeGreaterThan(0);
+    expect(boathouse.first, 'on the lakeshore before the jetty').toBeLessThan(KV.sprint);
+  });
+
+  it('stands the keep on a crag on the terrain: 20 m tall on a raised bench above the hairpins, its origin at the lowest ground under the footprint', () => {
+    const k = KV.keep;
+    const ground = (ax: number, az: number) => k.groundWith(k.x + ax, k.z + az);
+    const under = [-1, 0, 1].flatMap((i) => [-1, 0, 1].map((j) => ground(i * k.footprint.w / 2, j * k.footprint.d / 2)));
+    expect(k.y).toBeCloseTo(Math.min(...under) - 0.5, 6);
+    expect(Math.max(...under) - Math.min(...under), 'the bench is level under the footprint (the solved blend, to within the 3 m bumps\' own small variation)').toBeLessThan(2);
+    expect(keep.world!.y).toBeCloseTo(k.y, 6);
+    expect(keep.within).toBeGreaterThan(800);
+    expect(keep.within).toBeLessThan(1150); // the terrain is built 1,150 m round the rider
+    // The crag is raised on the slope: the bench's top is far above the wild ground just off it, and the road's own height is not touched.
+    expect(Math.abs(ground(0, 0) - k.bench), 'the terrain comes out at the bench').toBeLessThan(0.5);
+    expect(k.cragGround(k.spot.x + 200, k.spot.z, 123)).toBe(123);
+    expect(Math.max(...under), 'the crag stands above the slope round it').toBeGreaterThan(Math.min(ground(-120, 120), ground(120, -120), ground(-120, -120)) + 8);
+    // The keep is above the hairpins that look at it (Scar 2 and Scar 4 run towards it), by more than its own height.
+    expect(k.y - e(KV.from('scar-2')), 'above Scar 2').toBeGreaterThan(20);
+    expect(k.y - e(KV.to('scar-4')), 'above the top of Scar 4').toBeGreaterThan(20);
+  });
+
+  it('is in the chase camera’s view from at least two of the climb’s legs: ahead (within 35° of the heading), 120 to 700 m off, over the ground between', () => {
+    const k = KV.keep;
+    const T = k.groundWith;
+    const mid = k.y + k.height / 2;
+    const seen = (leg: string) => {
+      let ok = 0, n = 0;
+      for (let u = KV.from(leg); u < KV.to(leg); u += 25) {
+        n++;
+        const p = KV.roadPoint(u);
+        const dx = k.x - p.x, dz = k.z - p.z, dist = Math.hypot(dx, dz);
+        if (dist < 120 || dist > 700 || (dx * p.tx + dz * p.tz) / dist < Math.cos((35 * Math.PI) / 180)) continue;
+        const eye = e(u) + 2.5;
+        let clear = true;
+        for (let i = 1; i < Math.floor(dist / 12); i++) {
+          const f = i / Math.floor(dist / 12);
+          if (T(p.x + dx * f, p.z + dz * f) + 4 > eye + (mid - eye) * f) { clear = false; break; }
+        }
+        if (clear) ok++;
+      }
+      return ok / n;
+    };
+    const legs = ['climb-foot', 'scar-1', 'scar-2', 'scar-3', 'scar-4', 'scar-5'].filter((l) => seen(l) > 0.2);
+    expect(legs.length, legs.join(', ')).toBeGreaterThanOrEqual(2);
+    expect(legs).toEqual(expect.arrayContaining(['scar-2', 'scar-4']));
+  });
+
+  it('puts the inn in line with the terraces: front 16.5 m from the road like theirs, between the market cross and the first terrace, and clear of the arch, the bunting and the line', () => {
+    const { u, offset, footprint } = KV.inn;
+    expect(inn.first).toBe(u);
+    expect(inn.offset).toBe(offset);
+    const rect = { a0: u - footprint.w / 2, a1: u + footprint.w / 2, l0: offset - footprint.d / 2, l1: offset + footprint.d / 2 }; // along the road and left of it
+    const overlaps = (r: { a0: number; a1: number; l0: number; l1: number }) => r.a0 < rect.a1 && r.a1 > rect.a0 && r.l0 < rect.l1 && r.l1 > rect.l0;
+    // The terraces on its side (the village's own rows, through the first lap and the run-in).
+    for (const t of KESTREL_VALE.landmarks.filter((k) => k.model === 'terrace' && k.side === -1)) {
+      const size = new THREE.Box3().setFromObject(buildTerrace(t.options)).getSize(new THREE.Vector3());
+      for (let d = t.first; d <= (t.until ?? t.first); d += t.every) {
+        const along = d > KV_LAP / 2 ? d - KV_LAP : d; // the run-in's terraces are just before the line
+        expect(overlaps({ a0: along - size.x / 2, a1: along + size.x / 2, l0: t.offset - size.z / 2, l1: t.offset + size.z / 2 }), `terrace at ${d}`).toBe(false);
+      }
+    }
+    // Its front is in line with theirs: the terraces' fronts are at 21 - 4.5 = 16.5 m.
+    expect(rect.l0).toBeCloseTo(16.5, 1);
+    // The market cross (a 5.2 m square of steps, 12 m out, at lap metre 18).
+    const cross = KESTREL_VALE.landmarks.find((k) => k.model === 'market-cross')!;
+    expect(overlaps({ a0: cross.first - 2.6, a1: cross.first + 2.6, l0: cross.offset - 2.6, l1: cross.offset + 2.6 })).toBe(false);
+    expect(rect.a0 - (cross.first + 2.6), 'room between the cross and the inn').toBeGreaterThan(8);
+    // The start arch (30 m, the road's width plus its posts), the finish gantry on the line, and the bunting (its string and its anchor posts 16.2 m out, from 66 m).
+    const arch = stageById('kestrel-vale-loop').landmarks.find((k) => k.file === 'gantry.glb')!;
+    expect(overlaps({ a0: arch.first - 2, a1: arch.first + 2, l0: -arch.size / 2, l1: arch.size / 2 }), 'start arch').toBe(false);
+    expect(rect.l0, 'the arch’s posts are on the road’s edge, well inside').toBeGreaterThan(arch.size / 2 + 5);
+    for (const [from, to] of KV.dressing.bunting!.spans) for (let at = from; at <= to; at += KV.dressing.bunting!.spacing) {
+      const a = at > KV_LAP / 2 ? at - KV_LAP : at;
+      expect(rect.a0 > a + 1 || rect.a1 < a - 1, `bunting at ${at}`).toBe(true);
+    }
+    expect(rect.a0).toBeGreaterThan(0);
   });
 });
