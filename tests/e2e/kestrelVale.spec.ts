@@ -72,7 +72,7 @@ test('the hub world card fits a phone', async ({ page }) => {
 });
 
 /** Loads a stage at `km`, rides nothing, waits for the lazy chunks and the terrain, and with KESTREL_SHOTS saves a screenshot of the 3D scene. */
-async function loads(page: import('@playwright/test').Page, stage: string, km: number, tier: string, file: string, village = false, sideCamera = false) {
+async function loads(page: import('@playwright/test').Page, stage: string, km: number, tier: string, file: string, village = false, sideCamera = false, models: string[] = []) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
@@ -82,6 +82,8 @@ async function loads(page: import('@playwright/test').Page, stage: string, km: n
   });
   const fetched: string[] = [];
   page.on('response', (r) => { if (/\/ground-|\/roadExtras-|\/monuments-/.test(r.url()) && r.ok()) fetched.push(r.url().split('/').slice(-1)[0]); });
+  const glbs = new Set<string>();
+  page.on('response', (r) => { if (/\/models\/[^/]+\.glb$/.test(r.url()) && r.ok()) glbs.add(r.url().split('/').slice(-1)[0]); });
   await signedIn(page);
   await page.goto(`/?stage=${stage}&start=${km}&graphics=${tier}&adapt=off`);
   await expect(page.locator('#hub')).toBeVisible();
@@ -89,6 +91,8 @@ async function loads(page: import('@playwright/test').Page, stage: string, km: n
   await expect(page.locator('#hub')).toBeHidden();
   // The lazy chunks (the splatted ground, and by the village the code-built terraces and church) arrive after the first frame.
   await expect.poll(() => fetched.some((f) => /^ground-/.test(f)) && fetched.some((f) => /^roadExtras-/.test(f)) && (!village || fetched.some((f) => /^monuments-/.test(f))), { timeout: 120_000 }).toBe(true);
+  // A hero model (a .glb) is fetched once it is in range; wait for it, then for the frames that place it.
+  await expect.poll(() => models.every((m) => glbs.has(m)), { timeout: 120_000, message: `the models ${models.join(', ')} were fetched` }).toBe(true);
   // Terrain tiles build a few a frame, at one frame a second here.
   await page.waitForTimeout(SHOTS ? Number(process.env.KESTREL_SETTLE_MS ?? 25_000) : 3_000);
   if (sideCamera) { await page.keyboard.press('c'); await page.waitForTimeout(SHOTS ? 6_000 : 1_500); } // the side camera: 4 m to the rider's right, which is beside the tunnel's wall
@@ -152,6 +156,23 @@ for (const tier of SHOTS ? ['low', 'medium'] : ['low']) {
     test(`Kestrel Vale dressing: ${name} (${km} km) on ${tier}: loads without errors`, async ({ page }) => {
       test.setTimeout(300_000);
       await loads(page, 'kestrel-vale-loop', km, tier, `kestrel-dressing-${name.replace(/ /g, '-')}-${tier}`, monuments, side);
+    });
+  }
+}
+
+// The hero models (milestone 5): the Hollins Cross Inn on the high street just after the line, the Kestrel Water boathouse on the lakeshore just past the jetty, and Raven Keep, which the
+// climb's west-running legs (the foot, Scar 2, Scar 4) look at across their hairpins. The .glb files are waited for before the screenshot (`-g "hero"` runs just these).
+const HERO_SPOTS: { name: string; km: number; model: string; village?: boolean }[] = [
+  { name: 'inn', km: 0, model: 'hollins-cross-inn.glb', village: true }, // the inn is ahead on the left, past the market cross, in line with the terraces
+  { name: 'boathouse', km: 2.09, model: 'kestrel-boathouse.glb' }, // the boathouse is 50 m ahead on the left at the water's edge, its door turned back towards the rider; the jetty is 110 m beyond it
+  { name: 'keep from the second leg', km: 7.65, model: 'raven-keep.glb' }, // Scar 2, heading for hairpin 3: the keep is on its crag above hairpin 3, ahead and to the left
+  { name: 'keep from the fourth leg', km: 9.2, model: 'raven-keep.glb' }, // Scar 4, heading for hairpin 5, with the crag ahead on the left
+];
+for (const tier of SHOTS ? ['low', 'medium'] : ['low']) {
+  for (const { name, km, model, village } of HERO_SPOTS) {
+    test(`Kestrel Vale hero models: ${name} (${km} km) on ${tier}: loads without errors`, async ({ page }) => {
+      test.setTimeout(300_000);
+      await loads(page, 'kestrel-vale-loop', km, tier, `kestrel-hero-${name.replace(/ /g, '-')}-${tier}`, !!village, false, [model]);
     });
   }
 }
