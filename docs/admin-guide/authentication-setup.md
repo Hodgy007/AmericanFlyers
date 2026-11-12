@@ -71,7 +71,7 @@ Admins need a verified email (see [Managing admins](managing-admins.md)). Google
 ## 4. Check sign-in
 
 1. Open the site in a private window.
-2. Try **Continue with Google**: you should come back signed in, with your first name on the 👤 button.
+2. Try **Continue with Google**: you should come back signed in, with your first name on the account button.
 3. Sign out, then **Sign up with email** with a new address. You should be signed in straight away, with the weight and FTP you entered in ⚙ Settings.
 4. Sign out and sign back in with that email and password.
 5. Try **Forgot password?**, follow the email link, and set a new password.

@@ -432,7 +432,7 @@ export function initHub(deps: HubDeps) {
   const accountBtn = document.getElementById('hub-account')!;
   const syncAccountButton = () => {
     const id = identity();
-    accountBtn.textContent = `👤 ${id.name.split(' ')[0] || 'Profile'}`;
+    (document.getElementById('hub-account-label') ?? accountBtn).textContent = id.name.split(' ')[0] || 'Profile';
   };
   onAccountChange(syncAccountButton);
   syncAccountButton();

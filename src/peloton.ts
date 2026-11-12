@@ -14,6 +14,13 @@ import { draftShift, echelonLane, wind } from './world/wind';
 /** The road's wind at a distance along the course, for the race field. */
 export const windAtDistance = (d: number) => wind.at(headingAt(d));
 
+/**
+ * Who supplies the wind for a race field. A quick race feels the rider's own road wind; a scheduled event
+ * must be the same for everyone, so it uses shared still air rather than each rider's weather setting,
+ * join time and frame rate.
+ */
+export type RaceConditions = 'personal' | 'event';
+
 export interface Team {
   name: string;
   short: string; // on name tags
@@ -87,8 +94,8 @@ export class Peloton {
   }
 
   /** Lines everyone up for a race. The sim itself is stepped by the race controller (race.ts). */
-  startRace(course: RaceCourse, roster: RosterEntry[], refWkg: number, seed: number): RaceField {
-    this.race = new RaceField(course, roster, refWkg, seed);
+  startRace(course: RaceCourse, roster: RosterEntry[], refWkg: number, seed: number, conditions: RaceConditions = 'personal'): RaceField {
+    this.race = new RaceField(course, roster, refWkg, seed, conditions);
     this.groups = [];
     return this.race;
   }
@@ -282,8 +289,11 @@ export function makeRoster(seed: number): RosterEntry[] {
 export class RaceField {
   readonly sim: RaceSim;
   readonly roster: RosterEntry[];
-  constructor(course: RaceCourse, roster: RosterEntry[], refWkg: number, seed: number) {
+  constructor(course: RaceCourse, roster: RosterEntry[], refWkg: number, seed: number, conditions: RaceConditions = 'personal') {
     this.roster = roster;
-    this.sim = new RaceSim(course, roster, { refWkg, seed, startFront: -2.2, wind: windAtDistance });
+    this.sim = new RaceSim(course, roster, {
+      refWkg, seed, startFront: -2.2,
+      wind: conditions === 'event' ? undefined : windAtDistance,
+    });
   }
 }

@@ -15,6 +15,79 @@ export interface Workout {
   source: 'builtin' | 'uploaded' | 'custom';
 }
 
+export const WORKOUT_LIMITS = {
+  duration: 24 * 3600,
+  repeats: 1000,
+  blocks: 10000,
+  steps: 10000,
+  power: 10,
+  cadence: 300,
+} as const;
+
+function boundedNumber(value: number, label: string, max: number) {
+  if (!Number.isFinite(value) || value < 0 || value > max) {
+    throw new Error(`${label} must be a finite number between 0 and ${max}.`);
+  }
+}
+
+function validateBlocks(blocks: Block[]) {
+  if (!Array.isArray(blocks) || blocks.length > WORKOUT_LIMITS.blocks) {
+    throw new Error(`A workout can contain at most ${WORKOUT_LIMITS.blocks} blocks.`);
+  }
+  let duration = 0, steps = 0;
+  for (const b of blocks) {
+    if (!b || typeof b !== 'object') throw new Error('Invalid workout block.');
+    if ('cadence' in b && b.cadence !== undefined) boundedNumber(b.cadence, 'Cadence', WORKOUT_LIMITS.cadence);
+    switch (b.kind) {
+      case 'steady':
+        boundedNumber(b.power, 'Power (fraction of FTP)', WORKOUT_LIMITS.power);
+        boundedNumber(b.duration, 'Block duration (seconds)', WORKOUT_LIMITS.duration);
+        duration += b.duration;
+        steps++;
+        break;
+      case 'ramp':
+        boundedNumber(b.from, 'Ramp start power', WORKOUT_LIMITS.power);
+        boundedNumber(b.to, 'Ramp end power', WORKOUT_LIMITS.power);
+        boundedNumber(b.duration, 'Block duration (seconds)', WORKOUT_LIMITS.duration);
+        duration += b.duration;
+        steps++;
+        break;
+      case 'intervals':
+        if (!Number.isInteger(b.repeats) || b.repeats < 1 || b.repeats > WORKOUT_LIMITS.repeats) {
+          throw new Error(`Interval repeats must be a whole number between 1 and ${WORKOUT_LIMITS.repeats}.`);
+        }
+        boundedNumber(b.onDuration, 'On duration (seconds)', WORKOUT_LIMITS.duration);
+        boundedNumber(b.offDuration, 'Off duration (seconds)', WORKOUT_LIMITS.duration);
+        boundedNumber(b.onPower, 'On power', WORKOUT_LIMITS.power);
+        boundedNumber(b.offPower, 'Off power', WORKOUT_LIMITS.power);
+        duration += b.repeats * (b.onDuration + b.offDuration);
+        steps += 2 * b.repeats;
+        break;
+      case 'free':
+        boundedNumber(b.duration, 'Block duration (seconds)', WORKOUT_LIMITS.duration);
+        duration += b.duration;
+        steps++;
+        break;
+      default:
+        throw new Error('Unknown workout block type.');
+    }
+    if (duration > WORKOUT_LIMITS.duration) throw new Error('A workout cannot last longer than 24 hours.');
+    if (steps > WORKOUT_LIMITS.steps) throw new Error(`A workout can expand to at most ${WORKOUT_LIMITS.steps} steps.`);
+  }
+  return duration;
+}
+
+/** Validates imports, saved data and creator drafts without expanding intervals. */
+export function validateWorkout(w: Workout): void {
+  if (!w || typeof w !== 'object' || typeof w.id !== 'string' || !w.id.trim() || w.id.length > 200 ||
+      typeof w.name !== 'string' || !w.name.trim() || w.name.length > 500 ||
+      typeof w.description !== 'string' || w.description.length > 10000 ||
+      !['builtin', 'uploaded', 'custom'].includes(w.source)) {
+    throw new Error('Invalid workout id, name, description or source.');
+  }
+  if (!validateBlocks(w.blocks)) throw new Error('A workout needs at least one timed step.');
+}
+
 /** One flat segment of a workout: power ramps linearly from `start` to `end`. */
 export interface Step {
   at: number; // seconds from the start
@@ -27,6 +100,7 @@ export interface Step {
 }
 
 export function expand(blocks: Block[]): Step[] {
+  validateBlocks(blocks);
   const steps: Step[] = [];
   let at = 0;
   const push = (s: Omit<Step, 'at'>) => {
@@ -76,11 +150,25 @@ export function stepAt(steps: Step[], t: number): Step | undefined {
 
 /** Training Stress Score estimate from the targets (free ride counted at 50 %). */
 export function estimateTss(steps: Step[]) {
-  const T = totalDuration(steps);
+  if (!Array.isArray(steps) || steps.length > WORKOUT_LIMITS.steps) {
+    throw new Error(`A workout can contain at most ${WORKOUT_LIMITS.steps} steps.`);
+  }
+  let T = 0;
+  for (const s of steps) {
+    if (!s || typeof s !== 'object') throw new Error('Invalid workout step.');
+    boundedNumber(s.at, 'Step start time', WORKOUT_LIMITS.duration);
+    boundedNumber(s.duration, 'Step duration (seconds)', WORKOUT_LIMITS.duration);
+    boundedNumber(s.start, 'Step start power', WORKOUT_LIMITS.power);
+    boundedNumber(s.end, 'Step end power', WORKOUT_LIMITS.power);
+    if (s.at !== T || s.duration === 0 || typeof s.free !== 'boolean') throw new Error('Workout steps must be contiguous and have positive durations.');
+    T += s.duration;
+    if (T > WORKOUT_LIMITS.duration) throw new Error('A workout cannot last longer than 24 hours.');
+  }
   if (!T) return 0;
-  let p4 = 0;
+  let p4 = 0, i = 0;
   for (let t = 0; t < T; t++) {
-    const s = stepAt(steps, t)!;
+    while (i < steps.length - 1 && t >= steps[i].at + steps[i].duration) i++;
+    const s = steps[i];
     const p = s.free ? 0.5 : s.start + (s.end - s.start) * ((t - s.at) / s.duration);
     p4 += p ** 4;
   }

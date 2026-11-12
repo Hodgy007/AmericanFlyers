@@ -848,9 +848,23 @@ export function fitPlane(pts: [number, number, number][]) {
     a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
     a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
   const D = det(m);
+  // Collinear samples (a due north–south or east–west route is exactly this) make the system singular, and
+  // dividing by it used to fill the whole terrain with NaN. Fall back to a level plane at the mean height.
+  const mean = n ? se / n : 0;
+  const t0 = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]);
+  const t1 = -m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]);
+  const t2 = m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const scale = Math.abs(t0) + Math.abs(t1) + Math.abs(t2);
+  if (!Number.isFinite(D) || !Number.isFinite(scale) || scale === 0 || Math.abs(D) < 1e-9 * scale) {
+    return () => mean;
+  }
   const col = (k: number) => det(m.map((row, i) => row.map((v, j) => (j === k ? r[i] : v))));
   const a = col(0) / D, b = col(1) / D, c = col(2) / D;
-  return (x: number, z: number) => a + b * x + c * z;
+  if (![a, b, c].every(Number.isFinite)) return () => mean;
+  return (x: number, z: number) => {
+    const e = a + b * x + c * z;
+    return Number.isFinite(e) ? e : mean;
+  };
 }
 
 // ------------------------------------------------ Hell of the West tour ----

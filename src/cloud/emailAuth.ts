@@ -91,6 +91,9 @@ export function mountEmailAuth(container: HTMLElement, o: Options) {
     field('password').required = m === 'signup' || m === 'signin';
     field('password').autocomplete = m === 'signup' ? 'new-password' : 'current-password';
     field('email').required = m !== 'verify';
+    // Disable, not just hide: a hidden input still takes part in native validation, so an invalid
+    // weight from the sign-up form used to block signing in, and a short password blocked the reset link.
+    for (const input of form.querySelectorAll('input')) input.disabled = isHidden(input, form);
     if (m !== 'verify') { code?.destroy(); code = null; }
     error.textContent = '';
     ok.textContent = '';
@@ -158,4 +161,10 @@ export function mountEmailAuth(container: HTMLElement, o: Options) {
       setMode(mode === 'forgot' || mode === 'verify' ? 'signin' : mode);
     },
   };
+}
+
+/** Whether any ancestor inside the form (a hidden tab's fieldset or label) is hidden. */
+function isHidden(el: Element, root: Element) {
+  for (let n: Element | null = el; n && n !== root; n = n.parentElement) if ((n as HTMLElement).hidden) return true;
+  return false;
 }

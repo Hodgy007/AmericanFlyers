@@ -11,9 +11,9 @@ Everyone who is signed in and riding the same stage at the same time appears on 
 
 Your position is sent every 2 seconds. Between updates each rider moves on at their last speed, so they glide smoothly instead of jumping.
 
-## The 👥 button
+## The Riders button
 
-The 👥 button in the top bar shows how many other riders are on your stage. It glows green when anyone is there. Click it to open **Riding now**:
+The **Riders** button (two-people icon) in the top bar shows how many other riders are on your stage. It glows green when anyone is there. Click it to open **Riding now**:
 
 - Each rider's name, how far ahead or behind you they are, and their power and speed.
 - **Ride with**: starts a new ride right next to that rider, so you can ride together. Your current ride is saved first if it was a minute or longer.
@@ -25,7 +25,7 @@ When someone joins your stage, a message says so.
 
 Give another rider a quick thumbs up. A ride-on is one of four emoji, 👍 🔥 💪 👋, with no typing and no chat.
 
-- **From the list:** open 👥 and press an emoji under a rider's name.
+- **From the list:** open **Riders** and press an emoji under a rider's name.
 - **From the saddle:** press **R** to send a 👍 to the rider just ahead of you, the one whose draft you're in or closing on.
 - **When you get one:** a message says who sent it, and the emoji floats up over their rider on the road (if they're in view).
 
@@ -39,7 +39,7 @@ Ride-ons you haven't seen are kept for a day at most. Banned riders' ride-ons ar
 
 1. Both sign in.
 2. Open the same stage. Send the link from **Copy link to this stage**.
-3. Start pedalling. If you're far apart on the road, open 👥 and press **Ride with** next to your friend's name.
+3. Start pedalling. If you're far apart on the road, open **Riders** and press **Ride with** next to your friend's name.
 
 ## Pro teams
 
@@ -47,7 +47,7 @@ Choose **With pro teams** in the hub (or switch **Pro teams** on in ☰ Menu or 
 
 The team names are affectionate near-misses of the real ones (*Plasma | Lease-a-Trike*, *INEPTOS Grenadines*, *Scandal Quick-Slip*, *UAE Team Emigrates* and more). The riders are made up.
 
-Open 👥 to see them under **Pro teams on the road**: how far ahead or behind each one is, its pace in watts for your weight, and its speed. **Join** starts a new ride on the back of the group, rolling at their speed, so you're straight into their draft. Hold their watts (a little less, thanks to the draft) and you'll stay with them.
+Open **Riders** to see them under **Pro teams on the road**: how far ahead or behind each one is, its pace in watts for your weight, and its speed. **Join** starts a new ride on the back of the group, rolling at their speed, so you're straight into their draft. Hold their watts (a little less, thanks to the draft) and you'll stay with them.
 
 On a stage with a finish, teams that cross the line start the stage again. Switch them off again with **Solo** in the hub, **☰ Menu → 🚴 Pro teams** or **Pro teams on the road** in ⚙ Settings; with them off, the draft gauge only shows riders who are really on the road with you, and your rival. Turning them on or off mid-ride doesn't reset the ride. For a race against them (attacks, breakaways and sprints) see [Racing and the tour](racing-and-the-tour.md).
 

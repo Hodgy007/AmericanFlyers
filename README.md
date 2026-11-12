@@ -43,7 +43,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Rides don't get lost:** the ride keeps real time in a hidden tab, the screen stays awake, and after a crash or a closed tab you can pick the ride back up.
 - **Demo ride** mode for trying it without a trainer: set power with a slider or the ↑/↓ keys.
 - Metric and imperial units. Settings are saved in the browser (and in your account when signed in).
-- **Accounts** (👤 button): sign in with Google, or create a free account with your email (rider name, email, password, weight and optional FTP; never a phone number or address), with password reset by email (and an optional 6-digit email verification step, off for now). Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
+- **Accounts** (person-icon button): sign in with Google, or create a free account with your email (rider name, email, password, weight and optional FTP; never a phone number or address), with password reset by email (and an optional 6-digit email verification step, off for now). Your settings, workouts and routes sync to your account, and every ride over a minute is saved (when you finish a stage or workout, press Reset, or every 5 minutes on long rides).
 - **Profile:**
   - *Stats*: totals, personal bests (5 s, 1, 5 and 20 min power), distance per week, FTP progress, and time in heart-rate and power zones across all rides.
   - *Achievements*: badges for finishing the stages, distance and climbing milestones, streaks, power targets, ramp tests and FTP gains.
@@ -51,12 +51,12 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Heart-rate and power zones** after every ride, based on your max HR (5 zones) and FTP (6 zones), both set in ⚙ Settings.
 - **FTP history**: every change (by hand, from a ramp test, or at sign-up) is recorded and charted.
 - **Feedback** (💬 button): riders send ideas and bug reports and see the status and any reply.
-- **Riding together** (👥 button): signed-in riders on the same stage see each other on the road, with name tags, a *Riding now* list with gaps, and *Ride with* to join someone. Switch it off in Settings.
-- **Ride-ons** (👍 🔥 💪 👋): send a quick emoji to a rider from 👥, or press **R** for a 👍 to the rider ahead. It floats over their head on the road. No free-text chat.
+- **Riding together** (Riders button): signed-in riders on the same stage see each other on the road, with name tags, a *Riding now* list with gaps, and *Ride with* to join someone. Switch it off in Settings.
+- **Ride-ons** (👍 🔥 💪 👋): send a quick emoji to a rider from Riders, or press **R** for a 👍 to the rider ahead. It floats over their head on the road. No free-text chat.
 - **My kit** (☰ Menu → 🎨): choose your jersey, second colour and bike frame, or a preset. Your rider wears it and other riders see it.
 - **Garage & store** (☰ Menu → 🚲): earn credits and levels from your saved rides (1 credit per km, 1 per 10 m climbed), then buy better bikes, wheels, tyres, helmets and jersey designs. Each shows its real effect in watts or seconds. Climb 8,848 m in total to unlock the glowing **Tron bike**. Weekly challenges pay extra credits, and a **📤 Share** card turns a ride into a picture.
 - **Racing and the Hell of the West tour** (choose **Race** beside the hub's Ride button; ☰ Menu → 🏆): race 12 pro teams over a stage, with a 3-2-1 start, attacks, breakaways, chases and a sprint, a live race panel and results tables. The tour races its three stages in order with general, points and mountains classifications (yellow, green and polka-dot jerseys).
-- **Pro teams**: five computer-ridden teams with comedic near-miss names ride along two by two at 2.0–4.2 W/kg, in their own kit, when you choose **With pro teams** (the default ride mode is **Solo**; switch any time in ☰ Menu). Join one from 👥 and sit in.
+- **Pro teams**: five computer-ridden teams with comedic near-miss names ride along two by two at 2.0–4.2 W/kg, in their own kit, when you choose **With pro teams** (the default ride mode is **Solo**; switch any time in ☰ Menu). Join one from Riders and sit in.
 - **Drafting**: ride close behind someone and you save up to about a third of your air drag (and a smart trainer gets lighter). A slipstream gauge shows the gap to the wheel ahead and the watts you're saving.
 - **Steering**: **←** / **→** (or on-screen ◀ ▶ on touch screens) move you across the road; auto-steer eases you onto the wheel ahead. The draft is lateral, so you need to be on their line.
 - **AI coach and AI rivals** (opt-in, ⚙ Settings): Coach Marty plans your ride, gives a few reactive tips and writes a debrief with a suggested next session; ☰ Menu → 🤺 Rivals has four original rivals (a showboat sprinter, a cold climber, a crafty veteran, a data-obsessed time triallist) who ride at your pace, talk, and remember your rides. Powered by Claude through one Vercel function (`api/ai.ts`); built-in tips and lines when the AI is off or busy. The hub's **🧭 Climb guide** (real-road stages) adds short web-sourced answers with source links, through Perplexity Sonar on the Vercel AI Gateway. See `docs/developer-guide/ai.md`.
@@ -68,7 +68,7 @@ The full documentation library is in [`docs/`](docs/README.md). Start with the [
 - **Music** (☰ Menu, **N**, or the finish card): the American Flyers theme tune at home and in the hub, and a riding score that follows your speed and the road; made in the browser with no files to download.
 - **Virtual shifting** (Settings): 24 virtual gears with on-screen −/+ buttons and keys; harder gears push back harder.
 - **First-ride setup**, **install as an app** (⬇ Install app, or Add to Home Screen), full screen (**F**), and bigger numbers on TVs.
-- **Tidy top bar**: Stage, Workouts, 👥, Connect trainer and your account stay in view; everything else is in the **☰ Menu**. The data blocks can sit across the top or in a column on the left or right (✎ → Position).
+- **Tidy top bar**: Stage, Workouts, Riders, Connect trainer and your account stay in view; everything else is in the **☰ Menu**. The data blocks can sit across the top or in a column on the left or right (✎ → Position).
 - **Admin dashboard** (☰ Menu → 🛠, admins only): registered and active riders, rides, hours, distance, signups and rides per day, top stages and workouts, the rider list with ban/unban, and the feedback inbox (status, replies, delete). Admin access is checked in the database.
 
 ## Built with

@@ -2,14 +2,27 @@
 // stage list (built-in stages followed by the rider's routes).
 
 import { STAGES, type Stage } from '../stages';
-import { routeToStage, type StoredRoute } from './gpx';
+import { routeToStage, validateRoute, type StoredRoute } from './gpx';
 
 const KEY = 'americanflyers.routes';
+
+/** Ignore corrupt or oversized entries instead of letting one take the whole app down at startup. */
+function validRoutes(list: unknown): StoredRoute[] {
+  if (!Array.isArray(list)) return [];
+  return list.filter((r): r is StoredRoute => {
+    try {
+      validateRoute(r);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
 
 function load(): StoredRoute[] {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as StoredRoute[]) : [];
+    return raw ? validRoutes(JSON.parse(raw)) : [];
   } catch {
     return [];
   }
@@ -39,8 +52,8 @@ export function ownRoutes() {
 
 /** Replaces the local copies with the account's routes (after sign-in). */
 export function setLocalRoutes(list: StoredRoute[]) {
-  routes = list;
-  for (const id of built.keys()) if (!list.some((r) => r.id === id)) built.delete(id);
+  routes = validRoutes(list);
+  for (const id of built.keys()) if (!routes.some((r) => r.id === id)) built.delete(id);
   persist();
 }
 
@@ -63,10 +76,13 @@ export function stageById(id: string | null): Stage {
 
 /** Saves an uploaded route. Returns its stage, and whether it was persisted. */
 export function addRoute(r: StoredRoute): { stage: Stage; saved: boolean } {
-  routes = [...routes, r];
+  // Build it first: a bad route throws here, before it can be written to storage and break a later visit.
+  const stage = routeToStage(r);
+  routes = [...routes.filter((x) => x.id !== r.id), r];
+  built.set(r.id, stage);
   const saved = persist();
   routeSync.saved(r);
-  return { stage: stageFor(r), saved };
+  return { stage, saved };
 }
 
 export function deleteRoute(id: string) {

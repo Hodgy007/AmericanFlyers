@@ -41,7 +41,7 @@ interface LinkSpec<T extends Connectable> {
   /** "trainer" / "heart rate strap", for messages. */
   noun: string;
   request(name?: string): Promise<BluetoothDevice>;
-  open(device: BluetoothDevice, onDrop: () => void): Promise<T>;
+  open(device: BluetoothDevice, onDrop: () => void, ownsConnection: () => boolean): Promise<T>;
   changed(t: T | null): void;
   /** Called when the state or the connected device changes (status line etc.). */
   describe(state: LinkState, t: T | null, remembered: string | undefined): void;
@@ -51,9 +51,9 @@ class Link<T extends Connectable> {
   state: LinkState = 'idle';
   current: T | null = null;
   private device: BluetoothDevice | null = null; // the handle kept for in-session retries
-  private manualStop = false;
-  private picking = false; // the browser's chooser is open
-  private seq = 0; // bumped by every rider-started connect, so a slower automatic one backs off
+  private picking = false; // a rider-started chooser or setup is in progress
+  private seq = 0; // invalidates setup when the rider takes over, disconnects or forgets
+  private readonly openings = new Map<string, Promise<boolean>>();
   private readonly reconnector: Reconnector;
 
   constructor(
@@ -81,9 +81,29 @@ class Link<T extends Connectable> {
   }
 
   /** A device is in hand: connect to it and set it up. Throws if that fails. */
-  private async open(device: BluetoothDevice): Promise<T> {
-    const t = await this.spec.open(device, () => this.dropped());
-    return t;
+  private async open(device: BluetoothDevice, mine: number): Promise<boolean> {
+    // A stale setup must clean up before the same GATT device can be reopened.
+    const previous = this.openings.get(device.id);
+    const attempt = (async () => {
+      if (previous) await previous.catch(() => false);
+      if (this.seq !== mine) return false;
+      let t: T | null = null;
+      let dropped = false;
+      const ownsConnection = () => t !== null && this.current === t;
+      t = await this.spec.open(device, () => {
+        dropped = true;
+        if (ownsConnection()) this.dropped();
+      }, ownsConnection);
+      if (this.seq !== mine || dropped) {
+        t.disconnect();
+        return false;
+      }
+      this.install(device, t);
+      return true;
+    })();
+    this.openings.set(device.id, attempt);
+    try { return await attempt; }
+    finally { if (this.openings.get(device.id) === attempt) this.openings.delete(device.id); }
   }
 
   private install(device: BluetoothDevice, t: T) {
@@ -96,36 +116,39 @@ class Link<T extends Connectable> {
 
   /** From a button tap (a user gesture): the chooser, or with `name` a chooser that lists just that device. */
   async connect(name?: string): Promise<boolean> {
+    if (this.current) return true;
     if (this.picking) return false;
     this.picking = true;
-    this.seq++;
+    const mine = ++this.seq;
     this.reconnector.stop();
-    const before = this.state;
     this.setState('connecting');
-    let device: BluetoothDevice;
-    const asked = Date.now();
     try {
-      device = await this.spec.request(name);
-    } catch (err) {
+      let device: BluetoothDevice;
+      const asked = Date.now();
+      try {
+        device = await this.spec.request(name);
+      } catch (err) {
+        if (this.seq !== mine) return false;
+        this.setState('idle');
+        // A slow NotFoundError is the rider closing the chooser, not a connection failure.
+        const cancelled = (err as DOMException)?.name === 'NotFoundError' && Date.now() - asked > CHOOSER_SHOWN_MS;
+        if (cancelled && name) this.ui.toast(`Didn’t find ${name}. Wake it by pedalling, or use the connect button to pick another.`, 6000);
+        else if (!cancelled) this.ui.toast(`Couldn’t connect: ${(err as Error).message}`);
+        return false;
+      }
+      try {
+        if (!await this.open(device, mine)) return false;
+        this.ui.toast(`Connected to ${this.current!.name}`);
+        return true;
+      } catch (err) {
+        if (this.seq === mine) {
+          this.setState('idle');
+          this.ui.toast(`Couldn’t connect: ${(err as Error).message}`);
+        }
+        return false;
+      }
+    } finally {
       this.picking = false;
-      this.setState(before === 'connected' ? 'connected' : 'idle');
-      // NotFoundError is how the rider closing the chooser looks, so it stays quiet; but one that
-      // comes back at once never showed a chooser (Bluetooth off, or the browser refused): say why.
-      const cancelled = (err as DOMException)?.name === 'NotFoundError' && Date.now() - asked > CHOOSER_SHOWN_MS;
-      if (cancelled && name) this.ui.toast(`Didn’t find ${name}. Wake it by pedalling, or use the connect button to pick another.`, 6000);
-      else if (!cancelled) this.ui.toast(`Couldn’t connect: ${(err as Error).message}`);
-      return false;
-    }
-    this.picking = false;
-    try {
-      const t = await this.open(device);
-      this.install(device, t);
-      this.ui.toast(`Connected to ${t.name}`);
-      return true;
-    } catch (err) {
-      this.setState('idle');
-      this.ui.toast(`Couldn’t connect: ${(err as Error).message}`);
-      return false;
     }
   }
 
@@ -133,11 +156,11 @@ class Link<T extends Connectable> {
   private dropped() {
     const t = this.current;
     if (!t) return;
+    this.seq++;
     this.current = null;
     this.spec.changed(null);
     const remembered = this.remembered();
-    if (this.manualStop || !remembered) {
-      this.manualStop = false;
+    if (!remembered) {
       this.setState('idle');
       this.ui.toast(`${cap(this.spec.noun)} disconnected`);
       return;
@@ -151,43 +174,39 @@ class Link<T extends Connectable> {
   private async retry(): Promise<boolean> {
     const device = this.device;
     if (!device) return false;
+    const mine = this.seq;
     try {
-      const t = await this.open(device);
-      if (!this.reconnector.active) { // the rider took over (or disconnected) while this was connecting
-        t.disconnect();
-        return false;
-      }
-      this.install(device, t);
-      return true;
+      return await this.open(device, mine) && this.seq === mine && this.current !== null;
     } catch {
       return false;
     }
   }
 
   disconnect() {
-    if (!this.current) return;
-    this.manualStop = true;
+    const t = this.current;
+    if (!t) return;
+    this.seq++;
     this.reconnector.stop();
-    this.current.disconnect();
-    // Browsers report the drop as an event; make sure the UI moves on even if one never comes.
-    window.setTimeout(() => { if (this.manualStop && this.current === null) this.manualStop = false; }, 2000);
+    this.current = null;
+    this.spec.changed(null);
+    this.setState('idle');
+    t.disconnect();
+    this.ui.toast(`${cap(this.spec.noun)} disconnected`);
   }
 
   /** On page load: reconnect to the remembered device without the chooser, if the browser lets us. */
   async autoConnect(): Promise<void> {
     const r = this.remembered();
     if (!r || this.state !== 'idle' || !canReconnectSilently()) return;
-    const mine = this.seq;
+    const mine = ++this.seq;
     this.setState('connecting'); // set at once so the banner doesn't flash up
     const device = await findPermittedDevice(r.id);
-    if (!device) { if (this.seq === mine) this.setState('idle'); return; }
+    if (this.seq !== mine) return;
+    if (!device) { this.setState('idle'); return; }
     await waitForAdvertisement(device); // wake and in range, or time out and try anyway
     if (this.seq !== mine) return; // the rider chose a device themselves meanwhile
     try {
-      const t = await this.open(device);
-      if (this.seq !== mine || this.current) return;
-      this.install(device, t);
-      this.ui.toast(`Connected to ${t.name}`);
+      if (await this.open(device, mine)) this.ui.toast(`Connected to ${this.current!.name}`);
     } catch {
       if (this.seq === mine) this.setState('idle'); // the banner offers a one-tap Reconnect
     }
@@ -198,9 +217,10 @@ class Link<T extends Connectable> {
 
   /** Stops retrying and forgets the connection handle (used when the device is forgotten). */
   forgetHandle() {
+    this.seq++;
     this.reconnector.stop();
     this.device = null;
-    if (this.state === 'reconnecting') this.setState('idle');
+    if (!this.current) this.setState('idle');
   }
 
   get reconnecting() { return this.reconnector.active; }
@@ -293,9 +313,13 @@ export function initDevices(deps: DevicesDeps) {
       kind: 'trainer',
       noun: 'trainer',
       request: requestTrainerDevice,
-      open: (device, onDrop) => {
+      open: (device, onDrop, ownsConnection) => {
         if (meter.deviceId === device.id) throw SAME_DEVICE('power meter');
-        return openTrainer(device, { onReading: onTrainerReading, onDisconnect: onDrop, onControlState });
+        return openTrainer(device, {
+          onReading: (r) => { if (ownsConnection()) onTrainerReading(r); },
+          onDisconnect: onDrop,
+          onControlState: (s) => { if (ownsConnection()) onControlState(s); },
+        });
       },
       changed: (t) => deps.trainerChanged(t),
       describe: describeTrainer,
@@ -310,7 +334,11 @@ export function initDevices(deps: DevicesDeps) {
       kind: 'hr',
       noun: 'heart rate strap',
       request: requestHeartRateDevice,
-      open: (device, onDrop) => openHeartRate(device, (bpm) => { if (bpm > 0) hrSeenAt = performance.now(); deps.onHeartRate(bpm); }, onDrop),
+      open: (device, onDrop, ownsConnection) => openHeartRate(device, (bpm) => {
+        if (!ownsConnection()) return;
+        if (bpm > 0) hrSeenAt = performance.now();
+        deps.onHeartRate(bpm);
+      }, onDrop),
       changed: (h) => {
         deps.hrChanged(h);
         // A strap can connect and still send nothing (not worn, dry contacts, or another app holds it).
@@ -334,9 +362,9 @@ export function initDevices(deps: DevicesDeps) {
       kind: 'meter',
       noun: 'power meter',
       request: requestPowerMeterDevice,
-      open: (device, onDrop) => {
+      open: (device, onDrop, ownsConnection) => {
         if (trainer.deviceId === device.id) throw SAME_DEVICE('trainer');
-        return openPowerMeter(device, onMeterReading, onDrop);
+        return openPowerMeter(device, (r) => { if (ownsConnection()) onMeterReading(r); }, onDrop);
       },
       changed: (m) => { deps.meterChanged(m); if (!m) fellBack = false; watchSource(); },
       describe: describeTrainer,
@@ -414,7 +442,7 @@ export function initDevices(deps: DevicesDeps) {
     const pending = (['trainer', 'hr', 'meter'] as DeviceKind[]).filter((k) => remembered[k] && links[k].state === 'idle');
     const show = supported && !bannerDismissed && pending.length > 0;
     banner.hidden = !show;
-    if (!show) { banner.replaceChildren(); return; }
+    if (!show) { banner.replaceChildren(); delete banner.dataset.key; return; }
     // Rebuild only when the set of buttons changes, so a focused button isn't replaced under the rider.
     const key = pending.map((k) => `${k}:${remembered[k]!.name}`).join('|');
     if (banner.dataset.key === key) return;

@@ -86,8 +86,8 @@ This page lists every file and folder in the repository, with a one-line summary
 | `plans.ts` | The training plans and their progress logic. |
 | `plansUi.ts` | The training plans dialog. |
 | `onboarding.ts`, `onboardingState.ts` | The three-step first-ride guide (lazy), and the tiny "has it been done" check that stays in the entry chunk. |
-| `ridersUi.ts` | The 👥 button and the *Riding now* list, with the ride-on emoji buttons on each rider. |
-| `rideOnsUi.ts` | Ride-ons in the app: sending (from 👥 and the **R** key), the toast for ones you get, the floating emoji, and pro riders replying. |
+| `ridersUi.ts` | The Riders button and the *Riding now* list, with the ride-on emoji buttons on each rider. |
+| `rideOnsUi.ts` | Ride-ons in the app: sending (from Riders and the **R** key), the toast for ones you get, the floating emoji, and pro riders replying. |
 | `kit.ts` | Your kit (jersey, second colour, frame): the presets, validation, the kit string sent to the server, and `setTourJersey()` for tours. |
 | `kitUi.ts` | The ☰ Menu → 🎨 *My kit* dialog. |
 | `garage/catalogue.ts` | The store catalogue (items, prices, unlock rules, effects), loadout validation and `equipmentEffects()`. `scripts/gen-store-sql.mjs` prints the matching SQL seed. |
@@ -172,7 +172,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `cloud/privacy.ts`, `cloud/accountTab.ts` | "Download my data" and "Delete my account", and the profile tab that offers them. |
 | `privacyUi.ts`, `privacyText.ts`, `rideIntegrity.ts` | The Privacy dialog (any `data-privacy` element opens it; the text is lazy); which rides may be on leaderboards. |
 | `resultsTable.ts` | Caps the results and leaderboard tables: the first `MAX_ROWS` riders plus a "+N more" row. |
-| `cloud/accountBar.ts` | The 👤 button and admin button in the top bar, and the entry points that load `cloud/ui.ts`. |
+| `cloud/accountBar.ts` | The account button and admin button in the top bar, and the entry points that load `cloud/ui.ts`. |
 | `cloud/ui.ts` | The sign-in and password-reset dialogs, the profile tabs, the feedback dialog, and the admin dashboard (lazy). |
 
 ## Tests and tooling

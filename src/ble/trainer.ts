@@ -11,6 +11,7 @@ import {
 } from './control';
 import { CPS_SERVICE, CrankCadence, parseCyclingPower, subscribeCyclingPower } from './cyclingPower';
 import { onGattDrop } from './remembered';
+import { notificationView } from './notification';
 
 export { CrankCadence, parseCyclingPower };
 export type { ControlResult, ControlState };
@@ -108,8 +109,12 @@ async function connectFtms(
   cb: TrainerCallbacks,
 ): Promise<Trainer> {
   const bikeData = await service.getCharacteristic(FTMS_INDOOR_BIKE_DATA);
-  bikeData.addEventListener('characteristicvaluechanged', () => {
-    if (bikeData.value) cb.onReading(parseIndoorBikeData(bikeData.value));
+  bikeData.addEventListener('characteristicvaluechanged', (event) => {
+    const view = notificationView(event, bikeData);
+    if (!view) return;
+    let reading: TrainerReading;
+    try { reading = parseIndoorBikeData(view); } catch { return; }
+    cb.onReading(reading);
   });
   await bikeData.startNotifications();
 
@@ -130,8 +135,8 @@ async function connectFtms(
     // The trainer says so at once when another app takes control (op 0xFF); don't wait for a command to fail.
     try {
       const status = await service.getCharacteristic(FTMS_MACHINE_STATUS);
-      status.addEventListener('characteristicvaluechanged', () => {
-        if (isControlLostStatus(status.value)) control.permissionLost();
+      status.addEventListener('characteristicvaluechanged', (event) => {
+        if (isControlLostStatus(notificationView(event, status))) control.permissionLost();
       });
       await status.startNotifications();
     } catch { /* no status characteristic: failed commands still tell us */ }

@@ -86,3 +86,41 @@ describe('routeToStage', () => {
     expect(flat.tagline).toContain('rides flat');
   });
 });
+
+describe('import limits and degenerate routes', () => {
+  const straight = (pts: [number, number, number][]) => ({ id: 'gpx-straight', name: 'Straight', points: pts, hasElevation: true });
+
+  it('a dead-straight east-west route still has finite terrain everywhere', () => {
+    // Exactly collinear samples make the scenery plane singular: it used to fill every height with NaN.
+    const points: [number, number, number][] = Array.from({ length: 40 }, (_, i) => [39.7392, -104.9903 + i * 0.001, 1600 + i]);
+    const stage = routeToStage(straight(points));
+    const s = stage.scenery!;
+    for (const [x, z] of [[0, 0], [600, 0], [1200, 30], [-400, -30]]) {
+      const h = s.wildHeight(x, z);
+      expect(Number.isFinite(h), `${x},${z}`).toBe(true);
+    }
+    expect(Number.isFinite(stage.elevationAt(stage.finish! / 2))).toBe(true);
+  });
+
+  it('rejects a file that jumps between distant points', () => {
+    const gpx = `<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+      <trkpt lat="39.7" lon="-104.9"><ele>1600</ele></trkpt>
+      <trkpt lat="45.0" lon="-104.9"><ele>1600</ele></trkpt>
+    </trkseg></trk></gpx>`;
+    expect(() => parseGpx('x.gpx', gpx)).toThrow(/jumps/);
+  });
+
+  it('rejects coordinates outside the map range and absurd elevations', () => {
+    const bad = (lat: number, ele: number) => `<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+      <trkpt lat="${lat}" lon="-104.9"><ele>${ele}</ele></trkpt>
+      <trkpt lat="39.7002" lon="-104.9"><ele>${ele}</ele></trkpt>
+    </trkseg></trk></gpx>`;
+    expect(() => parseGpx('x.gpx', bad(120, 1600))).toThrow(/too short/);
+    expect(() => parseGpx('x.gpx', bad(39.7, 20_000))).toThrow(/elevation/);
+  });
+
+  it('a corrupt stored route is rejected before it is built', () => {
+    expect(() => routeToStage({ id: '', name: 'x', points: [[0, 0, 0], [0, 0, 0]], hasElevation: false })).toThrow();
+    expect(() => routeToStage({ id: 'ok', name: 'x', points: [[0, 0, 0], [NaN, 0, 0]], hasElevation: false })).toThrow(/point/);
+  });
+});

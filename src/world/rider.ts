@@ -123,6 +123,9 @@ export class RiderModel {
   readonly person = new THREE.Group();
   /** The parts of the bike that change with the garage style (frame, wheels, bars); rebuilt by setLook({ style }). */
   private readonly bike = new THREE.Group();
+  // Only fresh per-rider geometry belongs here; unit shapes, wheels and helmet shells are shared.
+  private readonly ownedGeometries = new Set<THREE.BufferGeometry>();
+  private readonly bikeGeometries = new Set<THREE.BufferGeometry>();
 
   private rearWheel = new THREE.Group();
   private frontWheel = new THREE.Group();
@@ -169,18 +172,39 @@ export class RiderModel {
   private dressRig() {
     const rig = this.rig;
     if (!rig || this.ghost) return;
+    // Shell geometry/materials are cached across riders: detach, but do not dispose or recolour them.
+    this.helmet?.removeFromParent();
     applyKitStyle(rig.root, this.kit, this.style.pattern, this.style.socks);
     rig.tt = this.style.frame === 'tt';
-    if (this.helmet) this.helmet.removeFromParent();
     this.helmet = buildHelmetShell(this.style.helmet);
     if (this.helmet) rig.head()?.add(this.helmet);
   }
 
-  /** Frees this rider's own materials (shared geometry and textures stay). */
+  private ownGeometry<G extends THREE.BufferGeometry>(geometry: G, bike = false): G {
+    this.ownedGeometries.add(geometry);
+    if (bike) this.bikeGeometries.add(geometry);
+    return geometry;
+  }
+
+  /** Frees this rider's own geometry, skeletons and colours; shared caches and textures stay. */
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
-    if (this.frameMat !== M.frame) this.frameMat.dispose();
-    if (this.jerseyMat !== M.jersey) this.jerseyMat.dispose();
+    this.rig?.dispose();
+    this.rig = null;
+    this.helmet?.removeFromParent();
+    this.helmet = null;
+    for (const geometry of this.ownedGeometries) geometry.dispose();
+    this.ownedGeometries.clear();
+    this.bikeGeometries.clear();
+    for (const [material, shared] of [[this.frameMat, M.frame], [this.jerseyMat, M.jersey]]) {
+      if (material === shared) continue;
+      ghostMats.get(material)?.dispose();
+      ghostMats.delete(material);
+      material.dispose();
+    }
+    this.group.removeFromParent();
+    this.group.clear();
   }
 
   /**
@@ -190,6 +214,7 @@ export class RiderModel {
    * other riders who change their kit.
    */
   setLook(look: { frame?: string; jersey?: string; kit?: [string, string] | null; style?: BikeStyle }) {
+    if (this.disposed) return;
     if (look.frame) this.frameMat = this.recolour(this.frameMat, M.frame, look.frame, { metalness: 0.35, roughness: 0.35 });
     if (look.jersey) this.jerseyMat = this.recolour(this.jerseyMat, M.jersey, look.jersey, { roughness: 0.7 });
     let dress = false;
@@ -272,7 +297,7 @@ export class RiderModel {
     const b = this.body;
     for (const side of [-1, 1]) {
       const crank = new Segment(b, 0.012, M.black, 1.6);
-      const pedal = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.015, 0.08), M.black);
+      const pedal = new THREE.Mesh(this.ownGeometry(new THREE.BoxGeometry(0.1, 0.015, 0.08)), M.black);
       pedal.castShadow = true;
       b.add(pedal);
       this.legs.push({
@@ -291,7 +316,12 @@ export class RiderModel {
 
   /** Throws away the frame, wheels and bars and builds them again for the current style. */
   private rebuildBike() {
-    for (const child of [...this.bike.children]) this.bike.remove(child); // geometry and materials are shared, so nothing to free
+    for (const geometry of this.bikeGeometries) {
+      geometry.dispose();
+      this.ownedGeometries.delete(geometry);
+    }
+    this.bikeGeometries.clear();
+    this.bike.clear();
     this.buildFrame();
     if (this.ghost) makeGhost(this.bike, true);
   }
@@ -355,7 +385,7 @@ export class RiderModel {
 
     // Seatpost and saddle.
     new Segment(b, 0.012, M.black).set(seat, tt ? v(-0.14, 0.88) : v(-0.18, 0.86));
-    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.035, 0.13), M.black);
+    const saddle = new THREE.Mesh(this.ownGeometry(new THREE.BoxGeometry(0.27, 0.035, 0.13), true), M.black);
     saddle.position.set(tt ? -0.15 : -0.19, tt ? 0.895 : 0.875, 0);
     saddle.castShadow = true;
     b.add(saddle);
@@ -370,7 +400,7 @@ export class RiderModel {
         new Segment(b, 0.011, M.black).set(v(0.53, 0.83, 0.1 * side), v(0.8, 0.82, 0.07 * side)); // extension
         new Segment(b, 0.011, M.black).set(v(0.8, 0.82, 0.07 * side), v(0.84, 0.86, 0.07 * side)); // upturned end
         new Segment(b, 0.011, M.black).set(stem.clone().setZ(0.2 * side), v(0.53, 0.83, 0.1 * side));
-        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.016, 0.07), M.black);
+        const pad = new THREE.Mesh(this.ownGeometry(new THREE.BoxGeometry(0.1, 0.016, 0.07), true), M.black);
         pad.position.set(0.5, 0.855, 0.1 * side);
         b.add(pad);
       }
@@ -386,16 +416,20 @@ export class RiderModel {
     }
 
     // Drivetrain on the right.
-    const ring = new THREE.Mesh(tron ? new THREE.TorusGeometry(0.096, 0.005, 6, 36) : new THREE.CylinderGeometry(0.1, 0.1, 0.006, 32).rotateX(Math.PI / 2), tron ? neonMat : M.alloy);
+    const ring = new THREE.Mesh(this.ownGeometry(tron ? new THREE.TorusGeometry(0.096, 0.005, 6, 36) : new THREE.CylinderGeometry(0.1, 0.1, 0.006, 32).rotateX(Math.PI / 2), true), tron ? neonMat : M.alloy);
     ring.position.set(this.bb.x, this.bb.y, 0.055);
-    const cassette = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 20).rotateX(Math.PI / 2), M.alloy);
+    const cassette = new THREE.Mesh(this.ownGeometry(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 20).rotateX(Math.PI / 2), true), M.alloy);
     cassette.position.set(rear.x, rear.y, 0.05);
     b.add(ring, cassette);
     new Segment(b, 0.004, M.black).set(v(0, 0.37, 0.055), v(-0.41, 0.385, 0.05));
     new Segment(b, 0.004, M.black).set(v(0, 0.17, 0.055), v(-0.41, 0.295, 0.05));
 
     // The Tron bike lights the road under it.
-    if (tron) b.add(groundGlow());
+    if (tron) {
+      const glow = groundGlow();
+      this.ownGeometry(glow.geometry, true);
+      b.add(glow);
+    }
   }
 
   private buildRider() {
@@ -428,17 +462,17 @@ export class RiderModel {
     const head = v(0.42, 1.4);
     new Segment(p, 0.045, M.skin).set(shoulder, head.clone().add(v(-0.03, -0.05)));
     sphere(p, 0.1, M.skin, head);
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.125, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.white);
+    const helmet = new THREE.Mesh(this.ownGeometry(new THREE.SphereGeometry(0.125, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2)), M.white);
     helmet.scale.set(1.3, 0.9, 1.05);
     helmet.position.copy(head).add(v(-0.015, 0.02));
     helmet.rotation.z = -0.3;
     helmet.castShadow = true;
     this.primHelmet = helmet;
-    const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.012, 6, 24, Math.PI), M.accent);
+    const stripe = new THREE.Mesh(this.ownGeometry(new THREE.TorusGeometry(0.11, 0.012, 6, 24, Math.PI)), M.accent);
     stripe.scale.set(1.3, 0.9, 1);
     stripe.position.copy(helmet.position);
     stripe.rotation.z = -0.3;
-    const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.035, 0.19), M.lens);
+    const glasses = new THREE.Mesh(this.ownGeometry(new THREE.BoxGeometry(0.03, 0.035, 0.19)), M.lens);
     glasses.position.copy(head).add(v(0.085, 0.0));
     p.add(helmet, stripe, glasses);
   }
@@ -512,6 +546,15 @@ class Rig {
   /** The head bone, to hang a helmet on. */
   head(): THREE.Object3D | null {
     return this.bones.get('Head') ?? null;
+  }
+
+  dispose() {
+    const skeletons = new Set<THREE.Skeleton>();
+    this.root.traverse((o) => {
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) skeletons.add((o as THREE.SkinnedMesh).skeleton);
+    });
+    for (const skeleton of skeletons) skeleton.dispose();
+    this.root.removeFromParent();
   }
 
   private bone(name: string) {

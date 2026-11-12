@@ -9,8 +9,8 @@
 import type { Activity } from './cloud/sync';
 
 export const QUEUE_KEY = 'americanflyers.rideQueue';
-export const MAX_QUEUED = 20; // oldest dropped beyond this
-export const MAX_ATTEMPTS = 12; // failed uploads while online before a ride is given up on
+export const MAX_QUEUED = 20; // refuse new rides rather than discard an unsent one
+export const MAX_ATTEMPTS = 12; // pause automatic retries; a manual retry keeps the ride recoverable
 
 export interface QueuedRide {
   userId: string;
@@ -22,18 +22,21 @@ export interface QueuedRide {
 export interface FlushResult {
   uploaded: Activity[];
   failed: boolean; // stopped at an upload that failed (still queued)
-  givenUp: Activity[]; // failed too many times while online: removed
+  paused: Activity[]; // automatic retries paused, but the ride is still stored
 }
 
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 export class RideQueue {
   private flushing: Promise<FlushResult> | null = null;
+  private flushingUser: string | null = null;
+  private generation = 0;
 
   constructor(
     private readonly store: Store | null,
-    private readonly upload: (a: Activity) => Promise<void>,
+    private readonly upload: (a: Activity, userId: string) => Promise<void>,
     private readonly online: () => boolean = () => true,
+    private readonly isCurrentUser: (userId: string) => boolean = () => true,
   ) {}
 
   list(): QueuedRide[] {
@@ -68,14 +71,15 @@ export class RideQueue {
    * 'failed' (couldn't store it at all).
    */
   add(userId: string, activity: Activity): 'saved' | 'trimmed' | 'failed' {
-    const others = this.list().filter((r) => r.activity.id !== activity.id);
+    const others = this.list().filter((r) => r.userId !== userId || r.activity.id !== activity.id);
+    if (others.length >= MAX_QUEUED) return 'failed';
     const entry = (a: Activity): QueuedRide => ({ userId, activity: a, attempts: 0, queuedAt: new Date().toISOString() });
-    const rows = [...others, entry(activity)].slice(-MAX_QUEUED);
+    const rows = [...others, entry(activity)];
     if (this.write(rows)) return 'saved';
     // Too big for the browser's storage: drop the samples of this ride, then of the others.
     const lean = (a: Activity): Activity => ({ ...a, samples: null });
-    if (this.write([...others, entry(lean(activity))].slice(-MAX_QUEUED))) return 'trimmed';
-    if (this.write([...others.map((r) => ({ ...r, activity: lean(r.activity) })), entry(lean(activity))].slice(-MAX_QUEUED))) return 'trimmed';
+    if (this.write([...others, entry(lean(activity))])) return 'trimmed';
+    if (this.write([...others.map((r) => ({ ...r, activity: lean(r.activity) })), entry(lean(activity))])) return 'trimmed';
     return 'failed';
   }
 
@@ -84,31 +88,45 @@ export class RideQueue {
    * (the connection is probably still down) so the rest aren't charged an attempt.
    * Only one flush runs at a time.
    */
-  flush(userId: string | null | undefined): Promise<FlushResult> {
-    if (!userId) return Promise.resolve({ uploaded: [], failed: false, givenUp: [] });
-    this.flushing ??= this.run(userId).finally(() => { this.flushing = null; });
+  flush(userId: string | null | undefined, retry = false): Promise<FlushResult> {
+    if (!userId || !this.isCurrentUser(userId)) return Promise.resolve({ uploaded: [], failed: false, paused: [] });
+    if (this.flushing) {
+      if (this.flushingUser === userId) return this.flushing;
+      return this.flushing.then(() => this.flush(userId, retry));
+    }
+    if (retry) this.write(this.list().map((r) => r.userId === userId ? { ...r, attempts: 0 } : r));
+    this.flushingUser = userId;
+    this.flushing = this.run(userId, this.generation).finally(() => { this.flushing = null; this.flushingUser = null; });
     return this.flushing;
   }
 
-  private async run(userId: string): Promise<FlushResult> {
-    const result: FlushResult = { uploaded: [], failed: false, givenUp: [] };
-    for (const row of this.list().filter((r) => r.userId === userId)) {
+  /** An account transition stops the next upload, even if the same rider signs back in before this one returns. */
+  stop() {
+    this.generation++;
+  }
+
+  private async run(userId: string, generation: number): Promise<FlushResult> {
+    const result: FlushResult = { uploaded: [], failed: false, paused: [] };
+    while (generation === this.generation && this.isCurrentUser(userId)) {
+      const row = this.list().find((r) => r.userId === userId && r.attempts < MAX_ATTEMPTS);
+      if (!row) break;
+      const snapshot = JSON.stringify(row.activity);
+      const matches = (r: QueuedRide) => r.userId === userId && r.activity.id === row.activity.id && JSON.stringify(r.activity) === snapshot;
       try {
-        await this.upload(row.activity);
-        result.uploaded.push(row.activity);
-        this.write(this.list().filter((r) => r.activity.id !== row.activity.id));
+        await this.upload(row.activity, userId);
+        const i = result.uploaded.findIndex((a) => a.id === row.activity.id);
+        if (i < 0) result.uploaded.push(row.activity);
+        else result.uploaded[i] = row.activity;
+        // A newer autosave of this id may have arrived while the upload was pending.
+        if (!this.write(this.list().filter((r) => !matches(r)))) break;
       } catch {
+        if (generation !== this.generation || !this.isCurrentUser(userId)) break;
         result.failed = true;
         if (this.online()) {
-          // Online but it still failed: count it, and stop trying after MAX_ATTEMPTS.
           const attempts = row.attempts + 1;
           const rows = this.list();
-          if (attempts >= MAX_ATTEMPTS) {
-            result.givenUp.push(row.activity);
-            this.write(rows.filter((r) => r.activity.id !== row.activity.id));
-          } else {
-            this.write(rows.map((r) => (r.activity.id === row.activity.id ? { ...r, attempts } : r)));
-          }
+          if (attempts >= MAX_ATTEMPTS && rows.some(matches)) result.paused.push(row.activity);
+          this.write(rows.map((r) => (matches(r) ? { ...r, attempts } : r)));
         }
         break;
       }

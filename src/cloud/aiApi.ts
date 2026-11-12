@@ -9,7 +9,9 @@ import { dataApiToken } from './token';
 import type { AiError, AiKind, AiPayloads, AiReply, AiResults, DebriefResult } from '../ai/types';
 
 export const AI_ENDPOINT = '/api/ai';
-export const AI_TIMEOUT_MS = 15_000;
+// The server gives up at 35 s (api/_lib/handler.ts) and Vercel at 40 s, so the browser must wait longer than
+// the server's budget or it would discard answers the server is about to return.
+export const AI_TIMEOUT_MS = 38_000;
 
 export type AiOutcome<K extends AiKind> = AiReply<K> | AiError;
 

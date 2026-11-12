@@ -1,13 +1,21 @@
 // Workout file import/export: Zwift .zwo (XML), and .erg / .mrc (text).
 
-import type { Block, Workout } from './model';
+import { validateWorkout, WORKOUT_LIMITS, type Block, type Workout } from './model';
+
+export const MAX_WORKOUT_FILE_BYTES = 2 * 1024 * 1024;
 
 export function parseWorkoutFile(name: string, text: string, ftp: number): Workout {
+  if (text.length > MAX_WORKOUT_FILE_BYTES || new TextEncoder().encode(text).byteLength > MAX_WORKOUT_FILE_BYTES) {
+    throw new Error('Workout files must be no larger than 2 MiB.');
+  }
   const ext = name.toLowerCase().split('.').pop();
   const base = name.replace(/\.[^.]+$/, '');
-  if (ext === 'zwo') return parseZwo(text, base);
-  if (ext === 'erg' || ext === 'mrc') return parseErgMrc(text, base, ftp);
-  throw new Error(`Unsupported file type ".${ext}". Use .zwo, .erg or .mrc.`);
+  let workout: Workout;
+  if (ext === 'zwo') workout = parseZwo(text, base);
+  else if (ext === 'erg' || ext === 'mrc') workout = parseErgMrc(text, base, ftp);
+  else throw new Error(`Unsupported file type ".${ext}". Use .zwo, .erg or .mrc.`);
+  validateWorkout(workout);
+  return workout;
 }
 
 // --------------------------------------------------------------- .zwo ----
@@ -17,6 +25,7 @@ function parseZwo(text: string, fallbackName: string): Workout {
   if (doc.querySelector('parsererror')) throw new Error('This .zwo file is not valid XML.');
   const root = doc.querySelector('workout');
   if (!root) throw new Error('No <workout> section found in this .zwo file.');
+  if (root.children.length > WORKOUT_LIMITS.blocks) throw new Error(`A workout file can contain at most ${WORKOUT_LIMITS.blocks} steps.`);
 
   const num = (el: Element, ...names: string[]) => {
     for (const n of names) {
@@ -28,8 +37,8 @@ function parseZwo(text: string, fallbackName: string): Workout {
   const blocks: Block[] = [];
   for (const el of Array.from(root.children)) {
     const duration = num(el, 'Duration');
-    const cadence = num(el, 'Cadence');
-    const cad = Number.isFinite(cadence) ? cadence : undefined;
+    const cadence = el.getAttribute('Cadence') ?? el.getAttribute('cadence');
+    const cad = cadence === null || cadence === '' ? undefined : Number(cadence);
     switch (el.tagName.toLowerCase()) {
       case 'warmup':
       case 'cooldown':
@@ -43,7 +52,7 @@ function parseZwo(text: string, fallbackName: string): Workout {
       case 'intervalst':
         blocks.push({
           kind: 'intervals',
-          repeats: Math.max(1, Math.round(num(el, 'Repeat'))),
+          repeats: num(el, 'Repeat'),
           onDuration: num(el, 'OnDuration'),
           onPower: num(el, 'OnPower', 'PowerOnHigh', 'PowerOnLow'),
           offDuration: num(el, 'OffDuration'),
@@ -58,8 +67,6 @@ function parseZwo(text: string, fallbackName: string): Workout {
       // Text events and unknown elements are ignored.
     }
   }
-  const bad = blocks.find((b) => Object.values(b).some((v) => typeof v === 'number' && !Number.isFinite(v)));
-  if (bad) throw new Error(`Couldn't read a <${bad.kind}> step in this .zwo file.`);
   if (!blocks.length) throw new Error('This .zwo file has no workout steps.');
   return {
     id: newId(),
@@ -77,7 +84,7 @@ function parseZwo(text: string, fallbackName: string): Workout {
 
 function parseErgMrc(text: string, fallbackName: string, riderFtp: number): Workout {
   const lines = text.split(/\r?\n/).map((l) => l.trim());
-  let fileFtp = 0;
+  let fileFtp: number | undefined;
   let percent = false;
   let name = fallbackName;
   let description = '';
@@ -91,7 +98,10 @@ function parseErgMrc(text: string, fallbackName: string, riderFtp: number): Work
       const kv = line.match(/^(\w[\w ]*?)\s*=\s*(.+)$/);
       if (kv) {
         const key = kv[1].toUpperCase();
-        if (key === 'FTP') fileFtp = Number(kv[2]);
+        if (key === 'FTP') {
+          fileFtp = Number(kv[2]);
+          if (!Number.isFinite(fileFtp) || fileFtp <= 0) throw new Error('The file FTP must be a finite, positive number.');
+        }
         if (key === 'FILE NAME' || key === 'DESCRIPTION') {
           if (key === 'FILE NAME') name = kv[2].replace(/\.[^.]+$/, '');
           else description = kv[2];
@@ -100,11 +110,26 @@ function parseErgMrc(text: string, fallbackName: string, riderFtp: number): Work
       if (/MINUTES\s+PERCENT/.test(upper)) percent = true;
       continue;
     }
-    const m = line.match(/^(-?[\d.]+)\s+(-?[\d.]+)/);
-    if (m) points.push([Number(m[1]) * 60, Number(m[2])]);
+    if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+    const m = line.match(/^(\S+)\s+(\S+)/);
+    if (!m) throw new Error('Invalid time or power data in this workout file.');
+    const time = Number(m[1]) * 60, power = Number(m[2]);
+    if (!Number.isFinite(time) || time < 0 || time > WORKOUT_LIMITS.duration) {
+      throw new Error('Workout timestamps must be finite and between 0 and 24 hours.');
+    }
+    if (!Number.isFinite(power) || power < 0) throw new Error('Workout power values must be finite and nonnegative.');
+    if (points.length && time < points[points.length - 1][0]) throw new Error('Workout timestamps must be in increasing order.');
+    if (points.length >= WORKOUT_LIMITS.blocks + 1) throw new Error(`A workout file can contain at most ${WORKOUT_LIMITS.blocks + 1} power points.`);
+    points.push([time, power]);
   }
   if (points.length < 2) throw new Error('No power data found in this file.');
-  const toFraction = (v: number) => (percent ? v / 100 : v / (fileFtp || riderFtp));
+  const ftp = fileFtp ?? riderFtp;
+  if (!percent && (!Number.isFinite(ftp) || ftp <= 0)) throw new Error('A finite, positive FTP is needed to read watts.');
+  const toFraction = (v: number) => (percent ? v / 100 : v / ftp);
+  for (const p of points) {
+    p[1] = toFraction(p[1]);
+    if (!Number.isFinite(p[1]) || p[1] > WORKOUT_LIMITS.power) throw new Error(`Workout power cannot exceed ${WORKOUT_LIMITS.power * 100}% of FTP.`);
+  }
 
   const blocks: Block[] = [];
   for (let i = 1; i < points.length; i++) {
@@ -112,8 +137,8 @@ function parseErgMrc(text: string, fallbackName: string, riderFtp: number): Work
     const [t1, v1] = points[i];
     const duration = Math.round(t1 - t0);
     if (duration <= 0) continue; // a vertical step
-    const from = toFraction(v0);
-    const to = toFraction(v1);
+    const from = v0;
+    const to = v1;
     blocks.push(Math.abs(from - to) < 1e-6 ? { kind: 'steady', duration, power: from } : { kind: 'ramp', duration, from, to });
   }
   return { id: newId(), name, description, blocks, source: 'uploaded' };

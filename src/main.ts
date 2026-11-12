@@ -13,7 +13,7 @@ import { airDensityAt, stepSpeed, DEFAULT_PARAMS, SEA_LEVEL_AIR_DENSITY } from '
 import { limitCornerSpeed, setRoadWet } from './cornering'; // slowing for bends on descents
 import { drawProfile } from './profile';
 import { World, type CameraMode } from './world/world';
-import { loadSettings, migrateSettings, saveSettings, type Settings } from './settings';
+import { loadSettings, migrateSettings, normalizeSettings, saveSettings, type Settings } from './settings';
 import { proTeamsOnRoad, type RideMode } from './rideMode';
 import { formatTime, Hud, openDataBlocks } from './hud';
 import { RideStats } from './stats';
@@ -89,9 +89,15 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
  */
 function closeButtons() {
   for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
-    if (dialog.querySelector(':scope > .dialog-close')) continue;
-    // Some dialogs already carry their own ✕ in the header: don't give them a second one.
-    if (dialog.querySelector('.dialog-head [aria-label="Close"]')) continue;
+    if (dialog.querySelector('.dialog-close')) continue;
+    // Dialogs that already carry a ✕ in their header keep that button (and its own close value), styled
+    // as the same red circle, so every dialog has exactly one.
+    const existing = dialog.querySelector<HTMLButtonElement>('.dialog-head [aria-label="Close"]');
+    if (existing) {
+      existing.classList.add('dialog-close');
+      existing.title ||= 'Close (Esc)';
+      continue;
+    }
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'dialog-close';
@@ -932,6 +938,7 @@ function finishWorkout() {
 interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
 
 function showSummary(flag: string, title: string, items: [string, string][], actions: SummaryAction[], extra: Node[] = []) {
+  summaryVersion++;
   $('finish').querySelector('.finish-card')!.classList.toggle('wide', extra.length > 0);
   $('finish-extra').replaceChildren(...extra);
   $('finish-note').textContent = '';
@@ -1001,7 +1008,11 @@ function buildActivity(sp: Span): Activity {
   return buildActivityRow({
     id: sp.rec.id,
     startedAt: sp.rec.startedAt,
-    samples: sp.rec.samples,
+    // A copy: the recorder keeps appending while a save is in flight, and the row must hold the window as it was.
+    samples: {
+      power: [...sp.rec.samples.power], cadence: [...sp.rec.samples.cadence], hr: [...sp.rec.samples.hr],
+      speed: [...sp.rec.samples.speed], distance: [...sp.rec.samples.distance], elevation: [...sp.rec.samples.elevation],
+    },
     stats: sp.st,
     stage: currentStage(),
     workout: sp.workout,
@@ -1029,55 +1040,70 @@ function saveRide(opts: { quiet?: boolean } = {}): Promise<boolean> {
 function saveUnsaved(): Promise<boolean[]> {
   return Promise.all([workoutSpan, rideSpan].flatMap((sp) => (sp && worthSaving(sp.st.seconds, sp.saved, MIN_RIDE_S) ? [saveSpan(sp, { quiet: true })] : [])));
 }
+// The account a ride belongs to, captured when the ride starts: a save goes to it however the session changes meanwhile.
+let rideUserId: string | null = account()?.id ?? null;
+// Bumped by every summary card: a save finishing after the card was replaced doesn't write into the new one.
+let summaryVersion = 0;
 
 /**
  * Saves one activity window to the rider's account (the same one is updated on later saves). Updates the note on the
  * summary card if it's showing. The row is built before anything waits, so it holds the window as it was when asked.
  */
 async function saveSpan(sp: Span, opts: { quiet?: boolean } = {}): Promise<boolean> {
-  const note = $('finish-note');
-  const showNote = !opts.quiet && !$('finish').hidden;
-  if (sp.st.seconds < MIN_RIDE_S) return false;
-  if (!account()) return false; // an account is required to ride, so this is only a ride that outlived its session
+  if (sp.st.seconds < MIN_RIDE_S || !rideUserId) return false; // an account is required to ride, so no owner is a ride that outlived its session
+  // Everything the save needs is captured before the first await: Reset, Autosave or a sign-out meanwhile can't change
+  // the row or its owner.
+  const userId = rideUserId;
   const activity = buildActivity(sp);
   const seconds = sp.st.seconds;
+  const gen = signInGen;
+  const summary = summaryVersion;
+  const sameAccount = () => account()?.id === userId && signInGen === gen;
+  const note = $('finish-note');
+  const showNote = !opts.quiet && !$('finish').hidden;
+  const noteCurrent = () => showNote && sameAccount() && summaryVersion === summary && !$('finish').hidden;
+  const alreadyQueued = rideQueue.list().some((r) => r.userId === userId && r.activity.id === activity.id);
+  const kept = rideQueue.add(userId, activity); // durable before the first await (src/rideQueue.ts), so nothing can lose it
+  if (kept !== 'failed') sp.saved = Math.max(sp.saved, seconds); // queued: the 5-minute autosave needn't retry it
   if (showNote) note.textContent = 'Saving to your rides…';
   try {
-    await saveActivity(activity);
-    sp.saved = seconds;
-    accountUi.invalidate();
-    hubNotify('ride');
-    if (showNote) note.textContent = '✓ Saved to your rides';
+    if (kept === 'failed') await saveActivity(activity, userId);
+    else {
+      const r = await rideQueue.flush(userId);
+      if (!r.uploaded.some((a) => a.id === activity.id) || rideQueue.list().some((q) => q.userId === userId && q.activity.id === activity.id)) {
+        throw new Error('The ride is waiting on this device');
+      }
+    }
+    sp.saved = Math.max(sp.saved, seconds);
+    if (sameAccount()) { accountUi.invalidate(); hubNotify('ride'); }
+    if (noteCurrent()) note.textContent = '✓ Saved to your rides';
     // Credits and levels come from the server's count of your saved rides.
-    garage.afterRide().then((r) => {
-      if (!r || opts.quiet) return;
+    if (sameAccount()) garage.afterRide().then((r) => {
+      if (!r || opts.quiet || !sameAccount() || summaryVersion !== summary) return;
       const text = rewardText(r);
-      if (text && showNote) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
+      if (text && noteCurrent()) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
       if (r.levelAfter > r.levelBefore) toast(`⭐ Level ${r.levelAfter}!`, 5000);
     }).catch(() => { /* credits are a bonus */ });
     return true;
   } catch (e) {
-    // No connection (or the server didn't answer): keep it on this device and upload it later (src/rideQueue.ts).
-    const kept = keepOffline(activity);
-    if (kept.result !== 'failed') {
-      sp.saved = seconds; // queued: the 5-minute autosave needn't retry it (a later save replaces the copy)
-      const msg = kept.result === 'trimmed'
+    if (!sameAccount()) return false; // the captured owner's queue is untouched by a session transition
+    if (kept !== 'failed') {
+      const msg = kept === 'trimmed'
         ? '📶 Couldn’t reach the server. Saved on this device (the summary; the second-by-second detail didn’t fit). It uploads when you’re back online.'
         : '📶 Couldn’t reach the server. Saved on this device: it uploads as soon as you’re back online.';
-      if (showNote) note.textContent = msg;
-      else if (!opts.quiet || !kept.already) toast(msg, 6000); // quiet saves (back to the hub, autosave) say so once per ride
+      if (noteCurrent()) note.textContent = msg;
+      else if (!opts.quiet || !alreadyQueued) toast(msg, 6000); // quiet saves (back to the hub, autosave) say so once per ride
       hubNotify('ride');
-    } else if (showNote) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
+    } else if (noteCurrent()) note.textContent = `Couldn’t save this ride: ${(e as Error).message}`;
     else if (!opts.quiet) toast(`Couldn’t save your ride: ${(e as Error).message}`);
     return false;
   }
 }
 
 /** Puts an activity in the offline queue (src/rideQueue.ts). `already`: an earlier copy of it was waiting there. */
-function keepOffline(activity: Activity) {
-  const me = account()?.id;
-  const already = rideQueue.list().some((r) => r.activity.id === activity.id);
-  return { result: me ? rideQueue.add(me, activity) : ('failed' as const), already };
+function keepOffline(activity: Activity, userId = account()?.id) {
+  const already = rideQueue.list().some((r) => r.userId === userId && r.activity.id === activity.id);
+  return { result: userId ? rideQueue.add(userId, activity) : ('failed' as const), already };
 }
 
 // ------------------------------------------- a safety copy of the ride ----
@@ -1146,13 +1172,13 @@ async function saveInterrupted(snap: RideSnapshot) {
     racePlace: null, raceSize: null, proM: Math.max(0, snap.ride.proM - snap.span.proM0), ftp: settings.ftp, maxHr: settings.maxHr,
   });
   try {
-    await saveActivity(row);
+    await saveActivity(row, snap.accountId);
     accountUi.invalidate();
     hubNotify('ride');
     void garage.refresh();
     toast('Saved your interrupted ride to your rides.', 5000);
   } catch {
-    if (keepOffline(row).result !== 'failed') { hubNotify('ride'); toast('📶 Couldn’t reach the server. Your interrupted ride is saved on this device and uploads when you’re back online.', 6000); }
+    if (account()?.id === snap.accountId && keepOffline(row, snap.accountId).result !== 'failed') { hubNotify('ride'); toast('📶 Couldn’t reach the server. Your interrupted ride is saved on this device and uploads when you’re back online.', 6000); }
     else toast('Couldn’t save your interrupted ride.', 6000);
   }
 }
@@ -1225,19 +1251,22 @@ const rideQueue = new RideQueue(
   (() => { try { return localStorage; } catch { return null; } })(),
   saveActivity,
   () => navigator.onLine !== false,
+  (userId) => account()?.id === userId,
 );
 
-async function uploadQueuedRides() {
+async function uploadQueuedRides(retry = false) {
   const me = account()?.id;
   if (!me || !rideQueue.count(me)) return;
-  const r = await rideQueue.flush(me);
+  const gen = signInGen;
+  const r = await rideQueue.flush(me, retry);
+  if (account()?.id !== me || signInGen !== gen) return;
   if (r.uploaded.length) {
     accountUi.invalidate();
     hubNotify('ride');
     void garage.refresh(); // credits and levels for the uploaded rides
     toast(r.uploaded.length === 1 ? `✓ Uploaded your ride “${r.uploaded[0].title}” (saved while offline).` : `✓ Uploaded ${r.uploaded.length} rides saved while offline.`, 5000);
   }
-  for (const a of r.givenUp) toast(`Couldn’t upload “${a.title}” (${new Date(a.started_at).toLocaleDateString()}) after several tries, so it was removed from this device.`, 8000);
+  for (const a of r.paused) toast(`“${a.title}” is still saved on this device. Automatic uploads are paused after several tries; retry from your profile’s Activities tab.`, 8000);
 }
 window.addEventListener('online', () => { void uploadQueuedRides(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void uploadQueuedRides(); });
@@ -1271,14 +1300,15 @@ setInterval(() => {
  * there by an older visit is still saved once at sign-in, then deleted, so it isn't lost.
  */
 async function savePendingRide() {
+  const me = account()?.id;
+  if (!me) return;
   let raw: string | null = null;
   try { raw = localStorage.getItem(OLD_PENDING_KEY); } catch { /* storage blocked */ }
   if (!raw) return;
   try {
-    await saveActivity(JSON.parse(raw) as Activity);
-    localStorage.removeItem(OLD_PENDING_KEY);
-    accountUi.invalidate();
-    toast('Your ride was saved to your profile.');
+    if (rideQueue.add(me, JSON.parse(raw) as Activity) === 'failed') throw new Error('This device has no room to keep your earlier ride safely');
+    if (localStorage.getItem(OLD_PENDING_KEY) === raw) localStorage.removeItem(OLD_PENDING_KEY);
+    await uploadQueuedRides();
   } catch (e) {
     toast(`Couldn’t save your earlier ride: ${(e as Error).message}`);
   }
@@ -1355,9 +1385,10 @@ function leaveRaceAndEvent() {
 }
 
 function resetRide() {
+  void saveUnsaved(); // quietly keeps what is worth keeping: the workout's activity and the ride's (captured before anything below changes)
+  rideUserId = account()?.id ?? null;
   ai?.newRide();
   ensureAi();
-  void saveUnsaved(); // quietly keeps what is worth keeping: the workout's activity and the ride's
   rideFlags.usedDemo = false;
   rideFlags.splitByWorkout = !!player; // a workout still going carries on in a new activity of its own (so this trip is split)
   Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
@@ -1389,6 +1420,7 @@ function stageClimbing(stage: Stage) {
 }
 
 function chooseStage(stage: Stage) {
+  resetRide(); // capture the outgoing stage before replacing the course
   setStage(stage);
   setMonitoringContext({ stage: stage.id });
   const url = new URL(location.href);
@@ -1397,7 +1429,6 @@ function chooseStage(stage: Stage) {
   history.replaceState(null, '', url);
   world.restage(markerConfig());
   updateTourJersey();
-  resetRide();
   presence.restage();
   peloton.reset(0);
   ghost = null;
@@ -1615,7 +1646,8 @@ async function joinEvent(row: EventRow) {
   const clock = () => secondsSinceStart(ev, serverNow());
   if (ev.kind === 'race') {
     const { roster, course } = raceSetup(stage, ev.seed);
-    const field = peloton.startRace(course, roster, EVENT_REF_WKG, ev.seed);
+    // A scheduled event runs in shared conditions: the same field on every client, whatever the rider's weather.
+    const field = peloton.startRace(course, roster, EVENT_REF_WKG, ev.seed, 'event');
     race = new LiveRace(stage, field, new Map(), null);
     race.useEventClock(clock);
     attachRace(race);
@@ -1819,14 +1851,18 @@ function showFinish() {
       textContent: vsGhost < 0 ? `🏆 ${raceTime(-vsGhost)} faster than ${who}` : `${raceTime(vsGhost)} behind ${who}`,
     }));
   }
-  void saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); void showRank(); });
+  const finishedSpan = sp;
+  void saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); if (saved && span() === finishedSpan) void showRank(); });
 }
 
 /** After a whole-stage ride is saved: where it puts you on the leaderboard. */
 async function showRank() {
   if (!account() || !ride.finishTime || !leaderboardEligible(rideFlags)) return;
+  const sp = span();
+  const gen = signInGen;
   try {
     const rows = await stageLeaderboard(currentStage().id);
+    if (span() !== sp || signInGen !== gen) return;
     const me = rows.find((r) => r.is_me);
     if (!me) return;
     const total = rows.length;
@@ -2174,6 +2210,7 @@ const accountUi = initAccountUi({
   toast,
   // Signing out ends the ride (an account is required to ride): keep a ride worth keeping first.
   beforeSignOut: async () => { await saveUnsaved(); },
+  queuedRides: { count: () => rideQueue.count(account()?.id), retry: () => uploadQueuedRides(true) },
   // 📤 Share on a ride in your profile.
   shareRide: (a) => { void import('./garage/shareUi').then((m) => shareRide(m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined), toast)); },
   context: () => ({
@@ -2243,7 +2280,9 @@ $('btn-rivals').addEventListener('click', () => {
 });
 /** After sign-in the database has the last word on the AI opt-in. Read it without loading the controller; that loads only if the rider has opted in. */
 function syncAiConsent() {
-  aiApiLazy.get().then((m) => m.loadConsent()).then((c) => {
+  const gen = signInGen;
+  aiApiLazy.get().then((m) => gen === signInGen && account() ? m.loadConsent() : null).then((c) => {
+    if (gen !== signInGen || !account()) return;
     if (c) patchAiSettings({ aiCoach: c.coach, aiRivals: c.rivals });
     ensureAi();
   }).catch(() => {});
@@ -2446,12 +2485,20 @@ initRidersUi({
 let signInGen = 0;
 onAccountChange(async (a) => {
   const gen = ++signInGen;
+  if ((a?.id ?? null) !== rideUserId) {
+    rideQueue.stop();
+    const hadOwner = !!rideUserId;
+    abandonRide(); // queues any unsaved outgoing ride under its original owner, never the new account
+    rideUserId = a?.id ?? null;
+    if (hadOwner) forgetLocalCopies();
+    snapshotHandledFor = null; // the next account's leftover copy (if any) is offered afresh
+    ghost = null;
+    ghostSeq++;
+  }
   setMonitoringUser(a?.id ?? null);
   world.setRiderName(a?.name); // painted on the road on the big climbs ("ALLEZ SAM")
   if (!a) {
-    snapshotHandledFor = null;
-    abandonRide(); // no account, no ride (the home page replaces the hub in src/home.ts)
-    forgetLocalCopies();
+    // The identity change above already ended any ride and cleared the previous owner's local copies.
     ghost = null;
     void garage.refresh(); // signed out: back to the starter kit and no wallet
     return;
@@ -2462,7 +2509,8 @@ onAccountChange(async (a) => {
     if (gen !== signInGen) return;
     if (remote) {
       const migrated = migrateSettings(remote); // an account saved before the ride-mode choice moves to Solo once, too
-      settings = { ...settings, ...migrated };
+      // The account's copy is only a record: read it through the same bounds (and unknown-key) checks as local storage.
+      settings = normalizeSettings({ ...settings, ...migrated });
       saveSettings(settings);
       if (migrated !== remote) pushSettings(settings);
       updateProTeamsMenu();
@@ -2475,6 +2523,9 @@ onAccountChange(async (a) => {
       placeWorkoutPanel();
       lastSentGrade = NaN;
       setSound(settings.sound);
+      sound.setMusic(settings.music); // (settings was replaced above, so setMusic() would skip as "unchanged")
+      updateMusicMenu();
+      syncMusic();
       updateGearPanel();
       updateMapMenu();
       applyHudPosition(settings.hudPosition);
@@ -2496,7 +2547,7 @@ onAccountChange(async (a) => {
     syncAiConsent(); // the AI coach and rivals follow what the account agreed to (the database has the last word)
     toast(`Signed in as ${a.name}`);
   } catch (e) {
-    toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
+    if (gen === signInGen) toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
   }
   if (gen === signInGen) void offerSnapshot(); // a ride interrupted by a crash or a closed tab: pick it up, or save it
 });

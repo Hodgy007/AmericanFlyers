@@ -2,6 +2,7 @@
 // power (trainer.ts) and a separate power meter (powerMeter.ts).
 
 import type { TrainerReading } from './trainer';
+import { notificationView } from './notification';
 
 export const CPS_SERVICE = 0x1818;
 export const CPS_MEASUREMENT = 0x2a63;
@@ -13,10 +14,11 @@ export const CPS_MEASUREMENT = 0x2a63;
 export async function subscribeCyclingPower(service: BluetoothRemoteGATTService, onReading: (r: TrainerReading) => void): Promise<void> {
   const measurement = await service.getCharacteristic(CPS_MEASUREMENT);
   const cadence = new CrankCadence();
-  measurement.addEventListener('characteristicvaluechanged', () => {
-    const v = measurement.value;
+  measurement.addEventListener('characteristicvaluechanged', (event) => {
+    const v = notificationView(event, measurement);
     if (!v) return;
-    const r = parseCyclingPower(v, cadence);
+    let r: TrainerReading;
+    try { r = parseCyclingPower(v, cadence); } catch { return; }
     if (r.power !== undefined) onReading(r);
   });
   await measurement.startNotifications();

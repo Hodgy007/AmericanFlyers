@@ -34,7 +34,7 @@ export function segmentLimitsFor(stage: Stage, seg: Segment) {
   return { stageId: stage.id, lengthM, minS, maxAvgKmh: Math.ceil((lengthM / minS) * 3.6) };
 }
 
-const sql = readFileSync('db/schema.sql', 'utf8');
+const sql = readFileSync('db/schema.sql', 'utf8').replace(/\r\n/g, '\n');
 function rows(table: string): string[][] {
   const start = sql.indexOf(`insert into public.${table}`);
   const block = sql.slice(start, sql.indexOf(';', start));

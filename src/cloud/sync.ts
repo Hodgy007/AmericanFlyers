@@ -8,11 +8,13 @@ import type { Settings } from '../settings';
 import type { Workout } from '../workouts/model';
 import { ownWorkouts, setLocalWorkouts, workoutSync } from '../workouts/library';
 import { sharedSegmentStore } from '../segmentStore';
-import { account } from './account';
+import { account, onAccountChange } from './account';
 import { neon } from './client';
 
 type Report = (msg: string) => void;
 let report: Report = () => {};
+let accountVersion = 0;
+onAccountChange(() => { accountVersion++; });
 
 export function onSyncError(fn: Report) {
   report = fn;
@@ -39,26 +41,35 @@ async function check<T>(p: PromiseLike<{ data: T; error: { message: string } | n
 export async function syncOnSignIn(local: Settings): Promise<Settings | null> {
   const userId = account()?.id;
   if (!userId) return null;
+  const version = accountVersion;
+  const current = () => account()?.id === userId && version === accountVersion;
 
   const profile = await check(neon.from('profiles').select('settings').eq('user_id', userId).maybeSingle());
+  if (!current()) return null;
   let remoteSettings: Settings | null = null;
   if (profile && Object.keys(profile.settings ?? {}).length) {
     remoteSettings = profile.settings as Settings;
   } else {
     await check(neon.from('profiles').upsert({ user_id: userId, settings: local, updated_at: new Date().toISOString() }));
-    await recordFtp(local.ftp, 'signup').catch(() => {});
+    if (!current()) return null;
+    await recordFtp(local.ftp, 'signup', userId).catch(() => {});
+    if (!current()) return null;
   }
 
   const workouts = await check(neon.from('workouts').select('id, data').eq('user_id', userId));
+  if (!current()) return null;
   const remoteW = new Map((workouts ?? []).map((r: { id: string; data: Workout }) => [r.id, r.data]));
   const newW = ownWorkouts().filter((w) => !remoteW.has(w.id));
   if (newW.length) await check(neon.from('workouts').insert(newW.map((w) => ({ id: w.id, user_id: userId, data: w }))));
+  if (!current()) return null;
   setLocalWorkouts([...remoteW.values(), ...newW]);
 
   const routes = await check(neon.from('routes').select('id, data').eq('user_id', userId));
+  if (!current()) return null;
   const remoteR = new Map((routes ?? []).map((r: { id: string; data: StoredRoute }) => [r.id, r.data]));
   const newR = ownRoutes().filter((r) => !remoteR.has(r.id));
   if (newR.length) await check(neon.from('routes').insert(newR.map((r) => ({ id: r.id, user_id: userId, name: r.name, data: r }))));
+  if (!current()) return null;
   setLocalRoutes([...remoteR.values(), ...newR]);
 
   return remoteSettings;
@@ -146,28 +157,35 @@ export interface Activity {
 
 const SUMMARY_COLUMNS = 'id, started_at, title, stage_id, stage_name, finished, workout_name, duration_s, distance_m, climbed_m, avg_power, np, max_power, avg_hr, max_hr, avg_cadence, kj, tss, ftp, best_power, hr_zones, power_zones, max_hr_setting, finish_s, race_place, race_size, pro_m';
 
-/** Saves (or updates, using the same id) an activity for the signed-in rider. */
-export async function saveActivity(a: Activity) {
-  const userId = account()?.id;
-  if (!userId) throw new Error('Not signed in');
-  // user_id is never client-supplied: the column default auth.user_id() fills it, and the upsert conflicts on id.
-  const { user_id: _ignored, ...row } = a as Activity & { user_id?: string };
-  await check(neon.from('activities').upsert(row));
+/** Saves an activity only for the rider who owned the captured snapshot. RLS checks that owner against the request's token. */
+export async function saveActivity(a: Activity, userId = account()?.id) {
+  if (!userId || account()?.id !== userId) throw new Error('The signed-in rider changed');
+  // The SDK may acquire its token asynchronously. An explicit owner makes a later account's token fail RLS,
+  // rather than letting the column default silently attach this ride to that later account.
+  await check(neon.from('activities').upsert({ ...a, user_id: userId }));
 }
 
 export async function listActivities(): Promise<Activity[]> {
   const userId = account()?.id;
   if (!userId) return [];
-  return ((await check(neon.from('activities').select(SUMMARY_COLUMNS).eq('user_id', userId).order('started_at', { ascending: false }).limit(1000))) ?? []) as Activity[];
+  const version = accountVersion;
+  const rows = await check(neon.from('activities').select(SUMMARY_COLUMNS).eq('user_id', userId).order('started_at', { ascending: false }).limit(1000));
+  return account()?.id === userId && version === accountVersion ? (rows ?? []) as Activity[] : [];
 }
 
 export async function activitySamples(id: string): Promise<Samples | null> {
-  const row = await check(neon.from('activities').select('samples').eq('id', id).maybeSingle());
+  const userId = account()?.id;
+  if (!userId) return null;
+  const version = accountVersion;
+  const row = await check(neon.from('activities').select('samples').eq('user_id', userId).eq('id', id).maybeSingle());
+  if (account()?.id !== userId || version !== accountVersion) return null;
   return (row?.samples as Samples) ?? null;
 }
 
 export async function deleteActivity(id: string) {
-  await check(neon.from('activities').delete().eq('id', id));
+  const userId = account()?.id;
+  if (!userId) throw new Error('Not signed in');
+  await check(neon.from('activities').delete().eq('user_id', userId).eq('id', id));
 }
 
 // ------------------------------------------------ leaderboards & ghosts ----
@@ -202,9 +220,9 @@ export type FtpSource = 'manual' | 'ramp_test' | 'signup';
 export interface FtpEntry { ftp: number; source: FtpSource; recorded_at: string }
 
 /** Records an FTP change (no-op when signed out). */
-export async function recordFtp(ftp: number, source: FtpSource) {
-  if (!account()) return;
-  await check(neon.from('ftp_history').insert({ ftp: Math.round(ftp), source }));
+export async function recordFtp(ftp: number, source: FtpSource, userId = account()?.id) {
+  if (!userId || account()?.id !== userId) return;
+  await check(neon.from('ftp_history').insert({ user_id: userId, ftp: Math.round(ftp), source }));
 }
 
 export async function ftpHistory(): Promise<FtpEntry[]> {
