@@ -6,6 +6,9 @@ import { mockNeon } from './mockNeon';
 // village, the lakeshore bend towards the water, the climb and the Raven Gap cutting) load on Low and Medium without page or shader errors. Each
 // place is saved as test-results/kestrel-<tier>-<km>.png for a human (or an agent) to look at: the village, the water, the
 // climb and the cutting should read as coherent places, with no floating road, no water over the road and no road under the ground.
+// By default (and in CI) only Low is loaded, briefly, as an error check; KESTREL_SHOTS=1 adds Medium, waits for the terrain to
+// settle (KESTREL_SETTLE_MS, default 25 s) and saves the screenshots.
+const SHOTS = !!process.env.KESTREL_SHOTS;
 
 test.use({ viewport: { width: 800, height: 450 }, deviceScaleFactor: 1 });
 
@@ -32,7 +35,7 @@ test('the hub lists the three Kestrel Vale routes', async ({ page }) => {
   await expect(page.locator('#hub-s-route [data-fkey="stage-kestrel-vale-loop"]')).toHaveText('Kestrel Vale · Vale Loop');
 });
 
-for (const tier of ['low', 'medium']) {
+for (const tier of SHOTS ? ['low', 'medium'] : ['low']) {
   for (const km of SPOTS) {
     test(`Kestrel Vale at ${km} km on ${tier}: loads without errors`, async ({ page }) => {
       test.setTimeout(300_000);
@@ -52,11 +55,14 @@ for (const tier of ['low', 'medium']) {
       await expect(page.locator('#hub')).toBeHidden();
       // The lazy chunks (the splatted ground, and by the village the code-built terraces and church) arrive after the first frame.
       await expect.poll(() => fetched.some((f) => /^ground-/.test(f)) && (km > 1 || fetched.some((f) => /^monuments-/.test(f))), { timeout: 120_000 }).toBe(true);
-      await page.waitForTimeout(Number(process.env.KESTREL_SETTLE_MS ?? 25_000)); // terrain tiles build a few a frame, at one frame a second here
-      mkdirSync('test-results', { recursive: true });
-      // Only the 3D scene: the HUD panels would cover the places being looked at.
-      await page.addStyleTag({ content: 'body * { visibility: hidden !important } #scene { visibility: visible !important }' });
-      await page.screenshot({ path: `test-results/kestrel-${tier}-${km}.png` });
+      // Terrain tiles build a few a frame, at one frame a second here.
+      await page.waitForTimeout(SHOTS ? Number(process.env.KESTREL_SETTLE_MS ?? 25_000) : 3_000);
+      if (SHOTS) {
+        mkdirSync('test-results', { recursive: true });
+        // Only the 3D scene: the HUD panels would cover the places being looked at.
+        await page.addStyleTag({ content: 'body * { visibility: hidden !important } #scene { visibility: visible !important }' });
+        await page.screenshot({ path: `test-results/kestrel-${tier}-${km}.png` });
+      }
       expect(errors, errors.join('\n')).toEqual([]);
     });
   }

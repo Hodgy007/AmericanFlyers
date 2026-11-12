@@ -14,7 +14,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The e2e suite alone takes most of a run (about 13 minutes on main in November 2026), so 15 left no headroom.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
