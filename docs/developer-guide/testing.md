@@ -73,7 +73,7 @@ Conventions:
 - goes back with ☰ Menu → 🏠 Hub, checks Escape keeps focus on **Ride**, and rides again,
 - fails on any page error or console error (blocked network requests are ignored).
 
-`tests/e2e/home.spec.ts` covers the way in: a visitor with no account sees the home page and no way past it (no *Ride without an account*, Escape does nothing, the hub stays hidden); a stale signed-in hint with no session ends on the home page; signing out returns to it; a ride left by the old guest flow is saved once at sign-in and deleted; and a workout made before accounts were required syncs to the account.
+`tests/e2e/home.spec.ts` covers the way in: a visitor with no account sees the home page and no way past it (no *Ride without an account*, Escape does nothing, the hub stays hidden); a stale signed-in hint with no session ends on the home page; signing out returns to it; a ride left by the old guest flow is saved once at sign-in and deleted; and a workout made before accounts were required syncs to the account. `tests/e2e/lateSession.spec.ts` starts a demo ride at one frame a second, before the session check answers, and checks the ride carries on at 250 W once it does (it used to be reset with the demo off). `tests/e2e/slowFrames.ts` is the one-frame-a-second init script.
 
 A second test in `smoke.spec.ts` signs the mocked rider in and checks the hub's name, level, credits, plan row, best times, each section's data, a ride row opening the profile's ride detail, and Ride starting a chosen workout.
 
