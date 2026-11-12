@@ -64,7 +64,16 @@ export function nearLandmark(x: number, z: number, d: number): boolean {
   for (const s of sitesBetween(d - 80, d + 80)) {
     if (Math.hypot(s.x - x, s.z - z) < s.kind.clearance) return true;
   }
+  // A world landmark that stands well away from the road (`within`) is found by position, not by the course distance of the road nearest to the tree.
+  for (const k of currentStage().landmarks) {
+    if (k.world && k.within !== undefined && Math.hypot(k.world.x - x, k.world.z - z) < k.clearance) return true;
+  }
   return false;
+}
+
+/** The clear zones of every landmark standing between course distances `from` and `to` (x, z, radius): for kits that keep off buildings (field walls). */
+export function landmarkDisks(from: number, to: number): { x: number; z: number; r: number }[] {
+  return sitesBetween(from, to).map((s) => ({ x: s.x, z: s.z, r: s.kind.clearance }));
 }
 
 export class Landmarks {
@@ -156,8 +165,11 @@ export class Landmarks {
 
   update(distance: number) {
     const keep = new Set<string>();
+    const rider = roadPoint(distance);
     for (const site of sitesBetween(distance - BEHIND, distance + AHEAD, true)) {
       const key = site.key;
+      // A landmark that stands apart from the road is only put up while the rider is near it (the terrain is only built round the rider); a little more room once it is up, so it does not flicker.
+      if (site.kind.within !== undefined && Math.hypot(site.x - rider.x, site.z - rider.z) > site.kind.within + (this.placed.has(key) ? 80 : 0)) continue;
       keep.add(key);
       if (this.placed.has(key)) continue;
       const model = this.model(site.kind);

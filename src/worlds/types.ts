@@ -238,6 +238,12 @@ export function routeStage(world: World, route: WorldRoute): Stage {
     // `plain` and the result are heights relative to the road, which the move does not change; only the distance is the world's.
     roadside: sc.roadside ? (d, lateral, plain) => sc.roadside!(wrap(d), lateral, plain) : undefined,
     walls: sc.walls ? (d) => sc.walls!(wrap(d)) : undefined,
+    // Field walls and bunting: the spans are in lap metres (the planner maps a distance through `lap`), the blocked test is by world position.
+    dressing: sc.dressing && {
+      ...sc.dressing,
+      lap: (d) => wrap(d),
+      fieldWalls: sc.dressing.fieldWalls && { ...sc.dressing.fieldWalls, blocked: sc.dressing.fieldWalls.blocked && ((x, z, lat) => sc.dressing!.fieldWalls!.blocked!(x + P[0], z + P[1], lat)) },
+    },
     clearing: sc.clearing ? (d) => sc.clearing!(wrap(d)) : undefined,
     water: sc.water?.map(shiftBody),
   };

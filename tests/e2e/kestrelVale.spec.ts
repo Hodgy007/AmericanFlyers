@@ -88,7 +88,7 @@ async function loads(page: import('@playwright/test').Page, stage: string, km: n
   await page.locator('#hub-go').evaluate((el) => (el as HTMLElement).click());
   await expect(page.locator('#hub')).toBeHidden();
   // The lazy chunks (the splatted ground, and by the village the code-built terraces and church) arrive after the first frame.
-  await expect.poll(() => fetched.some((f) => /^ground-/.test(f)) && (!village || fetched.some((f) => /^monuments-/.test(f))), { timeout: 120_000 }).toBe(true);
+  await expect.poll(() => fetched.some((f) => /^ground-/.test(f)) && fetched.some((f) => /^roadExtras-/.test(f)) && (!village || fetched.some((f) => /^monuments-/.test(f))), { timeout: 120_000 }).toBe(true);
   // Terrain tiles build a few a frame, at one frame a second here.
   await page.waitForTimeout(SHOTS ? Number(process.env.KESTREL_SETTLE_MS ?? 25_000) : 3_000);
   if (sideCamera) { await page.keyboard.press('c'); await page.waitForTimeout(SHOTS ? 6_000 : 1_500); } // the side camera: 4 m to the rider's right, which is beside the tunnel's wall
@@ -132,4 +132,26 @@ for (const [id, km] of PARTIAL) {
     test.setTimeout(300_000);
     await loads(page, id, km, 'low', `kestrel-${id.replace('kestrel-vale-', '')}-low-${km}`);
   });
+}
+
+// The code-built dressing (milestone 4): the market cross in the Hollins Cross square and its bunting, the lakeside jetty with its boats, Mill Bridge over Mill Beck, the
+// dry-stone field walls of Foss Bottom, and the stone viaduct across Foss Gill, which the Foss straight and the Raven Scar climb look across to. Same checks and
+// screenshots as above (`-g "dressing"` runs just these); the monuments chunk is waited for, and the walls and bunting are part of the road extras chunk.
+const DRESSING_SPOTS: { name: string; km: number; monuments: boolean; side?: boolean }[] = [
+  { name: 'market cross', km: 0.005, monuments: true }, // the square just after the line: the cross is ahead on the left, the bunting beyond the start arch
+  { name: 'bunting', km: 0.15, monuments: true }, // strings across the high street between the terraces
+  { name: 'jetty', km: 2.16, monuments: true }, // the shore comes closest to the road before the sprint: the jetty and its boats are just ahead on the left
+  { name: 'mill bridge', km: 4.0, monuments: false }, // the covered bridge over the beck, 135 m ahead (a model, not a monument)
+  { name: 'mill beck', km: 4.1, monuments: false }, // 35 m before the bridge: the beck runs across the road under it, water in its channel to the left and right
+  { name: 'field walls', km: 5.0, monuments: false }, // Foss Bottom: walls round the fields either side
+  { name: 'viaduct from the straight', km: 4.85, monuments: true }, // the viaduct is up the slope ahead on the right, broadside, across its gill
+  { name: 'viaduct from the climb', km: 7.4, monuments: true }, // the second leg of Raven Scar, just after the second hairpin, 800 m from the viaduct: it is off to the right, out of the chase camera's frame, so this is a load check and shows the climb's own side of the valley
+];
+for (const tier of SHOTS ? ['low', 'medium'] : ['low']) {
+  for (const { name, km, monuments, side } of DRESSING_SPOTS) {
+    test(`Kestrel Vale dressing: ${name} (${km} km) on ${tier}: loads without errors`, async ({ page }) => {
+      test.setTimeout(300_000);
+      await loads(page, 'kestrel-vale-loop', km, tier, `kestrel-dressing-${name.replace(/ /g, '-')}-${tier}`, monuments, side);
+    });
+  }
 }
