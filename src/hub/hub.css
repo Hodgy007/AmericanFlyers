@@ -236,6 +236,20 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2); font-size: 12px; font-weight: 600; color: var(--hub-text-1); font-variant-numeric: tabular-nums; }
 .hub-chip.gold { border-color: rgba(242, 193, 78, 0.5); color: #f6d58a; background: rgba(242, 193, 78, 0.1); }
 
+/* a world (Kestrel Vale): one card across the grid, a chip for each of its routes */
+.hub-world { grid-column: 1 / -1; }
+.hub-world:hover { transform: none; }
+.hub-card .hub-world-name { font-family: var(--font-display); font-weight: 800; font-size: 23px; letter-spacing: 0.03em; line-height: 1.05; text-transform: uppercase; color: #fff; }
+.hub-world .hub-desc { -webkit-line-clamp: unset; display: block; max-width: 72ch; }
+.hub-routes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.hub-route { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; min-width: 0; text-align: left; border-radius: 12px; background: rgba(255, 255, 255, 0.05); box-shadow: none; border: 1px solid rgba(255, 255, 255, 0.2); color: var(--hub-text-1); }
+.hub-route:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.hub-route-name { font-family: var(--font-display); font-weight: 700; font-size: 17px; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; overflow-wrap: anywhere; }
+.hub-route-meta { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--hub-text-2); }
+.hub-route[aria-pressed='true'] { background: var(--red); border-color: var(--red-hi); }
+.hub-route[aria-pressed='true'] .hub-route-meta { color: #fff; }
+.hub-route:focus-visible { outline: none; box-shadow: var(--ring); }
+
 /* ------------------------------------------------------- climb guide ---- */
 /* a full-width row under the stage's card (the grid is two cards across on a phone) */
 .hub-climb { grid-column: 1 / -1; border-radius: 16px; padding: 14px 16px 12px; background: linear-gradient(180deg, rgba(20, 31, 62, 0.86), rgba(10, 16, 38, 0.86)); border: 1px solid rgba(143, 184, 255, 0.35); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.3); min-width: 0; }
@@ -439,6 +453,10 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
   .hub-card-body { padding: 10px 11px 11px; }
   .hub-pick { font-size: 19px; }
   .hub-card .hub-desc { display: none; }
+  .hub-world .hub-desc { display: block; font-size: 12px; }
+  .hub-routes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .hub-route { padding: 7px 10px; }
+  .hub-route-name { font-size: 15px; }
   .hub-plan-card .hub-desc, .hub-featured .hub-desc, .hub-event .hub-desc { display: -webkit-box; }
   .hub-featured { flex-direction: column; }
   .hub-featured .hub-thumb { width: 100%; height: 64px; min-height: 0; }

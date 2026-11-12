@@ -41,7 +41,7 @@ describe('stage_limits', () => {
   });
 
   it('holds exactly the computed numbers for the American climbs, the circuits and the coast road', () => {
-    for (const id of ['mt-washington', 'mt-blue-sky', 'mt-diablo', 'flagstaff', 'richmond-worlds', 'central-park', 'harrogate-worlds', 'pacific-coast', 'kestrel-vale-loop', 'kestrel-vale-grand']) {
+    for (const id of ['mt-washington', 'mt-blue-sky', 'mt-diablo', 'flagstaff', 'richmond-worlds', 'central-park', 'harrogate-worlds', 'pacific-coast', 'kestrel-vale-loop', 'kestrel-vale-grand', 'kestrel-vale-raven-scar', 'kestrel-vale-lakeside']) {
       expect(limits.get(id), id).toEqual(limitsFor(FINISH_STAGES.find((s) => s.id === id)!));
     }
   });

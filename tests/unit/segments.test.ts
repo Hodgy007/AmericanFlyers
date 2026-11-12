@@ -40,6 +40,9 @@ const PINNED: Record<string, [string, string, number, number][]> = {
   'kestrel-vale': [],
   'kestrel-vale-loop': [['kestrel-vale:raven-scar', 'Raven Scar', 6025, 10175]],
   'kestrel-vale-grand': [['kestrel-vale:raven-scar', 'Raven Scar', 6025, 10175]],
+  // The partial routes get the world's segment mapped into their own metres (the climb is 125 m in from the Raven Scar route's start); the lakeside sprint has none.
+  'kestrel-vale-raven-scar': [['kestrel-vale:raven-scar', 'Raven Scar', 125, 4275]],
+  'kestrel-vale-lakeside': [],
 };
 
 describe('segment detection on the built-in stages', () => {

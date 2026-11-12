@@ -7,8 +7,9 @@
 // This file and the worlds that use it import only *types* from ../stages (stages.ts imports the routes at run time:
 // a value import back would be a cycle). Run-time helpers come from ../stageKit and the leaf modules in ../world/.
 
-import { finishArch, GANTRY, namedPlaces, startArch } from '../stageKit';
+import { finishArch, GANTRY, namedPlaces, roadTrace, startArch } from '../stageKit';
 import type { CultureId } from '../world/cultureTypes';
+import type { WaterBody } from '../world/waterTypes';
 import type { LandmarkKind, RacePoints, Scenery, Stage } from '../stages';
 
 // --------------------------------------------------------------- the loop ----
@@ -97,6 +98,8 @@ export function closeLoop(input: readonly LoopPiece[], slackA: number, slackB: n
 export interface World {
   id: string;
   name: string;
+  /** One line on the world, for the hub's world card. */
+  tagline: string;
   /** The lap's length, m. */
   lap: number;
   /** The heading change over one lap, radians (see ClosedLoop). */
@@ -128,55 +131,142 @@ export interface WorldRoute {
   /** "World · Route", so `shortStageName()` gives the route's own name. */
   name: string;
   tagline: string;
-  /** How many laps it is; null = an endless free ride. */
-  laps: number | null;
-  /**
-   * Lap metres where the route starts. Always 0 for now: a route that starts part way round needs the road behind the
-   * start drawn on the real road (course.ts draws it straight), and the elevation, landmarks and places shifted by it.
-   * TODO(milestone 2): support `start` in `routeStage` (elevation s + d minus that at s, landmarks and places moved by -s).
-   */
-  start?: 0;
+  /** Whole laps: how many (from the start); null = an endless free ride. Leave out for a partial route (`length`). */
+  laps?: number | null;
+  /** A partial route's length, m (a route has exactly one of `laps` or `length`). It may run across the lap line. */
+  length?: number;
+  /** Lap metres where the route starts (default 0). Pick a point on a straight: the road behind the start is the real road (course.ts). */
+  start?: number;
 }
 
 /** Laps of signs a free ride is given (it is endless, the list is not): about 185 km. */
 const ENDLESS_LAPS = 12;
 
+/** The road's (x east, z south) at lap metre `u`, as the world's own trace (every 10 m, midpoint rule) has it, interpolated. */
+function tracePoint(headingAt: (d: number) => number, u: number): [number, number] {
+  if (u <= 0) return [0, 0];
+  const step = 10;
+  const t = roadTrace(headingAt, u, step);
+  const f = u / step;
+  const i = Math.min(t.length - 2, Math.floor(f));
+  const k = f - i;
+  return [t[i][0] + (t[i + 1][0] - t[i][0]) * k, t[i][1] + (t[i + 1][1] - t[i][1]) * k];
+}
+
 /** Compiles a route into an ordinary Stage. */
 export function routeStage(world: World, route: WorldRoute): Stage {
   const lap = world.lap;
-  const laps = route.laps;
-  const finish = laps === null ? null : lap * laps;
-  const signLaps = laps ?? ENDLESS_LAPS;
-  const per = <T>(f: (offset: number) => T[]): T[] => Array.from({ length: signLaps }, (_, i) => f(i * lap)).flat();
+  const start = route.start ?? 0;
+  if (!(start >= 0 && start < lap)) throw new Error(`routeStage ${route.id}: start ${start} is outside the lap`);
+  const partial = route.length !== undefined;
+  if (partial === (route.laps !== undefined)) throw new Error(`routeStage ${route.id}: give exactly one of laps and length`);
+  const laps = partial ? undefined : route.laps!;
+  const finish = partial ? route.length! : laps === null ? null : lap * laps!;
+  // A route that does not start on the lap line (or is not whole laps) is "shifted": everything positional is moved.
+  const shifted = start !== 0 || partial;
   const mod = (d: number) => ((d % lap) + lap) % lap;
-  // The start arch, a banner over every sprint, and the line: a finite route's line is each lap's end, an endless one's the gantry every lap.
-  const sprintArches = per((o) => (world.race.sprints ?? []).map((sp) => finishArch(sp.d + o)));
-  const line: LandmarkKind[] = laps === null ? [{ ...GANTRY, first: lap, every: lap }] : Array.from({ length: laps }, (_, i) => finishArch(lap * (i + 1)));
+  const limit = finish ?? ENDLESS_LAPS * lap;
+  const kMax = Math.ceil((limit + start) / lap) + 1;
+  /** The route distances of lap metre `d`, on every lap the route covers (inside [0, finish], or the endless route's signs). */
+  const at = (d: number): number[] => {
+    const out: number[] = [];
+    for (let k = 0; k <= kMax; k++) {
+      const p = d - start + k * lap;
+      if (p >= 0 && (finish === null ? p < limit : p <= finish)) out.push(p);
+    }
+    return out;
+  };
+  const E0 = world.elevationAt(mod(start));
+  const P = tracePoint(world.headingAt, start);
+  // The start arch, a banner over every sprint, and the line: a finite route's line is each lap's end (the end of a partial route), an endless one's the gantry every lap.
+  const sprintArches = (world.race.sprints ?? []).flatMap((sp) => at(sp.d).map((p) => finishArch(p)));
+  const lineAt = mod(-start) || lap;
+  const line: LandmarkKind[] = finish === null ? [{ ...GANTRY, first: lineAt, every: lap }] : partial ? [finishArch(finish)] : Array.from({ length: laps! }, (_, i) => finishArch(lap * (i + 1)));
+  const landmarks: LandmarkKind[] = [startArch, ...line, ...sprintArches.sort((a, b) => a.first - b.first), ...(shifted ? shiftLandmarks(world.landmarks) : copyUntils(world.landmarks))];
   // A stretch of houses along one side has an `until` in lap metres: it is copied to every lap (the rest repeat on their own).
-  const world_ = world.landmarks.flatMap((k) => (k.until === undefined ? [k] : Array.from({ length: signLaps }, (_, i) => ({ ...k, first: k.first + i * lap, until: k.until! + i * lap }))));
-  const landmarks: LandmarkKind[] = [startArch, ...line, ...sprintArches, ...world_];
+  function copyUntils(kinds: LandmarkKind[]): LandmarkKind[] {
+    const signLaps = laps ?? ENDLESS_LAPS;
+    return kinds.flatMap((k) => (k.until === undefined ? [k] : Array.from({ length: signLaps }, (_, i) => ({ ...k, first: k.first + i * lap, until: k.until! + i * lap }))));
+  }
+  // The same for a route that starts part way round: each kind is re-phased by -start and cut to the route.
+  function shiftLandmarks(kinds: LandmarkKind[]): LandmarkKind[] {
+    const out: LandmarkKind[] = [];
+    for (const k of kinds) {
+      const every = Math.min(k.every, lap);
+      const moved: LandmarkKind = k.world ? { ...k, world: { ...k.world, x: k.world.x - P[0], z: k.world.z - P[1], y: k.world.y - E0 } } : k;
+      if (k.until !== undefined) {
+        for (let m = -1; m <= kMax; m++) {
+          let first = k.first + m * lap - start;
+          const until = Math.min(k.until + m * lap - start, limit);
+          if (first < 0) first += Math.ceil(-first / every) * every;
+          if (first <= until) out.push({ ...moved, first, until });
+        }
+      } else {
+        const first = (((k.first - start) % every) + every) % every;
+        if (first <= limit) out.push({ ...moved, first, every, until: finish ?? undefined });
+      }
+    }
+    return out;
+  }
+  const places: [number, string][] = world.places.flatMap(([d, name]) => at(d).map((p): [number, string] => [p, name])).sort((a, b) => a[0] - b[0]);
+  const raceOf = <T extends { d: number }>(list: T[] | undefined): T[] => (list ?? []).flatMap((x) => at(x.d).map((p) => ({ ...x, d: p }))).sort((a, b) => a.d - b.d);
+  // Where the world's elevation, heading and ground are, seen from the route: a point at world (x, z) is at (x - P.x, z - P.z); heights are lowered by E0.
+  const wrap = (d: number) => mod(d + start);
+  const sc = world.scenery;
+  const shiftBody = (b: WaterBody): WaterBody => b.kind === 'sea' ? { ...b, level: b.level - E0 }
+    : b.kind === 'pond' ? { ...b, x: b.x - P[0], z: b.z - P[1], level: b.level - E0 }
+    : { ...b, pts: b.pts.map(([x, z]) => [x - P[0], z - P[1]] as [number, number]), level: b.level - E0 };
+  const scenery: Scenery = start === 0 ? sc : {
+    ...sc,
+    wildHeight: (x, z) => sc.wildHeight(x + P[0], z + P[1]) - E0,
+    rockLine: sc.rockLine - E0,
+    snowLine: sc.snowLine - E0,
+    treeLine: sc.treeLine - E0,
+    screeLine: sc.screeLine === undefined ? undefined : sc.screeLine - E0,
+    // `plain` and the result are heights relative to the road, which the move does not change; only the distance is the world's.
+    roadside: sc.roadside ? (d, lateral, plain) => sc.roadside!(wrap(d), lateral, plain) : undefined,
+    walls: sc.walls ? (d) => sc.walls!(wrap(d)) : undefined,
+    clearing: sc.clearing ? (d) => sc.clearing!(wrap(d)) : undefined,
+    water: sc.water?.map(shiftBody),
+  };
+  const spots = world.crowdSpots;
+  // Whole laps from the start keep `lapLength` (the lap counter, the segments' passes, the crowds' modular spots); a route that does not
+  // start on the line or is not whole laps has no laps to count, so its spots are listed out for its own length.
+  const lapLength = shifted && finish !== null ? undefined : lap;
+  const crowdSpots = !spots ? undefined : start === 0 && !partial ? spots : lapLength !== undefined ? spots.map(mod2(start, lap)) : spots.flatMap(at);
   return {
     id: route.id,
     name: route.name,
     tagline: route.tagline,
     finish,
-    lapLength: lap,
-    elevationAt: (d) => world.elevationAt(mod(d)) - world.elevationAt(0),
-    headingAt: world.headingAt,
-    scenery: world.scenery,
+    lapLength,
+    elevationAt: (d) => world.elevationAt(mod(d + start)) - E0,
+    headingAt: (d) => {
+      const u = start + d;
+      if (u >= 0) return world.headingAt(u);
+      // Behind the start line, round the lap's far end: the same heading `world.turn` further on, so the road behind a route that starts at the line is the loop's own last stretch.
+      const k = Math.ceil(-u / lap);
+      return world.headingAt(u + k * lap) - k * world.turn;
+    },
+    scenery,
     landmarks,
-    signs: namedPlaces(world.places, lap, signLaps),
-    baseAltitude: world.baseAltitude,
+    signs: namedPlaces(places, lap, 1),
+    baseAltitude: world.baseAltitude + E0,
     timeOfDay: world.timeOfDay,
     weather: world.weather,
     wind: world.wind,
     culture: world.culture,
-    crowdSpots: world.crowdSpots,
+    crowdSpots,
     climb: false,
-    race: {
-      sprints: per((o) => (world.race.sprints ?? []).map((s) => ({ ...s, d: s.d + o }))),
-      summits: per((o) => (world.race.summits ?? []).map((s) => ({ ...s, d: s.d + o }))),
+    race: { sprints: raceOf(world.race.sprints), summits: raceOf(world.race.summits) },
+    world: {
+      id: world.id, route: route.id, start, name: world.name, tagline: world.tagline, lap,
+      // The canonical one-lap route from the lap line, which segments.ts finds the world's segments on (once per world).
+      lapStage: () => routeStage(world, { id: `${world.id}-lap`, name: world.name, tagline: '', laps: 1 }),
     },
-    world: { id: world.id, route: route.id, start: 0 },
   };
+}
+
+function mod2(start: number, lap: number) {
+  return (d: number) => (((d - start) % lap) + lap) % lap;
 }

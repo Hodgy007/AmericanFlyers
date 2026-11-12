@@ -5,7 +5,7 @@
 -- The browser talks to these tables through the Neon Data API as the
 -- "authenticated" role; row-level security keeps each rider to their own rows.
 --
--- Schema version: 2026-11-11 rev-2
+-- Schema version: 2026-11-12 rev-1
 -- db/schema.sql is the source of truth for the database and is re-runnable:
 -- every change is written with "if not exists" / "create or replace" / guarded
 -- "do" blocks so applying it again on an existing branch is safe.
@@ -490,7 +490,9 @@ insert into public.stage_limits (stage_id, distance_m, min_finish_s, max_avg_kmh
   ('harrogate-worlds', 27800, 1858, 54),
   ('pacific-coast', 39100, 2563, 55),
   ('kestrel-vale-loop', 15399, 1098, 51),
-  ('kestrel-vale-grand', 46196, 3286, 51)
+  ('kestrel-vale-grand', 46196, 3286, 51),
+  ('kestrel-vale-raven-scar', 4800, 526, 33),
+  ('kestrel-vale-lakeside', 5700, 348, 59)
 on conflict (stage_id) do update set distance_m = excluded.distance_m, min_finish_s = excluded.min_finish_s, max_avg_kmh = excluded.max_avg_kmh;
 
 -- Set by the app when a ride used the demo slider or ?timescale: such rides never count for times.

@@ -168,10 +168,19 @@ export interface Stage {
   /** False for a stage with named places but no climb to speak of (a circuit, a coast road): no painted words, campers or hairpin rails. */
   climb?: false;
   /**
-   * Set for a route inside a world (worlds/types.ts): the world's id, this route's id and where it starts round the world's lap (m).
+   * Set for a route inside a world (worlds/types.ts): the world's id, this route's id and where it starts round the world's lap (m), the lap's length and the canonical lap route.
    * Segment ids and limits are scoped to the world (`<world id>:<slug>`), so a climb ridden on two routes is one leaderboard.
    */
-  world?: { id: string; route: string; start: number };
+  world?: {
+    id: string; route: string; start: number;
+    /** The world's name and one-line description (the hub's world card). */
+    name: string;
+    tagline: string;
+    /** The world's lap, m. */
+    lap: number;
+    /** The world's canonical one-lap route from the lap line: segments.ts finds the world's segments on it, once, and maps them into each route. */
+    lapStage(): Stage;
+  };
 }
 
 // --------------------------------------------------------------- helpers ----

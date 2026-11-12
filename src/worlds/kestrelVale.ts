@@ -1,5 +1,5 @@
 // Kestrel Vale: a fictional limestone valley in the north of England, a cousin of the Harrogate stage, as one closed loop.
-// Its three routes (an endless free ride, one lap, three laps) are windows on that loop (see worlds/types.ts and
+// Its routes (an endless free ride, one lap, three laps, and two that start partway round) are windows on that loop (see worlds/types.ts and
 // docs/developer-guide/kestrel-vale-plan.md). Hollins Cross, the village, is the start and finish; the road runs down to
 // Kestrel Water, over Mill Bridge, across the farmland of Foss Bottom, up the Raven Scar climb with its five hairpins to the
 // rock cutting of Raven Gap (a tunnel in a later milestone), down through Highfold Woods, along Beck Lane and back into the
@@ -257,6 +257,7 @@ const SUMMIT = Math.round(GAP_FROM);
 export const KESTREL_VALE: World = {
   id: 'kestrel-vale',
   name: 'Kestrel Vale',
+  tagline: 'A limestone valley in the north: a village, a lake, a 4.3 km climb with five hairpins and a rock cutting, ridden as endless laps, a loop, a grand tour or just the best bits.',
   lap: KV_LAP,
   turn: LOOP.turn,
   headingAt: LOOP.headingAt,
@@ -305,6 +306,11 @@ export const KESTREL_ROUTE_DEFS: WorldRoute[] = [
   { id: 'kestrel-vale', name: 'Kestrel Vale · Free Ride', tagline: `${BLURB}an endless ride round the whole valley, village, lake, climb and cutting, lap after lap.`, laps: null },
   { id: 'kestrel-vale-loop', name: 'Kestrel Vale · Vale Loop', tagline: `${BLURB}one lap from Hollins Cross: the lakeshore, Foss Bottom, the Raven Scar climb and the cutting, then Highfold Woods back to the village.`, laps: 1 },
   { id: 'kestrel-vale-grand', name: 'Kestrel Vale · Grand Vale', tagline: `${BLURB}three laps of the valley circuit, over Raven Scar each time.`, laps: 3 },
+  // Partway round the lap. Starts and finishes are on straight road: 5,900 is on the Foss Bottom straight (the climb starts at 6,018),
+  // 10,700 is just past the cutting (Raven Gap ends at 10,633; the first Highfold bend is a long, gentle one). 14,000 is Beck Lane's first
+  // straight; 4,300 (lap metres, next lap) is just past the covered bridge, which ends at 4,260.
+  { id: 'kestrel-vale-raven-scar', name: 'Kestrel Vale · Raven Scar', tagline: `${BLURB}the climb alone: from the Foss Bottom straight up Raven Scar's five hairpins to the cutting at Raven Gap. 4.8 km, 277 m up.`, start: 5900, length: 4800 },
+  { id: 'kestrel-vale-lakeside', name: 'Kestrel Vale · Lakeside Sprint', tagline: `${BLURB}a flat dash from Beck Lane through the village, across the line and along Kestrel Water to Mill Bridge. 5.7 km, no climbs.`, start: 14000, length: 5700 },
 ];
 export const KESTREL_ROUTES: Stage[] = KESTREL_ROUTE_DEFS.map((r) => routeStage(KESTREL_VALE, r));
 
