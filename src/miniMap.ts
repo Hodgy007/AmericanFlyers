@@ -25,7 +25,12 @@ const HEADING_RADIUS = 1400; // metres from you to the edge, heading-up
 const ENDLESS_BEHIND = 600; // metres of road shown behind you on a stage with no finish
 const ENDLESS_AHEAD = 4000;
 
-interface Route { stage: Stage; step: number; x: Float32Array; z: Float32Array }
+/**
+ * The sampled road of a stage: every `step` metres from d = 0. A stage with a finish samples [0, finish]. A world's route samples the
+ * world's whole lap instead (a closed loop, the same road on every lap): an endless route draws all of it (`wrap`: the rider's distance
+ * is taken round the lap), a partial route's own span is `span` metres of it, the rest of the lap drawn faintly around it.
+ */
+interface Route { stage: Stage; step: number; x: Float32Array; z: Float32Array; /** Metres of the sample that are the route itself, and how many metres are sampled. */ span: number; extent: number; /** The lap's length, when distances wrap round it (an endless world route). */ wrap: number | null }
 
 function loadMode(): Mode {
   try { return localStorage.getItem(MODE_KEY) === 'heading' ? 'heading' : 'north'; } catch { return 'north'; }
@@ -64,11 +69,15 @@ export class MiniMap {
     this.last = 0;
   }
 
-  /** The route of a stage with a finish, sampled once and kept. */
+  /** The route of a stage with a finish (or of an endless world route: its lap), sampled once and kept. */
   private routeFor(stage: Stage): Route | null {
     if (this.route?.stage === stage) return this.route;
-    const finish = stage.finish;
-    if (finish === null) return null;
+    const lap = stage.world?.lap;
+    const endlessWorld = stage.finish === null && lap !== undefined;
+    if (stage.finish === null && !endlessWorld) return null;
+    const span = stage.finish ?? lap!;
+    // A route inside a world that is shorter than the lap shows the whole lap, with its own span picked out.
+    const finish = lap !== undefined && span < lap ? lap : span;
     ensureRoad(finish + 20);
     const step = Math.max(10, Math.ceil(finish / MAX_ROUTE_POINTS / 10) * 10);
     const n = Math.floor(finish / step) + 2;
@@ -79,7 +88,7 @@ export class MiniMap {
       x[i] = p.x;
       z[i] = p.z;
     }
-    this.route = { stage, step, x, z };
+    this.route = { stage, step, x, z, span, extent: finish, wrap: endlessWorld ? lap! : null };
     return this.route;
   }
 
@@ -107,6 +116,8 @@ export class MiniMap {
     const stage = currentStage();
     const me = roadPoint(data.distance);
     const route = this.routeFor(stage);
+    // Where you are along the sampled road (an endless world route's lap repeats).
+    const here = route?.wrap ? ((data.distance % route.wrap) + route.wrap) % route.wrap : data.distance;
 
     // The polyline to draw, as ground-plane points with the distance of each.
     let pts: { x: number; z: number; d: number }[];
@@ -167,16 +178,25 @@ export class MiniMap {
       }
       if (started) ctx.stroke();
     };
-    let split = pts.findIndex((p) => p.d >= data.distance);
+    // A partial world route: the rest of the lap first, faint, then the route over it.
+    let end = pts.length;
+    if (route && route.span < route.extent) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(86, 100, 138, 0.45)';
+      trace(0, pts.length);
+      end = Math.min(pts.length, Math.ceil(route.span / route.step) + 1);
+    }
+    let split = pts.findIndex((p) => p.d >= here);
     if (split < 0) split = pts.length;
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#56648a';
-    trace(0, Math.min(pts.length, split + 1));
+    trace(0, Math.min(end, split + 1));
     ctx.strokeStyle = '#dbe6ff';
-    trace(Math.max(0, split - 1), pts.length);
+    trace(Math.max(0, split - 1), end);
 
     // Markers: sprints, summits and the finish.
     const at = (d: number) => {
+      if (route?.wrap) d = ((d % route.wrap) + route.wrap) % route.wrap;
       const p = route ? (() => { const i = Math.min(route.x.length - 1, d / route.step); const a = Math.floor(i); const t = i - a; const b = Math.min(route.x.length - 1, a + 1); return { x: route.x[a] + (route.x[b] - route.x[a]) * t, z: route.z[a] + (route.z[b] - route.z[a]) * t }; })() : roadPoint(d);
       return project(p.x, p.z);
     };

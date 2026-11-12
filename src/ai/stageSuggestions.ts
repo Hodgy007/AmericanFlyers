@@ -19,4 +19,6 @@ export const STAGE_SUGGESTIONS: readonly { id: string; name: string; about: stri
   { id: 'pacific-coast', name: 'Pacific Coast Highway', about: '39.1 km. 39 km of California Highway 1 through Big Sur: the cliffs above the Pacific, Bixby Creek Bridge, Hurricane Point and the road to Bi' },
   { id: 'kestrel-vale-loop', name: 'Kestrel Vale · Vale Loop', about: '15.4 km. Kestrel Vale, a limestone valley in the north: one lap from Hollins Cross: the lakeshore, Foss Bottom, the Raven Scar climb and the' },
   { id: 'kestrel-vale-grand', name: 'Kestrel Vale · Grand Vale', about: '46.2 km. Kestrel Vale, a limestone valley in the north: three laps of the valley circuit, over Raven Scar each time.' },
+  { id: 'kestrel-vale-raven-scar', name: 'Kestrel Vale · Raven Scar', about: '4.8 km. Kestrel Vale, a limestone valley in the north: the climb alone: from the Foss Bottom straight up Raven Scar\'s five hairpins to the c' },
+  { id: 'kestrel-vale-lakeside', name: 'Kestrel Vale · Lakeside Sprint', about: '5.7 km. Kestrel Vale, a limestone valley in the north: a flat dash from Beck Lane through the village, across the line and along Kestrel Wat' },
 ];

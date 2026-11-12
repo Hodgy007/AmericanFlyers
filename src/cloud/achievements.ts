@@ -91,6 +91,8 @@ export function achievements(acts: Activity[], ftp: FtpEntry[], riderKg: number,
   first('🫖', 'Harrogate Worlds', 'Finish the 2019 World Championships circuit in Harrogate, over the Oak Beck climb and up Parliament Street.', (a) => a.finished && a.stage_id === 'harrogate-worlds');
   first('🌊', 'Pacific Coast', 'Ride California Highway 1 through Big Sur, over Bixby Creek Bridge, to Big Sur village.', (a) => a.finished && a.stage_id === 'pacific-coast');
   first('🪨', 'Vale Loop', 'Ride a full lap of Kestrel Vale: the lake, Raven Scar and the cutting at Raven Gap.', (a) => a.finished && a.stage_id === 'kestrel-vale-loop');
+  first('🧗', 'Raven Scar', 'Ride the Raven Scar route: up the five hairpins to the cutting at Raven Gap.', (a) => a.finished && a.stage_id === 'kestrel-vale-raven-scar');
+  first('🚤', 'Lakeside Sprint', 'Finish the Lakeside Sprint: Beck Lane, the village and Kestrel Water to Mill Bridge.', (a) => a.finished && a.stage_id === 'kestrel-vale-lakeside');
   first('🏞', 'Grand Vale', 'Finish three laps of Kestrel Vale, over Raven Scar each time.', (a) => a.finished && a.stage_id === 'kestrel-vale-grand');
   first('🧪', 'Tested', 'Complete a ramp FTP test.', (a) => a.workout_name === RAMP_TEST_NAME);
   first('⚡', 'Sprinter', 'Hold 800 W for 5 seconds.', (a) => (a.best_power?.['5'] ?? 0) >= 800);

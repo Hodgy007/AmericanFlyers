@@ -71,9 +71,39 @@ const cache = new WeakMap<Stage, Segment[]>();
 export function segmentsFor(stage: Stage): Segment[] {
   const hit = cache.get(stage);
   if (hit) return hit;
-  const out = findSegments(stage);
+  const out = stage.world ? worldSegments(stage, stage.world) : findSegments(stage);
   cache.set(stage, out);
   return out;
+}
+
+/** A world's segments in lap metres, found once on its canonical one-lap route (so every route of the world shares ids and geometry). */
+const worldCache = new Map<string, Segment[]>();
+
+/**
+ * A route inside a world: the world's segments, mapped into the route. A passage counts only if the route covers it whole (on each
+ * lap it covers), with `start` and `end` in the route's metres; a climb the route only touches is left out. The loop and the three-lap
+ * route therefore get exactly the segments they always had.
+ */
+function worldSegments(stage: Stage, world: NonNullable<Stage['world']>): Segment[] {
+  const finish = stage.finish;
+  if (finish === null) return [];
+  let canon = worldCache.get(world.id);
+  if (!canon) {
+    canon = findSegments(world.lapStage());
+    worldCache.set(world.id, canon);
+  }
+  const eps = 1e-6;
+  const out: Segment[] = [];
+  for (const g of canon) {
+    // Passage k lies at lap metres [g.start + k lap, g.end + k lap], i.e. at route metres minus the route's start.
+    const kLo = Math.ceil((world.start - g.start - eps) / world.lap);
+    const kHi = Math.floor((finish + world.start - g.end + eps) / world.lap);
+    const passes = kHi - kLo + 1;
+    if (passes < 1) continue;
+    const start = g.start + kLo * world.lap - world.start;
+    out.push({ ...g, stageId: stage.id, start, end: g.end + kLo * world.lap - world.start, lap: passes > 1 ? world.lap : undefined, passes });
+  }
+  return out.sort((a, b) => a.start - b.start);
 }
 
 function findSegments(stage: Stage): Segment[] {

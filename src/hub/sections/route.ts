@@ -6,7 +6,7 @@ import { climbById } from '../../ai/climbs';
 import { raceTime } from '../../ghost';
 import { drawProfile } from '../../profile';
 import { allStages } from '../../routes/library';
-import { segmentsFor } from '../../segments';
+import { segmentsFor, shortStageName } from '../../segments';
 import type { Stage } from '../../stages';
 import { climbText, distanceText, pickStage, stageFigures } from '../data';
 import { button, drawWhenVisible, forgetCanvas, h } from '../dom';
@@ -26,6 +26,9 @@ export const mount: SectionMount = (root, ctx) => {
   root.replaceChildren(actions, grid, mineHead, mine, credit);
 
   const cards = new Map<string, HTMLElement>();
+  /** A world's routes are one card with a chip each: the chips by stage id, and each world card's routes (for the selection and its Race and KOM shortcuts). */
+  const chips = new Map<string, HTMLElement>();
+  const worldCards = new Map<HTMLElement, { stages: Stage[]; sync(): void }>();
   const canvases: HTMLCanvasElement[] = [];
 
   // The Climb guide: one panel at a time, shown as a full-width row under the stage's card. Its module loads on the first click.
@@ -86,6 +89,70 @@ export const mount: SectionMount = (root, ctx) => {
     return el;
   }
 
+  /** One card for a world (Kestrel Vale): its profile, a line about it and a chip per route; a chip picks that route's stage as a normal card does. */
+  function worldCard(stages: Stage[]): HTMLElement {
+    const w = stages[0].world!;
+    const lapStage = w.lapStage();
+    const canvas = h('canvas', { class: 'hub-thumb', 'aria-hidden': 'true' });
+    canvases.push(canvas);
+    drawWhenVisible(canvas, () => drawProfile(canvas, null, [0, w.lap], lapStage.elevationAt));
+    const metaId = `hub-world-meta-${w.id}`;
+    const list = h('div', { class: 'hub-routes', role: 'group', 'aria-label': `${w.name} routes`, 'aria-describedby': metaId });
+    for (const stage of stages) {
+      const fig = stageFigures(stage);
+      const length = fig.lengthM === null ? '∞' : distanceText(fig.lengthM, imp());
+      const climb = `${climbText(fig.climbM, imp())}${fig.lengthM === null ? ' per 20 km' : ''}`;
+      const chip = button('', () => ctx.pick(pickStage(ctx.choice(), stage.id)), 'hub-route', {
+        'data-fkey': `stage-${stage.id}`, 'data-world': w.id, 'aria-pressed': 'false',
+        title: stage.tagline,
+        'aria-label': `${stage.name}: ${fig.lengthM === null ? 'endless' : length}, ${climb} climbing`,
+      });
+      chip.append(h('span', { class: 'hub-route-name', text: shortStageName(stage.name) }), h('span', { class: 'hub-route-meta', text: `${length} · ${climb}` }));
+      chips.set(stage.id, chip);
+      list.append(chip);
+    }
+    // The Race and KOM shortcuts act on the world's chosen route (else its first route with a finish).
+    const race = button('🏁 Race it', () => ctx.deps.race(active()), 'hub-mini hub-race', { 'data-fkey': `race-${w.id}` });
+    const kom = button('', () => {
+      const stage = active();
+      import('../../segmentBoardUi').then((m) => m.openStageSegments(stage, imp(), () => ctx.deps.dialogs.account())).catch(() => ctx.deps.toast('Couldn’t open the KOM segments just now.'));
+    }, 'hub-mini hub-race', { 'data-fkey': `kom-${w.id}` });
+    const foot = h('div', { class: 'hub-card-foot' });
+    const bests = h('span', { class: 'hub-chip gold', hidden: '' });
+    foot.append(bests, race, kom);
+    function active(): Stage {
+      const c = ctx.choice();
+      return stages.find((s) => s.id === c.stageId && !c.workoutId) ?? stages.find((s) => s.finish !== null) ?? stages[0];
+    }
+    function sync() {
+      const stage = active();
+      const segs = segmentsFor(stage);
+      race.hidden = stage.finish === null;
+      race.title = `Skip the ride mode and race the pro teams over ${stage.name} now`;
+      race.setAttribute('aria-label', `Race the pro teams over ${stage.name}`);
+      kom.hidden = segs.length === 0;
+      kom.textContent = `⛰ KOM ×${segs.length}`;
+      kom.title = `The big climbs on ${stage.name}: who holds the KOM, and your best`;
+      kom.setAttribute('aria-label', `KOM segments on ${stage.name}: ${segs.map((g) => g.name).join(', ')}`);
+      const best = ctx.summary()?.bests[stage.id];
+      bests.hidden = !best;
+      if (best) { bests.textContent = `🏆 ${raceTime(best.finishS)}`; bests.title = `Your best whole-stage time on ${shortStageName(stage.name)}`; }
+    }
+    const el = h('article', { class: 'hub-card hub-stage hub-world' },
+      canvas,
+      h('div', { class: 'hub-card-body' },
+        h('h3', { class: 'hub-world-name', text: w.name }),
+        h('p', { class: 'hub-meta', id: metaId, text: `${stages.length} routes · one valley` }),
+        h('p', { class: 'hub-desc', text: w.tagline }),
+        list, foot),
+      h('span', { class: 'hub-tick', 'aria-hidden': 'true', text: '✓ Chosen' }),
+    );
+    for (const stage of stages) cards.set(stage.id, el);
+    worldCards.set(el, { stages, sync });
+    sync();
+    return el;
+  }
+
   function tourCard(): HTMLElement {
     const pick = button('🏆 Hell of the West tour', () => ctx.deps.dialogs.tour(), 'hub-pick', { 'data-fkey': 'tour' });
     return h('article', { class: 'hub-card hub-stage hub-tour' },
@@ -101,9 +168,19 @@ export const mount: SectionMount = (root, ctx) => {
     for (const c of canvases) forgetCanvas(c);
     canvases.length = 0;
     cards.clear();
+    chips.clear();
+    worldCards.clear();
     const open = guide;
     const stages = allStages();
-    grid.replaceChildren(tourCard(), ...stages.filter((s) => !s.uploaded).map(card));
+    // A world's routes are one card, where its first route would be.
+    const built = new Set<string>();
+    const tiles = stages.filter((s) => !s.uploaded).flatMap((s) => {
+      if (!s.world) return [card(s)];
+      if (built.has(s.world.id)) return [];
+      built.add(s.world.id);
+      return [worldCard(stages.filter((o) => o.world?.id === s.world!.id))];
+    });
+    grid.replaceChildren(tourCard(), ...tiles);
     const own = stages.filter((s) => s.uploaded);
     mine.replaceChildren(...own.map(card));
     if (!own.length) mine.append(h('p', { class: 'hub-note', text: 'Upload a .gpx file from Strava, Komoot, RideWithGPS or Garmin and ride it here. Routes are kept in this browser, and in your account when you’re signed in.' }));
@@ -118,9 +195,15 @@ export const mount: SectionMount = (root, ctx) => {
   function updateSelection() {
     const c = ctx.choice();
     for (const [id, el] of cards) {
+      if (worldCards.has(el)) continue;
       const on = id === c.stageId && !c.workoutId;
       el.classList.toggle('selected', on);
       el.querySelector('.hub-pick')?.setAttribute('aria-pressed', String(on));
+    }
+    for (const [id, chip] of chips) chip.setAttribute('aria-pressed', String(id === c.stageId && !c.workoutId));
+    for (const [el, w] of worldCards) {
+      el.classList.toggle('selected', !c.workoutId && w.stages.some((s) => s.id === c.stageId));
+      w.sync();
     }
   }
 

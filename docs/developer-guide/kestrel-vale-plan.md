@@ -1,6 +1,6 @@
 # Kestrel Vale: plan for a fictional home world
 
-Status: **milestone 1 built** (the world, three routes, world-scoped segment ids, limit rows and tests; see "Worlds and routes" in stages-and-gpx.md). Milestones 2 to 5 are still plans. The rest of this page is the original plan; where the code differs (for example the climb's segment is named for the summit "Raven Scar", and a route has `laps` rather than `length`), the code wins.
+Status: **milestones 1 and 2 built** (the world, five routes, world-scoped segments defined once per world, routes that start partway round the lap with the real road behind the start, the hub's world card, the whole-lap mini-map, limit rows and tests; see "Worlds and routes" in stages-and-gpx.md). Milestones 3 to 5 are still plans. The rest of this page is the original plan; where the code differs (for example the climb's segment is named for the summit "Raven Scar", and a route has `laps` or `length`, rather than only `length`), the code wins.
 
 Original status line: **plan, not built.** This page describes a Zwift-style home world for American Flyers: a closed circuit with a village start, a climb, a tunnel and a lake, with named routes inside that world and a badge for each route. It covers the world, the data model for routes, the first pull request, what to build in code and what to model, the risks and the milestones.
 

@@ -1,7 +1,8 @@
 // The road being ridden, for the current stage: elevation, grade, heading,
 // and a cached ground-plane centreline integrated from the heading in 2 m
 // steps. For d ≤ 0 the road runs straight back from the start, so there is
-// road behind the start line.
+// road behind the start line (on a world's route it follows the world's own
+// loop back, see `ensureRoad`).
 
 import { stageById, type Stage } from './stages';
 
@@ -31,7 +32,8 @@ export function gradeAt(d: number): number {
 
 /** Direction of travel in radians on the ground plane (0 = +x). */
 export function headingAt(d: number): number {
-  return d <= 0 ? stage.headingAt(0) : stage.headingAt(d);
+  // A world's route has real road behind its start (the loop's, wrapping round the lap); every other stage runs straight back.
+  return d <= 0 && !stage.world ? stage.headingAt(0) : stage.headingAt(d);
 }
 
 // ---------------------------------------------------------- centreline ----
@@ -47,9 +49,22 @@ export const roadZ: number[] = [0];
 export function ensureRoad(d: number) {
   if (roadX.length === 1) {
     // Sample 0 sits so that the road passes through the origin at d = 0.
-    const h = headingAt(0);
-    roadX[0] = Math.cos(h) * ROAD_ORIGIN;
-    roadZ[0] = Math.sin(h) * ROAD_ORIGIN;
+    if (stage.world) {
+      // Integrate the road behind the start backwards from the origin: the same steps forward from sample 0 land on (0, 0).
+      let bx = 0, bz = 0;
+      const n = Math.round(-ROAD_ORIGIN / ROAD_STEP);
+      for (let i = 0; i < n; i++) {
+        const h = headingAt(ROAD_ORIGIN + (i + 0.5) * ROAD_STEP);
+        bx += Math.cos(h) * ROAD_STEP;
+        bz += Math.sin(h) * ROAD_STEP;
+      }
+      roadX[0] = -bx;
+      roadZ[0] = -bz;
+    } else {
+      const h = headingAt(0);
+      roadX[0] = Math.cos(h) * ROAD_ORIGIN;
+      roadZ[0] = Math.sin(h) * ROAD_ORIGIN;
+    }
   }
   while (ROAD_ORIGIN + (roadX.length - 1) * ROAD_STEP < d + ROAD_STEP) {
     const i = roadX.length - 1;
