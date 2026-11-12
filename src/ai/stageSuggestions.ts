@@ -17,4 +17,6 @@ export const STAGE_SUGGESTIONS: readonly { id: string; name: string; about: stri
   { id: 'central-park', name: 'Central Park Loop', about: '29.4 km. Three counter-clockwise laps of Park Drive: Cat Hill, the Reservoir, Harlem Hill, with Manhattan standing round the park.' },
   { id: 'harrogate-worlds', name: 'Harrogate Worlds Circuit', about: '27.8 km. Two laps of the 2019 World Championships finishing circuit: Otley Road, the Oak Beck valley between its dry-stone walls, and the dr' },
   { id: 'pacific-coast', name: 'Pacific Coast Highway', about: '39.1 km. 39 km of California Highway 1 through Big Sur: the cliffs above the Pacific, Bixby Creek Bridge, Hurricane Point and the road to Bi' },
+  { id: 'kestrel-vale-loop', name: 'Kestrel Vale · Vale Loop', about: '15.4 km. Kestrel Vale, a limestone valley in the north: one lap from Hollins Cross: the lakeshore, Foss Bottom, the Raven Scar climb and the' },
+  { id: 'kestrel-vale-grand', name: 'Kestrel Vale · Grand Vale', about: '46.2 km. Kestrel Vale, a limestone valley in the north: three laps of the valley circuit, over Raven Scar each time.' },
 ];

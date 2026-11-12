@@ -43,7 +43,9 @@ function rows(table: string): string[][] {
 
 describe('segment_limits', () => {
   const limits = new Map(rows('segment_limits').map(([id, stage, len, min, kmh]) => [id, { stageId: stage, lengthM: +len, minS: +min, maxAvgKmh: +kmh }]));
-  const all = STAGES.flatMap((s) => segmentsFor(s).map((seg) => ({ stage: s, seg })));
+  // A world's routes share segment ids (`<world id>:<slug>`): one row each, worked out on the first route that has the segment.
+  const seen = new Set<string>();
+  const all = STAGES.flatMap((s) => segmentsFor(s).map((seg) => ({ stage: s, seg }))).filter(({ seg }) => (seen.has(seg.id) ? false : (seen.add(seg.id), true)));
 
   it('has a row for every segment of every built-in stage, and nothing else', () => {
     expect([...limits.keys()].sort()).toEqual(all.map((x) => x.seg.id).sort());

@@ -29,12 +29,13 @@ describe('which stage has which road', () => {
       'central-park': 'city-park',
       'harrogate-worlds': 'alpine',
       'pacific-coast': 'us-highway',
+      'kestrel-vale': 'alpine', 'kestrel-vale-loop': 'alpine', 'kestrel-vale-grand': 'alpine',
     };
     for (const s of STAGES) expect(roadStyleOf(s), s.id).toBe(want[s.id]);
   });
-  it('uses stone parapets on Stelvio, Tourmalet, Ventoux and the Tour of the Moon, and dry-stone walls in Harrogate, only', () => {
+  it('uses stone parapets on Stelvio, Tourmalet, Ventoux and the Tour of the Moon, and dry-stone walls in Harrogate and Kestrel Vale, only', () => {
     const stone = STAGES.filter((s) => barrierKind(s) === 'stone').map((s) => s.id);
-    expect(stone.sort()).toEqual(['harrogate-worlds', 'hotw-tour-of-the-moon', 'stelvio', 'tourmalet', 'ventoux']);
+    expect(stone.sort()).toEqual(['harrogate-worlds', 'hotw-tour-of-the-moon', 'kestrel-vale', 'kestrel-vale-grand', 'kestrel-vale-loop', 'stelvio', 'tourmalet', 'ventoux']);
   });
   it('defaults to the US highway for a stage with no road style (an uploaded route)', () => {
     expect(roadStyleOf({ scenery: { ...stageById('heartland').scenery, road: undefined } })).toBe('us-highway');
