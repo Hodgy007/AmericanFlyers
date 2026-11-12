@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { slowFrames } from './slowFrames';
 
 // The ⏹ End button on the ride screen, and ☰ Menu → ⏹ End ride.
 
@@ -10,6 +11,7 @@ async function ride(page: Page, timescale = 1) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await mockNeon(page, { signedIn: true });
+  await slowFrames(page);
   await page.addInitScript(() => {
     localStorage.setItem('americanflyers.signedIn', '1');
     localStorage.setItem('americanflyers.onboarded', '1');

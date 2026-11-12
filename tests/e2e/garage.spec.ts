@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { slowFrames } from './slowFrames';
 test('the garage opens again after it has been closed (fresh preview canvas each time)', async ({ page }) => {
   test.setTimeout(120_000);
   // The default small viewport: nothing here depends on the window's size, and at 1366x768 every software-rendered frame (hub scene plus the garage turntable) is several times dearer.
@@ -7,6 +8,7 @@ test('the garage opens again after it has been closed (fresh preview canvas each
   page.on('pageerror', (e) => logs.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') logs.push('error: ' + m.text()); });
   await mockNeon(page, { signedIn: true });
+  await slowFrames(page, 250); // each opening still builds a real preview and its WebGL context; it just draws fewer frames in software
   await page.addInitScript(() => { localStorage.setItem('americanflyers.signedIn', '1'); localStorage.setItem('americanflyers.onboarded', '1'); });
   await page.goto('/');
   await expect(page.locator('#hub-name')).not.toHaveText('Guest rider', { timeout: 30_000 });
