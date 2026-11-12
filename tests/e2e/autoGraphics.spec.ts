@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { slowFrames } from './slowFrames';
 
 // Auto graphics: starts on Ultra (a software renderer normally starts on Low, so ?softgpu=off pretends
 // this browser has a real GPU), notices jerky frames (?jank= makes them on purpose), steps down with a
@@ -86,6 +87,7 @@ test('Auto starts from what it remembered, and re-tests one tier higher every th
   const now = Date.now();
   const saved = { tier: 'medium', scale: 0.85, at: now - 1000, tested: now - 1000, sessions: 0, gpu };
   await setup(page, { 'americanflyers.graphicsAuto': JSON.stringify(saved) });
+  await slowFrames(page); // only the tier chosen at start-up is read (adapt=off): no need to draw the hub's scene five times at full rate
   await page.goto('/?softgpu=off&adapt=off');
   await expect(page.locator('#hub')).toBeVisible();
   expect(await gfx(page)).toMatchObject({ tier: 'medium', scale: 0.85, remembered: 'medium', retest: false });
