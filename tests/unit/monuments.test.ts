@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { STAGES, stageById, type LandmarkKind } from '../../src/stages';
 import { mountainHeight } from '../../src/world/flatirons';
 import { Kit, FAR_FOG_SCALE, farMaterial, triangleCount } from '../../src/world/monumentKit';
+import { JETTY_HEIGHT, MARKET_CROSS_HEIGHT, VIADUCT } from '../../src/world/monumentTypes';
 import { MONUMENT_IDS, buildMonument, type MonumentId } from '../../src/world/monuments';
 
 const TRI_BUDGET = 6000;
@@ -220,5 +221,63 @@ describe('monuments with a modelled version', () => {
       expect(MONUMENT_IDS, id).toContain(id);
       expect(existsSync(`public/models/${m!.file}`), m!.file).toBe(true);
     }
+  });
+});
+
+describe("Kestrel Vale's code-built dressing (monumentVale.ts)", () => {
+  const size = (id: MonumentId, options = {}) => bounds(buildMonument(id, options));
+
+  it('the market cross is a small stone monument: about 8 m tall on a 5 m base, under 400 triangles, as tall as the stage says', () => {
+    const g = buildMonument('market-cross');
+    expect(triangleCount(g)).toBeLessThan(400);
+    const b = bounds(g);
+    expect(b.max.y).toBeCloseTo(MARKET_CROSS_HEIGHT, 1);
+    expect(b.getSize(new THREE.Vector3()).x).toBeLessThan(6);
+  });
+
+  it('the viaduct is a repeating arch module, 13 bays and 195 m long, 20 m high, under 2,500 triangles', () => {
+    const g = buildMonument('stone-viaduct');
+    expect(triangleCount(g)).toBeLessThan(2500);
+    const b = bounds(g);
+    expect(Math.abs(b.getSize(new THREE.Vector3()).x - VIADUCT.bays * VIADUCT.module), 'the parapet and cornice overhang a little').toBeLessThan(2);
+    expect(b.max.y).toBeCloseTo(VIADUCT.height, 1);
+    expect(b.getSize(new THREE.Vector3()).z, 'a deck about 6 m wide').toBeLessThan(8);
+    // Two more bays are two more modules: about 1/13th more triangles each.
+    const more = triangleCount(buildMonument('stone-viaduct', { bays: 15 }));
+    expect(more).toBeGreaterThan(triangleCount(g));
+    expect(Math.abs(size('stone-viaduct', { bays: 15 }).getSize(new THREE.Vector3()).x - 15 * VIADUCT.module)).toBeLessThan(2);
+  });
+
+  it("builds each pier down to the ground it is given (three metres under it), and none where the land is above the springing line", () => {
+    const flat = Array.from({ length: VIADUCT.bays + 1 }, () => 4);
+    expect(size('stone-viaduct', { ground: flat }).min.y).toBeCloseTo(4 - 3, 1);
+    const deep = Array.from({ length: VIADUCT.bays + 1 }, (_, i) => (i === 6 ? -9 : 4));
+    expect(size('stone-viaduct', { ground: deep }).min.y).toBeCloseTo(-9 - 3, 1);
+    // Land up at the deck (the gill's rim): no pier at all, so the lowest part is the arched wall's feet, well above the footings.
+    const high = Array.from({ length: VIADUCT.bays + 1 }, () => VIADUCT.deck);
+    expect(size('stone-viaduct', { ground: high }).min.y).toBeGreaterThan(5);
+    // The viaduct's own piers: fewer triangles with no piers than with them.
+    expect(triangleCount(buildMonument('stone-viaduct', { ground: high }))).toBeLessThan(triangleCount(buildMonument('stone-viaduct', { ground: flat })));
+  });
+
+  it('the jetty is 24 m of deck on piles 3.5 m into the water, with three boats, under 2,500 triangles, and stands on its water line', () => {
+    const g = buildMonument('lake-jetty');
+    expect(triangleCount(g)).toBeLessThan(2500);
+    expect(triangleCount(g), 'piles, boards and three hulls').toBeGreaterThan(900);
+    const b = bounds(g);
+    expect(b.min.y).toBeCloseTo(-3.5, 1);
+    expect(b.max.y).toBeCloseTo(JETTY_HEIGHT, 1);
+    expect(b.min.z).toBeCloseTo(0, 1); // the root at the shore
+    expect(b.max.z).toBeGreaterThan(23);
+    expect(b.max.z).toBeLessThan(26);
+    // The deck is just above the water (y = 0): a board's top at 0.75 m or so, nothing floating higher except mast and rail.
+    let deckTops = 0;
+    g.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const p = m.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) if (Math.abs(p.getY(i) - 0.74) < 0.03 && p.getZ(i) > 3 && p.getZ(i) < 20 && Math.abs(p.getX(i)) < 1.3) deckTops++;
+    });
+    expect(deckTops, 'boards at deck height').toBeGreaterThan(40);
   });
 });

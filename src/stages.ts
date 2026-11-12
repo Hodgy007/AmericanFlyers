@@ -30,6 +30,7 @@ import centralParkRoute from './routes/real/central-park';
 import harrogateRoute from './routes/real/harrogate-worlds';
 import pacificRoute from './routes/real/pacific-coast';
 import { sinkInto } from './world/waterTypes';
+import type { Dressing } from './world/dressingTypes';
 import { skylineHeight, skylineTowers } from './world/skyline';
 import { KESTREL_ROUTES } from './worlds/kestrelVale';
 import { GANTRY, finishArch, monumentAt, namedPlaces, pchip, perLap, roadLocator, roadTrace, startArch, terraceRow } from './stageKit';
@@ -60,6 +61,11 @@ export interface LandmarkBase {
    * `first` and `reach` still say when it is in range, by course distance.
    */
   world?: { x: number; z: number; y: number; yaw: number };
+  /**
+   * Only placed while the rider is within this many metres of it (straight line): for a `world` landmark that stands well away from the road and is built
+   * on terrain that only exists near the rider (the terrain is 1,150 m deep), so it is never seen hanging over nothing.
+   */
+  within?: number;
 }
 
 /**
@@ -102,6 +108,8 @@ export interface Scenery {
    * keep it cheap, and key it off `d` and `lateral` only.
    */
   roadside?(d: number, lateral: number, plain: number): number | null;
+  /** Field walls and bunting beside and across the road (world/dressingTypes.ts, drawn per road chunk by roadExtras.ts). Only Kestrel Vale has any. */
+  dressing?: Dressing;
   /** How much clearer than the usual the air is: the haze distance is multiplied by this (default 1). Dry Colorado air lets a canyon's far wall and floor read. */
   clearAir?: number;
   /** On High and Ultra (the post chain) blend the haze as Low does, in display colour with Low's thickness, so the distance is not paler there. Off by default: other stages keep the post chain's own look. */

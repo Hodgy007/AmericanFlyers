@@ -5,8 +5,15 @@ import { ROAD_ORIGIN, roadPoint, setStage } from '../../src/course';
 import { crowdAt } from '../../src/world/crowdZones';
 import { STAGES, stageById, type Stage } from '../../src/stages';
 import { segmentsFor } from '../../src/segments';
-import { pondDistance, type PondBody } from '../../src/world/waterTypes';
-import { KESTREL_ROUTE_DEFS, KESTREL_ROUTES, KESTREL_VALE, KV, KV_LAKE, KV_LAP } from '../../src/worlds/kestrelVale';
+import { pondDistance, riverDistance, type PondBody, type RiverBody } from '../../src/world/waterTypes';
+import { planFieldWalls, WALL_SECTION } from '../../src/world/fieldWalls';
+import { planBunting } from '../../src/world/bunting';
+import { SCENERY } from '../../src/world/scenery';
+import { fieldWallGeometry } from '../../src/world/fieldWalls';
+import { triangleCount } from '../../src/world/monumentKit';
+import * as THREE from 'three';
+import { VIADUCT } from '../../src/world/monumentTypes';
+import { KESTREL_ROUTE_DEFS, KESTREL_ROUTES, KESTREL_VALE, KV, KV_BECK, KV_LAKE, KV_LAP } from '../../src/worlds/kestrelVale';
 import { closeLoop, routeStage } from '../../src/worlds/types';
 
 const e = KESTREL_VALE.elevationAt;
@@ -105,7 +112,7 @@ describe('the Kestrel Vale loop', () => {
       }
     }
     expect(inside).toBeGreaterThan(40);
-    expect(sc.water).toEqual([KV_LAKE]);
+    expect(sc.water).toEqual([KV_LAKE, KV_BECK]); // the lake, then its outflow, Mill Beck
   });
 
   it('keeps the road corridor and its verge level where the lake is near (the hook never lowers the road)', () => {
@@ -113,6 +120,82 @@ describe('the Kestrel Vale loop', () => {
       expect(KV.roadside(u, 0, 0), `${u} m`).toBeCloseTo(0, 6);
       expect(KV.roadside(u, 6, 0)).toBeCloseTo(0, 6);
     }
+  });
+
+  describe('Mill Beck, the lake’s outflow under Mill Bridge', () => {
+    const beck = KV_BECK as RiverBody;
+    const sc = KESTREL_VALE.scenery;
+    const U = KV.bridge;
+    const along = (): [number, number][] => { // the centreline, every 5 m
+      const out: [number, number][] = [];
+      for (let i = 0; i + 1 < beck.pts.length; i++) {
+        const [ax, az] = beck.pts[i], [bx, bz] = beck.pts[i + 1];
+        const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 5);
+        for (let k = 0; k < n; k++) out.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
+      }
+      return out;
+    };
+
+    it('is a river from inside the lake at the lake’s level (a hair above it), 14 m wide, which crosses the road square at the covered bridge', () => {
+      expect(beck.kind).toBe('river');
+      expect(pondDistance(KV_LAKE, beck.pts[0][0], beck.pts[0][1])).toBeLessThan(-8); // it starts well inside the lake
+      expect(beck.level).toBeGreaterThan(KV_LAKE.level);
+      expect(beck.level).toBeLessThan(KV_LAKE.level + 0.5);
+      const r = KV.roadPoint(U);
+      expect(riverDistance(beck, r.x, r.z), 'the road centre is inside the water').toBeLessThan(-5);
+      // Square: the river's direction at the road is across the road's tangent.
+      const nearest = beck.pts.reduce((best, p, i) => (Math.hypot(p[0] - r.x, p[1] - r.z) < Math.hypot(beck.pts[best][0] - r.x, beck.pts[best][1] - r.z) ? i : best), 0);
+      const [p0, p1] = [beck.pts[Math.max(0, nearest - 1)], beck.pts[Math.min(beck.pts.length - 1, nearest + 1)]];
+      const dir = [p1[0] - p0[0], p1[1] - p0[1]], len = Math.hypot(dir[0], dir[1]);
+      expect(Math.abs((dir[0] * r.tx + dir[1] * r.tz) / len), 'cosine of the angle with the road').toBeLessThan(0.15);
+    });
+
+    it('is under the bridge’s deck: the road at Mill Bridge is at least 5 m above the water, and the ground under the deck is dug out below the water', () => {
+      expect(e(U) - 0.15 - beck.level, 'deck above the water').toBeGreaterThan(5);
+      const road = e(U) - 0.15;
+      for (const lat of [-8, -4, 0, 4, 8]) {
+        const rel = KV.roadside(U, lat, 0)!;
+        expect(road + rel, `ground under the deck at ${lat}`).toBeLessThan(beck.level - 1);
+      }
+      // ... but not along the road either side of the channel: the verge keeps the road's own level.
+      for (const du of [-60, -30, 30, 60]) expect(KV.roadside(U + du, 0, 0) ?? 0, `${du}`).toBeCloseTo(0, 6);
+      for (const du of [-60, -30, 30, 60]) expect(KV.roadside(U + du, 6, 0) ?? 0, `${du}`).toBeCloseTo(0, 6);
+    });
+
+    it('keeps the road at least 15 m from the beck everywhere except at the bridge (±30 m)', () => {
+      for (let i = 0; i < KV.trace.length; i++) {
+        const u = i * 10;
+        if (Math.abs(u - U) <= 30) continue;
+        expect(riverDistance(beck, KV.trace[i][0], KV.trace[i][1]), `${u} m`).toBeGreaterThanOrEqual(15);
+      }
+    });
+
+    it('sinks the land under the river below the water (bed 3.5 m down), all along it but the last stretch, where the bed climbs back out of the hillside', () => {
+      const pts = along();
+      let n = 0;
+      pts.forEach(([x, z], i) => {
+        if (i > pts.length - 36) return; // the last 170 m or so
+        if (Math.abs(KV.roadPoint(U).x - x) + Math.abs(KV.roadPoint(U).z - z) < 40) return; // the corridor under the bridge is the roadside hook's (above)
+        n++;
+        expect(sc.wildHeight(x, z), `${x.toFixed(0)},${z.toFixed(0)}`).toBeLessThan(beck.level - 3);
+      });
+      expect(n).toBeGreaterThan(60);
+      // Away from the water the land is its own: a point 60 m off the centreline is not lowered.
+      const mid = pts[Math.floor(pts.length * 0.6)];
+      const off = sc.wildHeight(mid[0] + 60, mid[1] + 60);
+      expect(off).toBeGreaterThan(beck.level - 3);
+    });
+
+    it('is in the world’s water list, so routes shift it with the lake (index 1), and trees keep out of it', () => {
+      for (const r of PARTIAL) {
+        const shifted = r.scenery.water![1] as RiverBody;
+        const P = KV.roadPoint(r.world!.start);
+        expect(shifted.kind).toBe('river');
+        expect(shifted.level).toBeCloseTo(beck.level - e(r.world!.start), 9);
+        expect(shifted.pts[3][0]).toBeCloseTo(beck.pts[3][0] - P.x, 6);
+        expect(shifted.pts[3][1]).toBeCloseTo(beck.pts[3][1] - P.z, 6);
+      }
+    });
   });
 
   it('has a cutting at Raven Gap: rock walls rise either side of the road, and nowhere else on the straight', () => {
@@ -410,5 +493,286 @@ describe('the road behind the start', () => {
       expect(p.x).toBeCloseTo(-Math.cos(hd) * back, 9);
       expect(p.z).toBeCloseTo(-Math.sin(hd) * back, 9);
     }
+  });
+});
+
+// ------------------------------------------- the dressing (field walls, bunting) and the performance budget ----
+
+/** Distance from (x, z) to the world's road (its 10 m trace as a polyline) and the lap metre of the nearest point. */
+function roadNear(x: number, z: number): { dist: number; u: number } {
+  const t = KV.trace;
+  let best = Infinity, u = 0;
+  for (let i = 0; i + 1 < t.length; i++) {
+    const [ax, az] = t[i], [bx, bz] = t[i + 1];
+    const vx = bx - ax, vz = bz - az;
+    const k = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz)));
+    const d = Math.hypot(x - (ax + vx * k), z - (az + vz * k));
+    if (d < best) { best = d; u = (i + k) * 10; }
+  }
+  return { dist: best, u };
+}
+
+describe('the dry-stone field walls of Foss Bottom', () => {
+  const loop = stageById('kestrel-vale-loop');
+  const chunks = (reach: number, a = 0, b = KV_LAP) => {
+    const out: ReturnType<typeof planFieldWalls> = [];
+    for (let d0 = Math.floor(a / 100) * 100; d0 < b; d0 += 100) out.push(...planFieldWalls(loop, d0, d0 + 100, reach));
+    return out;
+  };
+  afterEach(() => setStage(stageById(null)));
+
+  it('are laid in Foss Bottom only: from just past Mill Bridge to the foot of the climb, and nowhere in the village, the lakeshore, the cutting or the tunnel', () => {
+    setStage(loop);
+    const spans = KESTREL_VALE.scenery.dressing!.fieldWalls!.spans;
+    expect(spans).toEqual([[KV.to('mill-bridge') + 30, KV.from('climb-foot')]]);
+    const all = chunks(110);
+    expect(all.length).toBeGreaterThan(1000);
+    for (let d0 = 0; d0 < KV_LAP; d0 += 100) {
+      for (const s of planFieldWalls(loop, d0, d0 + 100, 110)) {
+        // A section's nearest road is its own: the chunk it was laid for (the cross walls and the bends move the foot of the perpendicular a little).
+        const { u } = roadNear((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2);
+        expect(u, `chunk ${d0}`).toBeGreaterThan(d0 - 150);
+        expect(u, `chunk ${d0}`).toBeLessThan(d0 + 250);
+        expect(d0 + 50, 'in the span').toBeGreaterThan(spans[0][0] - 60);
+        expect(d0 + 50, 'in the span').toBeLessThan(spans[0][1] + 60);
+      }
+    }
+    // Nothing in the village (0 to 760 m and the run-in), the lake, the cutting and the tunnel.
+    expect(chunks(110, 0, 4200)).toEqual([]);
+    expect(chunks(110, KV.from('climb-foot') + 100, KV_LAP)).toEqual([]);
+    for (let d0 = Math.floor((KV.gap[0] - 300) / 100) * 100; d0 < KV.gap[1] + 300; d0 += 100) expect(planFieldWalls(loop, d0, d0 + 100, 110)).toEqual([]);
+  });
+
+  it('keep clear of the road’s shoulder, the lake, the beck and the farm buildings’ yards, and every section is a 4 m piece of wall', () => {
+    setStage(loop);
+    for (const s of chunks(110)) {
+      const mx = (s.x0 + s.x1) / 2, mz = (s.z0 + s.z1) / 2;
+      expect(Math.abs(Math.hypot(s.x1 - s.x0, s.z1 - s.z0) - WALL_SECTION), 'a chord of the road’s offset curve').toBeLessThan(0.3);
+      // 7 m from the centreline is the road (4.6), its verge and the lane's own wall (5.6): field walls stand beyond.
+      for (const [x, z] of [[s.x0, s.z0], [mx, mz], [s.x1, s.z1]]) expect(roadNear(x, z).dist, 'shoulder').toBeGreaterThan(7);
+      expect(pondDistance(KV_LAKE, mx, mz), 'lake').toBeGreaterThan(14);
+      expect(riverDistance(KV_BECK as RiverBody, mx, mz), 'beck').toBeGreaterThan(5);
+    }
+    // The road chunk passes the landmarks' clear zones as `avoid`: the farm's buildings keep their yards.
+    const barn = KESTREL_VALE.landmarks.find((k) => k.file === 'barn.glb' && k.first < 5000)!;
+    const p = KV.roadPoint(barn.first);
+    const bx = p.x - p.tz * barn.offset * barn.side, bz = p.z + p.tx * barn.offset * barn.side;
+    const keep = (x: number, z: number) => Math.hypot(x - bx, z - bz) < barn.clearance;
+    let dropped = 0;
+    for (let d0 = Math.floor(barn.first / 100) * 100 - 100; d0 <= barn.first + 100; d0 += 100) {
+      const all = planFieldWalls(loop, d0, d0 + 100, 110);
+      const some = planFieldWalls(loop, d0, d0 + 100, 110, keep);
+      dropped += all.length - some.length;
+      for (const s of some) expect(keep((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2)).toBe(false);
+    }
+    expect(dropped, 'the barn’s yard is clear of wall').toBeGreaterThan(0);
+  });
+
+  it('thins with the tier: Low keeps the first field only (within 44 m of the road), Medium and High the second too', () => {
+    setStage(loop);
+    const low = chunks(44), high = chunks(110);
+    expect(low.length).toBeGreaterThan(300);
+    expect(low.length).toBeLessThan(high.length * 0.65);
+    for (const s of low) expect(roadNear((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2).dist, 'Low stays near the road').toBeLessThan(52);
+    expect(Math.max(...high.map((s) => roadNear((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2).dist))).toBeGreaterThan(75);
+    expect(chunks(0)).toEqual([]);
+    expect(planFieldWalls(stageById('kestrel-vale-loop'), 4500, 4600, 7)).toEqual([]);
+  });
+
+  it('are hashed from the world’s lap metres: the same places on every call, every lap and every route, with gaps for gates and runs without a wall', () => {
+    setStage(loop);
+    const a = planFieldWalls(loop, 5000, 5100, 110);
+    expect(planFieldWalls(loop, 5000, 5100, 110)).toEqual(a);
+    // A route that starts partway round lays the same walls (the world’s, moved by -P): same count, each section where the loop's is minus the start's position.
+    const r = routeStage(KESTREL_VALE, { id: 'tmp-walls', name: 'Kestrel Vale · Tmp', tagline: '', length: 2500, start: 4800 });
+    const P = KV.roadPoint(4800);
+    setStage(r);
+    const b = planFieldWalls(r, 200, 300, 110); // lap metres 5000 to 5100
+    expect(b.length).toBe(a.length);
+    for (let i = 0; i < a.length; i++) {
+      expect(Math.abs(b[i].x0 - (a[i].x0 - P.x)), `section ${i}`).toBeLessThan(2);
+      expect(Math.abs(b[i].z0 - (a[i].z0 - P.z)), `section ${i}`).toBeLessThan(2);
+    }
+    // Not a continuous fence: some sections are missing (gates and open boundaries).
+    const parallel = chunks(110).filter((s) => s.kind === 'along');
+    const cross = chunks(110).filter((s) => s.kind === 'cross');
+    expect(parallel.length).toBeGreaterThan(cross.length);
+    expect(cross.length).toBeGreaterThan(100);
+  });
+});
+
+describe('the bunting in the Hollins Cross high street', () => {
+  const loop = stageById('kestrel-vale-loop');
+  const strings = (d0: number, d1: number) => planBunting(loop, d0, d1);
+  afterEach(() => setStage(stageById(null)));
+
+  it('hangs a string at every terrace (44 m apart from 66 m to 550 m, and again on the run-in), none in the square, over the line or beyond the street', () => {
+    const all: number[] = [];
+    for (let d0 = 0; d0 < KV_LAP; d0 += 100) all.push(...strings(d0, d0 + 100).map((s) => s.d));
+    expect(all.length).toBe(12 + 9);
+    for (const d of all) {
+      const near = Math.min(d, KV_LAP - d);
+      expect(near === d ? d : KV_LAP - d, `${d}`).toBeGreaterThan(60); // clear of the start arch (30 m) and the line
+      expect(Math.abs(d - 30), 'the start arch').toBeGreaterThan(30);
+    }
+    for (const d of [66, 110, 550]) expect(all.some((x) => Math.abs(x - d) < 1e-6), `${d}`).toBe(true);
+    expect(strings(600, 700)).toEqual([]);
+    expect(strings(2000, 2100)).toEqual([]);
+  });
+
+  it('keeps clear of the finish gantry: a finish line or a start arch is never within 40 m of a string, on any route', () => {
+    for (const st of KESTREL_ROUTES) {
+      const arches = st.landmarks.filter((k) => k.file === 'gantry.glb' && k.every >= 1e9).map((k) => k.first);
+      const gantryEvery = st.landmarks.filter((k) => k.file === 'gantry.glb' && k.every < 1e9);
+      const lap = st.world!.lap;
+      const lapMetre = (d: number) => (((d + st.world!.start) % lap) + lap) % lap;
+      const limit = st.finish ?? 3 * lap;
+      for (let d0 = 0; d0 < Math.min(limit, 16000); d0 += 100) {
+        for (const s of planBunting(st, d0, d0 + 100)) {
+          for (const a of arches) expect(Math.abs(s.d - a), `${st.id} string ${s.d} vs arch ${a}`).toBeGreaterThan(28);
+          expect(lapMetre(s.d), st.id).toBeGreaterThan(60);
+        }
+      }
+      void gantryEvery;
+    }
+  });
+
+  it('sits at the same lap metres on a route that starts partway round (the strings are the world’s, shifted by the start)', () => {
+    const r = stageById('kestrel-vale-lakeside'); // starts 14,000: the village is 1,400 m on
+    const mine = [] as number[];
+    for (let d0 = 0; d0 < 3000; d0 += 100) mine.push(...planBunting(r, d0, d0 + 100).map((s) => (s.d + 14000) % KV_LAP));
+    expect(mine.length).toBe(9 + 12 - (mine.length - 21 > 0 ? 0 : 0));
+    expect(mine.some((u) => Math.abs(u - 66) < 1e-6)).toBe(true);
+  });
+});
+
+describe('the performance budget in and round the village (risk 3 of the plan)', () => {
+  const sitesIn = (kinds: typeof KESTREL_VALE.landmarks, lo: number, hi: number) => {
+    let n = 0;
+    for (const k of kinds) {
+      if (k.first > hi || (k.until ?? Infinity) < lo) continue;
+      const last = Math.min(hi, k.until ?? Infinity);
+      for (let i = Math.max(0, Math.ceil((lo - k.first) / k.every)); k.first + i * k.every <= last; i++) n++;
+    }
+    return n;
+  };
+  const LANDMARK_BUDGET = 52;
+  afterEach(() => setStage(stageById(null)));
+
+  it(`never has more than ${LANDMARK_BUDGET} landmarks in the 1,600 m ahead (250 behind) at any point of the free ride's laps: the village is the busiest`, () => {
+    const free = stageById('kestrel-vale');
+    let best = 0, at = 0;
+    for (let u = 0; u < KV_LAP * 1.3; u += 10) {
+      const n = sitesIn(free.landmarks, u - 250, u + 1600);
+      if (n > best) { best = n; at = u; }
+    }
+    expect(best).toBeLessThanOrEqual(LANDMARK_BUDGET);
+    expect(best, 'the busiest point is the village, either side of the line').toBeGreaterThan(30);
+    expect(at % KV_LAP === 0 || at % KV_LAP > KV_LAP - 1200 || at % KV_LAP < 700, `busiest at ${at}`).toBe(true);
+    // The new standalone dressing adds only a handful: market cross, viaduct, jetty.
+    const extras = KESTREL_VALE.landmarks.filter((k) => k.model === 'market-cross' || k.model === 'stone-viaduct' || k.model === 'lake-jetty');
+    expect(extras).toHaveLength(3);
+    for (const k of extras) expect(k.every, `${k.model} once a lap`).toBe(KV_LAP);
+    // ... and the village is no denser than Richmond's brick terraces, which already run well.
+    const richmond = stageById('richmond-worlds');
+    let rb = 0;
+    for (let u = 0; u < richmond.finish!; u += 50) rb = Math.max(rb, sitesIn(richmond.landmarks, u - 250, u + 1600));
+    expect(best, `Richmond's busiest is ${rb}`).toBeLessThan(rb);
+  });
+
+  it('thins the dressing with the tier: Low has the cheapest wall section, the first field only and flags every other time; High and Ultra have the stone courses', () => {
+    const tris = (d: 0 | 1) => triangleCount(new THREE.Group().add(new THREE.Mesh(fieldWallGeometry(d))));
+    expect(tris(0)).toBeLessThanOrEqual(40);
+    expect(tris(1)).toBeLessThan(160);
+    expect(tris(1)).toBeGreaterThan(tris(0) * 2);
+    const t = SCENERY;
+    expect([t.low, t.medium, t.high, t.ultra].map((x) => x.fieldWalls.reach)).toEqual([44, 110, 110, 110]);
+    expect([t.low, t.medium, t.high, t.ultra].map((x) => x.fieldWalls.detail)).toEqual([0, 0, 1, 1]);
+    expect([t.low, t.medium, t.high, t.ultra].map((x) => x.bunting)).toEqual([1, 2, 2, 2]);
+  });
+
+  it('lays at most 1,000 wall sections on Low and 1,800 on Medium and up in the 17 road chunks round the rider, at the busiest point of Foss Bottom', () => {
+    const loop = stageById('kestrel-vale-loop');
+    setStage(loop);
+    const per = (reach: number) => {
+      const out: number[] = [];
+      for (let d0 = 4200; d0 < 6100; d0 += 100) out.push(planFieldWalls(loop, d0, d0 + 100, reach).length);
+      let best = 0;
+      for (let i = 0; i + 17 <= out.length; i++) best = Math.max(best, out.slice(i, i + 17).reduce((a, b) => a + b, 0));
+      return best;
+    };
+    const low = per(44), high = per(110);
+    expect(low).toBeLessThanOrEqual(1000);
+    expect(high).toBeLessThanOrEqual(1800);
+    expect(low).toBeLessThan(high);
+  });
+});
+
+describe("the standalone landmarks: the market cross, the viaduct and the jetty", () => {
+  const of = (m: string) => KESTREL_VALE.landmarks.find((k) => k.model === m)!;
+  const lake = (id: string) => stageById(id);
+
+  it('puts the market cross in the square: left of the road just after the line, before the start arch (30 m) and the terraces (66 m), once a lap', () => {
+    const k = of('market-cross');
+    expect(k).toMatchObject({ first: 18, side: -1, every: KV_LAP });
+    expect(k.offset).toBeGreaterThan(8);
+    expect(k.offset).toBeLessThan(18); // inside the street's fronts (16.5 m)
+    expect(k.size).toBeCloseTo(8.43, 2);
+    // It is on every route that passes the line: the lap routes, and the Lakeside Sprint (which crosses it 1.4 km in).
+    for (const id of ['kestrel-vale-loop', 'kestrel-vale-grand', 'kestrel-vale', 'kestrel-vale-lakeside']) expect(stageById(id).landmarks.some((m) => m.model === 'market-cross'), id).toBe(true);
+    expect(stageById('kestrel-vale-raven-scar').landmarks.some((m) => m.model === 'market-cross')).toBe(false);
+  });
+
+  it('stands the viaduct across the gill well off the road (at least 150 m from it), 195 m long, each pier on the land and the deck level with the bench its ends stand on', () => {
+    const k = of('stone-viaduct');
+    expect(k.world).toBeDefined();
+    expect(k.within).toBeGreaterThan(800);
+    expect(k.within).toBeLessThan(1150); // the terrain is built 1,150 m round the rider
+    expect(k.size).toBeCloseTo(VIADUCT.height, 2);
+    const { x, z, y, yaw } = k.world!;
+    const ax = Math.cos(yaw), az = -Math.sin(yaw); // the viaduct's own x axis in the world
+    for (let a = -100; a <= 100; a += 10) expect(roadNear(x + ax * a, z + az * a).dist, `at ${a}`).toBeGreaterThan(150);
+    const ground = k.options!.ground!;
+    expect(ground).toHaveLength(VIADUCT.bays + 1);
+    ground.forEach((g, i) => {
+      const a = (i - VIADUCT.bays / 2) * VIADUCT.module;
+      expect(KV.viaduct.terrainAt(x + ax * a, z + az * a) - y, `pier ${i}`).toBeCloseTo(g, 1);
+      expect(g, `pier ${i} is under the deck`).toBeLessThan(VIADUCT.deck);
+    });
+    expect(Math.max(...ground.slice(0, 2), ...ground.slice(-2)), 'the bench meets the deck at its ends').toBeGreaterThan(VIADUCT.deck - 4);
+    expect(Math.min(...ground), 'a gill under it').toBeLessThan(VIADUCT.deck - 12);
+    // The land under the middle is the gill's: below the ground either side of it, by most of its depth.
+    const mid = KV.viaduct.terrainAt(x, z);
+    expect(mid).toBeLessThan(KV.viaduct.terrainAt(x + ax * 90, z + az * 90) - 8);
+    // The bench is level but for the small bumps and the road's own blend pulling its near end down a little: the two ends are within 10 m, and the gill is cut right through it.
+    expect(Math.abs(KV.viaduct.terrainAt(x - ax * 90, z - az * 90) - KV.viaduct.terrainAt(x + ax * 90, z + az * 90))).toBeLessThan(10);
+  });
+
+  it('has the viaduct on the Vale routes and the Raven Scar route (which starts on the straight at 5,900), and moves it with the start; the Lakeside Sprint does not pass it', () => {
+    const k = of('stone-viaduct');
+    expect(stageById('kestrel-vale-loop').landmarks.filter((m) => m.model === 'stone-viaduct')).toHaveLength(1);
+    const scar = stageById('kestrel-vale-raven-scar').landmarks.find((m) => m.model === 'stone-viaduct')!;
+    const P = KV.roadPoint(5900);
+    expect(scar.first).toBeCloseTo(k.first - 5900, 6);
+    expect(scar.world!.x).toBeCloseTo(k.world!.x - P.x, 6);
+    expect(scar.world!.z).toBeCloseTo(k.world!.z - P.z, 6);
+    expect(scar.world!.y).toBeCloseTo(k.world!.y - e(5900), 6);
+    expect(scar.within).toBe(k.within);
+    expect(lake('kestrel-vale-lakeside').landmarks.some((m) => m.model === 'stone-viaduct')).toBe(false);
+  });
+
+  it('puts the jetty on the shore (its root 0 to 4 m from the water) with its 24 m running out into the lake, the deck just above the water', () => {
+    const k = of('lake-jetty');
+    const { x, z, y, yaw } = k.world!;
+    expect(y).toBe(KV_LAKE.level);
+    expect(pondDistance(KV_LAKE, x, z)).toBeGreaterThan(0);
+    expect(pondDistance(KV_LAKE, x, z)).toBeLessThan(4);
+    const tip = [x + Math.sin(yaw) * 24, z + Math.cos(yaw) * 24];
+    expect(pondDistance(KV_LAKE, tip[0], tip[1]), 'the far end is in the water').toBeLessThan(-8);
+    expect(roadNear(x, z).dist, 'seen from the road').toBeLessThan(80);
+    expect(roadNear(x, z).dist).toBeGreaterThan(42);
+    expect(k.first).toBeLessThan(KV.sprint); // just before the sprint's banner
+    expect(KV.sprint - k.first).toBeLessThan(600);
+    expect(k.size).toBeCloseTo(5.08, 2);
   });
 });

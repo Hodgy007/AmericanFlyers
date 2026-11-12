@@ -2,10 +2,13 @@ import * as THREE from 'three';
 import { roadPoint } from '../course';
 import { currentStage } from '../course';
 import { barrierKind, hasBarriers, barrierSections, buildBarriers, railGeometry, stoneGeometry } from './barriers';
+import { buildBunting, buntingGeometry, planBunting } from './bunting';
 import { buildCampers, camperGeometries, camperMaterial, loadVanModel, planCampers, type CamperGeometries, type VanModel } from './campers';
 import { CULTURES, type CultureId } from './crowdCulture';
 import { buildCrowd, crowdMaterial, crowdUniforms, planCrowd, spectatorGeometry } from './crowds';
 import { buildPaint, drawAtlas, paintName, planPaint, type PaintSpot } from './roadPaint';
+import { buildFieldWalls, fieldWallGeometry, planFieldWalls } from './fieldWalls';
+import { landmarkDisks } from './landmarks';
 import { isClimb } from './roadside';
 import { RoadSurface } from './roadSurface';
 import type { RoadPaintLayout } from './roadStyle';
@@ -32,6 +35,10 @@ export class RoadExtras {
   private readonly railMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.5 });
   private stoneGeo: THREE.BufferGeometry | null = null; // only the alpine passes need these
   private stoneMat: THREE.MeshStandardMaterial | null = null;
+  private readonly wallGeos = new Map<0 | 1, THREE.BufferGeometry>(); // the field walls' two levels of detail, built when a world with walls asks
+  private wallMat: THREE.MeshStandardMaterial | null = null;
+  private buntingGeo: THREE.BufferGeometry | null = null;
+  private buntingMat: THREE.MeshStandardMaterial | null = null;
   // Spectators: the plain and flag-waving meshes (simple, or detailed with caps from High), one material for plain spectators and one per culture for flag-wavers.
   private readonly crowdGeos = new Map<boolean, { plain: THREE.BufferGeometry; flag: THREE.BufferGeometry }>();
   private readonly crowdMat = crowdMaterial();
@@ -116,6 +123,31 @@ export class RoadExtras {
         }
         const rails = buildBarriers(barrierSections(stage, d0, d1, ground), stone ? this.stoneGeo! : this.railGeo, stone ? this.stoneMat! : this.railMat, origin);
         if (rails) objects.push(rails);
+      }
+      // Dry-stone field walls and bunting (a world's `dressing`): one InstancedMesh each per road chunk, thinned by the tier.
+      const dress = stage.scenery.dressing;
+      if (dress?.fieldWalls && spec.fieldWalls.reach > 0) {
+        const mid = roadPoint(d0 + CHUNK / 2);
+        const reachBox = spec.fieldWalls.reach + 90;
+        const disks = landmarkDisks(d0 - 120, d1 + 120);
+        const sections = planFieldWalls(stage, d0, d1, spec.fieldWalls.reach, (x, z) => disks.some((k) => Math.hypot(k.x - x, k.z - z) < k.r));
+        if (sections.length) {
+          const walls = groundSampler(mid.x - reachBox, mid.x + reachBox, mid.z - reachBox, mid.z + reachBox);
+          let geo = this.wallGeos.get(spec.fieldWalls.detail);
+          if (!geo) this.wallGeos.set(spec.fieldWalls.detail, (geo = fieldWallGeometry(spec.fieldWalls.detail)));
+          this.wallMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
+          const mesh = buildFieldWalls(sections, geo, this.wallMat, origin, walls);
+          if (mesh) objects.push(mesh);
+        }
+      }
+      if (dress?.bunting && spec.bunting > 0) {
+        const strings = planBunting(stage, d0, d1);
+        if (strings.length) {
+          this.buntingGeo ??= buntingGeometry();
+          this.buntingMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true });
+          const mesh = buildBunting(strings, dress.bunting.half, dress.bunting.height, spec.bunting === 2 ? 1.4 : 2.8, this.buntingGeo, this.buntingMat, origin);
+          if (mesh) objects.push(mesh);
+        }
       }
       if (camping && ground) {
         // Vans, tents and parasols keep clear of every rail section within reach of the chunk (the neighbours' too).

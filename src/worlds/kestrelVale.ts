@@ -12,7 +12,9 @@
 
 import { fbm, smoothstep } from '../world/noise';
 import { riseRel, shapeAt } from '../world/canyon';
-import { pondDistance, type PondBody } from '../world/waterTypes';
+import { pondDistance, type PondBody, type RiverBody } from '../world/waterTypes';
+import { JETTY_HEIGHT, MARKET_CROSS_HEIGHT, VIADUCT } from '../world/monumentTypes';
+import type { Dressing } from '../world/dressingTypes';
 import { TUNNEL_HALF_WIDTH, TUNNEL_HILL, TUNNEL_PORTAL_DEPTH, vaultHeight, type TunnelSpan } from '../world/tunnelSpan';
 import { monumentAt, pchip, roadElevationField, roadTrace, terraceRow } from '../stageKit';
 import { closeLoop, routeStage, type LoopPiece, type World, type WorldRoute } from './types';
@@ -174,6 +176,54 @@ export function lakeGround(x: number, z: number, ground: number): number {
 /** Trace points (indices) whose road has the lake within reach of the roadside hook's bank. */
 const LAKE_NEAR = TRACE.map(([x, z]) => pondDistance(KV_LAKE, x, z) < 330);
 
+// Mill Beck: the lake's outflow, which the road crosses at Mill Bridge. It runs from inside the lake's north tip (about 350 m from the bridge) straight at the
+// road, so it crosses it square, then wanders off north-east and runs out into the hillside. The sheet is a hair above the lake's, so the two never share a
+// surface; the bed is sunk below it (`beckGround`) with a gentle bank, and under the bridge the channel is dug through the road's verge (`roadside`), so the
+// deck spans open water. The road's own height is never touched.
+const BRIDGE_U = from('mill-bridge') + 125; // the covered bridge's middle (its landmark is placed here)
+const BECK_WIDTH = 14;
+const BECK_LEVEL = LAKE_LEVEL + 0.25;
+const BECK_DEPTH = 3.5; // the bed's depth under the sheet
+const BECK_BANK = 80; // metres over which the ground rises from the water's edge to the land: long and gentle, or a rider's eye (2 m over the road, 7 m over the water) never sees the water over the bank's crest
+const BECK_FADE = 170; // the last stretch downstream, over which the bed climbs back out of the ground
+function buildBeck(): RiverBody {
+  const b = roadPoint(BRIDGE_U);
+  let nx = -b.tz, nz = b.tx; // across the road, towards the lake
+  if (nx * (KV_LAKE.x - b.x) + nz * (KV_LAKE.z - b.z) < 0) { nx = -nx; nz = -nz; }
+  const at = (s: number, wig: number): [number, number] => [b.x + nx * s + b.tx * wig, b.z + nz * s + b.tz * wig];
+  let lake = 0; // how far along the normal the lake is 14 m deep
+  while (pondDistance(KV_LAKE, b.x + nx * lake, b.z + nz * lake) > -14 && lake < 1500) lake += 5;
+  const pts: [number, number][] = [];
+  for (let s = lake; s > 0; s -= 40) pts.push(at(s, 18 * smoothstep(0, 120, s) * (1 - smoothstep(lake - 100, lake, s)) * Math.sin(s / 60)));
+  for (let s = 0; s >= -520; s -= 40) pts.push(at(s, 26 * smoothstep(0, 150, -s) * Math.sin(-s / 75 + 1.3)));
+  return { kind: 'river', pts, width: BECK_WIDTH, level: BECK_LEVEL };
+}
+export const KV_BECK = buildBeck();
+const BECK_LEN = KV_BECK.pts.slice(1).reduce((n, p, i) => n + Math.hypot(p[0] - KV_BECK.pts[i][0], p[1] - KV_BECK.pts[i][1]), 0);
+/** Distance from (x, z) to the beck's centreline and how far along it (from the lake) the nearest point is. */
+function beckAt(x: number, z: number): { dist: number; along: number } {
+  let best = Infinity, along = 0, run = 0;
+  for (let i = 0; i + 1 < KV_BECK.pts.length; i++) {
+    const [ax, az] = KV_BECK.pts[i], [bx, bz] = KV_BECK.pts[i + 1];
+    const vx = bx - ax, vz = bz - az, len = Math.hypot(vx, vz);
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (len * len)));
+    const d = Math.hypot(x - (ax + vx * t), z - (az + vz * t));
+    if (d < best) { best = d; along = run + len * t; }
+    run += len;
+  }
+  return { dist: best, along };
+}
+/** The ground with the beck's channel sunk into it: the bed under the sheet, rising over BECK_BANK metres to the land, and climbing out of the ground over the last BECK_FADE metres downstream. */
+function beckGround(x: number, z: number, ground: number): number {
+  const { dist, along } = beckAt(x, z);
+  const edge = dist - BECK_WIDTH / 2;
+  if (edge >= BECK_BANK) return ground;
+  const w = (1 - smoothstep(0, BECK_BANK, Math.max(0, edge))) * (1 - smoothstep(BECK_LEN - BECK_FADE, BECK_LEN, along));
+  return ground + (Math.min(ground, BECK_LEVEL - BECK_DEPTH) - ground) * w;
+}
+/** Trace points whose road is within reach of the beck's bank. */
+const BECK_NEAR = TRACE.map(([x, z]) => beckAt(x, z).dist < 110);
+
 // Raven Gap: the ridge the road crosses at a saddle, with crags either side, placed from the trace's point at the cutting.
 const GAP_MID = (GAP_FROM + GAP_TO) / 2;
 const GAP = roadPoint(GAP_MID);
@@ -192,7 +242,32 @@ const crestAt = (x: number, z: number) => {
 
 /** The wild ground: low rolling country that follows the road, a little above it, the ridge at Raven Gap, and the lake's basin. */
 const base = (x: number, z: number) => roadLevel(x, z) + 6 + fbm(x / 700 + 9, z / 700, 3) * 14 + fbm(x / 170, z / 170, 2) * 2.5 + crestAt(x, z);
-const wildHeight = (x: number, z: number) => lakeGround(x, z, base(x, z));
+
+// Foss Gill: a side valley in the northern slope of Foss Bottom, which the stone viaduct strides across (its landmark is below). The viaduct stands 250 m up the slope from
+// the Foss straight, turned broadside to the sight line from the road a little before it (the straight runs towards the climb, so the viaduct is ahead on the right and,
+// from 600 m, nearly square to the rider). The hillside is levelled to a bench under it, the gill cut through the bench (17 m deep, 56 m either side of its line, rounded),
+// running up the hill and fading out at both ends. The viaduct is more than 200 m from the road, so the road's own blend of the ground hardly touches it.
+const VIADUCT_U = 5200; // lap metres of the road point it stands across from: the Foss straight
+const VIADUCT_OFFSET = 250; // m to the right of the road
+const VIEW_U = 4800; // the viewpoint on the road it is turned broadside to
+const GILL_DEPTH = 19;
+const GILL = (() => {
+  const r = roadPoint(VIADUCT_U), v = roadPoint(VIEW_U);
+  const cx = r.x - r.tz * VIADUCT_OFFSET, cz = r.z + r.tx * VIADUCT_OFFSET;
+  const sl = Math.hypot(cx - v.x, cz - v.z);
+  const sx = (cx - v.x) / sl, sz = (cz - v.z) / sl; // the sight line from the road to the viaduct: the gill runs along it (up the hill)
+  return { cx, cz, sx, sz, ax: -sz, az: sx, bench: base(cx, cz) }; // a: along the viaduct
+})();
+/** The ground in and round the gill: the hillside levelled to a bench under the viaduct (200 m by 340 m) and the gill cut through the bench. */
+function gillGround(x: number, z: number, ground: number): number {
+  const dx = x - GILL.cx, dz = z - GILL.cz;
+  const a = dx * GILL.ax + dz * GILL.az; // along the viaduct
+  const b = dx * GILL.sx + dz * GILL.sz; // along the gill: away from the road, up the hill, is positive
+  const flat = (1 - smoothstep(100, 200, Math.abs(a))) * (1 - smoothstep(60, 170, Math.abs(b)));
+  const cut = GILL_DEPTH * (1 - smoothstep(10, 88, Math.abs(a))) * smoothstep(-320, -90, b) * (1 - smoothstep(100, 300, b));
+  return flat > 0 || cut > 0 ? ground + (GILL.bench - ground) * flat - cut : ground;
+}
+const wildHeight = (x: number, z: number) => beckGround(x, z, gillGround(x, z, lakeGround(x, z, base(x, z))));
 
 // The cutting: steep rock walls either side of the road over Raven Gap, from the shapes in canyon.ts (stepped faces and benches).
 const CUT_FADE = 150;
@@ -262,6 +337,17 @@ function roadside(d: number, lateral: number, plain: number): number | null {
     rel += keep * (sunk - rel);
     touched = true;
   }
+  if (BECK_NEAR[i]) {
+    // Mill Beck. The verge is held level like the lake's; but under Mill Bridge the channel is dug right through it, so the deck spans the water.
+    const r = roadPoint(u);
+    const x = r.x - r.tz * lateral, z = r.z + r.tx * lateral;
+    const road = elevation(u) - 0.15;
+    const hold = smoothstep(10, 30, Math.abs(lateral));
+    const under = 1 - smoothstep(BECK_WIDTH / 2 + 2, BECK_WIDTH / 2 + 6, Math.abs(u - BRIDGE_U));
+    const sunk = beckGround(x, z, road + rel) - road;
+    rel += (hold + (1 - hold) * under) * (sunk - rel);
+    touched = true;
+  }
   return touched ? rel : null;
 }
 
@@ -283,6 +369,8 @@ const once = (k: LandmarkKind): LandmarkKind => ({ ...k, every: KV_LAP });
 const LANDMARKS: LandmarkKind[] = [
   ...VILLAGE,
   once(monumentAt('alpine-church', from('church-bend') + 150, 1, 36, 26.6, { yaw: -0.3, clearance: 16 })),
+  // The market cross in the square, left of the road a little after the line (the start arch is at 30 m).
+  once(monumentAt('market-cross', 18, -1, 12, MARKET_CROSS_HEIGHT, { clearance: 10 })),
   // Mill Bridge: the covered bridge carries the road over the lake's outflow.
   once({ file: 'covered-bridge.glb', first: from('mill-bridge') + 125, every: 1e9, side: 0, span: 'along', offset: 0, size: 12.5, clearance: 22 }),
   // Foss Bottom's farms (one of each a lap: the spacing is the lap, which divides it).
@@ -298,8 +386,75 @@ const PORTALS: LandmarkKind[] = [KV_TUNNEL_FROM + TUNNEL_PORTAL_DEPTH / 2, KV_TU
   once({ model: 'tunnel-portal', first: d, every: 1e9, side: 0, span: 'across', offset: 0, size: 11.6, clearance: 30, options: { lines: ['RAVEN GAP TUNNEL', 'ALT. 300 m'] } }));
 LANDMARKS.push(...PORTALS);
 
+// The stone viaduct over Foss Gill, up the slope to the right of the Foss straight and seen across Foss Bottom from the road and the first hairpins of the Raven Scar climb: a
+// world landmark (it is well off the road), stood on the terrain. Its `first` is on the climb's foot, so the Raven Scar route (which starts on the straight at 5,900) has it too. Its origin is the gill's floor; each pier's ground is read from the terrain here, so every pier reaches the land. Placed only
+// while the rider is within `within` metres (the terrain is built a kilometre round the rider), for as long as the climb and the farmland can see it.
+const terrainAt = (x: number, z: number): number => {
+  // terrain.ts's heightAt far from the road: the wild ground and its small bumps, blended a little towards the road's level within 260 m of it.
+  let best = Infinity, at = 0;
+  TRACE.forEach(([tx, tz], i) => { const dd = (tx - x) ** 2 + (tz - z) ** 2; if (dd < best) { best = dd; at = i; } });
+  const dist = Math.sqrt(best), w = smoothstep(9, 260, dist);
+  return (elevation(at * TRACE_STEP) - 0.15) * (1 - w) + wildHeight(x, z) * w + fbm(x / 70, z / 70, 3) * 3 * smoothstep(9, 45, dist);
+};
+// The deck is level with the bench the ends stand on; the origin is 19 m under the deck.
+const VIADUCT_DECK = Math.max(...[-98, -90, -80, -70, -62, 62, 70, 80, 90, 98].map((a) => terrainAt(GILL.cx + GILL.ax * a, GILL.cz + GILL.az * a))) + 0.6; // the bench either side of the gill
+const VIADUCT_ORIGIN = VIADUCT_DECK - VIADUCT.deck;
+const VIADUCT_LENGTH = VIADUCT.bays * VIADUCT.module;
+const viaductGround = Array.from({ length: VIADUCT.bays + 1 }, (_, i) => {
+  const a = -VIADUCT_LENGTH / 2 + i * VIADUCT.module;
+  return Math.round((terrainAt(GILL.cx + GILL.ax * a, GILL.cz + GILL.az * a) - VIADUCT_ORIGIN) * 10) / 10;
+});
+LANDMARKS.push(once({
+  model: 'stone-viaduct', options: { ground: viaductGround }, first: 6030, every: 1e9, side: 1, offset: VIADUCT_OFFSET, size: VIADUCT.height, clearance: 125,
+  reach: 4200, within: 1050, world: { x: GILL.cx, y: VIADUCT_ORIGIN, z: GILL.cz, yaw: Math.atan2(-GILL.az, GILL.ax) },
+}));
+
+// The jetty on Kestrel Water, where the shore comes closest to the road before the sprint: it starts on the bank 3 m from the water and runs 24 m out, angled
+// towards the oncoming rider, with its deck just above the lake.
+const JETTY_U = 2250;
+const JETTY = (() => {
+  const r = roadPoint(JETTY_U);
+  const lx = r.tz, lz = -r.tx; // to the road's left, the lake's side
+  let s = 0;
+  while (pondDistance(KV_LAKE, r.x + lx * s, r.z + lz * s) > 3 && s < 400) s += 1;
+  const x = r.x + lx * s, z = r.z + lz * s;
+  // The shore's own normal there (the pond distance grows away from the water): the jetty runs the other way, turned 0.45 rad back along the road.
+  const gx = pondDistance(KV_LAKE, x + 1, z) - pondDistance(KV_LAKE, x - 1, z), gz = pondDistance(KV_LAKE, x, z + 1) - pondDistance(KV_LAKE, x, z - 1);
+  const gl = Math.hypot(gx, gz);
+  const turn = 0.45;
+  const dx = -gx / gl, dz = -gz / gl; // into the lake
+  const ex = dx * Math.cos(turn) - dz * Math.sin(turn), ez = dx * Math.sin(turn) + dz * Math.cos(turn);
+  return { x, z, yaw: Math.atan2(ex, ez), offset: s };
+})();
+LANDMARKS.push(once({
+  model: 'lake-jetty', first: JETTY_U, every: 1e9, side: -1, offset: JETTY.offset, size: JETTY_HEIGHT, clearance: 56,
+  world: { x: JETTY.x, y: LAKE_LEVEL, z: JETTY.z, yaw: JETTY.yaw },
+}));
+
 const SPRINT = 2600; // on the lakeshore
 const SUMMIT = Math.round(GAP_FROM);
+
+// Dressing (world/dressingTypes.ts): the field walls of Foss Bottom, from just past Mill Bridge to the foot of the climb, kept off the lake and the beck; and bunting
+// across the high street between the terraces' fronts (16.5 m from the centreline), hung over the middle of each terrace (they stand every 44 m, from 66 m), clear of
+// the square and the line.
+/** Distance from (x, z) to the nearest point of the road's trace (10 m apart, so within 5 m). */
+function roadDistance(x: number, z: number): number {
+  let best = Infinity;
+  for (const [tx, tz] of TRACE) { const d = (tx - x) ** 2 + (tz - z) ** 2; if (d < best) best = d; }
+  return Math.sqrt(best);
+}
+
+const DRESSING: Dressing = {
+  lap: mod,
+  lapLength: KV_LAP,
+  fieldWalls: {
+    spans: [[to('mill-bridge') + 30, from('climb-foot')]],
+    // ... and kept off any other stretch of road: the Foss straight's end is within a couple of hundred metres of the first hairpins' legs, so a wall whose nearest road is nearer than
+    // its own lateral offset has run into another leg.
+    blocked: (x, z, lateral) => pondDistance(KV_LAKE, x, z) < 14 || beckAt(x, z).dist < BECK_WIDTH / 2 + 6 || roadDistance(x, z) < lateral - 4,
+  },
+  bunting: { spans: [[66, 572], [KV_LAP - 440, KV_LAP - 62]], spacing: 44, half: 16.2, height: 6.5 },
+};
 
 export const KESTREL_VALE: World = {
   id: 'kestrel-vale',
@@ -325,10 +480,11 @@ export const KESTREL_VALE: World = {
     horizon: 'hills',
     road: 'alpine',
     barrier: 'stone',
-    water: [KV_LAKE],
+    water: [KV_LAKE, KV_BECK],
     walls: (d) => within(WALLED, d),
     clearing: (d) => within(OPEN, d),
     tunnels: [KV_TUNNEL],
+    dressing: DRESSING,
   },
   landmarks: LANDMARKS,
   places: [
@@ -364,4 +520,4 @@ export const KESTREL_ROUTE_DEFS: WorldRoute[] = [
 export const KESTREL_ROUTES: Stage[] = KESTREL_ROUTE_DEFS.map((r) => routeStage(KESTREL_VALE, r));
 
 /** Pieces and marks the tests read back. */
-export const KV = { loop: LOOP, from, to, roadPoint, trace: TRACE, hairpins: HAIRPINS, gap: [GAP_FROM, GAP_TO] as const, tunnel: KV_TUNNEL, tunnelRoof, summit: SUMMIT, sprint: SPRINT, crestAt, lakeGround, roadside };
+export const KV = { bridge: BRIDGE_U, beck: KV_BECK, beckAt, beckGround, gill: GILL, gillGround, viaduct: { u: VIADUCT_U, ground: viaductGround, origin: VIADUCT_ORIGIN, terrainAt }, jetty: JETTY, dressing: DRESSING, loop: LOOP, from, to, roadPoint, trace: TRACE, hairpins: HAIRPINS, gap: [GAP_FROM, GAP_TO] as const, tunnel: KV_TUNNEL, tunnelRoof, summit: SUMMIT, sprint: SPRINT, crestAt, lakeGround, roadside };
