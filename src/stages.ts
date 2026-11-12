@@ -4,6 +4,7 @@
 import type { MonumentId, MonumentOptions } from './world/monumentTypes';
 import type { CultureId } from './world/cultureTypes';
 import type { WaterBody } from './world/waterTypes';
+import type { TunnelSpan } from './world/tunnelSpan';
 import { fbm, smoothstep } from './world/noise.js';
 import type { TreeMix } from './world/trees.js';
 import type { HorizonChoice } from './world/horizon';
@@ -113,6 +114,12 @@ export interface Scenery {
   walls?(d: number): boolean;
   /** Where no trees grow beside the road (a park lawn, The Stray): true for a course distance. */
   clearing?(d: number): boolean;
+  /**
+   * Where the road runs through a tunnel, in course metres (sorted, not overlapping). The stage's own `roadside` hook must raise the ground over the
+   * road along each span (the hill closes over it); the tube, its lamps and the portals are built per road chunk (world/tunnel.ts), and no trees,
+   * ground cover, crowds or guardrails are placed there (world/tunnelSpan.ts). Left out: no tunnels.
+   */
+  tunnels?: TunnelSpan[];
 }
 
 /** The road's look: 'us-highway' (double yellow dashed, white edge lines, gravel shoulders), 'alpine' (white dashed centre, thin edge lines), 'lane' (no markings), 'park' (solid double yellow, red chip seal) or 'city-park' (granite kerbs, white edge and lane lines). */
@@ -178,6 +185,8 @@ export interface Stage {
     tagline: string;
     /** The world's lap, m. */
     lap: number;
+    /** The day (YYYY-MM-DD) the route was added to the world, left out for the routes it launched with: the "every route" badge (cloud/achievements.ts) only asks riders for the routes that existed when they finished the last of them. */
+    since?: string;
     /** The world's canonical one-lap route from the lap line: segments.ts finds the world's segments on it, once, and maps them into each route. */
     lapStage(): Stage;
   };

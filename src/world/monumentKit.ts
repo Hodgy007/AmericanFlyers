@@ -173,6 +173,12 @@ export class Kit {
     return this.add(new THREE.TorusGeometry(r, tube, 5, seg).translate(x, y, z), color, 0.9);
   }
 
+  /** A flat outline (an arch wall with a doorway cut in it) extruded `depth` thick along z, centred on z = 0, its origin standing on (x, y). */
+  slab(outline: THREE.Shape, depth: number, x: number, y: number, color: Col, shade = 0.88) {
+    const geo = new THREE.ExtrudeGeometry(outline, { depth, bevelEnabled: false, steps: 1 }).translate(0, 0, -depth / 2);
+    return this.add(geo, color, shade, new THREE.Matrix4().setPosition(x, y, 0));
+  }
+
   /** A textured quad (a sign face) centred on (x, y, z), facing +z, turned `ry`. */
   panel(w: number, h: number, x: number, y: number, z: number, material: THREE.Material, ry = 0) {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);

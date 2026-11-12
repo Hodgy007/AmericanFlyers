@@ -3,6 +3,7 @@ import { currentStage, elevationAt, ensureRoad, ROAD_ORIGIN, ROAD_STEP, roadX, r
 import { nearLandmark } from './landmarks';
 import { fbm, rng, smoothstep } from './noise';
 import { REACH } from './canyon';
+import { coveredByTunnel } from './tunnelSpan';
 import type { Scenery } from '../stages';
 import { TREE_SPECIES, TreeKit, chooseLod, defaultMix, loneTreeShare, pickSpecies, standRoll, treeLineRule, treeScale, treeTint, type TreeLod, type TreeSpecies } from './trees';
 import type { GroundTextures } from './ground'; // the splatting shader and textures are their own chunk (ground.ts), loaded after the first frame
@@ -217,6 +218,7 @@ function desertColor(x: number, z: number, h: number, near: Near | null, out: TH
 
 export function groundColor(x: number, z: number, h: number, near: Near | null, out: THREE.Color, w: Weights) {
   const sc = currentStage().scenery;
+  if (near && coveredByTunnel(sc.tunnels, near)) near = { ...near, dist: 99 }; // the hill over a tunnel has no road shoulder: its top is not dirt
   if (sc.palette === 'desert') return desertColor(x, z, h, near, out, w);
   const t = fbm(x / 140, z / 140, 3) * 0.5 + 0.5;
   out.copy(COL.grassA).lerp(COL.grassB, t);
@@ -266,7 +268,7 @@ export function groundColor(x: number, z: number, h: number, near: Near | null, 
 }
 
 /** What a probe found at a point: the ground height and how far the nearest road centreline is. One object, reused by every call. */
-export interface GroundHit { h: number; roadDist: number; /** Rise over run across the road beside canyons (0 elsewhere): cliffs grow nothing. */ slope?: number }
+export interface GroundHit { h: number; roadDist: number; /** True over a tunnel (and its portal ramp): nothing is planted there. */ covered?: boolean; /** Rise over run across the road beside canyons (0 elsewhere): cliffs grow nothing. */ slope?: number }
 
 /**
  * A lookup for things stood on the ground (ground cover): at (x, z) it fills `w` with the
@@ -281,6 +283,7 @@ export function groundProbe(minX: number, maxX: number, minZ: number, maxZ: numb
     const near = nearestRoad(cands, x, z);
     hit.h = heightAt(x, z, near);
     hit.roadDist = near ? near.dist : Infinity;
+    hit.covered = coveredByTunnel(currentStage().scenery.tunnels, near);
     hit.slope = roadsideSlope(x, z, near);
     w.fill(0);
     groundColor(x, z, hit.h, near, c, w);
@@ -477,7 +480,7 @@ export class Terrain {
       const keep = rand();
       if (desert ? forest < 0.0 && keep > 0.08 : forest < 0.05 - sc.forestCover && keep > lone) continue;
       const near = nearestRoad(cands, x, z);
-      if (near && (near.dist < 12 || nearLandmark(x, z, near.d) || roadsideSlope(x, z, near) > CLIFF_SLOPE || (near.dist < 220 && sc.clearing?.(near.d)))) continue; // nor on a cliff face, nor on a park lawn
+      if (near && (near.dist < 12 || nearLandmark(x, z, near.d) || roadsideSlope(x, z, near) > CLIFF_SLOPE || (near.dist < 220 && sc.clearing?.(near.d)) || coveredByTunnel(sc.tunnels, near))) continue; // nor on a cliff face, nor on a park lawn
       const h = heightAt(x, z, near);
       const rule = treeLineRule(h, sc.treeLine, forest, rand()); // the tree line
       if (!rule) continue;

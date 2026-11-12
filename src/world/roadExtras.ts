@@ -11,6 +11,7 @@ import { RoadSurface } from './roadSurface';
 import type { RoadPaintLayout } from './roadStyle';
 import type { SceneryTier } from './scenery';
 import { groundSampler } from './terrain';
+import { buildTunnel } from './tunnel';
 
 // Everything round 6 puts on and beside the road, in one lazily loaded chunk
 // (road.ts fetches it after the first frame): the asphalt detail and the wet
@@ -140,6 +141,12 @@ export class RoadExtras {
           if (mesh) objects.push(mesh);
         }
       }
+    }
+    // A tunnel: the tube and its lamps (the portals are monuments). Not gated by the tier: the hill over the road is terrain, so without the tube the road would vanish.
+    if (stage.scenery.tunnels?.length) {
+      const tube = buildTunnel(stage.scenery.tunnels, d0, d1, origin);
+      objects.push(...tube.objects);
+      geos.push(...tube.geos);
     }
     for (const o of objects) group.add(o);
     return {

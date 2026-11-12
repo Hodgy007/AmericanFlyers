@@ -2,7 +2,7 @@
 // Its routes (an endless free ride, one lap, three laps, and two that start partway round) are windows on that loop (see worlds/types.ts and
 // docs/developer-guide/kestrel-vale-plan.md). Hollins Cross, the village, is the start and finish; the road runs down to
 // Kestrel Water, over Mill Bridge, across the farmland of Foss Bottom, up the Raven Scar climb with its five hairpins to the
-// rock cutting of Raven Gap (a tunnel in a later milestone), down through Highfold Woods, along Beck Lane and back into the
+// rock cutting and tunnel of Raven Gap, down through Highfold Woods, along Beck Lane and back into the
 // village. It turns left all the way round, so the lake lies inside the loop.
 //
 // ROUTE IDS AND THE LAP ARE FROZEN once shipped: leaderboards, ghosts and segment times key on them. The lap length is
@@ -13,6 +13,7 @@
 import { fbm, smoothstep } from '../world/noise';
 import { riseRel, shapeAt } from '../world/canyon';
 import { pondDistance, type PondBody } from '../world/waterTypes';
+import { TUNNEL_HALF_WIDTH, TUNNEL_HILL, TUNNEL_PORTAL_DEPTH, vaultHeight, type TunnelSpan } from '../world/tunnelSpan';
 import { monumentAt, pchip, roadElevationField, roadTrace, terraceRow } from '../stageKit';
 import { closeLoop, routeStage, type LoopPiece, type World, type WorldRoute } from './types';
 import type { LandmarkKind, Stage } from '../stages';
@@ -197,18 +198,58 @@ const wildHeight = (x: number, z: number) => lakeGround(x, z, base(x, z));
 const CUT_FADE = 150;
 const cutWeight = (u: number) => smoothstep(GAP_FROM - CUT_FADE, GAP_FROM + 40, u) * (1 - smoothstep(GAP_TO - 40, GAP_TO + CUT_FADE, u));
 
-/** `Scenery.roadside`: the cutting's walls and the lake's graded bank, both measured against the road. */
+// The tunnel: the last stretch of the cutting runs under the ridge. The span is where the tube (world/tunnel.ts) and the two stone portals are; the
+// road's elevation and heading are untouched (the lap, the segments and the limits do not change).
+//
+// A heightfield cannot close over a road: where the ground climbs from the road's level to a hill's, its slope would stand inside the portal. So over
+// the span the TERRAIN is dug out below the road (a slot, |lateral| < 8 m, climbing steeply to the hill's own height by 12 m) and the tube builds the hill's
+// surface over the slot (`TunnelSpan.roof`, the same height the terrain has from 12 m out). Outside the span the cutting stays open, so each portal stands
+// in a rock face at the head of the open approach, with the hill rising behind its wall.
+const TUNNEL_MARGIN = 14; // m from the ends of the old cutting to the portals
+export const KV_TUNNEL_FROM = GAP_FROM + TUNNEL_MARGIN;
+export const KV_TUNNEL_TO = GAP_TO - TUNNEL_MARGIN;
+const TUNNEL_HUMP = 20; // m of ground over the road at the centreline, inside the tunnel
+const TUNNEL_DIG_IN = 2; // m behind a portal's face over which the terrain is dug out; the hill starts to climb after it
+const TUNNEL_RAMP = 6; // m over which the hill then climbs to its full height
+const TUNNEL_REACH = 45; // lateral reach of the hump (it fades to the cutting's own walls)
+const TUNNEL_DUG = -5; // m: the terrain's floor in the slot, below the road (hidden under the road and the tube)
+const SLOT = 8; // half width of the slot, m (the tube's walls are at 5.6; the 4 m terrain grid needs the rest)
+/** 0..1: how far under the hill the road is at lap metre `u`. */
+export const tunnelRoof = (u: number) => smoothstep(KV_TUNNEL_FROM + TUNNEL_DIG_IN, KV_TUNNEL_FROM + TUNNEL_DIG_IN + TUNNEL_RAMP, u) * (1 - smoothstep(KV_TUNNEL_TO - TUNNEL_DIG_IN - TUNNEL_RAMP, KV_TUNNEL_TO - TUNNEL_DIG_IN, u));
+/** 0..1: how far the terrain has been dug out at lap metre `u`: from the portal's face to full depth TUNNEL_DIG_IN m in, before the hill starts to climb (so the ground is never above the road inside the tube's walls). */
+const tunnelDig = (u: number) => smoothstep(KV_TUNNEL_FROM, KV_TUNNEL_FROM + TUNNEL_DIG_IN, u) * (1 - smoothstep(KV_TUNNEL_TO - TUNNEL_DIG_IN, KV_TUNNEL_TO, u));
+
+/** The height of the ground above the road at the cutting's walls and the hill over the tunnel (the terrain's own height outside the slot; the tube's roof inside it). */
+function hillRel(u: number, lateral: number, plain: number): number {
+  const side = lateral < 0 ? -1 : 1;
+  let rel = plain;
+  const w = cutWeight(u);
+  if (w > 0) {
+    const wall = riseRel({ ...shapeAt(u, side), rise: shapeAt(u, side).rise * 1.5 }, 1, Math.abs(lateral), plain);
+    rel += smoothstep(0, 0.35, w) * (wall - rel);
+  }
+  const roof = tunnelRoof(u);
+  return roof > 0 ? rel + TUNNEL_HUMP * roof * (1 - smoothstep(0, TUNNEL_REACH, Math.abs(lateral))) : rel;
+}
+/** The tube's roof: the hill's height, and never lower than a hand over the vault, so no slope of it shows through a portal. */
+function tunnelHill(d: number, lateral: number): number {
+  const u = mod(d);
+  const a = Math.abs(lateral);
+  return Math.max(hillRel(u, lateral, 0), (vaultHeight(Math.min(a, TUNNEL_HALF_WIDTH)) + 0.6) * (1 - smoothstep(TUNNEL_HALF_WIDTH + 1, SLOT + 1, a)));
+}
+export const KV_TUNNEL: TunnelSpan = { from: KV_TUNNEL_FROM, to: KV_TUNNEL_TO, roof: tunnelHill };
+
+/** `Scenery.roadside`: the cutting's walls, the hill over the tunnel and the lake's graded bank, both measured against the road. */
 function roadside(d: number, lateral: number, plain: number): number | null {
   const u = mod(d);
   let rel = plain;
   let touched = false;
-  const w = cutWeight(u);
-  if (w > 0) {
-    const side = lateral < 0 ? -1 : 1;
-    const p = shapeAt(u, side);
-    const wall = riseRel({ ...p, rise: p.rise * 1.5 }, 1, Math.abs(lateral), plain);
-    rel += smoothstep(0, 0.35, w) * (wall - rel);
+  if (cutWeight(u) > 0) {
+    rel = hillRel(u, lateral, plain);
     touched = true;
+    // Over the tunnel the terrain is dug out below the road, steeply, between 8 and 12 m from the centreline (the tube's roof is the hill over it).
+    const dig = tunnelDig(u);
+    if (dig > 0) rel += dig * (1 - smoothstep(SLOT, TUNNEL_HILL, Math.abs(lateral))) * (TUNNEL_DUG - rel);
   }
   const i = Math.round(u / TRACE_STEP);
   if (LAKE_NEAR[i]) {
@@ -251,6 +292,12 @@ const LANDMARKS: LandmarkKind[] = [
   once({ file: 'barn.glb', first: from('beck-2') + 180, every: 1e9, side: -1, offset: 32, size: 10, yaw: 0.5, clearance: 26 }),
 ];
 
+// Raven Gap's two portals: a stone arch across each mouth of the tunnel (the same monument, decorated on both faces). The entrance's front face is on the
+// span's start; the exit's back face is on its end. 11.6 m is its height as built.
+const PORTALS: LandmarkKind[] = [KV_TUNNEL_FROM + TUNNEL_PORTAL_DEPTH / 2, KV_TUNNEL_TO - TUNNEL_PORTAL_DEPTH / 2].map((d): LandmarkKind =>
+  once({ model: 'tunnel-portal', first: d, every: 1e9, side: 0, span: 'across', offset: 0, size: 11.6, clearance: 30, options: { lines: ['RAVEN GAP TUNNEL', 'ALT. 300 m'] } }));
+LANDMARKS.push(...PORTALS);
+
 const SPRINT = 2600; // on the lakeshore
 const SUMMIT = Math.round(GAP_FROM);
 
@@ -281,6 +328,7 @@ export const KESTREL_VALE: World = {
     water: [KV_LAKE],
     walls: (d) => within(WALLED, d),
     clearing: (d) => within(OPEN, d),
+    tunnels: [KV_TUNNEL],
   },
   landmarks: LANDMARKS,
   places: [
@@ -291,7 +339,8 @@ export const KESTREL_VALE: World = {
     sprints: [{ d: SPRINT, name: 'Kestrel Water sprint' }],
     summits: [{ d: SUMMIT, name: 'Raven Scar', cat: 2 }],
   },
-  crowdSpots: [...HAIRPINS, GAP_FROM - 60],
+  // The hairpins; the summit, just short of the tunnel's mouth (nobody stands inside it); and the Hollins Cross square either side of the lap line.
+  crowdSpots: [...HAIRPINS, GAP_FROM - 30, 70, KV_LAP - 70],
   baseAltitude: 190,
   culture: 'gb',
   weather: 'cloudy',
@@ -315,4 +364,4 @@ export const KESTREL_ROUTE_DEFS: WorldRoute[] = [
 export const KESTREL_ROUTES: Stage[] = KESTREL_ROUTE_DEFS.map((r) => routeStage(KESTREL_VALE, r));
 
 /** Pieces and marks the tests read back. */
-export const KV = { loop: LOOP, from, to, roadPoint, trace: TRACE, hairpins: HAIRPINS, gap: [GAP_FROM, GAP_TO] as const, summit: SUMMIT, sprint: SPRINT, crestAt, lakeGround, roadside };
+export const KV = { loop: LOOP, from, to, roadPoint, trace: TRACE, hairpins: HAIRPINS, gap: [GAP_FROM, GAP_TO] as const, tunnel: KV_TUNNEL, tunnelRoof, summit: SUMMIT, sprint: SPRINT, crestAt, lakeGround, roadside };

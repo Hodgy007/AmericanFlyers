@@ -60,7 +60,7 @@ describe('stage_limits', () => {
 
 describe('event_stage_pool', () => {
   it('matches the schedule’s pool: ids, names, lengths and positions', () => {
-    const pool = rows('event_stage_pool').map(([id, name, len, pos]) => ({ id, name, lengthM: +len, pos: +pos }));
-    expect(pool.sort((a, b) => a.pos - b.pos)).toEqual(EVENT_STAGE_POOL.map((p, i) => ({ id: p.id, name: p.name, lengthM: p.lengthM, pos: i })));
+    const pool = rows('event_stage_pool').map(([id, name, len, pos, since]) => ({ id, name, lengthM: +len, pos: +pos, sinceDay: since === 'null' ? undefined : +since }));
+    expect(pool.sort((a, b) => a.pos - b.pos)).toEqual(EVENT_STAGE_POOL.map((p, i) => ({ id: p.id, name: p.name, lengthM: p.lengthM, pos: i, sinceDay: p.sinceDay })));
   });
 });

@@ -4,7 +4,17 @@
 // in, and gives the rotation a unit test. Keep the pool, the hours and the
 // rotation rule in step with the SQL.
 
-export interface PoolStage { id: string; name: string; lengthM: number }
+export interface PoolStage {
+  id: string;
+  name: string;
+  lengthM: number;
+  /**
+   * The first UTC day (days since 1970) the stage is in the rotation; left out: always. The rotation is "day number mod the number of stages in
+   * rotation that day", so adding a stage would shift every already-scheduled day's stage. A stage added with a `sinceDay` a few weeks ahead
+   * leaves every earlier day exactly as it was (and as the database already created it): see raceStageForDay.
+   */
+  sinceDay?: number;
+}
 
 /** The stages the evening race rotates through, in order (event_stage_pool in the database). */
 export const EVENT_STAGE_POOL: PoolStage[] = [
@@ -25,6 +35,8 @@ export const EVENT_STAGE_POOL: PoolStage[] = [
   { id: 'central-park', name: 'Central Park Loop', lengthM: 29400 },
   { id: 'harrogate-worlds', name: 'Harrogate Worlds Circuit', lengthM: 27800 },
   { id: 'pacific-coast', name: 'Pacific Coast Highway', lengthM: 39100 },
+  // Three laps of Kestrel Vale. In the rotation from 14 December 2026 (UTC day 20801): the days before keep the 17-stage rotation they already have.
+  { id: 'kestrel-vale-grand', name: 'Grand Vale, Kestrel Vale', lengthM: 46196, sinceDay: 20801 },
 ];
 
 export const RACE_HOUR_UTC = 19.5; // 19:30 UTC every day
@@ -46,11 +58,15 @@ export interface ScheduledEvent {
 
 const DAY = 86400000;
 
-/** The stage the evening race uses on the UTC day that starts at `dayStartMs`. */
+/** The stages in the rotation on UTC day number `idx`, in position order. */
+export const poolOnDay = (idx: number): PoolStage[] => EVENT_STAGE_POOL.filter((s) => s.sinceDay === undefined || s.sinceDay <= idx);
+
+/** The stage the evening race uses on the UTC day that starts at `dayStartMs`: the (day number mod n)th of the n stages in the rotation that day (upcoming_events() in db/schema.sql). */
 export function raceStageForDay(dayStartMs: number): PoolStage {
   const idx = Math.floor(dayStartMs / DAY);
-  const n = EVENT_STAGE_POOL.length;
-  return EVENT_STAGE_POOL[((idx % n) + n) % n];
+  const pool = poolOnDay(idx);
+  const n = pool.length;
+  return pool[((idx % n) + n) % n];
 }
 
 /** Events starting from 3 hours ago to `hours` ahead of `nowMs`, in order. */
