@@ -20,7 +20,9 @@ async function setup(page: Page, o: { stored?: Record<string, { best?: unknown; 
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await mockNeon(page, { signedIn: true });
-  if (!o.fullFps) await slowFrames(page); // the panel and the clock run off real time, not frames: skip most of the software rendering (not for the long rides, below)
+  // Frames 250 ms apart: the panel and the clock run off real time, so this skips most of the software rendering. Not 1 s: at one
+  // frame a second the demo rider's power fades and the ride stalls (seen on CI in this test, see slowFrames.ts); the long rides below keep full frame rate.
+  if (!o.fullFps) await slowFrames(page, 250);
   await page.addInitScript((seed) => {
     localStorage.setItem('americanflyers.signedIn', '1');
     localStorage.setItem('americanflyers.onboarded', '1');
