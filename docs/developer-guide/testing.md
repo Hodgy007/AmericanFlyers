@@ -4,13 +4,16 @@ This page covers what the repository checks automatically (the type check, the b
 
 ## What runs automatically
 
-Every pull request and every push to `main` runs [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) on GitHub Actions:
+Every pull request and every push to `main` runs [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) on GitHub Actions. Its jobs run side by side:
 
-1. `npm ci`.
-1. **`npm run lint`.** ESLint (`eslint.config.js`): typescript-eslint's recommended rules plus `no-floating-promises` on `src/` and `api/`.
-2. **`npm run build`.** This type-checks the app (`tsc --noEmit` on everything under `src/`: strict mode, unused-variable checks, the Web Bluetooth types), the serverless functions (`tsc -p api --noEmit`) and the tests (`tsc -p tsconfig.test.json --noEmit`), then runs `vite build`.
-3. **`npm test`.** The unit tests (Vitest), below.
-4. **The smoke test.** `npx playwright install --with-deps chromium`, then `npx playwright test`: the built app in headless Chromium, below. On failure the workflow uploads the Playwright report and traces.
+- **Lint, build and unit tests** (one job), after `npm ci`:
+  1. **`npm run lint`.** ESLint (`eslint.config.js`): typescript-eslint's recommended rules plus `no-floating-promises` on `src/` and `api/`.
+  2. **`npm run build`.** This type-checks the app (`tsc --noEmit` on everything under `src/`: strict mode, unused-variable checks, the Web Bluetooth types), the serverless functions (`tsc -p api --noEmit`) and the tests (`tsc -p tsconfig.test.json --noEmit`), then runs `vite build`.
+  3. **`npm test`.** The unit tests (Vitest), below.
+- **Browser tests, in four shards.** Each shard runs `vite build`, installs Chromium (`npx playwright install --with-deps chromium`; the browser download is cached per Playwright version), then `npx playwright test --shard=N/4`: the built app in headless Chromium, below. Run one after another the suite takes about 14 minutes, because the 3D scene renders in software on CI; split four ways it is about 5 minutes. `fullyParallel: true` in `playwright.config.ts` is what lets a shard take single tests rather than whole files (with `workers: 1`, tests still run one at a time). On failure a shard uploads its Playwright report and traces as `playwright-report-N`.
+- **`test`** waits for the others and passes only if they all passed. It is the check branch protection looks at, so the shards can change without touching the repository settings.
+
+Tests must not depend on each other or on running in file order: a shard can start anywhere in a file.
 
 Vercel also runs `npm run build` for every push, so a branch that doesn't build won't deploy.
 
