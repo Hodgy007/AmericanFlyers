@@ -72,7 +72,7 @@ test('the hub world card fits a phone', async ({ page }) => {
 });
 
 /** Loads a stage at `km`, rides nothing, waits for the lazy chunks and the terrain, and with KESTREL_SHOTS saves a screenshot of the 3D scene. */
-async function loads(page: import('@playwright/test').Page, stage: string, km: number, tier: string, file: string, village = false) {
+async function loads(page: import('@playwright/test').Page, stage: string, km: number, tier: string, file: string, village = false, sideCamera = false) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
@@ -91,6 +91,7 @@ async function loads(page: import('@playwright/test').Page, stage: string, km: n
   await expect.poll(() => fetched.some((f) => /^ground-/.test(f)) && (!village || fetched.some((f) => /^monuments-/.test(f))), { timeout: 120_000 }).toBe(true);
   // Terrain tiles build a few a frame, at one frame a second here.
   await page.waitForTimeout(SHOTS ? Number(process.env.KESTREL_SETTLE_MS ?? 25_000) : 3_000);
+  if (sideCamera) { await page.keyboard.press('c'); await page.waitForTimeout(SHOTS ? 6_000 : 1_500); } // the side camera: 4 m to the rider's right, which is beside the tunnel's wall
   if (SHOTS) {
     mkdirSync('test-results', { recursive: true });
     // Only the 3D scene: the HUD panels would cover the places being looked at.
@@ -108,6 +109,23 @@ for (const tier of SHOTS ? ['low', 'medium'] : ['low']) {
     });
   }
 }
+
+// Raven Gap's tunnel runs from lap metre 10,297 to 10,619: just before the portal (the arch and the open approach), inside (the tube, its lamps, the
+// vault's shadow) and just after the exit (the far portal's back and the cutting opening out). Same checks and screenshots as the places above.
+const TUNNEL_SPOTS: [string, number][] = [['approach', 10.26], ['portal', 10.285], ['inside', 10.45], ['exit', 10.605], ['beyond', 10.65]];
+for (const tier of SHOTS ? ['low', 'medium'] : ['low']) {
+  for (const [name, km] of TUNNEL_SPOTS) {
+    test(`Raven Gap tunnel ${name} (${km} km) on ${tier}: loads without errors`, async ({ page }) => {
+      test.setTimeout(300_000);
+      await loads(page, 'kestrel-vale-loop', km, tier, `kestrel-tunnel-${name}-${tier}`);
+    });
+  }
+}
+
+test('Raven Gap tunnel inside (10.45 km) on low, from the side camera: loads without errors', async ({ page }) => {
+  test.setTimeout(300_000);
+  await loads(page, 'kestrel-vale-loop', 10.45, 'low', 'kestrel-tunnel-inside-side-low', false, true);
+});
 
 for (const [id, km] of PARTIAL) {
   test(`${id} at ${km} km on low: loads without errors (the road behind the start is the loop's)`, async ({ page }) => {

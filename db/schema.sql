@@ -5,7 +5,7 @@
 -- The browser talks to these tables through the Neon Data API as the
 -- "authenticated" role; row-level security keeps each rider to their own rows.
 --
--- Schema version: 2026-11-12 rev-1
+-- Schema version: 2026-11-12 rev-2
 -- db/schema.sql is the source of truth for the database and is re-runnable:
 -- every change is written with "if not exists" / "create or replace" / guarded
 -- "do" blocks so applying it again on an existing branch is safe.
@@ -668,25 +668,30 @@ create table if not exists public.event_stage_pool (
   length_m integer not null,
   position integer not null
 );
+-- The first UTC day (days since 1970) a stage is in the rotation; null = always. The evening race on day N is the (N mod n)th stage of the n in
+-- rotation that day, so a stage appended without a start day would move every day's stage, including days whose events the schedule has
+-- already created. A stage with a since_day some weeks ahead leaves every earlier day exactly as it is.
+alter table public.event_stage_pool add column if not exists since_day integer;
 alter table public.event_stage_pool enable row level security;
-insert into public.event_stage_pool (stage_id, name, length_m, position) values
-  ('hotw-morgul-bismark', 'Morgul-Bismark', 42263, 0),
-  ('alpe-dhuez', 'Alpe d''Huez', 14000, 1),
-  ('hotw-tour-of-the-moon', 'Tour of the Moon', 37000, 2),
-  ('stelvio', 'Stelvio Pass', 24500, 3),
-  ('route66', 'Route 66 Flats', 25000, 4),
-  ('ventoux', 'Mont Ventoux', 21400, 5),
-  ('hell-of-the-west', 'Echo Lake', 20800, 6),
-  ('tourmalet', 'Col du Tourmalet', 19000, 7),
-  ('zoncolan', 'Monte Zoncolan', 10100, 8),
-  ('mt-washington', 'Mount Washington', 12200, 9),
-  ('mt-blue-sky', 'Mount Blue Sky', 23300, 10),
-  ('mt-diablo', 'Mount Diablo', 18000, 11),
-  ('flagstaff', 'Flagstaff Mountain', 7400, 12),
-  ('richmond-worlds', 'Richmond Worlds Circuit', 32400, 13),
-  ('central-park', 'Central Park Loop', 29400, 14),
-  ('harrogate-worlds', 'Harrogate Worlds Circuit', 27800, 15),
-  ('pacific-coast', 'Pacific Coast Highway', 39100, 16)
+insert into public.event_stage_pool (stage_id, name, length_m, position, since_day) values
+  ('hotw-morgul-bismark', 'Morgul-Bismark', 42263, 0, null),
+  ('alpe-dhuez', 'Alpe d''Huez', 14000, 1, null),
+  ('hotw-tour-of-the-moon', 'Tour of the Moon', 37000, 2, null),
+  ('stelvio', 'Stelvio Pass', 24500, 3, null),
+  ('route66', 'Route 66 Flats', 25000, 4, null),
+  ('ventoux', 'Mont Ventoux', 21400, 5, null),
+  ('hell-of-the-west', 'Echo Lake', 20800, 6, null),
+  ('tourmalet', 'Col du Tourmalet', 19000, 7, null),
+  ('zoncolan', 'Monte Zoncolan', 10100, 8, null),
+  ('mt-washington', 'Mount Washington', 12200, 9, null),
+  ('mt-blue-sky', 'Mount Blue Sky', 23300, 10, null),
+  ('mt-diablo', 'Mount Diablo', 18000, 11, null),
+  ('flagstaff', 'Flagstaff Mountain', 7400, 12, null),
+  ('richmond-worlds', 'Richmond Worlds Circuit', 32400, 13, null),
+  ('central-park', 'Central Park Loop', 29400, 14, null),
+  ('harrogate-worlds', 'Harrogate Worlds Circuit', 27800, 15, null),
+  ('pacific-coast', 'Pacific Coast Highway', 39100, 16, null),
+  ('kestrel-vale-grand', 'Grand Vale, Kestrel Vale', 46196, 17, 20801) -- 14 December 2026: apply this file more than 15 days before it
 on conflict (stage_id) do nothing;
 
 create table if not exists public.events (
@@ -727,34 +732,39 @@ language plpgsql security definer set search_path = '' as $$
 declare
   me text := auth.user_id();
   hrs integer := greatest(1, least(coalesce(p_hours, 48), 24 * 14));
-  n integer := (select count(*) from public.event_stage_pool);
+  n integer;
   day0 timestamptz := date_trunc('day', now() at time zone 'utc') at time zone 'utc';
   d timestamptz;
   idx integer;
   pool record;
 begin
   if me is null then raise exception 'Sign in to see events' using errcode = '42501'; end if;
-  if n > 0 then
-    for i in -1 .. (hrs / 24 + 1) loop
-      d := day0 + i * interval '1 day';
-      idx := (extract(epoch from d)::bigint / 86400)::integer;
-      select p.stage_id, p.name into pool from public.event_stage_pool p where p.position = idx % n;
-      -- The evening race.
-      if d + interval '19 hours 30 minutes' > now() - interval '3 hours' and d + interval '19 hours 30 minutes' < now() + make_interval(hours => hrs) then
-        insert into public.events (kind, stage_id, starts_at, title, seed)
-        values ('race', pool.stage_id, d + interval '19 hours 30 minutes', 'Evening race: ' || pool.name,
-                ('x' || lpad(substr(md5('race' || d::text), 1, 7), 8, '0'))::bit(32)::integer)
-        on conflict (kind, stage_id, starts_at) do nothing;
-      end if;
-      -- The midday group ride on Heartland Rollers.
-      if d + interval '12 hours 30 minutes' > now() - interval '3 hours' and d + interval '12 hours 30 minutes' < now() + make_interval(hours => hrs) then
-        insert into public.events (kind, stage_id, starts_at, title, seed, pace_wkg)
-        values ('group_ride', 'heartland', d + interval '12 hours 30 minutes', 'Group ride: Heartland Rollers, 2.6 W/kg',
-                ('x' || lpad(substr(md5('ride' || d::text), 1, 7), 8, '0'))::bit(32)::integer, 2.6)
-        on conflict (kind, stage_id, starts_at) do nothing;
-      end if;
-    end loop;
-  end if;
+  for i in -1 .. (hrs / 24 + 1) loop
+    d := day0 + i * interval '1 day';
+    idx := (extract(epoch from d)::bigint / 86400)::integer;
+    -- The stages in the rotation that day (see since_day), in position order: the (idx mod n)th. Days before a stage's since_day are unchanged by adding it.
+    n := (select count(*) from public.event_stage_pool p where p.since_day is null or p.since_day <= idx);
+    continue when n = 0;
+    select q.stage_id, q.name into pool
+      from (select p.stage_id, p.name, row_number() over (order by p.position) - 1 as rn
+              from public.event_stage_pool p where p.since_day is null or p.since_day <= idx) q
+     where q.rn = idx % n;
+    -- The evening race. Never a second automatic race at a time that already has one (whatever stage it was created with).
+    if d + interval '19 hours 30 minutes' > now() - interval '3 hours' and d + interval '19 hours 30 minutes' < now() + make_interval(hours => hrs) then
+      insert into public.events (kind, stage_id, starts_at, title, seed)
+      select 'race', pool.stage_id, d + interval '19 hours 30 minutes', 'Evening race: ' || pool.name,
+             ('x' || lpad(substr(md5('race' || d::text), 1, 7), 8, '0'))::bit(32)::integer
+       where not exists (select 1 from public.events e where e.kind = 'race' and e.starts_at = d + interval '19 hours 30 minutes' and e.created_by is null)
+      on conflict (kind, stage_id, starts_at) do nothing;
+    end if;
+    -- The midday group ride on Heartland Rollers.
+    if d + interval '12 hours 30 minutes' > now() - interval '3 hours' and d + interval '12 hours 30 minutes' < now() + make_interval(hours => hrs) then
+      insert into public.events (kind, stage_id, starts_at, title, seed, pace_wkg)
+      values ('group_ride', 'heartland', d + interval '12 hours 30 minutes', 'Group ride: Heartland Rollers, 2.6 W/kg',
+              ('x' || lpad(substr(md5('ride' || d::text), 1, 7), 8, '0'))::bit(32)::integer, 2.6)
+      on conflict (kind, stage_id, starts_at) do nothing;
+    end if;
+  end loop;
   return query
     select e.id, e.kind, e.stage_id, e.title, e.starts_at, e.seed, e.pace_wkg,
            case when e.kind = 'race' then 150 else 90 end,

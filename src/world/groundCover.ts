@@ -207,6 +207,7 @@ export function planCell(cell: Cell, o: PlanOptions, road: (d: number) => Road, 
     const g = ground(x, z, w);
     // Skip ground nearer another stretch of road (the inside of a hairpin) or the road itself.
     if (g.roadDist < LAT_MIN - 0.3 || g.roadDist < r - 2) continue;
+    if (g.covered) continue; // the hill over a tunnel is bare
     if (g.slope !== undefined && g.slope > 0.5) continue; // no plants on cliff faces (canyons beside the road)
     const what = pickCover(w, o.desert, meadowAt(d, lat), u(3), u(4), u(5), u(6));
     if (!what) continue;

@@ -1,5 +1,6 @@
 // Achievements, worked out from a rider's saved activities and FTP history.
 
+import { STAGES } from '../stages';
 import type { EffortLogRow } from './segmentApi';
 import type { Activity, FtpEntry } from './sync';
 
@@ -73,6 +74,26 @@ export function achievements(acts: Activity[], ftp: FtpEntry[], riderKg: number,
     list.push({ icon, name, description, done: !!when, progress: Math.min(1, sum / goal), detail: when ? date(when) : `${shown(sum)} / ${shown(goal)} ${unit}` });
   };
 
+  /**
+   * Earned by finishing every route of a world that has a finish line (the routes come from the stages themselves, so a route added later counts by itself).
+   * Achievements are worked out afresh from the saved rides every time, so a route added after you had finished them all must not un-earn the badge:
+   * it is earned by the first finish after which every route that existed on that day (`world.since`, empty for the launch routes) has been finished,
+   * and a route added later asks nothing of a rider who had already earned it.
+   */
+  const everyRoute = (icon: string, name: string, description: string, worldId: string) => {
+    const routes = STAGES.filter((s) => s.world?.id === worldId && s.finish !== null);
+    const done = new Set<string>();
+    let when: Activity | undefined;
+    for (const a of chrono) {
+      if (!a.finished || !a.stage_id || !routes.some((r) => r.id === a.stage_id)) continue;
+      done.add(a.stage_id);
+      const day = a.started_at.slice(0, 10);
+      if (routes.every((r) => (r.world!.since !== undefined && r.world!.since > day) || done.has(r.id))) { when = a; break; }
+    }
+    const have = routes.filter((r) => done.has(r.id)).length;
+    list.push({ icon, name, description, done: !!when, progress: when ? 1 : routes.length ? have / routes.length : 0, detail: when ? date(when) : `${have} / ${routes.length} routes` });
+  };
+
   const counted = (icon: string, name: string, description: string, goal: number, n: number, unit: string) => {
     list.push({ icon, name, description, done: n >= goal, progress: Math.min(1, n / goal), detail: n >= goal ? 'Earned' : `${n} / ${goal} ${unit}` });
   };
@@ -94,6 +115,7 @@ export function achievements(acts: Activity[], ftp: FtpEntry[], riderKg: number,
   first('🧗', 'Raven Scar', 'Ride the Raven Scar route: up the five hairpins to the cutting at Raven Gap.', (a) => a.finished && a.stage_id === 'kestrel-vale-raven-scar');
   first('🚤', 'Lakeside Sprint', 'Finish the Lakeside Sprint: Beck Lane, the village and Kestrel Water to Mill Bridge.', (a) => a.finished && a.stage_id === 'kestrel-vale-lakeside');
   first('🏞', 'Grand Vale', 'Finish three laps of Kestrel Vale, over Raven Scar each time.', (a) => a.finished && a.stage_id === 'kestrel-vale-grand');
+  everyRoute('🗺', 'Vale Explorer', 'Finish every Kestrel Vale route that has a finish line.', 'kestrel-vale');
   first('🧪', 'Tested', 'Complete a ramp FTP test.', (a) => a.workout_name === RAMP_TEST_NAME);
   first('⚡', 'Sprinter', 'Hold 800 W for 5 seconds.', (a) => (a.best_power?.['5'] ?? 0) >= 800);
   first('🔥', 'Four watts', `Hold 4 W/kg for 20 minutes (${Math.round(riderKg * 4)} W at ${riderKg} kg).`, (a) => (a.best_power?.['1200'] ?? 0) >= riderKg * 4);

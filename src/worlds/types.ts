@@ -10,6 +10,7 @@
 import { finishArch, GANTRY, namedPlaces, roadTrace, startArch } from '../stageKit';
 import type { CultureId } from '../world/cultureTypes';
 import type { WaterBody } from '../world/waterTypes';
+import type { TunnelSpan } from '../world/tunnelSpan';
 import type { LandmarkKind, RacePoints, Scenery, Stage } from '../stages';
 
 // --------------------------------------------------------------- the loop ----
@@ -135,12 +136,16 @@ export interface WorldRoute {
   laps?: number | null;
   /** A partial route's length, m (a route has exactly one of `laps` or `length`). It may run across the lap line. */
   length?: number;
+  /** The day (YYYY-MM-DD) this route was added to its world; leave it out for the routes the world launched with. The world's "ride every route" badge does not un-earn when a route is added: it asks only for the routes that existed when you finished the last one (tests/unit/worlds.test.ts makes a new route say when it is from). */
+  since?: string;
   /** Lap metres where the route starts (default 0). Pick a point on a straight: the road behind the start is the real road (course.ts). */
   start?: number;
 }
 
 /** Laps of signs a free ride is given (it is endless, the list is not): about 185 km. */
 const ENDLESS_LAPS = 12;
+/** Laps of tunnels an endless ride is given (about 3,000 km): the list is long, the lookup is a binary search. */
+const TUNNEL_LAPS = 200;
 
 /** The road's (x east, z south) at lap metre `u`, as the world's own trace (every 10 m, midpoint rule) has it, interpolated. */
 function tracePoint(headingAt: (d: number) => number, u: number): [number, number] {
@@ -167,6 +172,7 @@ export function routeStage(world: World, route: WorldRoute): Stage {
   const mod = (d: number) => ((d % lap) + lap) % lap;
   const limit = finish ?? ENDLESS_LAPS * lap;
   const kMax = Math.ceil((limit + start) / lap) + 1;
+  const tunnelLaps = finish === null ? TUNNEL_LAPS : kMax;
   /** The route distances of lap metre `d`, on every lap the route covers (inside [0, finish], or the endless route's signs). */
   const at = (d: number): number[] => {
     const out: number[] = [];
@@ -216,8 +222,14 @@ export function routeStage(world: World, route: WorldRoute): Stage {
   const shiftBody = (b: WaterBody): WaterBody => b.kind === 'sea' ? { ...b, level: b.level - E0 }
     : b.kind === 'pond' ? { ...b, x: b.x - P[0], z: b.z - P[1], level: b.level - E0 }
     : { ...b, pts: b.pts.map(([x, z]) => [x - P[0], z - P[1]] as [number, number]), level: b.level - E0 };
-  const scenery: Scenery = start === 0 ? sc : {
+  // Tunnel spans, in the route's own metres: every lap's copy that overlaps the route (an endless ride gets TUNNEL_LAPS of them), cut to the route.
+  const tunnels: TunnelSpan[] | undefined = sc.tunnels?.length
+    ? Array.from({ length: tunnelLaps + 1 }, (_, k) => k).flatMap((k) => sc.tunnels!.map((t): TunnelSpan => ({ from: t.from - start + k * lap, to: t.to - start + k * lap, roof: t.roof && ((d, lat) => t.roof!(wrap(d), lat)) })))
+      .filter((t) => t.to > 0 && (finish === null || t.from < finish)).map((t): TunnelSpan => ({ ...t, from: Math.max(0, t.from), to: finish === null ? t.to : Math.min(finish, t.to) })).sort((a, b) => a.from - b.from)
+    : undefined;
+  const scenery: Scenery = start === 0 && !tunnels ? sc : start === 0 ? { ...sc, tunnels } : {
     ...sc,
+    tunnels,
     wildHeight: (x, z) => sc.wildHeight(x + P[0], z + P[1]) - E0,
     rockLine: sc.rockLine - E0,
     snowLine: sc.snowLine - E0,
@@ -260,7 +272,7 @@ export function routeStage(world: World, route: WorldRoute): Stage {
     climb: false,
     race: { sprints: raceOf(world.race.sprints), summits: raceOf(world.race.summits) },
     world: {
-      id: world.id, route: route.id, start, name: world.name, tagline: world.tagline, lap,
+      id: world.id, route: route.id, start, name: world.name, tagline: world.tagline, lap, since: route.since,
       // The canonical one-lap route from the lap line, which segments.ts finds the world's segments on (once per world).
       lapStage: () => routeStage(world, { id: `${world.id}-lap`, name: world.name, tagline: '', laps: 1 }),
     },

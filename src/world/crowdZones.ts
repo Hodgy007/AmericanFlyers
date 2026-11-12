@@ -2,6 +2,7 @@ import { currentStage } from '../course';
 import type { Stage } from '../stages';
 import type { CultureId } from './crowdCulture';
 import { bendsOf } from './roadside';
+import { tunnelAt } from './tunnelSpan';
 
 /**
  * A place where the crowd is much thicker and louder than a hairpin's usual one,
@@ -70,6 +71,8 @@ export function hotspotAt(stage: Stage, d: number): { hotspot: CrowdHotspot; wei
  * (louder). Pure; `crowdNear()` is it for the current stage.
  */
 export function crowdAt(stage: Stage, d: number): number {
+  // Nobody lines the road inside a tunnel (or on its portal's doorstep): no spectators, no camp, no roar.
+  if (tunnelAt(stage.scenery.tunnels, d, 4)) return 0;
   let c = 0;
   // Named places on a circuit or a coast road (`climb: false`) are only announced: the crowds gather at its `crowdSpots`.
   if (stage.climb !== false) {

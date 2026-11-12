@@ -21,7 +21,8 @@ export type MonumentId =
   | 'manhattan-skyline'
   | 'virginia-capitol'
   | 'terrace'
-  | 'bixby-bridge';
+  | 'bixby-bridge'
+  | 'tunnel-portal';
 
 /** Words and looks a monument can be given (signs, plaques, clusters). Which fields matter depends on the monument. */
 export interface MonumentOptions {

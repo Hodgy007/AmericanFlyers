@@ -4,6 +4,7 @@ import { roadPoint } from '../course';
 import type { Stage } from '../stages';
 import { hash2 } from './noise';
 import { ROAD_HALF_WIDTH, bendsOf, hash01, isClimb } from './roadside';
+import { tunnelAt } from './tunnelSpan';
 
 // Guardrails (a W-beam on posts) on mountain stages: along the outside of every
 // hairpin and wherever the ground falls away beside the road. One instanced
@@ -31,6 +32,7 @@ export function barrierSections(stage: Stage, d0: number, d1: number, ground: (x
   for (let k = first; k * SECTION < d1; k++) {
     const d = k * SECTION;
     if (d < 40) continue; // not through the start
+    if (tunnelAt(stage.scenery.tunnels, d, 4)) continue; // the tunnel's own walls are the guard
     if (stage.finish !== null && Math.abs(d - stage.finish) < 14) continue; // the finish gantry and its crowd barriers are elsewhere
     const p = roadPoint(d);
     for (const side of [-1, 1] as const) {
