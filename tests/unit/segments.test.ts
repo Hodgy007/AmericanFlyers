@@ -6,6 +6,7 @@ import {
   type Effort, type Segment,
 } from '../../src/segments';
 import { STAGES, stageById } from '../../src/stages';
+import { RideClock } from '../../src/rideClock';
 
 /** id, name, start, end (metres, rounded) for every built-in stage. Changing any of these changes a leaderboard: add a row to db/schema.sql's segment_limits too. */
 const PINNED: Record<string, [string, string, number, number][]> = {
@@ -218,6 +219,72 @@ describe('timing an effort', () => {
     tracker.update(1100, 20, 0, true);
     expect(tracker.live?.x).toBeCloseTo(100, 6);
     expect(tracker.live?.elapsed).toBeGreaterThan(0);
+  });
+});
+
+// ------------------------------------------------ fed from the simulation step ----
+
+/**
+ * Drives the tracker the way src/main.ts does: a RideClock turns each (sparse) frame or background tick into substeps of at most
+ * 0.1 s real, and the tracker is updated once per substep. `gapMs` is the real time between frames; `scale` is `?timescale`.
+ */
+function rideByFrames(tracker: SegmentTracker, o: { from: number; to: number; v: number; gapMs: number; scale?: number; limits?: { maxCatchUpMs?: number } }) {
+  const clock = new RideClock(o.scale ?? 1);
+  let d = o.from;
+  let t = 0;
+  let w = 0;
+  let now = 0;
+  clock.reset(now);
+  tracker.update(d, t, w, true);
+  while (d < o.to) {
+    now += o.gapMs;
+    const s = clock.advance(now, o.limits);
+    for (let i = 0; i < s.count; i++) {
+      d += o.v * s.dt;
+      t += s.dt;
+      w += 300 * s.dt;
+      tracker.update(d, t, w, true);
+    }
+  }
+}
+
+describe('a sparse frame rate does not lose the effort when the tracker is fed every simulation step', () => {
+  // 15 m/s is 150 m in 10 s: a tracker fed once per frame would see a jump (JUMP_M) with frames more than 10 s apart, and a background
+  // timer or a throttled frame can be that far apart. Fed per substep, the step is 1.5 m whatever the frame gap.
+  it('survives frames 5 s apart (a stalled tab catching up, capped at 5 s) at 15 m/s, with the same time and splits as dense frames', () => {
+    const dense = collect([SEG]);
+    rideByFrames(dense.tracker, { from: 800, to: 1700, v: 15, gapMs: 16 });
+    const sparse = collect([SEG]);
+    rideByFrames(sparse.tracker, { from: 800, to: 1700, v: 15, gapMs: 5000 });
+    expect(sparse.voided).toEqual([]);
+    expect(sparse.finished).toHaveLength(1);
+    expect(sparse.finished[0].e.t).toBeCloseTo(dense.finished[0].e.t, 1);
+    expect(sparse.finished[0].e.t).toBeCloseTo(500 / 15, 1);
+    expect(sparse.finished[0].e.s).toEqual(dense.finished[0].e.s);
+    expect(sparse.finished[0].e.p).toBe(dense.finished[0].e.p);
+  });
+
+  it('survives one frame a second at ?timescale=20 (2 s per substep)', () => {
+    const { tracker, finished, voided } = collect([SEG]);
+    rideByFrames(tracker, { from: 800, to: 1700, v: 12, gapMs: 1000, scale: 20 });
+    expect(voided).toEqual([]);
+    expect(finished).toHaveLength(1);
+    expect(finished[0].e.t).toBeCloseTo(500 / 12, 1);
+  });
+
+  it('a hidden tab ticked once a second at 1x (10 substeps each) times a climb as dense frames do', () => {
+    const { tracker, finished, voided } = collect([SEG]);
+    rideByFrames(tracker, { from: 900, to: 1600, v: 6, gapMs: 1000 });
+    expect(voided).toEqual([]);
+    expect(finished[0].e.t).toBeCloseTo(500 / 6, 1);
+  });
+
+  it('is the per-step feed that matters: one update per 10 s frame at 15 m/s sees 150 m jumps and never starts the effort', () => {
+    const { tracker, started, finished } = collect([SEG]);
+    // What komUi.update() on the HUD schedule would have done: only the state at each frame, 151 m apart.
+    for (let k = 0; k <= 8; k++) tracker.update(800 + k * 151, k * 10, 0, true);
+    expect(started).toEqual([]);
+    expect(finished).toHaveLength(0);
   });
 });
 

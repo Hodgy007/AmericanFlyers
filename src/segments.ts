@@ -331,7 +331,7 @@ export function segmentTime(s: number): string {
 
 // ------------------------------------------------------------------ tracker ----
 
-/** A jump along the road bigger than this in one frame (demo profile jumps) is not riding: it voids an effort and can't start one. */
+/** A jump along the road bigger than this between two updates (demo profile jumps) is not riding: it voids an effort and can't start one. */
 const JUMP_M = 150;
 
 export interface Live {
@@ -353,7 +353,8 @@ export interface TrackerEvents {
 }
 
 /**
- * Times a ride through a stage's segments. Call `update` every frame with the distance, the moving-time clock the
+ * Times a ride through a stage's segments. Call `update` on every simulation step (not once per drawn frame: a throttled
+ * frame or a hidden tab's timer is seconds apart, and a gap over JUMP_M voids the effort) with the distance, the moving-time clock the
  * stage finish uses, the work done so far (joules) and whether the rider is riding (moving, not on the start line
  * waiting, not finished). O(segments) numbers per frame and no allocation, except when a split or an effort is stored.
  */

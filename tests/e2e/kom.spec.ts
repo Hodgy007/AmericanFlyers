@@ -50,13 +50,16 @@ test('approaching Alpe d’Huez shows the KOM panel with the board, then the liv
   // The card shrinks to a chip after a few seconds: pin it open the way a rider does (the click or tap on the card) to read the board.
   // Not just "expanded": when the climb comes into range the card opens by itself for 6 s (cardDock.ts AUTO_MS), and a test that saw it
   // open then and didn't click lost the board when it shrank back (CI, run 43263133231). A click while it is auto-open closes it (it
-  // pins the opposite of what is shown), so click until it is open by the rider's choice (data-open="user"). A DOM click (press), not a
-  // pointer one: the pointer's hover opens the card first, so the click itself would then pin it shut.
-  await expect(async () => {
-    if ((await card.getAttribute('data-open')) !== 'user') await press(page, '#kom-toggle');
-    await expect(card).toHaveAttribute('data-open', 'user', { timeout: 1000 });
-    await expect(page.locator('#kom-toggle')).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
-  }).toPass({ timeout: 15_000 });
+  // pins the opposite of what is shown), so click until it is open by the rider's choice (data-open="user"). DOM clicks, not pointer
+  // ones (the pointer's hover opens the card first, so the click itself would then pin it shut), and all in one step inside the page:
+  // the toggle's handler applies at once, and on a busy machine a round trip per click took seconds and ran out of time.
+  await page.evaluate(() => {
+    const el = document.getElementById('kom-card')!;
+    const toggle = document.getElementById('kom-toggle') as HTMLButtonElement;
+    for (let i = 0; i < 3 && el.dataset.open !== 'user'; i++) toggle.click();
+  });
+  await expect(card).toHaveAttribute('data-open', 'user');
+  await expect(page.locator('#kom-toggle')).toHaveAttribute('aria-expanded', 'true');
   // The top 5 from the (mocked) shared board, the leader crowned, and your own rank below.
   await expect(page.locator('#kom-board li:visible')).toHaveCount(5);
   await expect(page.locator('#kom-board li').first()).toContainText('👑');

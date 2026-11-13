@@ -62,6 +62,7 @@ The live app is at https://americanflyers.vercel.app. It's written in TypeScript
 - [Physics and stats](developer-guide/physics-and-stats.md): the power-to-speed model and how ride statistics are computed.
 - [3D world](developer-guide/3d-world.md): renderer, terrain, road, rider, sky, landmarks and cameras.
 - [Stages and GPX](developer-guide/stages-and-gpx.md): stage definitions, how the climbs are built, the tour stages, and GPX parsing.
+- [Improvement plan](developer-guide/improvement-plan.md): the fixes from the November 2026 review, in order, with what done means for each.
 - [Kestrel Vale plan](developer-guide/kestrel-vale-plan.md): the plan (milestones 1 and 2 built) for a fictional home world with named routes and route badges.
 - [Racing and the tour](developer-guide/racing-and-tour.md): the race engine, the live race, the classifications and the tour.
 - [KOM segments](developer-guide/kom-segments.md): how a stage's big climbs are found, how efforts are timed and compared, storage, the database and the HUD.
