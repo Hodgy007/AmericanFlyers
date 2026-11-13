@@ -147,7 +147,8 @@ src/
   hud.ts             Data blocks and the data-block chooser
   workouts/          Workout model, built-ins, .zwo/.erg/.mrc import + .zwo export,
                      library (browser storage), player, graph, library + creator UI
-  stages.ts          Stage definitions: profiles, bends, scenery, landmarks, signs
+  stages.ts          Stage list, types and loader; stageDefs/ holds each stage's profile, bends,
+                     scenery, landmarks, signs (loaded on demand); stageCatalogue.ts is generated
   routes/            GPX parsing, route → stage conversion, saved routes; real/ holds the baked
                      real roads of the built-in stages (scripts/bake-routes.mjs)
   course.ts          The current stage's road: elevation, grade, heading, centreline

@@ -8,7 +8,7 @@ import type { EffortLogRow } from '../cloud/segmentApi';
 import type { Activity, FtpEntry } from '../cloud/sync';
 import { nextSession, sessions, type Plan, type PlanProgress } from '../plans';
 import { dailySchedule, joinState, RACE_MINUTES, RIDE_MINUTES } from '../schedule';
-import type { Stage } from '../stages';
+import { stageCatalogue, type Stage } from '../stages';
 
 const KM_PER_MI = 1.609344;
 
@@ -59,11 +59,15 @@ export function stageClimb(stage: Pick<Stage, 'finish' | 'elevationAt'>): number
 export interface StageFigures { lengthM: number | null; climbM: number }
 
 const figureCache = new WeakMap<object, StageFigures>();
-/** Length (null = endless) and climbing of a stage, worked out once. */
-export function stageFigures(stage: Pick<Stage, 'finish' | 'elevationAt'>): StageFigures {
+/**
+ * Length (null = endless) and climbing of a stage, worked out once. A built-in stage's come from the catalogue (src/stageCatalogue.ts, checked
+ * against the real roads by a unit test), so the hub lists every stage without fetching any road; an uploaded route's are summed from its profile.
+ */
+export function stageFigures(stage: Pick<Stage, 'finish' | 'elevationAt'> & { id?: string; uploaded?: boolean }): StageFigures {
   let f = figureCache.get(stage);
   if (!f) {
-    f = { lengthM: stage.finish, climbM: stageClimb(stage) };
+    const known = stage.id === undefined ? undefined : stageCatalogue({ id: stage.id, uploaded: stage.uploaded });
+    f = { lengthM: stage.finish, climbM: known ? known.climbM : stageClimb(stage) };
     figureCache.set(stage, f);
   }
   return f;

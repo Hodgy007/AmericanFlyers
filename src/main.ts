@@ -7,7 +7,9 @@ import { initDevices } from './devicesUi';
 import { PowerMatch } from './ble/powerMatch';
 import { RideQueue } from './rideQueue'; // rides saved on this device while offline // ☰ Menu trainer and heart rate entries, remembered devices
 import { currentStage, elevationAt, gradeAt, headingAt, setStage } from './course';
-import type { Stage } from './stages';
+import { loadStage, stageLoader, stageProfile, type Stage } from './stages';
+import { startupStage, startupStageFailed } from './startupStage';
+import { stageFigures } from './hub/data';
 import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
 import { airDensityAt, stepSpeed, DEFAULT_PARAMS, SEA_LEVEL_AIR_DENSITY } from './physics';
 import { limitCornerSpeed, setRoadWet } from './cornering'; // slowing for bends on descents
@@ -392,8 +394,10 @@ function markerConfig() {
   };
 }
 
-// `?stage=alpe-dhuez` picks the stage; the stage picker updates it.
-setStage(stageById(new URLSearchParams(location.search).get('stage')));
+// `?stage=alpe-dhuez` picks the stage; the stage picker updates it. Its road has already been fetched (src/boot.ts, src/startupStage.ts): a
+// built-in stage's road loads on demand, and if this one couldn't be fetched the app opens on Heartland and says so.
+setStage(startupStage);
+if (startupStageFailed) window.setTimeout(() => toast(`Couldn’t load ${startupStageFailed!.name}: check your connection. Opened Heartland Rollers instead.`, 7000), 0); // (after the module has run: toast() uses state declared further down)
 const world = new World($<HTMLCanvasElement>('scene'), markerConfig());
 world.setAtmosphere(settings.timeOfDay, settings.weather);
 // Wind, and the mini-map and climb preview.
@@ -1185,8 +1189,10 @@ async function saveInterrupted(snap: RideSnapshot) {
 
 /** Picks an interrupted ride back up: the stage, the position, the activity's recorder (same id) and its statistics. */
 function resumeSnapshot(snap: RideSnapshot) {
+  const stage = stageById(snap.stageId);
+  if (stageNotHere(stage, () => resumeSnapshot(snap))) return;
   leaveHub();
-  chooseStage(stageById(snap.stageId)); // (starts afresh, so nothing of an earlier ride is left)
+  chooseStage(stage); // (starts afresh, so nothing of an earlier ride is left)
   Object.assign(ride, {
     distance: snap.ride.distance, startDistance: snap.ride.startDistance, speed: 0, movingTime: snap.ride.movingTime,
     climbed: snap.ride.climbed, work: snap.ride.work, proM: snap.ride.proM, planCounted: snap.ride.planCounted,
@@ -1409,14 +1415,18 @@ function resetRide() {
 
 /** Total climbing in metres over a stage (or its first 20 km if endless). */
 function stageClimbing(stage: Stage) {
-  let total = 0;
-  let last = stage.elevationAt(0);
-  for (let d = 10; d <= (stage.finish ?? 20000); d += 10) {
-    const e = stage.elevationAt(d);
-    if (e > last) total += e - last;
-    last = e;
-  }
-  return total;
+  return stageFigures(stage).climbM;
+}
+
+/**
+ * A built-in stage's road loads on demand (src/stages.ts). True when this stage's hasn't arrived: it is fetched (the hub's Ride button pulses if
+ * that takes a moment, and a failure toasts, and the next try fetches again) and `retry` runs once it is here, so the caller just returns.
+ */
+function stageNotHere(stage: Stage, retry: () => void): boolean {
+  const l = stageLoader(stage);
+  if (l.peek()) return false;
+  void use(l, retry, document.getElementById('hub-go'));
+  return true;
 }
 
 function chooseStage(stage: Stage) {
@@ -1476,7 +1486,7 @@ function openStages() {
     card.querySelector('.stage-tagline')!.textContent = stage.tagline;
     card.addEventListener('click', () => {
       dialog.close();
-      if (stage !== currentStage()) chooseStage(stage);
+      if (stage !== currentStage() && !stageNotHere(stage, () => chooseStage(stage))) chooseStage(stage);
     });
     if (stage.finish !== null) {
       // A race against the pro teams, from the start line.
@@ -1513,7 +1523,7 @@ function openStages() {
   if (!dialog.open) dialog.showModal();
   // Draw each card's profile now that it has a size.
   stages.forEach((stage, i) => {
-    drawProfile(list.querySelectorAll('canvas')[i] as HTMLCanvasElement, null, [0, stage.finish ?? 20000], stage.elevationAt);
+    drawProfile(list.querySelectorAll('canvas')[i] as HTMLCanvasElement, null, [0, stage.finish ?? 20000], stageProfile(stage));
   });
 }
 
@@ -1522,6 +1532,7 @@ function openStages() {
 /** Lines the pro teams up against you on a stage: a 3-2-1 countdown, then a race to the finish. */
 function beginRace(stage: Stage, tourStage: number | null = null) {
   if (stage.finish === null) return;
+  if (stageNotHere(stage, () => beginRace(stage, tourStage))) return;
   if (stage !== currentStage()) chooseStage(stage);
   else resetRide();
   const tour = tourStage ? getTour() : null;
@@ -1559,10 +1570,11 @@ function finishRace(r: LiveRace) {
 
 const tourUi = lazy(() => import('./tourUi').then((m) => m.initTourUi({
   race: (n) => beginRace(stageById(TOUR_STAGE_IDS[n - 1]), n),
-  simulate: (n) => {
+  simulate: function simulate(n: number) {
     const tour = getTour();
     if (!tour) return;
     const id = TOUR_STAGE_IDS[n - 1];
+    if (stageNotHere(stageById(id), () => simulate(n))) return;
     const rows = simulateStage(tour, id, settings);
     recordStage(id, rows);
     const you = rows.findIndex((x) => x.you) + 1;
@@ -1637,6 +1649,7 @@ async function joinEvent(row: EventRow) {
   if (joinState(row.kind, startsAtMs, serverNow()) !== 'open') { toast('That event isn’t open to join right now.'); return; }
   const stage = stageById(row.stage_id);
   if (stage.id !== row.stage_id || (row.kind === 'race' && stage.finish === null)) { toast('Sorry, that event’s stage isn’t available.'); return; }
+  if (stageNotHere(stage, () => void joinEvent(row))) return;
   if (stage !== currentStage()) chooseStage(stage);
   else resetRide();
   const ev: ActiveEvent = {
@@ -2212,7 +2225,14 @@ const accountUi = initAccountUi({
   beforeSignOut: async () => { await saveUnsaved(); },
   queuedRides: { count: () => rideQueue.count(account()?.id), retry: () => uploadQueuedRides(true) },
   // 📤 Share on a ride in your profile.
-  shareRide: (a) => { void import('./garage/shareUi').then((m) => shareRide(m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined), toast)); },
+  shareRide: (a) => {
+    void import('./garage/shareUi').then(async (m) => {
+      const ride = m.shareRideFromActivity(a, settings.units === 'imperial', settings.kit, garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined);
+      // The card draws the route's shape and profile, which need that stage's road; without it (offline) the card goes without a picture.
+      if (ride.stage) await loadStage(ride.stage).catch(() => { ride.stage = null; });
+      void shareRide(ride, toast);
+    });
+  },
   context: () => ({
     stage: currentStage().name,
     workout: player?.workout.name ?? null,
@@ -2253,7 +2273,7 @@ function aiHost(): AiHostBase {
     countsForRecord: () => !isDemoRide(rideFlags),
     loadSession: (id, kind) => {
       if (kind === 'workout') { const w = workoutById(id); if (w) startWorkout(w); }
-      else chooseStage(stageById(id));
+      else { const stage = stageById(id); if (!stageNotHere(stage, () => chooseStage(stage))) chooseStage(stage); }
     },
     patchSettings: patchAiSettings,
     openSettings,
@@ -2343,6 +2363,7 @@ function rideSession(session: Session) {
     if (w) startWorkout(w);
   } else if (session.stage) {
     const stage = stageById(session.stage);
+    if (stageNotHere(stage, () => rideSession(session))) return;
     if (stage !== currentStage()) chooseStage(stage);
     else resetRide();
     toast(stage.finish === null ? `${stage.name}: ride for 30 minutes.` : `${stage.name}: ride to the finish line.`, 5000);
@@ -2455,7 +2476,8 @@ const kitUi = lazy(() => import('./kitUi').then((m) => m.initKitUi({
 })));
 $('btn-menu-kit').addEventListener('click', () => use(kitUi, (u) => u.open(), $('btn-menu-kit')));
 // 🚲 Garage & store (src/garage): bikes, wheels and clothes, bought with credits earned from riding.
-const garageUi = lazy(() => import('./garage/garageUi').then((m) => m.initGarageUi({
+// (The garage's numbers include the seconds a part saves up Alpe d'Huez, which need that road: it arrives with the module.)
+const garageUi = lazy(() => Promise.all([import('./garage/garageUi'), loadStage(stageById('alpe-dhuez'))]).then(([m]) => m.initGarageUi({
   garage,
   ctx: () => ({ riderKg: settings.riderKg, bikeKg: settings.bikeKg, ftp: settings.ftp }),
   imperial: () => settings.units === 'imperial',
@@ -2578,8 +2600,9 @@ function abandonRide() {
 
 /** Ride: what the hub chose, as a fresh ride (a workout goes on top of its stage). */
 function startFromHub(c: { stageId: string; workoutId: string | null }, mode: RideMode) {
-  leaveHub();
   const stage = stageById(c.stageId);
+  if (stageNotHere(stage, () => startFromHub(c, mode))) return; // (the hub stays up, its Ride button pulsing, until the road is here)
+  leaveHub();
   if (player) stopWorkout();
   if (mode === 'race' && stage.finish !== null && !c.workoutId) { beginRace(stage, tourStageNumber(stage.id)); return; } // Race: the pro teams on the start line
   if (stage !== currentStage()) chooseStage(stage); // (this also starts the ride afresh)
@@ -2645,7 +2668,7 @@ const hub = initHub({
   },
   start: startFromHub,
   setProTeams,
-  race: (stage) => { leaveHub(); beginRace(stage, tourStageNumber(stage.id)); },
+  race: function hubRace(stage: Stage) { if (stageNotHere(stage, () => hubRace(stage))) return; leaveHub(); beginRace(stage, tourStageNumber(stage.id)); },
   joinEvent: async (row) => {
     await joinEvent(row); // checks the account and the join window, and shows why if it can't
     if (eventState) leaveHub();

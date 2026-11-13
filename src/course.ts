@@ -4,7 +4,7 @@
 // road behind the start line (on a world's route it follows the world's own
 // loop back, see `ensureRoad`).
 
-import { stageById, type Stage } from './stages';
+import { StageNotLoadedError, isStageLoaded, stageById, type Stage } from './stages';
 
 let stage: Stage = stageById(null);
 
@@ -14,6 +14,9 @@ export function currentStage(): Stage {
 
 /** Switches stage and clears the cached centreline. */
 export function setStage(next: Stage) {
+  // A stage whose road hasn't been fetched (stages.ts loads them on demand) must never become the road: every frame would then throw.
+  // Refusing here fails the one action that asked, and the ride carries on where it was. Callers load the stage first (`loadStage`).
+  if (!isStageLoaded(next)) throw new StageNotLoadedError(next.id, 'setStage');
   stage = next;
   roadX.length = 1;
   roadZ.length = 1;

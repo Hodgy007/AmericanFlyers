@@ -7,10 +7,16 @@ import { raceTime } from '../../ghost';
 import { drawProfile } from '../../profile';
 import { allStages } from '../../routes/library';
 import { segmentsFor, shortStageName } from '../../segments';
-import type { Stage } from '../../stages';
+import { isStageLoaded, loadStage, stageCatalogue, stageProfile, worldLapProfile, type Stage } from '../../stages';
 import { climbText, distanceText, pickStage, stageFigures } from '../data';
 import { button, drawWhenVisible, forgetCanvas, h } from '../dom';
 import type { SectionMount } from '../types';
+
+/** The names of a stage's KOM segments: found from its road once that has arrived, until then the catalogue's list (so the hub's cards don't fetch every road). */
+function komNames(stage: Stage): string[] {
+  if (isStageLoaded(stage) || stage.uploaded) return segmentsFor(stage).map((g) => g.name);
+  return stageCatalogue(stage)?.segments ?? [];
+}
 
 export const mount: SectionMount = (root, ctx) => {
   const imp = () => ctx.imperial();
@@ -66,7 +72,7 @@ export const mount: SectionMount = (root, ctx) => {
     const best = ctx.summary()?.bests[stage.id];
     const canvas = h('canvas', { class: 'hub-thumb', 'aria-hidden': 'true' });
     canvases.push(canvas);
-    drawWhenVisible(canvas, () => drawProfile(canvas, null, [0, stage.finish ?? 20000], stage.elevationAt));
+    drawWhenVisible(canvas, () => drawProfile(canvas, null, [0, stage.finish ?? 20000], stageProfile(stage)));
     const metaId = `hub-stage-meta-${stage.id}`;
     const pick = button(stage.name, () => ctx.pick(pickStage(ctx.choice(), stage.id)), 'hub-pick', { 'data-fkey': `stage-${stage.id}`, 'aria-describedby': metaId, 'aria-pressed': 'false' });
     const meta = h('p', { class: 'hub-meta', id: metaId, text: `${fig.lengthM === null ? 'Endless' : distanceText(fig.lengthM, imp())} · ${climbText(fig.climbM, imp())} climbing${fig.lengthM === null ? ' per 20 km' : ''}` });
@@ -74,11 +80,11 @@ export const mount: SectionMount = (root, ctx) => {
     if (best) foot.append(h('span', { class: 'hub-chip gold', title: 'Your best whole-stage time', text: `🏆 ${raceTime(best.finishS)}` }));
     if (climbById(stage.id)) foot.append(button('🧭 Climb guide', () => { void toggleGuide(stage); }, 'hub-mini hub-race', { title: `Current, web-sourced facts about ${stage.name}: history, records, road conditions, riding it for real`, 'aria-label': `Climb guide for ${stage.name}`, 'aria-expanded': 'false', 'data-guide': stage.id, 'data-fkey': `guide-${stage.id}` }));
     if (stage.finish !== null) foot.append(button('🏁 Race it', () => ctx.deps.race(stage), 'hub-mini hub-race', { title: `Skip the ride mode and race the pro teams over ${stage.name} now`, 'aria-label': `Race the pro teams over ${stage.name}`, 'data-fkey': `race-${stage.id}` }));
-    const segs = segmentsFor(stage);
+    const segs = komNames(stage);
     if (segs.length) {
       foot.append(button(`⛰ KOM ×${segs.length}`, () => {
-        import('../../segmentBoardUi').then((m) => m.openStageSegments(stage, imp(), () => ctx.deps.dialogs.account())).catch(() => ctx.deps.toast('Couldn’t open the KOM segments just now.'));
-      }, 'hub-mini hub-race', { title: `The big climbs on ${stage.name}: who holds the KOM, and your best`, 'aria-label': `KOM segments on ${stage.name}: ${segs.map((s) => s.name).join(', ')}`, 'data-fkey': `kom-${stage.id}` }));
+        loadStage(stage).then(() => import('../../segmentBoardUi')).then((m) => m.openStageSegments(stage, imp(), () => ctx.deps.dialogs.account())).catch(() => ctx.deps.toast('Couldn’t open the KOM segments just now.'));
+      }, 'hub-mini hub-race', { title: `The big climbs on ${stage.name}: who holds the KOM, and your best`, 'aria-label': `KOM segments on ${stage.name}: ${segs.join(', ')}`, 'data-fkey': `kom-${stage.id}` }));
     }
     const el = h('article', { class: 'hub-card hub-stage' },
       canvas,
@@ -92,10 +98,10 @@ export const mount: SectionMount = (root, ctx) => {
   /** One card for a world (Kestrel Vale): its profile, a line about it and a chip per route; a chip picks that route's stage as a normal card does. */
   function worldCard(stages: Stage[]): HTMLElement {
     const w = stages[0].world!;
-    const lapStage = w.lapStage();
+    const lapElevation = worldLapProfile(w) ?? (() => 0); // (the stored lap profile: the world's road isn't fetched for a thumbnail)
     const canvas = h('canvas', { class: 'hub-thumb', 'aria-hidden': 'true' });
     canvases.push(canvas);
-    drawWhenVisible(canvas, () => drawProfile(canvas, null, [0, w.lap], lapStage.elevationAt));
+    drawWhenVisible(canvas, () => drawProfile(canvas, null, [0, w.lap], lapElevation));
     const metaId = `hub-world-meta-${w.id}`;
     const list = h('div', { class: 'hub-routes', role: 'group', 'aria-label': `${w.name} routes`, 'aria-describedby': metaId });
     for (const stage of stages) {
@@ -115,7 +121,7 @@ export const mount: SectionMount = (root, ctx) => {
     const race = button('🏁 Race it', () => ctx.deps.race(active()), 'hub-mini hub-race', { 'data-fkey': `race-${w.id}` });
     const kom = button('', () => {
       const stage = active();
-      import('../../segmentBoardUi').then((m) => m.openStageSegments(stage, imp(), () => ctx.deps.dialogs.account())).catch(() => ctx.deps.toast('Couldn’t open the KOM segments just now.'));
+      loadStage(stage).then(() => import('../../segmentBoardUi')).then((m) => m.openStageSegments(stage, imp(), () => ctx.deps.dialogs.account())).catch(() => ctx.deps.toast('Couldn’t open the KOM segments just now.'));
     }, 'hub-mini hub-race', { 'data-fkey': `kom-${w.id}` });
     const foot = h('div', { class: 'hub-card-foot' });
     const bests = h('span', { class: 'hub-chip gold', hidden: '' });
@@ -126,14 +132,14 @@ export const mount: SectionMount = (root, ctx) => {
     }
     function sync() {
       const stage = active();
-      const segs = segmentsFor(stage);
+      const segs = komNames(stage);
       race.hidden = stage.finish === null;
       race.title = `Skip the ride mode and race the pro teams over ${stage.name} now`;
       race.setAttribute('aria-label', `Race the pro teams over ${stage.name}`);
       kom.hidden = segs.length === 0;
       kom.textContent = `⛰ KOM ×${segs.length}`;
       kom.title = `The big climbs on ${stage.name}: who holds the KOM, and your best`;
-      kom.setAttribute('aria-label', `KOM segments on ${stage.name}: ${segs.map((g) => g.name).join(', ')}`);
+      kom.setAttribute('aria-label', `KOM segments on ${stage.name}: ${segs.join(', ')}`);
       const best = ctx.summary()?.bests[stage.id];
       bests.hidden = !best;
       if (best) { bests.textContent = `🏆 ${raceTime(best.finishS)}`; bests.title = `Your best whole-stage time on ${shortStageName(stage.name)}`; }

@@ -13,7 +13,9 @@
 import './hub.css';
 import { account, onAccountChange, type Account } from '../cloud/account';
 import type { Wallet } from '../garage/progression';
+import { firstFrame } from '../lazy';
 import { allStages, stageById } from '../routes/library';
+import { stageLoader } from '../stages';
 import { canRace, effectiveMode, MODE_LABEL, type RideMode } from '../rideMode';
 import { workoutById } from '../workouts/library';
 import { clearCache, loadCache, loadStageChoice, saveCache, saveStageChoice, type HubCache } from './cache';
@@ -71,6 +73,9 @@ export function initHub(deps: HubDeps) {
   const validStage = (id: string | null) => (id && allStages().some((s) => s.id === id) ? id : null);
   const fromUrl = validStage(new URLSearchParams(location.search).get('stage'));
   let choice: Choice = { stageId: fromUrl ?? validStage(loadStageChoice()) ?? validStage(deps.currentStageId()) ?? FREE_RIDE_STAGE, workoutId: null };
+
+  // The chosen stage's road (a built-in stage's loads on demand, src/stages.ts) is fetched once the first frame is up, so Ride is usually instant.
+  void firstFrame.then(() => stageLoader(stageById(choice.stageId)).prefetch());
 
   // Race is a per-ride wish (it only holds where the route has a finish); Solo and With pro teams are settings.proTeams.
   let raceWanted = false;
@@ -134,6 +139,7 @@ export function initHub(deps: HubDeps) {
     choice: () => choice,
     pick(c) {
       choice = c;
+      stageLoader(stageById(c.stageId)).prefetch(); // its road starts arriving now, so Ride is usually instant
       emit('choice');
       ctx.announce(`${label(c)} chosen. Press Ride to start.`);
     },
