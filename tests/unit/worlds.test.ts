@@ -12,7 +12,7 @@ import { SCENERY } from '../../src/world/scenery';
 import { fieldWallGeometry } from '../../src/world/fieldWalls';
 import { triangleCount } from '../../src/world/monumentKit';
 import * as THREE from 'three';
-import { VIADUCT } from '../../src/world/monumentTypes';
+import { VALE_ARCH, VIADUCT } from '../../src/world/monumentTypes';
 import { buildTerrace } from '../../src/world/monumentCity';
 import { KESTREL_ROUTE_DEFS, KESTREL_ROUTES, KESTREL_VALE, KV, KV_BECK, KV_LAKE, KV_LAP } from '../../src/worlds/kestrelVale';
 import { closeLoop, routeStage } from '../../src/worlds/types';
@@ -399,7 +399,7 @@ describe('routes that start partway round the lap', () => {
         for (const p of r.signs) { expect(p.d).toBeGreaterThanOrEqual(0); expect(p.d).toBeLessThanOrEqual(finish); }
         for (const p of [...(r.race?.sprints ?? []), ...(r.race?.summits ?? [])]) { expect(p.d).toBeGreaterThanOrEqual(0); expect(p.d).toBeLessThanOrEqual(finish); }
         for (const d of r.crowdSpots ?? []) { expect(d).toBeGreaterThanOrEqual(0); expect(d).toBeLessThanOrEqual(finish); }
-        const arches = r.landmarks.filter((k) => k.file === 'gantry.glb' && k.every >= 1e9).map((k) => k.first);
+        const arches = r.landmarks.filter((k) => (k.file === 'gantry.glb' || k.model === 'vale-arch') && k.every >= 1e9).map((k) => k.first);
         expect(arches).toContain(30);
         expect(arches).toContain(finish);
         expect(r.signs.map((p) => p.d)).toEqual([...r.signs.map((p) => p.d)].sort((a, b) => a - b));
@@ -623,8 +623,9 @@ describe('the bunting in the Hollins Cross high street', () => {
 
   it('keeps clear of the finish gantry: a finish line or a start arch is never within 40 m of a string, on any route', () => {
     for (const st of KESTREL_ROUTES) {
-      const arches = st.landmarks.filter((k) => k.file === 'gantry.glb' && k.every >= 1e9).map((k) => k.first);
-      const gantryEvery = st.landmarks.filter((k) => k.file === 'gantry.glb' && k.every < 1e9);
+      const isArch = (k: Stage['landmarks'][number]) => k.file === 'gantry.glb' || k.model === 'vale-arch';
+      const arches = st.landmarks.filter((k) => isArch(k) && k.every >= 1e9).map((k) => k.first);
+      const gantryEvery = st.landmarks.filter((k) => isArch(k) && k.every < 1e9);
       const lap = st.world!.lap;
       const lapMetre = (d: number) => (((d + st.world!.start) % lap) + lap) % lap;
       const limit = st.finish ?? 3 * lap;
@@ -846,13 +847,13 @@ describe('the hero models (milestone 5): Raven Keep, the Kestrel Water boathouse
     expect(inn.clearance).toBeGreaterThanOrEqual(16);
   });
 
-  it('sizes them like real buildings: the inn about 10.5 m, the boathouse about 8.5 m and the keep, rock base and all, about 20 m', () => {
+  it('sizes them like real buildings: the inn about 10.5 m, the boathouse about 8.5 m and the keep, rock base and all, about 28 m', () => {
     expect(inn.size).toBeGreaterThanOrEqual(10);
     expect(inn.size).toBeLessThanOrEqual(11);
     expect(boathouse.size).toBeGreaterThanOrEqual(8);
     expect(boathouse.size).toBeLessThanOrEqual(9);
-    expect(keep.size).toBeGreaterThanOrEqual(18);
-    expect(keep.size).toBeLessThanOrEqual(22);
+    expect(keep.size).toBeGreaterThanOrEqual(25); // a tower keep is 25 to 30 m
+    expect(keep.size).toBeLessThanOrEqual(30);
   });
 
   it('stands the boathouse at the water’s edge: its door faces the lake, the front half over the water line and the back on the bank, clear of the jetty', () => {
@@ -935,10 +936,10 @@ describe('the hero models (milestone 5): Raven Keep, the Kestrel Water boathouse
     const overlaps = (r: { a0: number; a1: number; l0: number; l1: number }) => r.a0 < rect.a1 && r.a1 > rect.a0 && r.l0 < rect.l1 && r.l1 > rect.l0;
     // The terraces on its side (the village's own rows, through the first lap and the run-in).
     for (const t of KESTREL_VALE.landmarks.filter((k) => k.model === 'terrace' && k.side === -1)) {
-      const size = new THREE.Box3().setFromObject(buildTerrace(t.options)).getSize(new THREE.Vector3());
+      const box = new THREE.Box3().setFromObject(buildTerrace(t.options)); // a village row is not centred on its landmark: its own extent along the road
       for (let d = t.first; d <= (t.until ?? t.first); d += t.every) {
         const along = d > KV_LAP / 2 ? d - KV_LAP : d; // the run-in's terraces are just before the line
-        expect(overlaps({ a0: along - size.x / 2, a1: along + size.x / 2, l0: t.offset - size.z / 2, l1: t.offset + size.z / 2 }), `terrace at ${d}`).toBe(false);
+        expect(overlaps({ a0: along + box.min.x, a1: along + box.max.x, l0: t.offset - (box.max.z - box.min.z) / 2, l1: t.offset + (box.max.z - box.min.z) / 2 }), `terrace at ${d}`).toBe(false);
       }
     }
     // Its front is in line with theirs: the terraces' fronts are at 21 - 4.5 = 16.5 m.
@@ -948,9 +949,10 @@ describe('the hero models (milestone 5): Raven Keep, the Kestrel Water boathouse
     expect(overlaps({ a0: cross.first - 2.6, a1: cross.first + 2.6, l0: cross.offset - 2.6, l1: cross.offset + 2.6 })).toBe(false);
     expect(rect.a0 - (cross.first + 2.6), 'room between the cross and the inn').toBeGreaterThan(8);
     // The start arch (30 m, the road's width plus its posts), the finish gantry on the line, and the bunting (its string and its anchor posts 16.2 m out, from 66 m).
-    const arch = stageById('kestrel-vale-loop').landmarks.find((k) => k.file === 'gantry.glb')!;
-    expect(overlaps({ a0: arch.first - 2, a1: arch.first + 2, l0: -arch.size / 2, l1: arch.size / 2 }), 'start arch').toBe(false);
-    expect(rect.l0, 'the arch’s posts are on the road’s edge, well inside').toBeGreaterThan(arch.size / 2 + 5);
+    const arch = stageById('kestrel-vale-loop').landmarks.find((k) => k.model === 'vale-arch')!;
+    const archHalf = VALE_ARCH.pier + 0.6; // the piers' outer faces (plinths 1.15 m square)
+    expect(overlaps({ a0: arch.first - 2, a1: arch.first + 2, l0: -archHalf, l1: archHalf }), 'start arch').toBe(false);
+    expect(rect.l0, 'the arch’s piers are on the road’s edge, well inside').toBeGreaterThan(archHalf + 5);
     for (const [from, to] of KV.dressing.bunting!.spans) for (let at = from; at <= to; at += KV.dressing.bunting!.spacing) {
       const a = at > KV_LAP / 2 ? at - KV_LAP : at;
       expect(rect.a0 > a + 1 || rect.a1 < a - 1, `bunting at ${at}`).toBe(true);

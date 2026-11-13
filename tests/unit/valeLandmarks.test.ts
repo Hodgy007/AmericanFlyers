@@ -86,7 +86,7 @@ describe('the hero models through the real Landmarks class', () => {
     return l.group.children.find(test)!;
   };
 
-  it('stands Raven Keep 20 m tall at its world position, turned to face the zigzag, only while the rider is within 1,050 m, and keeps trees off it', async () => {
+  it('stands Raven Keep 28 m tall at its world position, turned to face the zigzag, only while the rider is within 1,050 m, and keeps trees off it', async () => {
     const loop = stageById('kestrel-vale-loop');
     setStage(loop);
     const k = find(loop, 'raven-keep.glb');
@@ -97,8 +97,8 @@ describe('the hero models through the real Landmarks class', () => {
     expect(obj.rotation.y).toBeCloseTo(k.world!.yaw, 6);
     const box = new THREE.Box3().setFromObject(obj);
     expect(box.min.y, 'on its origin').toBeCloseTo(k.world!.y, 3);
-    expect(box.max.y - box.min.y, 'its size').toBeCloseTo(20, 2);
-    expect(box.max.x - box.min.x).toBeLessThan(20);
+    expect(box.max.y - box.min.y, 'its size').toBeCloseTo(28, 2);
+    expect(box.max.x - box.min.x).toBeLessThan(28);
     l.update(1000); // the village, 4 km off
     expect(l.group.children.some(at)).toBe(false);
     expect(nearLandmark(k.world!.x + 25, k.world!.z, 0), 'no tree within its clear zone').toBe(true);

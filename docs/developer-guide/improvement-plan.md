@@ -46,12 +46,12 @@ Both suspected bugs were investigated. Neither was what it looked like; one real
 3. **`kestrel-vale-plan.md` reads as a plan though all five milestones are built.** Rewrite it as a short page on how the world is built, and move the parts that still matter (the route model, the frozen ids and lap, the tunnel approach) into it.
    - **Status: done.** The page is now [kestrel-vale.md](kestrel-vale.md).
 
-### D. Kestrel Vale polish
+### D. Kestrel Vale polish (done)
 
-1. **A start arch that belongs in the village.** The world uses `gantry.glb`, the US stars-and-stripes arch. Build a local one in code (a banner between two posts, or a stone arch) and use it for the world's start, finish and sprint lines.
-2. **Vary the terraces.** The rows repeat visibly along the high street: vary height, roof line, door colour and the odd gap.
-3. **Raven Keep is small from the climb.** Make it read better (size, the crag's height, or less haze on it), without moving the road.
-   - **Done when:** screenshots (`KESTREL_SHOTS=1`) show each change, and the landmark budget and every lap, segment and limit pin still hold.
+1. ~~**A start arch that belongs in the village.**~~ Done: `vale-arch` (two limestone piers, oak beam, painted board with the place and START/FINISH/the sprint's name, chequered trim, bunting; about 1,200 triangles), chosen by `World.arch` and used by `routeStage` for the start, each finish and every sprint. Other stages keep `gantry.glb`.
+2. ~~**Vary the terraces.**~~ Done: `terrace` with `village: true` (22 seeded rows: two and three storeys, stepped roofs, low cottages, ginnels, shopfronts, door and frame colours, chimneys, shifted and differently wide). Same one landmark every 44 m, so the budget (52) holds; Richmond's and Harrogate's rows are untouched and pinned by a test.
+3. ~~**Raven Keep is small from the climb.**~~ Done: 28 m tall (was 20), the crag 40 m above the slope (was 26) with an 18 m flat bench, and the world's `clearAir` 1.5. The road and its elevation and heading are unchanged.
+   - **Done when:** `KESTREL_SHOTS=1` screenshots show each change (the Medium keep from the second leg is visible again, the fourth leg shows it on a clear crag); the landmark budget and every lap, segment and limit pin still hold. Not done: the keep is still small from the climb's foot (800 m).
 
 ### E. Split `src/main.ts` (after A is merged)
 

@@ -144,6 +144,10 @@ for (const [id, km] of PARTIAL) {
 const DRESSING_SPOTS: { name: string; km: number; monuments: boolean; side?: boolean }[] = [
   { name: 'market cross', km: 0.005, monuments: true }, // the square just after the line: the cross is ahead on the left, the bunting beyond the start arch
   { name: 'bunting', km: 0.15, monuments: true }, // strings across the high street between the terraces
+  { name: 'high street', km: 0.32, monuments: true }, // mid high street, the terrace rows either side ahead (they vary storeys, roofs, doors and gaps)
+  { name: 'run-in', km: 15.0, monuments: true }, // the run-in's terraces, 400 m before the line
+  { name: 'finish arch', km: 15.34, monuments: true }, // the lap's finish arch, 60 m ahead
+  { name: 'sprint banner', km: 2.55, monuments: true }, // the Kestrel Water sprint's banner, 50 m ahead
   { name: 'jetty', km: 2.16, monuments: true }, // the shore comes closest to the road before the sprint: the jetty and its boats are just ahead on the left
   { name: 'mill bridge', km: 4.0, monuments: false }, // the covered bridge over the beck, 135 m ahead (a model, not a monument)
   { name: 'mill beck', km: 4.1, monuments: false }, // 35 m before the bridge: the beck runs across the road under it, water in its channel to the left and right
