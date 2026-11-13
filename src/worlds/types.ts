@@ -2,7 +2,7 @@
 // coordinates (its road, scenery, landmarks, places, race points); a route is a window on that loop, compiled
 // by `routeStage()` into an ordinary Stage with its own permanent id. Leaderboards, ghosts, saved rides, presence and
 // the limit tables are all keyed by stage id, so they work on a route unchanged. See
-// docs/developer-guide/stages-and-gpx.md ("Worlds and routes") and kestrel-vale-plan.md.
+// docs/developer-guide/stages-and-gpx.md ("Worlds and routes") and kestrel-vale.md.
 //
 // This file and the worlds that use it import only *types* from ../stages (stages.ts imports the routes at run time:
 // a value import back would be a cycle). Run-time helpers come from ../stageKit and the leaf modules in ../world/.
@@ -96,6 +96,17 @@ export function closeLoop(input: readonly LoopPiece[], slackA: number, slackB: n
 
 // --------------------------------------------------------------- the world ----
 
+/**
+ * The arch a world uses for its start, its finish line and its sprints, when it has one of its own instead of the stars-and-stripes `gantry.glb` (stageKit.ts). Each is a kind
+ * with `side: 0`, `span: 'across'`; `routeStage` sets where it stands (`first`, `every`), so only the model, its size, its clearance and its words matter.
+ */
+export interface WorldArch {
+  start: LandmarkKind;
+  finish: LandmarkKind;
+  /** The arch over a sprint, given the sprint's name. */
+  sprint(name: string): LandmarkKind;
+}
+
 export interface World {
   id: string;
   name: string;
@@ -112,6 +123,8 @@ export interface World {
   scenery: Scenery;
   /** Landmarks in lap metres: every `every` divides the lap (a one-off repeats each lap with `every` = lap), so every lap looks the same. A kind with an `until` (a street of houses) is copied to each lap. */
   landmarks: LandmarkKind[];
+  /** The world's own start, finish and sprint arch (default: `gantry.glb`, as every other stage has). */
+  arch?: WorldArch;
   /** Named places (announced, not drawn), in lap metres. */
   places: [number, string][];
   /** Sprints and summits in the first lap's metres; they repeat every lap. */
@@ -185,10 +198,13 @@ export function routeStage(world: World, route: WorldRoute): Stage {
   const E0 = world.elevationAt(mod(start));
   const P = tracePoint(world.headingAt, start);
   // The start arch, a banner over every sprint, and the line: a finite route's line is each lap's end (the end of a partial route), an endless one's the gantry every lap.
-  const sprintArches = (world.race.sprints ?? []).flatMap((sp) => at(sp.d).map((p) => finishArch(p)));
+  const arch = world.arch;
+  const startK: LandmarkKind = arch ? { ...arch.start, first: startArch.first, every: 1e9 } : startArch;
+  const finishK = (at: number): LandmarkKind => (arch ? { ...arch.finish, first: at, every: 1e9 } : finishArch(at));
+  const sprintArches = (world.race.sprints ?? []).flatMap((sp) => at(sp.d).map((p): LandmarkKind => (arch ? { ...arch.sprint(sp.name), first: p, every: 1e9 } : finishArch(p))));
   const lineAt = mod(-start) || lap;
-  const line: LandmarkKind[] = finish === null ? [{ ...GANTRY, first: lineAt, every: lap }] : partial ? [finishArch(finish)] : Array.from({ length: laps! }, (_, i) => finishArch(lap * (i + 1)));
-  const landmarks: LandmarkKind[] = [startArch, ...line, ...sprintArches.sort((a, b) => a.first - b.first), ...(shifted ? shiftLandmarks(world.landmarks) : copyUntils(world.landmarks))];
+  const line: LandmarkKind[] = finish === null ? [{ ...(arch ? arch.finish : GANTRY), first: lineAt, every: lap }] : partial ? [finishK(finish)] : Array.from({ length: laps! }, (_, i) => finishK(lap * (i + 1)));
+  const landmarks: LandmarkKind[] = [startK, ...line, ...sprintArches.sort((a, b) => a.first - b.first), ...(shifted ? shiftLandmarks(world.landmarks) : copyUntils(world.landmarks))];
   // A stretch of houses along one side has an `until` in lap metres: it is copied to every lap (the rest repeat on their own).
   function copyUntils(kinds: LandmarkKind[]): LandmarkKind[] {
     const signLaps = laps ?? ENDLESS_LAPS;

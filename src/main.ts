@@ -2488,10 +2488,10 @@ onAccountChange(async (a) => {
   if ((a?.id ?? null) !== rideUserId) {
     rideQueue.stop();
     const hadOwner = !!rideUserId;
-    // Queues any unsaved outgoing ride under its original owner, never the new account. A ride with no owner yet is not
-    // abandoned: the signed-in hint let the rider start before the session check (which waits for the first frame) had
-    // answered, so on a slow device the account can arrive mid-ride. That ride is this account's and carries on.
-    if (hadOwner) abandonRide();
+    // A ride with no owner yet was started on the strength of the signed-in hint, before the session had come back (the hub shows at once; the
+    // account arrives a moment later, seconds on a slow network or a busy page). That ride is this account's: carry on with it. Stopping it here
+    // reset the distance and switched the demo rider off the moment the session landed.
+    if (hadOwner) abandonRide(); // queues any unsaved outgoing ride under its original owner, never the new account
     rideUserId = a?.id ?? null;
     if (hadOwner) forgetLocalCopies();
     snapshotHandledFor = null; // the next account's leftover copy (if any) is offered afresh

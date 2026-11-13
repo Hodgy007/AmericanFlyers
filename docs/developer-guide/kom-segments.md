@@ -23,11 +23,11 @@ Current segments: Morgul-Bismark: The Wall (both laps); Tour of the Moon: Cold S
 
 ## Timing an effort
 
-`main.ts` calls `komUi.frame(distance, movingTime, work, riding)` every frame, right after the moving-time clock advances (and before the finish check, so a climb that tops out at the line still counts). `SegmentTracker.update()` is allocation-free except when a split or an effort is stored:
+`simStep()` in `main.ts` calls `komUi.frame(distance, movingTime, work, riding)` on **every simulation step** (at most 0.1 s of real time each, see `src/rideClock.ts`), right after the moving-time clock advances (and before the finish check, so a climb that tops out at the line still counts). It is not tied to drawn frames: a throttled frame, or a hidden tab driven by the background timer, is simulated in several substeps, each feeding the tracker a distance a few metres on, so the 150 m jump rule below is never met by slow frames (at 15 m/s a step is 1.5 m; at `?timescale=20` it is 2 s of ride, 30 m). Only the panel's redraw, `komUi.update()`, runs on the HUD's 200 ms schedule (visible tab only). `tests/unit/segments.test.ts` drives the tracker through a `RideClock` with frames up to 5 s apart to pin this, and `tests/e2e/rideTiming.spec.ts` rides a segment with frames a second apart. `SegmentTracker.update()` is allocation-free except when a split or an effort is stored:
 
-- A start line crossed between two frames starts an effort; the start time (and the work at that moment) is interpolated between the frames, so a coarse frame (a sped-up clock) doesn't move the time.
+- A start line crossed between two steps starts an effort; the start time (and the work at that moment) is interpolated between the steps, so a coarse step (a sped-up clock) doesn't move the time.
 - A split is stored for every 50 m into the segment, interpolated the same way, as tenths of a second (an int). The top is not a split: it is `Effort.t`. `Effort.p` is the average power.
-- It voids an effort when `riding` is false (stopped, on the start line of a race, finished), when the distance jumps by more than 150 m in a frame (the demo profile jump) or goes backwards, and on `reset()`. `komUi.reset()` runs on a new ride, a new stage and when the hub opens.
+- It voids an effort when `riding` is false (stopped, on the start line of a race, finished), when the distance jumps by more than 150 m between two steps (the demo profile jump) or goes backwards, and on `reset()`. `komUi.reset()` runs on a new ride, a new stage and when the hub opens.
 
 ## The live gap
 

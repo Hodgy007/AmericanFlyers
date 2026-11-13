@@ -43,6 +43,28 @@ The insert trigger means a rider can't submit feedback with a status other than 
 
 Neon Auth only returns users to trusted domains. Add the live site and any local addresses in the Neon Console. This prevents sign-in from sending users back to an unknown site. See [Authentication setup](../admin-guide/authentication-setup.md).
 
+## Content-Security-Policy
+
+`vercel.json` sends `Content-Security-Policy-Report-Only`, so a violation is logged in the browser console and blocks nothing. The policy is built by [`csp.mjs`](../../csp.mjs) from `index.html`; `vite.config.ts` sends the same header from `vite preview` and `vite dev` (the dev one adds its HMR websocket and style injection), and `tests/unit/csp.test.ts` fails if `vercel.json` differs from what `csp.mjs` builds. After changing `csp.mjs` or an inline script in `index.html`, run `npm run csp:sync`. `tests/e2e/csp.spec.ts` loads the home page, then a signed-in session through the hub, a Medium-graphics ride at Kestrel Vale's village (a `.glb` hero model, the post-processing chunk) and every main dialog, and fails on any violation.
+
+| Directive | Allows | Why |
+| --- | --- | --- |
+| `default-src 'none'` | nothing | Everything the app loads is listed below; anything new has to be added on purpose. |
+| `script-src 'self' 'wasm-unsafe-eval' 'sha256-…'` | our bundles, the two inline scripts in `index.html` by hash, WebAssembly | The inline scripts set `data-hero` and `data-start` before first paint, which an external file would delay by a request, so they are allowed by sha256 (computed from `index.html`, so editing one needs `npm run csp:sync`). The Meshopt decoder that reads the `.glb` models compiles WebAssembly. No `'unsafe-inline'`, no `'unsafe-eval'`. |
+| `style-src 'self' https://fonts.googleapis.com` | our stylesheet, Google Fonts' CSS | No inline `<style>` and no `style=""` attributes: the few that existed (the hub skeleton in `index.html`, the kit swatches, the garage level bar) now use classes or the CSSOM (`el.style.x = …`, which a CSP allows). New code must not write `style="…"` into `innerHTML`. |
+| `font-src https://fonts.gstatic.com` | the font files | Barlow Condensed and Inter. |
+| `img-src 'self' data: blob:` | our images, `data:` and `blob:` | `data:` is the select arrow in `style.css`; `blob:` is for textures decoded from the models (the browser test fails without it). Google profile pictures are not shown anywhere, so no third-party image host is allowed. |
+| `media-src 'self'` | the hero clips and commentary audio | Both are ours. |
+| `connect-src 'self' blob: <Neon Data API> <Sentry ingest>` | `/api/auth` and `/api/ai` (our origin), `blob:` (three.js's image loader fetches the textures it makes from blob URLs: the browser test fails without it), the Neon Data API host the browser calls directly (`src/cloud/client.ts`), and Sentry's ingest hosts (`*.ingest.sentry.io`, `*.ingest.us.sentry.io`, `*.ingest.de.sentry.io`: the DSN is only known at build time, so the regions are listed). The Google sign-in redirect is a navigation, not a connection, so it needs nothing. | A `VITE_NEON_DATA_API_URL` override is added to the dev and preview header (not to `vercel.json`). |
+| `worker-src 'self' blob:` | the service worker, and blob workers | `/sw.js`; the ride-clock tick worker (`src/tickWorker.ts`) and the Meshopt decoder's workers are created from blob URLs. |
+| `manifest-src 'self'` | `manifest.webmanifest` | |
+| `base-uri 'self'`, `form-action 'self'`, `object-src 'none'` | | Nothing here needs a different base, a form posting elsewhere or a plugin. |
+| `frame-ancestors 'none'` | | The same as `X-Frame-Options: DENY`. |
+
+Nothing needs `'unsafe-inline'` or `'unsafe-eval'` in production. One third-party behaviour had to be handled: zod (inside the Neon SDK) probes `new Function('')` to speed up validation, which a strict policy reports as a violation even though zod copes with the refusal. `src/cloud/client.ts` therefore switches zod's JIT off (`config({ jitless: true })`) before the SDK loads, which is why zod has a chunk of its own (`vendor-zod` in `vite.config.ts`).
+
+**Not enforcing yet, and no report endpoint.** The policy is report-only and has no `report-uri` / `report-to`, so only the rider's own console sees a violation: nobody finds out about one in production. What has to be true before it is switched to enforcing is in the [improvement plan](improvement-plan.md#c-security-header-dependencies-and-docs).
+
 ## No secrets in the client
 
 The app bundles these values, and they're all public:
@@ -85,6 +107,7 @@ These are things the code doesn't enforce. Fix them or work around them before r
 - **No account deletion.** Riders can delete their own rides, but nothing in the app removes the account or its rows.
 - **Feedback context is sent with every report.** It includes the browser user agent and screen size. That's useful for debugging, but it's visible to admins.
 - **Riding together trusts the client's position and speed.** Values are clamped, but a rider could report a made-up position. Leaderboard times also come from the client.
+- **The Content-Security-Policy only reports.** It is not enforced yet (see above).
 - **No rate limiting in the app.** The app doesn't limit how often riders send feedback, save rides or sync. Any limits come from the database and Neon.
 
 ## Reviewing a change

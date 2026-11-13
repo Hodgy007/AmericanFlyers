@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Kit, finish, farMaterial, mix, rnd } from './monumentKit';
 import type { MonumentOptions } from './monumentTypes';
 import { DEFAULT_LOOP, skylineTowers } from './skyline';
+import { buildVillageTerrace } from './monumentVale';
 
 // Landmarks of the circuits and the coast road, built in code like the summit buildings (monuments.ts
 // registers them): the Manhattan skyline round Central Park, the Virginia State Capitol, a row of houses
@@ -79,9 +80,10 @@ const DOORS = ['#2f4a3a', '#5a2a2a', '#1f2f4a', '#3a3a3a', '#6a4a2a'];
 
 /**
  * A short terrace of attached town houses, three storeys under one slate roof, with chimneys: red-brick Italianate rowhouses
- * for Richmond's Church Hill (`material: 'brick'`, the default), grey stone Victorian terraces for Harrogate (`'stone'`). `seed` varies the colours and the number of houses (four to six). Front towards +z.
+ * for Richmond's Church Hill (`material: 'brick'`, the default), grey stone Victorian terraces for Harrogate (`'stone'`). `seed` varies the colours and the number of houses (four to six). `village: true` builds a varied village street instead (monumentVale.ts). Front towards +z.
  */
 export function buildTerrace(o: MonumentOptions = {}): THREE.Group {
+  if (o.village) return buildVillageTerrace(o); // Kestrel Vale's street (monumentVale.ts); the code below is Richmond's and Harrogate's, untouched
   const stone = o.material === 'stone';
   const seed = o.seed ?? 1;
   const palette = stone ? STONE_HOUSES : BRICK;

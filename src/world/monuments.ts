@@ -3,7 +3,7 @@ import { buildAlpeVillage, buildApartments, buildChalet, buildChurch, buildCrest
 import { buildFlatirons } from './flatirons';
 import { buildBixbyBridge, buildCapitol, buildSkyline, buildTerrace } from './monumentCity';
 import { buildTunnelPortal } from './monumentTunnel';
-import { buildJetty, buildMarketCross, buildViaduct } from './monumentVale';
+import { buildJetty, buildMarketCross, buildValeArch, buildViaduct } from './monumentVale';
 import { Kit, boardMaterial, finish, fitText } from './monumentKit';
 import type { MonumentId, MonumentOptions } from './monumentTypes';
 
@@ -231,6 +231,7 @@ const BUILDERS: Record<MonumentId, (o: MonumentOptions) => THREE.Group> = {
   'market-cross': buildMarketCross,
   'stone-viaduct': buildViaduct,
   'lake-jetty': buildJetty,
+  'vale-arch': buildValeArch,
 };
 
 export const MONUMENT_IDS = Object.keys(BUILDERS) as MonumentId[];

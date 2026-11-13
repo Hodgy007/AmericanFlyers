@@ -22,7 +22,9 @@ async function start(page: Page, tier: string, errors: string[], fetched: string
     localStorage.setItem('americanflyers.signedIn', '1');
     localStorage.setItem('americanflyers.onboarded', '1');
     const raf = window.requestAnimationFrame.bind(window);
-    window.requestAnimationFrame = (cb) => window.setTimeout(() => raf(cb), 1000) as unknown as number; // software rendering is slow: one frame a second
+    const w = window as unknown as { __frames: number };
+    w.__frames = 0; // frames drawn so far: a time-free way to say "long enough for High to have fetched its cover"
+    window.requestAnimationFrame = (cb) => window.setTimeout(() => raf((t) => { w.__frames++; cb(t); }), 1000) as unknown as number; // software rendering is slow: one frame a second
   });
   await page.goto(`/?stage=heartland&start=3&graphics=${tier}&adapt=off`);
   await expect(page.locator('#hub')).toBeVisible();
@@ -35,7 +37,8 @@ test('Medium never downloads the ground cover', async ({ page }) => {
   const errors: string[] = [];
   const fetched: string[] = [];
   await start(page, 'medium', errors, fetched);
-  await page.waitForTimeout(40_000);
+  // High fetches its cover within the first few frames (the next test sees it after about four): give Medium many more, then look.
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __frames: number }).__frames), { timeout: 120_000 }).toBeGreaterThanOrEqual(12);
   expect(await cover(page)).toBeUndefined();
   expect(fetched).toEqual([]);
   expect(errors, errors.join('\n')).toEqual([]);

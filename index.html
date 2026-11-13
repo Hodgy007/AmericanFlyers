@@ -9,15 +9,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Fonts: the stylesheet is fetched early (preload) but applied without blocking the first paint
-         (media="print" until it arrives); display=swap shows text in the fallback font meanwhile. -->
+         (media="print" until it arrives, switched by the first inline script below: an inline load handler
+         would be blocked by the Content-Security-Policy); display=swap shows text in the fallback font meanwhile. -->
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
+    <link id="af-fonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" media="print" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700;800&display=swap" /></noscript>
     <script>
       // The home page hero rotates between three heroes (src/home.ts crossfades them) in a
       // fixed order, dog -> look -> rider -> dog, starting on the next one each visit.
-      // ?hero=dog, ?hero=look or ?hero=rider pins one.
+      // ?hero=dog, ?hero=look or ?hero=rider pins one. Also applies the Google Fonts stylesheet once it has loaded.
+      // (Inline scripts are allowed by their sha256 in the CSP: csp.mjs computes it, so editing a script
+      // here needs `npm run csp:sync`, which tests/unit/csp.test.ts reminds you of.)
       (function () {
+        var fonts = document.getElementById('af-fonts');
+        if (fonts) { if (fonts.sheet) fonts.media = 'all'; else fonts.addEventListener('load', function () { fonts.media = 'all'; }); }
         var order = ['dog', 'look', 'rider'];
         var asked = new URLSearchParams(location.search).get('hero');
         var hero;
@@ -97,10 +102,10 @@
           <div class="hub-hero">
             <section id="hub-rider" class="hub-panel hub-rider" aria-label="Your rider">
               <div class="hub-avatar hub-sk" aria-hidden="true"></div>
-              <div class="hub-rider-main"><span class="hub-sk" style="width:60%;height:44px"></span><span class="hub-sk" style="width:90%;height:18px"></span><span class="hub-sk" style="width:70%;height:12px"></span></div>
+              <div class="hub-rider-main"><span class="hub-sk hub-sk-w60-h44"></span><span class="hub-sk hub-sk-w90-h18"></span><span class="hub-sk hub-sk-w70-h12"></span></div>
             </section>
             <section id="hub-ride" class="hub-panel hub-ride" aria-label="Start riding">
-              <span class="hub-sk" style="width:55%;height:34px"></span><span class="hub-sk" style="width:80%;height:16px"></span><span class="hub-sk" style="width:100%;height:56px"></span>
+              <span class="hub-sk hub-sk-w55-h34"></span><span class="hub-sk hub-sk-w80-h16"></span><span class="hub-sk hub-sk-w100-h56"></span>
             </section>
           </div>
           <nav id="hub-tabs" class="hub-tabs" aria-label="Hub sections"></nav>

@@ -1,6 +1,6 @@
 // Kestrel Vale: a fictional limestone valley in the north of England, a cousin of the Harrogate stage, as one closed loop.
 // Its routes (an endless free ride, one lap, three laps, and two that start partway round) are windows on that loop (see worlds/types.ts and
-// docs/developer-guide/kestrel-vale-plan.md). Hollins Cross, the village, is the start and finish; the road runs down to
+// docs/developer-guide/kestrel-vale.md). Hollins Cross, the village, is the start and finish; the road runs down to
 // Kestrel Water, over Mill Bridge, across the farmland of Foss Bottom, up the Raven Scar climb with its five hairpins to the
 // rock cutting and tunnel of Raven Gap, down through Highfold Woods, along Beck Lane and back into the
 // village. It turns left all the way round, so the lake lies inside the loop.
@@ -13,11 +13,11 @@
 import { fbm, smoothstep } from '../world/noise';
 import { riseRel, shapeAt } from '../world/canyon';
 import { pondDistance, type PondBody, type RiverBody } from '../world/waterTypes';
-import { JETTY_HEIGHT, MARKET_CROSS_HEIGHT, VIADUCT } from '../world/monumentTypes';
+import { JETTY_HEIGHT, MARKET_CROSS_HEIGHT, VALE_ARCH, VIADUCT } from '../world/monumentTypes';
 import type { Dressing } from '../world/dressingTypes';
 import { TUNNEL_HALF_WIDTH, TUNNEL_HILL, TUNNEL_PORTAL_DEPTH, vaultHeight, type TunnelSpan } from '../world/tunnelSpan';
 import { monumentAt, pchip, roadElevationField, roadTrace, terraceRow } from '../stageKit';
-import { closeLoop, routeStage, type LoopPiece, type World, type WorldRoute } from './types';
+import { closeLoop, routeStage, type LoopPiece, type World, type WorldArch, type WorldRoute } from './types';
 import type { LandmarkKind, Stage } from '../stages';
 
 // ------------------------------------------------------------------ the loop ----
@@ -267,7 +267,69 @@ function gillGround(x: number, z: number, ground: number): number {
   const cut = GILL_DEPTH * (1 - smoothstep(10, 88, Math.abs(a))) * smoothstep(-320, -90, b) * (1 - smoothstep(100, 300, b));
   return flat > 0 || cut > 0 ? ground + (GILL.bench - ground) * flat - cut : ground;
 }
-const wildHeight = (x: number, z: number) => beckGround(x, z, gillGround(x, z, lakeGround(x, z, base(x, z))));
+/** Distance from (x, z) to the nearest point of the road's trace (10 m apart, so within 5 m). */
+function roadDistance(x: number, z: number): number {
+  let best = Infinity;
+  for (const [tx, tz] of TRACE) { const d = (tx - x) ** 2 + (tz - z) ** 2; if (d < best) best = d; }
+  return Math.sqrt(best);
+}
+
+// Raven Keep's crag: the ruined tower stands on a bench of the western slope above the hairpins, 130 m beyond the outside of hairpin 5, ahead of the two legs that run west
+// towards hairpins 3 and 5 (Scar 2 and Scar 4: from both it is in the chase camera's view, a crag above the road). The terrain (terrain.ts) is the road's own level out to 260 m from
+// it, blended to the wild ground by `smoothstep(9, 260, distance)` (and towards the road of the next leg up, by inverse distance to the fourth power), so a bench this near the
+// road is built by solving that blend: `cragGround` gives the wild height at which the terrain comes out exactly BENCH (the slope there plus CRAG_RISE), flat for 16 m and eased
+// back to the land over 50 m (a knoll on the downhill side, a cut into the hill on the uphill one); the slope's own shading turns the steep edges to rock. The road's elevation and
+// heading are not touched.
+const ROAD_BLEND = 260; // terrain.ts: beyond this the road no longer shapes the land
+const SECTION_GAP = 120; // terrain.ts: road points this far apart along the course count as different stretches
+/** The nearest point of the road's trace to (x, z): its distance and lap metre (the closest point on the polyline of the 10 m samples). */
+function nearTrace(x: number, z: number, notNear = -1): { dist: number; u: number } {
+  let bi = -1, bd = Infinity;
+  const gap = SECTION_GAP / TRACE_STEP;
+  for (let i = 0; i < TRACE.length; i++) {
+    if (notNear >= 0 && Math.abs(i - notNear) < gap) continue;
+    const d = (TRACE[i][0] - x) ** 2 + (TRACE[i][1] - z) ** 2;
+    if (d < bd) { bd = d; bi = i; }
+  }
+  let dist2 = bd, u = bi * TRACE_STEP;
+  for (const j of [bi - 1, bi]) {
+    if (j < 0 || j + 1 >= TRACE.length) continue;
+    const [ax, az] = TRACE[j], vx = TRACE[j + 1][0] - ax, vz = TRACE[j + 1][1] - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz)));
+    const p2 = (ax + vx * t - x) ** 2 + (az + vz * t - z) ** 2;
+    if (p2 <= dist2) { dist2 = p2; u = (j + t) * TRACE_STEP; }
+  }
+  return { dist: Math.sqrt(dist2), u };
+}
+/** terrain.ts's height at (x, z) for a given wild height, away from the roadside hook (the crag is nowhere near the cutting, the lake or the beck): the road's level, mixed with the wild ground, and the small bumps. */
+function groundWith(x: number, z: number, wild: number): number {
+  const a = nearTrace(x, z);
+  if (a.dist >= ROAD_BLEND) return wild + fbm(x / 70, z / 70, 3) * 3;
+  const b = nearTrace(x, z, Math.round(a.u / TRACE_STEP));
+  const wa = 1 / (a.dist + 1) ** 4, wb = 1 / (b.dist + 1) ** 4;
+  const road = (elevation(a.u) * wa + elevation(b.u) * wb) / (wa + wb) - 0.15;
+  const w = smoothstep(9, ROAD_BLEND, a.dist);
+  return road * (1 - w) + wild * w + fbm(x / 70, z / 70, 3) * 3 * smoothstep(9, 45, a.dist);
+}
+const KEEP_SPOT = { x: -500, z: -3980 };
+const CRAG_RISE = 40; // m the bench stands above the slope at the keep (the terrain's own height, after the blend)
+const CRAG_FLAT = 18;
+const CRAG_FADE = 50;
+const CRAG_REACH = CRAG_FLAT + CRAG_FADE;
+const CRAG_BENCH = groundWith(KEEP_SPOT.x, KEEP_SPOT.z, base(KEEP_SPOT.x, KEEP_SPOT.z)) + CRAG_RISE;
+/** The wild ground with the crag: where the bench is, the height that makes terrain.ts's blend come out at CRAG_BENCH (the blend's weight floored at a quarter, so the eased skirt never asks for the earth). */
+function cragGround(x: number, z: number, ground: number): number {
+  const r = Math.hypot(x - KEEP_SPOT.x, z - KEEP_SPOT.z);
+  if (r >= CRAG_REACH) return ground;
+  const a = nearTrace(x, z);
+  const b = nearTrace(x, z, Math.round(a.u / TRACE_STEP));
+  const wa = 1 / (a.dist + 1) ** 4, wb = 1 / (b.dist + 1) ** 4;
+  const road = (elevation(a.u) * wa + elevation(b.u) * wb) / (wa + wb) - 0.15;
+  const w = smoothstep(9, ROAD_BLEND, a.dist);
+  const need = (CRAG_BENCH - fbm(x / 70, z / 70, 3) * 3 * smoothstep(9, 45, a.dist) - road * (1 - w)) / Math.max(w, 0.25);
+  return ground + (need - ground) * (1 - smoothstep(CRAG_FLAT, CRAG_REACH, r));
+}
+const wildHeight = (x: number, z: number) => beckGround(x, z, gillGround(x, z, lakeGround(x, z, cragGround(x, z, base(x, z)))));
 
 // The cutting: steep rock walls either side of the road over Raven Gap, from the shapes in canyon.ts (stepped faces and benches).
 const CUT_FADE = 150;
@@ -357,13 +419,27 @@ const WALLED: [number, number][] = [[to('mill-bridge'), from('hairpin-2')], [fro
 const OPEN: [number, number][] = [[KV_LAP - 520, KV_LAP], [0, 760], [to('mill-bridge'), from('climb-foot')], [GAP_FROM - 150, GAP_TO + 150]];
 const within = (ranges: [number, number][], d: number) => { const u = mod(d); return ranges.some(([a, b]) => u >= a && u <= b); };
 
-/** Stone terraces along the high street and the run-in, both sides (rows repeat every lap through `until`). */
+/**
+ * Stone terraces along the high street and the run-in, both sides (rows repeat every lap through `until`). Each row is laid out as a village street (`village`: storeys,
+ * roof lines, doors, a cottage, a ginnel or a shopfront, from the seed; terracePlan.ts). A side of the high street takes six seeds (a row every 44 m: the pattern repeats
+ * every 264 m, and a side of the run-in five, every 220 m), and the seeds are picked so that neighbouring rows differ in height, shopfronts, cottages and ginnels (a test
+ * checks the mix). The landmark count is the same as before (a row every 44 m): only more kinds, each placed once or twice a street.
+ */
+const HIGH_STREET_LEFT = [3, 14, 31, 7, 24, 38];
+const HIGH_STREET_RIGHT = [12, 6, 22, 11, 29, 17];
+const RUN_IN_LEFT = [34, 27, 10, 16, 1];
+const RUN_IN_RIGHT = [23, 9, 13, 36, 40];
 const VILLAGE: LandmarkKind[] = [
-  ...terraceRow(66, 572, -1, 'stone', [1, 2]),
-  ...terraceRow(66, 572, 1, 'stone', [3, 4]),
-  ...terraceRow(KV_LAP - 440, KV_LAP - 30, -1, 'stone', [5, 6]),
-  ...terraceRow(KV_LAP - 440, KV_LAP - 30, 1, 'stone', [7, 1]),
+  ...terraceRow(66, 572, -1, 'stone', HIGH_STREET_LEFT, 44, true),
+  ...terraceRow(66, 572, 1, 'stone', HIGH_STREET_RIGHT, 44, true),
+  ...terraceRow(KV_LAP - 440, KV_LAP - 30, -1, 'stone', RUN_IN_LEFT, 44, true),
+  ...terraceRow(KV_LAP - 440, KV_LAP - 30, 1, 'stone', RUN_IN_RIGHT, 44, true),
 ];
+// The inn: model measures after `normalise` (height 10.5 m, so its footprint is 12.1 by 9.6 m, front towards the road).
+const INN_U = 40;
+const INN_HEIGHT = 10.5;
+const INN_FOOTPRINT = { w: 12.1, d: 9.6 };
+const INN_OFFSET = 16.5 + INN_FOOTPRINT.d / 2;
 /** One-offs that stand once a lap: `every` is the lap itself. */
 const once = (k: LandmarkKind): LandmarkKind => ({ ...k, every: KV_LAP });
 const LANDMARKS: LandmarkKind[] = [
@@ -371,6 +447,9 @@ const LANDMARKS: LandmarkKind[] = [
   once(monumentAt('alpine-church', from('church-bend') + 150, 1, 36, 26.6, { yaw: -0.3, clearance: 16 })),
   // The market cross in the square, left of the road a little after the line (the start arch is at 30 m).
   once(monumentAt('market-cross', 18, -1, 12, MARKET_CROSS_HEIGHT, { clearance: 10 })),
+  // The Hollins Cross Inn (a model, 12.1 m wide, 9.6 deep, 10.5 high), the first building on the left after the square: its front 16.5 m from the centreline like the terraces' (their
+  // offset is 21 and their depth 9), 12 m on from the market cross (18) and clear of the left terrace row, which starts at 66 (the widest terrace is 32.4 m, so its end is at 49.8).
+  once({ file: 'hollins-cross-inn.glb', first: INN_U, every: 1e9, side: -1, offset: INN_OFFSET, size: INN_HEIGHT, clearance: 16 }),
   // Mill Bridge: the covered bridge carries the road over the lake's outflow.
   once({ file: 'covered-bridge.glb', first: from('mill-bridge') + 125, every: 1e9, side: 0, span: 'along', offset: 0, size: 12.5, clearance: 22 }),
   // Foss Bottom's farms (one of each a lap: the spacing is the lap, which divides it).
@@ -431,18 +510,57 @@ LANDMARKS.push(once({
   world: { x: JETTY.x, y: LAKE_LEVEL, z: JETTY.z, yaw: JETTY.yaw },
 }));
 
+// Kestrel Water boathouse (a model: 9.2 m wide, 10.7 deep, 8.5 m high), at the shore 110 m before the jetty, where the lake comes closest to the road (35 m). Its water door faces the lake, turned BOAT_TURN back along the road
+// so riders coming along the shore see the door end (the jetty's own turn is 0.45); the front 3 m is over the water's edge (the shore's own ground is a hair above the lake for
+// the first few metres, so the stone plinth stands in it) and the rest is on the bank. The origin is the plinth's foot, at the lake's level.
+const BOAT_U = 2140;
+const BOAT_HEIGHT = 8.5;
+const BOAT_FOOTPRINT = { w: 9.2, d: 10.7 };
+const BOAT_TURN = 0.6;
+const BOAT_FRONT = 3; // m of the front face (its middle) inside the water line
+const BOATHOUSE = (() => {
+  const r = roadPoint(BOAT_U);
+  const lx = r.tz, lz = -r.tx; // to the road's left, the lake's side
+  let s = 0;
+  while (pondDistance(KV_LAKE, r.x + lx * s, r.z + lz * s) > 0 && s < 400) s += 0.5;
+  const x = r.x + lx * s, z = r.z + lz * s; // on the water's edge
+  const gx = pondDistance(KV_LAKE, x + 1, z) - pondDistance(KV_LAKE, x - 1, z), gz = pondDistance(KV_LAKE, x, z + 1) - pondDistance(KV_LAKE, x, z - 1);
+  const gl = Math.hypot(gx, gz);
+  const dx = -gx / gl, dz = -gz / gl; // into the lake
+  const fx = dx * Math.cos(BOAT_TURN) - dz * Math.sin(BOAT_TURN), fz = dx * Math.sin(BOAT_TURN) + dz * Math.cos(BOAT_TURN); // the way the door faces
+  const mid = BOAT_FRONT - BOAT_FOOTPRINT.d / 2; // the middle of the plan, along the facing from the water's edge
+  return { x: x + fx * mid, z: z + fz * mid, yaw: Math.atan2(fx, fz), offset: s, edge: { x, z }, face: { x: fx, z: fz } };
+})();
+LANDMARKS.push(once({
+  file: 'kestrel-boathouse.glb', first: BOAT_U, every: 1e9, side: -1, offset: BOATHOUSE.offset, size: BOAT_HEIGHT, clearance: 24, within: 1000,
+  world: { x: BOATHOUSE.x, y: LAKE_LEVEL - 0.05, z: BOATHOUSE.z, yaw: BOATHOUSE.yaw },
+}));
+
+// Raven Keep, the climb's own landmark: a ruined three-storey tower with its rock base (a model, 20.2 m square and 28 m tall), on the crag above the hairpins (see KEEP_SPOT).
+// A world landmark like the viaduct (stood on the terrain where it is built, so placed only while the rider is within `within`), its door turned towards the zigzag of the
+// hairpins below. It is in range from the foot of the climb (and so on the Raven Scar route) to the cutting; the lap's first lap metre it stands for is the second hairpin.
+const KEEP_U = 7200;
+const KEEP_HEIGHT = 28;
+const KEEP_FOOTPRINT = { w: 20.2, d: 19.6 };
+const KEEP = (() => {
+  // The lowest of the ground under the footprint (centre and eight points), sunk a hand so the rock base meets the slope.
+  const hw = KEEP_FOOTPRINT.w / 2, hd = KEEP_FOOTPRINT.d / 2;
+  let y = Infinity;
+  for (const ax of [-hw, 0, hw]) for (const az of [-hd, 0, hd]) y = Math.min(y, groundWith(KEEP_SPOT.x + ax, KEEP_SPOT.z + az, wildHeight(KEEP_SPOT.x + ax, KEEP_SPOT.z + az)));
+  const mx = (roadPoint(HAIRPINS[2]).x + roadPoint(HAIRPINS[3]).x) / 2, mz = (roadPoint(HAIRPINS[2]).z + roadPoint(HAIRPINS[3]).z) / 2; // the zigzag's middle, below it
+  return { x: KEEP_SPOT.x, z: KEEP_SPOT.z, y: y - 0.5, yaw: Math.atan2(mx - KEEP_SPOT.x, mz - KEEP_SPOT.z) };
+})();
+LANDMARKS.push(once({
+  file: 'raven-keep.glb', first: KEEP_U, every: 1e9, side: 1, offset: 300, size: KEEP_HEIGHT, clearance: 48, reach: 4200, within: 1050,
+  world: { x: KEEP.x, y: KEEP.y, z: KEEP.z, yaw: KEEP.yaw },
+}));
+
 const SPRINT = 2600; // on the lakeshore
 const SUMMIT = Math.round(GAP_FROM);
 
 // Dressing (world/dressingTypes.ts): the field walls of Foss Bottom, from just past Mill Bridge to the foot of the climb, kept off the lake and the beck; and bunting
 // across the high street between the terraces' fronts (16.5 m from the centreline), hung over the middle of each terrace (they stand every 44 m, from 66 m), clear of
 // the square and the line.
-/** Distance from (x, z) to the nearest point of the road's trace (10 m apart, so within 5 m). */
-function roadDistance(x: number, z: number): number {
-  let best = Infinity;
-  for (const [tx, tz] of TRACE) { const d = (tx - x) ** 2 + (tz - z) ** 2; if (d < best) best = d; }
-  return Math.sqrt(best);
-}
 
 const DRESSING: Dressing = {
   lap: mod,
@@ -454,6 +572,19 @@ const DRESSING: Dressing = {
     blocked: (x, z, lateral) => pondDistance(KV_LAKE, x, z) < 14 || beckAt(x, z).dist < BECK_WIDTH / 2 + 6 || roadDistance(x, z) < lateral - 4,
   },
   bunting: { spans: [[66, 572], [KV_LAP - 440, KV_LAP - 62]], spacing: 44, half: 16.2, height: 6.5 },
+};
+
+/**
+ * The village's own start, finish and sprint arch (`vale-arch`, monumentVale.ts) in place of the stars-and-stripes gantry: two limestone piers, an oak beam and a painted board
+ * with chequered trim and a string of bunting, spanning the road at 9.9 m clear. Its words: the place, then START, FINISH or the sprint's name over SPRINT. It stands where the
+ * gantry stood (lap metre 30, the line, each sprint), 12 m clear of trees; the market cross (18 m, 10 m left of the road's edge), the inn (40 m) and the bunting (from 66 m) are
+ * all clear of it, and its piers stand inside the first row of spectators (6.05 m out).
+ */
+const archKind = (lines: string[]): LandmarkKind => ({ model: 'vale-arch', first: 0, every: 1e9, side: 0, span: 'across', offset: 0, size: VALE_ARCH.height, clearance: 12, options: { lines } });
+const ARCH: WorldArch = {
+  start: archKind(['HOLLINS CROSS', 'START']),
+  finish: archKind(['HOLLINS CROSS', 'FINISH']),
+  sprint: (name) => archKind([name.replace(/\s*sprint$/i, '').toUpperCase(), 'SPRINT']),
 };
 
 export const KESTREL_VALE: World = {
@@ -477,6 +608,7 @@ export const KESTREL_VALE: World = {
     fields: true,
     dryGrass: 0.3,
     mountainScale: 1.6, // the Pennines
+    clearAir: 1.5, // the haze distance x1.5: Raven Keep, 800 m up the slope, is hidden by it from the climb's second leg on Medium
     horizon: 'hills',
     road: 'alpine',
     barrier: 'stone',
@@ -487,6 +619,7 @@ export const KESTREL_VALE: World = {
     dressing: DRESSING,
   },
   landmarks: LANDMARKS,
+  arch: ARCH,
   places: [
     [60, 'Hollins Cross'], [from('lake-1'), 'Kestrel Water'], [from('mill-bridge'), 'Mill Bridge'], [from('foss-bend') + 200, 'Foss Bottom'],
     [from('climb-foot'), 'Raven Scar'], [GAP_FROM, 'Raven Gap'], [from('highfold-1') + 40, 'Highfold Woods'], [from('beck-1'), 'Beck Lane'],
@@ -520,4 +653,4 @@ export const KESTREL_ROUTE_DEFS: WorldRoute[] = [
 export const KESTREL_ROUTES: Stage[] = KESTREL_ROUTE_DEFS.map((r) => routeStage(KESTREL_VALE, r));
 
 /** Pieces and marks the tests read back. */
-export const KV = { bridge: BRIDGE_U, beck: KV_BECK, beckAt, beckGround, gill: GILL, gillGround, viaduct: { u: VIADUCT_U, ground: viaductGround, origin: VIADUCT_ORIGIN, terrainAt }, jetty: JETTY, dressing: DRESSING, loop: LOOP, from, to, roadPoint, trace: TRACE, hairpins: HAIRPINS, gap: [GAP_FROM, GAP_TO] as const, tunnel: KV_TUNNEL, tunnelRoof, summit: SUMMIT, sprint: SPRINT, crestAt, lakeGround, roadside };
+export const KV = { bridge: BRIDGE_U, beck: KV_BECK, beckAt, beckGround, gill: GILL, gillGround, viaduct: { u: VIADUCT_U, ground: viaductGround, origin: VIADUCT_ORIGIN, terrainAt }, jetty: JETTY, boathouse: { ...BOATHOUSE, u: BOAT_U, footprint: BOAT_FOOTPRINT, height: BOAT_HEIGHT }, keep: { ...KEEP, u: KEEP_U, spot: KEEP_SPOT, footprint: KEEP_FOOTPRINT, height: KEEP_HEIGHT, bench: CRAG_BENCH, cragGround, groundWith: (x: number, z: number) => groundWith(x, z, wildHeight(x, z)) }, inn: { u: INN_U, offset: INN_OFFSET, footprint: INN_FOOTPRINT, height: INN_HEIGHT }, dressing: DRESSING, loop: LOOP, from, to, roadPoint, trace: TRACE, hairpins: HAIRPINS, gap: [GAP_FROM, GAP_TO] as const, tunnel: KV_TUNNEL, tunnelRoof, summit: SUMMIT, sprint: SPRINT, crestAt, lakeGround, roadside };

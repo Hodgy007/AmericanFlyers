@@ -100,15 +100,16 @@ async function setup(page: Page, f: Partial<Fixture> = {}, query = ''): Promise<
   await page.addInitScript(() => {
     localStorage.setItem('americanflyers.signedIn', '1');
     localStorage.setItem('americanflyers.onboarded', '1');
-    // Software WebGL: run the render loop at ~4 fps so the test's own clicks aren't starved.
+    // Software WebGL: run the render loop at ~1 fps so the test's own clicks aren't starved (the ride phase below speeds it up).
     const raf = window.requestAnimationFrame.bind(window);
     const w = window as unknown as { __rafDelay: number; __rafPaused: boolean; __rafQueue: FrameRequestCallback[] };
-    w.__rafDelay = 250;
+    w.__rafDelay = 1000;
     w.__rafPaused = false;
     w.__rafQueue = [];
     window.requestAnimationFrame = (cb) => window.setTimeout(() => { if (w.__rafPaused) w.__rafQueue.push(cb); else raf(cb); }, w.__rafDelay) as unknown as number;
   });
-  await page.setViewportSize({ width: 960, height: 600 });
+  // Nothing here depends on the window's size (the screenshots, when asked for, are nicer in a bigger one).
+  if (SHOTS) await page.setViewportSize({ width: 960, height: 600 });
   await page.goto(`/${query}`);
   await ride(page);
   await expect(page.locator('#btn-menu')).toBeVisible();
@@ -202,8 +203,8 @@ test('opt in, coach tips, rival lines and debriefs (mocked AI)', async ({ page }
     const m = /(\d+):(\d\d)(?::(\d\d))?/.exec(txt.replace(/\s+/g, ' '));
     return m ? (m[3] ? Number(m[1]) * 60 : Number(m[1])) : 0;
   }, { timeout: 250_000, intervals: [1000] }).toBeGreaterThanOrEqual(3);
-  await page.setViewportSize({ width: 960, height: 600 });
-  await page.evaluate(() => { (window as unknown as { __rafDelay: number }).__rafDelay = 250; });
+  await page.setViewportSize(SHOTS ? { width: 960, height: 600 } : { width: 640, height: 400 }); // back from the small ride-phase window
+  await page.evaluate(() => { (window as unknown as { __rafDelay: number }).__rafDelay = 1000; });
   await press(page, '#btn-menu');
   await press(page, '#btn-reset');
   await press(page, '#hub-leave-go'); // ⏹ End ride asks first

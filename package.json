@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && tsc -p api --noEmit && tsc -p tsconfig.test.json --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
+    "csp:sync": "node scripts/sync-csp.mjs",
     "test": "vitest run",
     "typecheck:tests": "tsc -p tsconfig.test.json --noEmit",
     "test:watch": "vitest",
@@ -27,12 +28,15 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.2",
     "vite": "^7.3.8",
-    "vitest": "^4.1.12",
-    "zod": "^4.6.7"
+    "vitest": "^4.1.12"
   },
   "dependencies": {
     "@neon/neon-js": "^0.10.2",
     "@sentry/browser": "^11.10.0",
-    "three": "^0.187.0"
+    "three": "^0.187.0",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "minimatch": "^11.0.8"
   }
 }
