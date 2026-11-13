@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
+import { CSP_HEADER, NEON_DATA_API_ORIGIN, buildCsp } from './csp.mjs';
 
 // Sentry: the DSN is public (it only lets the browser send error reports).
 // The Vercel Sentry integration provides it as SENTRY_DSN or
@@ -61,10 +62,16 @@ function shortCommit(): string | null {
   }
 }
 
+// The same Content-Security-Policy as vercel.json (see csp.mjs), sent by `vite preview` and `vite dev` so tests and
+// local runs see the violations. A VITE_NEON_DATA_API_URL override is allowed too.
+const indexHtml = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
+const dataApiOrigin = env.VITE_NEON_DATA_API_URL ? new URL(env.VITE_NEON_DATA_API_URL).origin : NEON_DATA_API_ORIGIN;
+const cspHeaders = (dev: boolean) => ({ [CSP_HEADER]: buildCsp(indexHtml, { dev, dataApiOrigin }) });
+
 export default defineConfig({
   base: './',
-  server: { proxy: authProxy },
-  preview: { proxy: authProxy },
+  server: { proxy: authProxy, headers: cspHeaders(true) },
+  preview: { proxy: authProxy, headers: cspHeaders(false) },
   define: {
     __SENTRY_DSN__: JSON.stringify(dsn),
     __RELEASE__: JSON.stringify(release),
@@ -82,6 +89,8 @@ export default defineConfig({
           if (/node_modules\/three\/examples\/jsm\/(postprocessing|shaders)\//.test(id)) return 'vendor-three-post';
           if (/node_modules\/three\//.test(id)) return 'vendor-three';
           if (/node_modules\/@sentry/.test(id)) return 'vendor-sentry';
+          // zod gets its own chunk so cloud/client.ts can switch its code generation off before the SDK (which builds its schemas on load) runs.
+          if (/node_modules\/zod\//.test(id)) return 'vendor-zod';
           if (/node_modules\/(@neon|better-auth|@better-auth|better-call|nanostores|zod|@better-fetch|jose|@supabase|@neondatabase)/.test(id)) return 'vendor-neon';
           return undefined;
         },

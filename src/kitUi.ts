@@ -31,7 +31,10 @@ export function initKitUi(o: Options) {
     b.className = 'kit-preset';
     b.dataset.id = p.id;
     const k = p.kit ?? STARS_AND_STRIPES;
-    b.innerHTML = `<span class="kit-swatch"><i style="background:${k.jersey}"></i><i style="background:${k.accent}"></i><i style="background:${k.frame}"></i></span><span class="kit-preset-name"></span>`;
+    b.innerHTML = '<span class="kit-swatch"><i></i><i></i><i></i></span><span class="kit-preset-name"></span>';
+    // Colours go through the CSSOM: the CSP forbids style="" attributes in markup.
+    const colours = [k.jersey, k.accent, k.frame];
+    b.querySelectorAll<HTMLElement>('.kit-swatch i').forEach((i, n) => { i.style.background = colours[n]; });
     b.querySelector('.kit-preset-name')!.textContent = p.name;
     b.addEventListener('click', () => {
       working = p.kit ? { ...p.kit } : null;

@@ -34,9 +34,17 @@ Both suspected bugs were investigated. Neither was what it looked like; one real
 
 1. **Content-Security-Policy.** `vercel.json` sets the other standard headers but not this one. Start with `Content-Security-Policy-Report-Only`, so a mistake cannot break sign-in, and list what it must allow (the app's own origin, Neon through `/api/auth`, Sentry, blob and data URLs for textures and workers, inline styles if the app needs them).
    - **Done when:** the header is in `vercel.json`, a browser test loads the app, signs in (mocked) and starts a ride with no CSP violation reported, and this page says what has to be true before the header is switched from report-only to enforcing.
+   - **Status: done, report-only.** The policy and what each directive allows are in [Security](security.md#content-security-policy); it is built by `csp.mjs` and sent by `vercel.json`, `vite preview` and `vite dev`; `tests/e2e/csp.spec.ts` and `tests/unit/csp.test.ts` guard it.
+   - **Before switching to enforcing** (rename the header to `Content-Security-Policy` in `csp.mjs`, run `npm run csp:sync`, and keep the report-only copy for any stricter experiment):
+     1. Add somewhere to send reports. There is none today, so a production violation is only seen in the rider's console. Cheapest: a `report-uri` (and `report-to`) pointing at Sentry's security endpoint for the project (Sentry accepts CSP reports at `https://<ingest host>/api/<project id>/security/?sentry_key=<public key>`, the same public key as the DSN), which needs no new function. The alternative is a small `api/csp-report.ts` that logs the report (blocked URI, directive, source file, never the page's query string) to the Vercel logs.
+     2. A week or more of clean reports in production, on the browsers riders use (Chrome, Safari, Firefox, Bluefy on iOS), including a sign-in with Google, an email sign-in and password reset, a ride on every graphics tier, the share-card save, a `.fit` and `.tcx` export and a service-worker update. Extensions inject scripts and styles and produce noise: filter reports whose source is `chrome-extension:` or `moz-extension:`.
+     3. The two things the test cannot see are checked by hand: the Sentry ingest host the DSN really uses is in `connect-src` (the list covers `*.ingest.sentry.io`, `.us.` and `.de.`), and Neon's Data API host in `csp.mjs` is the one in the production environment.
+     4. A rollback plan: the header is one line in `vercel.json`, so reverting is a revert of that commit (or a rename back to report-only).
 2. **The Dependabot alert.** `minimatch`, pulled in by ESLint, a development tool. Upgrade ESLint, and fix what its new rules flag.
    - **Done when:** `npm audit` reports nothing, and lint is clean.
+   - **Status: done.** ESLint 10.14.0 and typescript-eslint 8.72.2 are already the latest releases, so there is no upgrade to make: the alert (minimatch below 11.0.1) is cleared by an npm `overrides` entry forcing `minimatch ^11.0.8` for ESLint's, typescript-eslint's and the Sentry plugin's copies, and `npm audit` reports 0 vulnerabilities.
 3. **`kestrel-vale-plan.md` reads as a plan though all five milestones are built.** Rewrite it as a short page on how the world is built, and move the parts that still matter (the route model, the frozen ids and lap, the tunnel approach) into it.
+   - **Status: done.** The page is now [kestrel-vale.md](kestrel-vale.md).
 
 ### D. Kestrel Vale polish
 

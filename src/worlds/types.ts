@@ -2,7 +2,7 @@
 // coordinates (its road, scenery, landmarks, places, race points); a route is a window on that loop, compiled
 // by `routeStage()` into an ordinary Stage with its own permanent id. Leaderboards, ghosts, saved rides, presence and
 // the limit tables are all keyed by stage id, so they work on a route unchanged. See
-// docs/developer-guide/stages-and-gpx.md ("Worlds and routes") and kestrel-vale-plan.md.
+// docs/developer-guide/stages-and-gpx.md ("Worlds and routes") and kestrel-vale.md.
 //
 // This file and the worlds that use it import only *types* from ../stages (stages.ts imports the routes at run time:
 // a value import back would be a cycle). Run-time helpers come from ../stageKit and the leaf modules in ../world/.

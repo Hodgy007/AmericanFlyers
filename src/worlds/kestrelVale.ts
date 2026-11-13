@@ -1,6 +1,6 @@
 // Kestrel Vale: a fictional limestone valley in the north of England, a cousin of the Harrogate stage, as one closed loop.
 // Its routes (an endless free ride, one lap, three laps, and two that start partway round) are windows on that loop (see worlds/types.ts and
-// docs/developer-guide/kestrel-vale-plan.md). Hollins Cross, the village, is the start and finish; the road runs down to
+// docs/developer-guide/kestrel-vale.md). Hollins Cross, the village, is the start and finish; the road runs down to
 // Kestrel Water, over Mill Bridge, across the farmland of Foss Bottom, up the Raven Scar climb with its five hairpins to the
 // rock cutting and tunnel of Raven Gap, down through Highfold Woods, along Beck Lane and back into the
 // village. It turns left all the way round, so the lake lies inside the loop.

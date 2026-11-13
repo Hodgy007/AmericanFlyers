@@ -75,6 +75,8 @@ Conventions:
 
 `tests/e2e/home.spec.ts` covers the way in: a visitor with no account sees the home page and no way past it (no *Ride without an account*, Escape does nothing, the hub stays hidden); a stale signed-in hint with no session ends on the home page; signing out returns to it; a ride left by the old guest flow is saved once at sign-in and deleted; and a workout made before accounts were required syncs to the account.
 
+`tests/e2e/csp.spec.ts` watches for Content-Security-Policy violations (`securitypolicyviolation` events and `[Report Only]` console messages) on the home page and through a signed-in Medium ride at Kestrel Vale's village and every main dialog, and fails on any; `tests/unit/csp.test.ts` keeps `vercel.json` in step with `csp.mjs` (see [Security](security.md#content-security-policy)).
+
 A second test in `smoke.spec.ts` signs the mocked rider in and checks the hub's name, level, credits, plan row, best times, each section's data, a ride row opening the profile's ride detail, and Ride starting a chosen workout.
 
 It takes about a minute with software WebGL. To keep that fast and reliable, the test throttles `requestAnimationFrame` to about 1 fps (set `E2E_FULL_FPS=1` to turn that off) and clicks through the DOM. When you add a main dialog or menu entry, add a line to `DIALOGS` in the spec.

@@ -26,7 +26,13 @@ let real: Promise<NeonClient> | null = null;
 
 /** The real client, built the first time something needs it. */
 export function realNeon(): Promise<NeonClient> {
-  real ??= import('@neon/neon-js').then(({ createClient: make }) => build(make)).catch((e) => { real = null; throw e; });
+  // zod (inside the SDK) probes whether `new Function` works to speed up validation, which a strict Content-Security-Policy
+  // reports as a violation although zod copes with the refusal. Its JIT is switched off first, and it must be before the SDK
+  // loads (the SDK builds its schemas as it evaluates): so zod has a chunk of its own (vite.config.ts) that is awaited first.
+  real ??= import('zod/v4/core')
+    .then(({ config }) => { config({ jitless: true }); return import('@neon/neon-js'); })
+    .then(({ createClient: make }) => build(make))
+    .catch((e) => { real = null; throw e; });
   return real;
 }
 
