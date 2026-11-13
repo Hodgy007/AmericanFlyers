@@ -78,10 +78,11 @@ export function initGarageUi(o: Options) {
     const frac = levelFraction(w);
     head.innerHTML = `
       <div class="gar-level"><span class="gar-lv">Level ${w.level}</span><span class="gar-title">${levelTitle(w.level)}</span></div>
-      <div class="gar-bar" role="img" aria-label="${Math.round(frac * 100)}% of the way to the next level"><i style="width:${Math.round(frac * 100)}%"></i></div>
+      <div class="gar-bar" role="img" aria-label="${Math.round(frac * 100)}% of the way to the next level"><i></i></div>
       <div class="gar-xp">${w.xpNext === null ? 'Top level!' : `${fmt(w.xp - w.xpThis)} / ${fmt(w.xpNext - w.xpThis)} XP to level ${w.level + 1}`}</div>
       <div class="gar-credits"><strong>🪙 ${fmt(w.balance)}</strong> credits<small>${fmt(w.creditsEarned)} earned · ${fmt(w.creditsSpent)} spent</small></div>
       <div class="gar-totals">${o.imperial() ? `${fmt(w.km / 1.609344)} mi` : `${fmt(w.km)} km`} ridden · ${o.imperial() ? `${fmt(w.climbedM * 3.28084)} ft` : `${fmt(w.climbedM)} m`} climbed · ${fmt(w.rides)} rides</div>`;
+    head.querySelector<HTMLElement>('.gar-bar i')!.style.width = `${Math.round(frac * 100)}%`; // CSSOM, not style="": the CSP forbids that attribute
   }
 
   function renderTabs() {

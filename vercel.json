@@ -21,7 +21,8 @@
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=()" },
-        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
+        { "key": "Content-Security-Policy-Report-Only", "value": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-HPWXGKf0wXgdM4tntcAWL90AbYjcFlp8XEiITCOkp/0=' 'sha256-5TdInhVLcvGy3touc+qcYXPtCeb5VlDDmcpy150Re4Q='; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self'; connect-src 'self' blob: https://ep-winter-voice-za03vb20.apirest.c-2.eu-west-2.aws.neon.tech https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'" }
       ]
     }
   ]
