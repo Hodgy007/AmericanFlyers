@@ -397,7 +397,10 @@ function markerConfig() {
 // `?stage=alpe-dhuez` picks the stage; the stage picker updates it. Its road has already been fetched (src/boot.ts, src/startupStage.ts): a
 // built-in stage's road loads on demand, and if this one couldn't be fetched the app opens on Heartland and says so.
 setStage(startupStage);
-if (startupStageFailed) window.setTimeout(() => toast(`Couldn’t load ${startupStageFailed!.name}: check your connection. Opened Heartland Rollers instead.`, 7000), 0); // (after the module has run: toast() uses state declared further down)
+// The message is kept for its first seconds: the "Signed in as…" toast arrives a moment later and would otherwise replace it unread.
+const startupNote = startupStageFailed ? `Couldn’t load ${startupStageFailed.name}: check your connection. Opened Heartland Rollers instead.` : '';
+let startupNoteUntil = 0;
+if (startupNote) window.setTimeout(() => { startupNoteUntil = performance.now() + 7000; toast(startupNote, 7000); }, 0); // (after the module has run: toast() uses state declared further down)
 const world = new World($<HTMLCanvasElement>('scene'), markerConfig());
 world.setAtmosphere(settings.timeOfDay, settings.weather);
 // Wind, and the mini-map and climb preview.
@@ -2570,7 +2573,8 @@ onAccountChange(async (a) => {
     void accountUi.checkAdmin(); // the session is settled now
     void loadMyGhost();
     syncAiConsent(); // the AI coach and rivals follow what the account agreed to (the database has the last word)
-    toast(`Signed in as ${a.name}`);
+    if (performance.now() < startupNoteUntil) toast(startupNote, startupNoteUntil - performance.now()); // the stage that failed to load matters more than the greeting
+    else toast(`Signed in as ${a.name}`);
   } catch (e) {
     if (gen === signInGen) toast(`Signed in, but couldn’t sync: ${(e as Error).message}`, 6000);
   }
