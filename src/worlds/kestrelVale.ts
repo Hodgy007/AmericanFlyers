@@ -13,11 +13,11 @@
 import { fbm, smoothstep } from '../world/noise';
 import { riseRel, shapeAt } from '../world/canyon';
 import { pondDistance, type PondBody, type RiverBody } from '../world/waterTypes';
-import { JETTY_HEIGHT, MARKET_CROSS_HEIGHT, VIADUCT } from '../world/monumentTypes';
+import { JETTY_HEIGHT, MARKET_CROSS_HEIGHT, VALE_ARCH, VIADUCT } from '../world/monumentTypes';
 import type { Dressing } from '../world/dressingTypes';
 import { TUNNEL_HALF_WIDTH, TUNNEL_HILL, TUNNEL_PORTAL_DEPTH, vaultHeight, type TunnelSpan } from '../world/tunnelSpan';
 import { monumentAt, pchip, roadElevationField, roadTrace, terraceRow } from '../stageKit';
-import { closeLoop, routeStage, type LoopPiece, type World, type WorldRoute } from './types';
+import { closeLoop, routeStage, type LoopPiece, type World, type WorldArch, type WorldRoute } from './types';
 import type { LandmarkKind, Stage } from '../stages';
 
 // ------------------------------------------------------------------ the loop ----
@@ -312,8 +312,8 @@ function groundWith(x: number, z: number, wild: number): number {
   return road * (1 - w) + wild * w + fbm(x / 70, z / 70, 3) * 3 * smoothstep(9, 45, a.dist);
 }
 const KEEP_SPOT = { x: -500, z: -3980 };
-const CRAG_RISE = 26; // m the bench stands above the slope at the keep (the terrain's own height, after the blend)
-const CRAG_FLAT = 16;
+const CRAG_RISE = 40; // m the bench stands above the slope at the keep (the terrain's own height, after the blend)
+const CRAG_FLAT = 18;
 const CRAG_FADE = 50;
 const CRAG_REACH = CRAG_FLAT + CRAG_FADE;
 const CRAG_BENCH = groundWith(KEEP_SPOT.x, KEEP_SPOT.z, base(KEEP_SPOT.x, KEEP_SPOT.z)) + CRAG_RISE;
@@ -419,12 +419,21 @@ const WALLED: [number, number][] = [[to('mill-bridge'), from('hairpin-2')], [fro
 const OPEN: [number, number][] = [[KV_LAP - 520, KV_LAP], [0, 760], [to('mill-bridge'), from('climb-foot')], [GAP_FROM - 150, GAP_TO + 150]];
 const within = (ranges: [number, number][], d: number) => { const u = mod(d); return ranges.some(([a, b]) => u >= a && u <= b); };
 
-/** Stone terraces along the high street and the run-in, both sides (rows repeat every lap through `until`). */
+/**
+ * Stone terraces along the high street and the run-in, both sides (rows repeat every lap through `until`). Each row is laid out as a village street (`village`: storeys,
+ * roof lines, doors, a cottage, a ginnel or a shopfront, from the seed; terracePlan.ts). A side of the high street takes six seeds (a row every 44 m: the pattern repeats
+ * every 264 m, and a side of the run-in five, every 220 m), and the seeds are picked so that neighbouring rows differ in height, shopfronts, cottages and ginnels (a test
+ * checks the mix). The landmark count is the same as before (a row every 44 m): only more kinds, each placed once or twice a street.
+ */
+const HIGH_STREET_LEFT = [3, 14, 31, 7, 24, 38];
+const HIGH_STREET_RIGHT = [12, 6, 22, 11, 29, 17];
+const RUN_IN_LEFT = [34, 27, 10, 16, 1];
+const RUN_IN_RIGHT = [23, 9, 13, 36, 40];
 const VILLAGE: LandmarkKind[] = [
-  ...terraceRow(66, 572, -1, 'stone', [1, 2]),
-  ...terraceRow(66, 572, 1, 'stone', [3, 4]),
-  ...terraceRow(KV_LAP - 440, KV_LAP - 30, -1, 'stone', [5, 6]),
-  ...terraceRow(KV_LAP - 440, KV_LAP - 30, 1, 'stone', [7, 1]),
+  ...terraceRow(66, 572, -1, 'stone', HIGH_STREET_LEFT, 44, true),
+  ...terraceRow(66, 572, 1, 'stone', HIGH_STREET_RIGHT, 44, true),
+  ...terraceRow(KV_LAP - 440, KV_LAP - 30, -1, 'stone', RUN_IN_LEFT, 44, true),
+  ...terraceRow(KV_LAP - 440, KV_LAP - 30, 1, 'stone', RUN_IN_RIGHT, 44, true),
 ];
 // The inn: model measures after `normalise` (height 10.5 m, so its footprint is 12.1 by 9.6 m, front towards the road).
 const INN_U = 40;
@@ -527,12 +536,12 @@ LANDMARKS.push(once({
   world: { x: BOATHOUSE.x, y: LAKE_LEVEL - 0.05, z: BOATHOUSE.z, yaw: BOATHOUSE.yaw },
 }));
 
-// Raven Keep, the climb's own landmark: a ruined three-storey tower with its rock base (a model, 14.4 m square and 20 m tall), on the crag above the hairpins (see KEEP_SPOT).
+// Raven Keep, the climb's own landmark: a ruined three-storey tower with its rock base (a model, 20.2 m square and 28 m tall), on the crag above the hairpins (see KEEP_SPOT).
 // A world landmark like the viaduct (stood on the terrain where it is built, so placed only while the rider is within `within`), its door turned towards the zigzag of the
 // hairpins below. It is in range from the foot of the climb (and so on the Raven Scar route) to the cutting; the lap's first lap metre it stands for is the second hairpin.
 const KEEP_U = 7200;
-const KEEP_HEIGHT = 20;
-const KEEP_FOOTPRINT = { w: 14.4, d: 14 };
+const KEEP_HEIGHT = 28;
+const KEEP_FOOTPRINT = { w: 20.2, d: 19.6 };
 const KEEP = (() => {
   // The lowest of the ground under the footprint (centre and eight points), sunk a hand so the rock base meets the slope.
   const hw = KEEP_FOOTPRINT.w / 2, hd = KEEP_FOOTPRINT.d / 2;
@@ -542,7 +551,7 @@ const KEEP = (() => {
   return { x: KEEP_SPOT.x, z: KEEP_SPOT.z, y: y - 0.5, yaw: Math.atan2(mx - KEEP_SPOT.x, mz - KEEP_SPOT.z) };
 })();
 LANDMARKS.push(once({
-  file: 'raven-keep.glb', first: KEEP_U, every: 1e9, side: 1, offset: 300, size: KEEP_HEIGHT, clearance: 40, reach: 4200, within: 1050,
+  file: 'raven-keep.glb', first: KEEP_U, every: 1e9, side: 1, offset: 300, size: KEEP_HEIGHT, clearance: 48, reach: 4200, within: 1050,
   world: { x: KEEP.x, y: KEEP.y, z: KEEP.z, yaw: KEEP.yaw },
 }));
 
@@ -563,6 +572,19 @@ const DRESSING: Dressing = {
     blocked: (x, z, lateral) => pondDistance(KV_LAKE, x, z) < 14 || beckAt(x, z).dist < BECK_WIDTH / 2 + 6 || roadDistance(x, z) < lateral - 4,
   },
   bunting: { spans: [[66, 572], [KV_LAP - 440, KV_LAP - 62]], spacing: 44, half: 16.2, height: 6.5 },
+};
+
+/**
+ * The village's own start, finish and sprint arch (`vale-arch`, monumentVale.ts) in place of the stars-and-stripes gantry: two limestone piers, an oak beam and a painted board
+ * with chequered trim and a string of bunting, spanning the road at 9.9 m clear. Its words: the place, then START, FINISH or the sprint's name over SPRINT. It stands where the
+ * gantry stood (lap metre 30, the line, each sprint), 12 m clear of trees; the market cross (18 m, 10 m left of the road's edge), the inn (40 m) and the bunting (from 66 m) are
+ * all clear of it, and its piers stand inside the first row of spectators (6.05 m out).
+ */
+const archKind = (lines: string[]): LandmarkKind => ({ model: 'vale-arch', first: 0, every: 1e9, side: 0, span: 'across', offset: 0, size: VALE_ARCH.height, clearance: 12, options: { lines } });
+const ARCH: WorldArch = {
+  start: archKind(['HOLLINS CROSS', 'START']),
+  finish: archKind(['HOLLINS CROSS', 'FINISH']),
+  sprint: (name) => archKind([name.replace(/\s*sprint$/i, '').toUpperCase(), 'SPRINT']),
 };
 
 export const KESTREL_VALE: World = {
@@ -586,6 +608,7 @@ export const KESTREL_VALE: World = {
     fields: true,
     dryGrass: 0.3,
     mountainScale: 1.6, // the Pennines
+    clearAir: 1.5, // the haze distance x1.5: Raven Keep, 800 m up the slope, is hidden by it from the climb's second leg on Medium
     horizon: 'hills',
     road: 'alpine',
     barrier: 'stone',
@@ -596,6 +619,7 @@ export const KESTREL_VALE: World = {
     dressing: DRESSING,
   },
   landmarks: LANDMARKS,
+  arch: ARCH,
   places: [
     [60, 'Hollins Cross'], [from('lake-1'), 'Kestrel Water'], [from('mill-bridge'), 'Mill Bridge'], [from('foss-bend') + 200, 'Foss Bottom'],
     [from('climb-foot'), 'Raven Scar'], [GAP_FROM, 'Raven Gap'], [from('highfold-1') + 40, 'Highfold Woods'], [from('beck-1'), 'Beck Lane'],

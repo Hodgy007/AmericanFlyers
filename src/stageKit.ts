@@ -4,6 +4,7 @@
 // import cycle: stages.ts imports the worlds' routes). Only types come from stages.ts here.
 
 import type { MonumentId, MonumentOptions } from './world/monumentTypes';
+import { villageTerraceHeight } from './world/terracePlan';
 import type { LandmarkBase, LandmarkKind, StageSign } from './stages';
 
 /** Monotone cubic interpolation (Fritsch–Carlson) through (x, y) knots: no overshoot, no flat spots. */
@@ -93,10 +94,14 @@ export const finishArch = (at: number): LandmarkKind => ({ ...GANTRY, first: at,
 export const perLap = (kinds: LandmarkKind[], lap: number, laps: number): LandmarkKind[] =>
   kinds.flatMap((k) => Array.from({ length: laps }, (_, i) => ({ ...k, first: k.first + i * lap, until: (k.until ?? lap) + i * lap })));
 
-/** A street of terraced houses along one side of the road from lap metre `from` to `to`: `seeds` alternate along it, so it is not one house repeated. */
-export function terraceRow(from: number, to: number, side: -1 | 1, material: 'brick' | 'stone', seeds: number[], spacing = 44): LandmarkKind[] {
+/**
+ * A street of terraced houses along one side of the road from lap metre `from` to `to`: `seeds` alternate along it, so it is not one house repeated. With `village`
+ * each row is laid out as a village street (varied storeys, roofs, doors, a cottage, a ginnel or a shop: terracePlan.ts) and is sized to its own height, which differs
+ * from row to row; Richmond's and Harrogate's rows leave it off and are exactly as they were.
+ */
+export function terraceRow(from: number, to: number, side: -1 | 1, material: 'brick' | 'stone', seeds: number[], spacing = 44, village = false): LandmarkKind[] {
   return seeds.map((seed, i) => ({
-    ...monumentAt('terrace', from + i * spacing, side, 21, TERRACE_HEIGHT, { options: { seed, material }, clearance: 16 }),
+    ...monumentAt('terrace', from + i * spacing, side, 21, village ? villageTerraceHeight(seed) : TERRACE_HEIGHT, { options: village ? { seed, material, village } : { seed, material }, clearance: 16 }),
     every: spacing * seeds.length,
     until: to,
   }));
