@@ -73,7 +73,7 @@ Conventions:
 - goes back with ☰ Menu → 🏠 Hub, checks Escape keeps focus on **Ride**, and rides again,
 - fails on any page error or console error (blocked network requests are ignored).
 
-`tests/e2e/home.spec.ts` covers the way in: a visitor with no account sees the home page and no way past it (no *Ride without an account*, Escape does nothing, the hub stays hidden); a stale signed-in hint with no session ends on the home page; signing out returns to it; a ride left by the old guest flow is saved once at sign-in and deleted; and a workout made before accounts were required syncs to the account.
+`tests/e2e/home.spec.ts` covers the way in: a visitor with no account sees the home page and no way past it (no *Ride without an account*, Escape does nothing, the hub stays hidden); a stale signed-in hint with no session ends on the home page; signing out returns to it; a ride left by the old guest flow is saved once at sign-in and deleted; and a workout made before accounts were required syncs to the account. `tests/e2e/lateSession.spec.ts` starts a demo ride at one frame a second, before the session check answers, and checks the ride carries on at 250 W once it does (it used to be reset with the demo off). `tests/e2e/slowFrames.ts` is the one-frame-a-second init script.
 
 `tests/e2e/csp.spec.ts` watches for Content-Security-Policy violations (`securitypolicyviolation` events and `[Report Only]` console messages) on the home page and through a signed-in Medium ride at Kestrel Vale's village and every main dialog, and fails on any; `tests/unit/csp.test.ts` keeps `vercel.json` in step with `csp.mjs` (see [Security](security.md#content-security-policy)).
 
