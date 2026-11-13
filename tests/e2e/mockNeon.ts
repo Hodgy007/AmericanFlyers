@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 // Neon Auth and the Data API are unreachable (and not wanted) in tests: answer them locally.
 // `signedIn: false` is a visitor with no account (no session, empty tables): the app shows the home page and nothing else.
 // `signedIn: true` is a rider with rides, an FTP history, a plan, a garage wallet and this week's
-// challenges, so the hub has things to show.
+// challenges, so the hub has things to show. `sessionDelayMs` holds the session back that long (a slow sign-in restore).
 
 /** Neon Auth sends cookies, so the browser wants the page's own origin (not *) and credentials allowed. */
 const cors = (origin: string | undefined) => ({
@@ -67,7 +67,7 @@ export function sampleSegmentBoard(now = Date.now()) {
   return [row(1, 'Alex M.', 3012), row(2, 'Jo K.', 3077), row(3, 'Priya S.', 3140), row(4, 'Tom H.', 3201), row(5, 'Lena B.', 3255), row(7, 'Sam R.', 3290, true)];
 }
 
-export async function mockNeon(page: Page, opts: { signedIn?: boolean; segmentBoard?: unknown[] } = {}) {
+export async function mockNeon(page: Page, opts: { signedIn?: boolean; segmentBoard?: unknown[]; sessionDelayMs?: number } = {}) {
   const signedIn = !!opts.signedIn;
   const now = Date.now();
   const startsAt = (hours: number) => new Date(now + hours * 3600000).toISOString();
@@ -85,10 +85,12 @@ export async function mockNeon(page: Page, opts: { signedIn?: boolean; segmentBo
         const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
         const jwt = `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: 'u-test', exp: Math.floor((now + 7 * DAY) / 1000) })}.test`;
         CORS['access-control-expose-headers'] = 'set-auth-jwt';
-        return route.fulfill({ status: 200, headers: { ...CORS, 'set-auth-jwt': jwt, 'content-type': 'application/json' }, body: JSON.stringify({
+        const answer = () => route.fulfill({ status: 200, headers: { ...CORS, 'set-auth-jwt': jwt, 'content-type': 'application/json' }, body: JSON.stringify({
           session: { id: 's1', userId: 'u-test', expiresAt: new Date(now + 7 * DAY).toISOString() },
           user: { id: 'u-test', name: 'Sam Rider', email: 'sam@example.com', emailVerified: true, image: null },
         }) });
+        // `sessionDelayMs`: the session comes back late, as on a slow network (the signed-in hint has already shown the hub by then).
+        return opts.sessionDelayMs ? setTimeout(() => { answer().catch(() => {}); }, opts.sessionDelayMs) : answer();
       }
       return json(null);
     }
