@@ -3,7 +3,7 @@
 
 import type { Activity } from '../cloud/sync';
 import type { Kit } from '../kit';
-import { STAGES, stageById, type Stage } from '../stages';
+import { STAGES, isStageLoaded, stageById, type Stage } from '../stages';
 import { elevationProfile, formatDuration, routeShape, shareCard, type ShareCardData } from './shareCard';
 
 export interface ShareRide {
@@ -42,8 +42,9 @@ export function shareDataFromRide(r: ShareRide): ShareCardData {
   return {
     title: r.title,
     subtitle: r.subtitle,
-    route: r.stage ? routeShape(r.stage, r.fromM, to) : [],
-    profile: r.stage ? elevationProfile(r.stage, r.fromM, to) : [],
+    // (A built-in stage's road loads on demand: a card made before it has arrived goes without the picture.)
+    route: r.stage && isStageLoaded(r.stage) ? routeShape(r.stage, r.fromM, to) : [],
+    profile: r.stage && isStageLoaded(r.stage) ? elevationProfile(r.stage, r.fromM, to) : [],
     stats,
     headline: r.headline,
     badges: r.badges,

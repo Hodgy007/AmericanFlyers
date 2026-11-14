@@ -211,10 +211,11 @@ Nothing in the cloud layer runs on the frame loop. Every call is triggered by a 
 
 ## Lazy loading
 
-The first visit downloads only what draws the first frame: the entry chunk (`main.ts` and the ride, world and HUD code) and the `vendor-three` chunk. Everything else is split off with dynamic `import()` and loaded on first use, so a phone isn't parsing the garage, the admin dashboard or the privacy text before the road appears.
+The first visit downloads only what draws the first frame: the page's tiny entry (`boot.ts`, with the stage catalogue), the app chunk (`main.ts` and the ride, world and HUD code, preloaded by `index.html` next to the entry: see `preloadApp` in `vite.config.ts`) and the `vendor-three` chunk. Everything else is split off with dynamic `import()` and loaded on first use, so a phone isn't parsing the garage, the admin dashboard or the privacy text before the road appears.
 
 | What | Where it loads from | Loads when |
 | --- | --- | --- |
+| A built-in stage's road (elevation, bends, scenery, landmarks, signs, with its baked data in `routes/real/`), and Kestrel Vale's world | `stageDefs/<stage>.ts` (each with its `climb.ts`/`circuit.ts` builder), `worlds/kestrelVale.ts`; fetched by `loadStage()` in `stages.ts` | The stage a page opens on (`?stage=`): before `main.ts` runs (`boot.ts`, `startupStage.ts`). Otherwise when Ride, Race, an event, a plan session or a resumed ride needs it (`stageNotHere()` in `main.ts`: the hub's Ride button pulses, a failed fetch toasts and the next try fetches again). The hub's chosen stage is prefetched after the first frame and when picked. Heartland and Route 66 are in the app. The hub lists every stage at once from `stageCatalogue.ts`. |
 | Neon SDK (`vendor-neon`) | `cloud/client.ts` | After the first frame (`restoreSession()`), or at the first database call. `neon` there is a small recording proxy: `neon.from(...).select(...)` and `neon.auth.getSession()` look and chain as before, and awaiting one loads the SDK and replays the calls on the real client. |
 | Sentry SDK | `monitoring.ts` | After the first frame (`startMonitoring()`). Until then two tiny listeners keep crashes, and hand them to Sentry once it is up. |
 | Sign-in, profile, feedback, admin dialogs | `cloud/ui.ts` (via `cloud/accountBar.ts`, which keeps the account button and admin button) | First click on the account button, Admin, Feedback, or any `openSignIn()`. |

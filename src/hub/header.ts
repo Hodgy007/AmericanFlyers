@@ -10,6 +10,7 @@ import { canRace, MODE_HELP, MODE_LABEL, RACE_UNAVAILABLE, RIDE_MODES, type Ride
 import { levelFraction, levelTitle } from '../garage/progression';
 import { drawProfile } from '../profile';
 import { allStages, stageById } from '../routes/library';
+import { stageProfile } from '../stages';
 import { nextSession, planById } from '../plans';
 import { drawWorkout } from '../workouts/graph';
 import { workoutById } from '../workouts/library';
@@ -163,7 +164,7 @@ export function mountHeader(ctx: HubCtx) {
       const length = fig.lengthM === null ? 'Endless road' : distanceText(fig.lengthM, imp);
       m = `${length} · ${climbText(fig.climbM, imp)} climbing${fig.lengthM === null ? ' per 20 km' : ''}${best ? ` · 🏆 your best ${raceTime(best.finishS)}` : ''}`;
       chart.setAttribute('aria-label', `Elevation profile of ${stage.name}`);
-      drawWhenVisible(chart, () => drawProfile(chart, null, [0, stage.finish ?? 20000], stage.elevationAt));
+      drawWhenVisible(chart, () => drawProfile(chart, null, [0, stage.finish ?? 20000], stageProfile(stage)));
     }
     title.textContent = t;
     meta.textContent = m;

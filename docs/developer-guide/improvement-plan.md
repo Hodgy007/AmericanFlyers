@@ -28,7 +28,20 @@ Both suspected bugs were investigated. Neither was what it looked like; one real
 - The entry file is 214 kB compressed, and Three.js is another 176 kB, before the road appears.
 - `src/stages.ts` imports all 16 baked routes in `src/routes/real/` and the whole Kestrel Vale world, although a rider uses one stage at a time.
 - **Measure first.** Find what is in the entry file (for example with `npx vite-bundle-visualizer`, run once, not added as a dependency) and list the five largest parts.
-- **Done when:** the entry file is measurably smaller, with before and after sizes recorded here; the hub still lists every stage with its length and climbing at once; and picking a stage whose data has not arrived shows a loading state, not a broken road. If stage data turns out to be a small share of the entry file, do the largest safe part instead and write down what was found.
+- **Done (workstream B).** What was in the 569 kB entry chunk (rendered size from rollup, gzip of each module on its own): `src/world/*` 227 kB / 80 kB gz, the baked roads `src/routes/real/*` 103 kB / 50 kB, `main.ts` 102 kB / 29 kB, `stages.ts` (definitions of every stage) 41 kB / 13 kB, `src/cloud` 40 kB, `src/hub` 37 kB, Kestrel Vale and `worlds/` 34 kB / 11 kB, `ble` 22 kB, `raceSim` 21 kB. So the stage data was the second-largest group (18%), and with the stage definitions and the Kestrel Vale world 31% of the file; the 3D world code is the largest but is needed for the first frame.
+  - Moved: every stage but Heartland and Route 66 now loads on demand (`stageDefs/`, `worlds/kestrelVale.ts`, with their baked roads); the hub, schedule and lists read a generated, test-checked `stageCatalogue.ts`. See [Stages and GPX](stages-and-gpx.md#how-a-stage-is-loaded) and the lazy-loading table in [Architecture](architecture.md#lazy-loading).
+  - Page entry: `boot.ts` (tiny) fetches the opening stage's road, then imports `main.ts`; `vite.config.ts` preloads the app chunk and its stylesheet from `index.html`, so there is no extra round trip.
+
+  | Before the first frame | Before | After |
+  | --- | --- | --- |
+  | Entry chunk (`index`, raw / gzip) | 568.8 kB / 218.3 kB | 35.8 kB / 14.4 kB (`boot` + catalogue + stage loader) |
+  | App chunk (`main`, raw / gzip) | (in the entry) | 409.7 kB / 148.7 kB |
+  | Entry + app | 568.8 kB / 218.3 kB | 445.5 kB / 163.1 kB (-22% / -25%) |
+  | All JS fetched (entry, app, `vendor-three`, 2 small shared chunks) | 1,274.6 kB / 398.2 kB | 1,154.1 kB / 344.4 kB (-9.5% / -13.5%) |
+  | One stage on demand (Alpe d'Huez / Stelvio / Pacific Coast, gzip) | 0 | about 6 / 5 / 6 kB |
+
+  Not moved, and why: the race engine, `music`, `devicesUi`, `workouts` and the cloud code are wired into `main.ts` in many places (and others are editing it); each is 4 to 7 kB gzip. A stage never fetched cannot be ridden offline (the toast says so); one ridden once can (the service worker keeps the chunk).
+- **Done when (original):** the entry file is measurably smaller, with before and after sizes recorded here; the hub still lists every stage with its length and climbing at once; and picking a stage whose data has not arrived shows a loading state, not a broken road. If stage data turns out to be a small share of the entry file, do the largest safe part instead and write down what was found.
 
 ### C. Security header, dependencies and docs
 

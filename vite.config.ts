@@ -54,6 +54,38 @@ function serviceWorkerVersion(): Plugin {
   };
 }
 
+// src/boot.ts (the page's entry) loads the app, src/main.ts, with a dynamic import after fetching the opening stage's road. That would put the
+// app a round trip behind the page, so the built index.html preloads the app's chunk, and the chunks it needs, next to the entry's own.
+function preloadApp(): Plugin {
+  return {
+    name: 'af-preload-app',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        const bundle = ctx.bundle;
+        if (!bundle) return html;
+        const app = Object.values(bundle).find((c) => c.type === 'chunk' && c.moduleIds.some((id) => id.endsWith('/src/main.ts')));
+        if (!app || app.type !== 'chunk') return html;
+        const wanted = new Set<string>();
+        const visit = (name: string) => {
+          if (wanted.has(name)) return;
+          wanted.add(name);
+          const c = bundle[name];
+          if (c?.type === 'chunk') c.imports.forEach(visit);
+        };
+        visit(app.fileName);
+        const have = (file: string) => html.includes(`./${file}"`);
+        const tags = [...wanted].filter((f) => !have(f)).map((f) => ({ tag: 'link', attrs: { rel: 'modulepreload', crossorigin: '', href: `./${f}` }, injectTo: 'head' as const }));
+        // The app's stylesheet belongs to the app's chunk, which loads late: link it from the page, as it was when the app was the entry.
+        const css = [...wanted].flatMap((f) => { const c = bundle[f]; return c?.type === 'chunk' ? [...(c.viteMetadata?.importedCss ?? [])] : []; });
+        for (const f of css) if (!have(f)) tags.push({ tag: 'link', attrs: { rel: 'stylesheet', crossorigin: '', href: `./${f}` }, injectTo: 'head' as const });
+        return { html, tags };
+      },
+    },
+  };
+}
+
 function shortCommit(): string | null {
   try {
     return execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
@@ -99,6 +131,7 @@ export default defineConfig({
   },
   plugins: [
     serviceWorkerVersion(),
+    preloadApp(),
     ...(uploadMaps
       ? [
           sentryVitePlugin({

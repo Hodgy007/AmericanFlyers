@@ -4,6 +4,14 @@ This page covers the stage definition, how the mountain climbs and two of the He
 
 Source: [`src/stages.ts`](../../src/stages.ts), [`src/course.ts`](../../src/course.ts), [`src/routes/realStage.ts`](../../src/routes/realStage.ts), [`src/routes/realRoute.ts`](../../src/routes/realRoute.ts), [`scripts/bake-routes.mjs`](../../scripts/bake-routes.mjs), [`src/routes/gpx.ts`](../../src/routes/gpx.ts), [`src/routes/library.ts`](../../src/routes/library.ts).
 
+## How a stage is loaded
+
+Only Heartland and Route 66 (and uploaded GPX routes) are complete `Stage` objects in the app bundle. Every other built-in stage is a **shell**: a `Stage` whose light fields (`id`, `name`, `tagline`, `finish`, `lapLength`, `baseAltitude`, `hairpinWord`, `world` and so on) come from the generated `src/stageCatalogue.ts`, and whose road fields (`elevationAt`, `headingAt`, `scenery`, `landmarks`, `signs`, `race`, `crowdSpots`, `world.lapStage`) throw `StageNotLoadedError` until `loadStage(stage)` has fetched the stage's module (`src/stageDefs/<stage>.ts`, which imports its baked road from `routes/real/`; Kestrel Vale's five routes come from `worlds/kestrelVale.ts`) and filled them in, on the same object, so `stage === currentStage()` and caches keyed on the stage still work. `stageById()` and `STAGES` stay synchronous. Code that rides a stage must wait: `stageNotHere()` in `main.ts`, `use(stageLoader(stage), ...)`, `loadStage()`; `isStageLoaded()` asks.
+
+The catalogue also holds, per stage, the climbing total, a 96-point elevation profile and the KOM segment names, so the hub's cards (length, climbing, thumbnail, KOM chip) draw without any road (`stageFigures`, `stageProfile`, `worldLapProfile`). `tests/unit/stageCatalogue.test.ts` builds every stage and fails if the file is out of step; after changing a stage's name, length, climbing or segments run `UPDATE_STAGE_CATALOGUE=1 npx vitest run tests/unit/stageCatalogue.test.ts` (twice if a stage is new). To add a stage: a module in `stageDefs/` with a default export, a `fromDef(...)` line in `STAGES`, then regenerate. Unit tests get every road through `tests/unit/setup.ts`.
+
+Offline: the service worker caches a stage's chunk when it is first fetched, so a stage ridden once works offline. A stage never fetched, with no connection, shows "Couldn't load that" and leaves the hub up (or, from `?stage=`, opens Heartland and says so).
+
 ## The stage definition
 
 A `Stage` in `src/stages.ts`:
