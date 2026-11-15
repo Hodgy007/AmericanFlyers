@@ -1,7 +1,7 @@
-// Rewrites the Content-Security-Policy-Report-Only value in vercel.json from csp.mjs and index.html.
+// Rewrites the Content-Security-Policy-Report-Only and Reporting-Endpoints values in vercel.json from csp.mjs and index.html.
 // Run it after changing either (tests/unit/csp.test.ts fails when vercel.json is out of step).
 import { readFileSync, writeFileSync } from 'node:fs';
-import { CSP_HEADER, buildCsp } from '../csp.mjs';
+import { CSP_HEADER, REPORTING_HEADER, REPORTING_VALUE, buildCsp } from '../csp.mjs';
 
 const root = new URL('../', import.meta.url);
 const vercel = JSON.parse(readFileSync(new URL('vercel.json', root), 'utf8'));
@@ -10,7 +10,10 @@ const headers = vercel.headers.find((h) => h.source === '/(.*)').headers;
 const entry = headers.find((h) => h.key === CSP_HEADER);
 if (entry) entry.value = policy;
 else headers.push({ key: CSP_HEADER, value: policy });
+const reporting = headers.find((h) => h.key === REPORTING_HEADER);
+if (reporting) reporting.value = REPORTING_VALUE;
+else headers.push({ key: REPORTING_HEADER, value: REPORTING_VALUE });
 // One header per line, as the file is written by hand.
 const text = JSON.stringify(vercel, null, 2).replace(/\{\n\s+"key": (.*),\n\s+"value": (.*)\n\s+\}/g, '{ "key": $1, "value": $2 }');
 writeFileSync(new URL('vercel.json', root), text + '\n');
-console.log(`${CSP_HEADER} updated in vercel.json`);
+console.log(`${CSP_HEADER} and ${REPORTING_HEADER} updated in vercel.json`);

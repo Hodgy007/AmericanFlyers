@@ -43,8 +43,17 @@ export function buildCsp(html, { dev = false, dataApiOrigin = NEON_DATA_API_ORIG
     'form-action': ["'self'"],
     'object-src': ["'none'"],
     'frame-ancestors': ["'none'"], // as X-Frame-Options: DENY
+    // Violation reports go to api/csp-report.ts: report-uri for browsers that only know the legacy form, report-to (the group named in Reporting-Endpoints) for the rest.
+    'report-uri': [REPORT_PATH],
+    'report-to': [REPORT_GROUP],
   };
   return Object.entries(d).map(([k, v]) => `${k} ${v.join(' ')}`).join('; ');
 }
 
 export const CSP_HEADER = 'Content-Security-Policy-Report-Only';
+
+/** Where reports are sent (api/csp-report.ts), the Reporting API group name, and the header that defines the group. */
+export const REPORT_PATH = '/api/csp-report';
+export const REPORT_GROUP = 'csp';
+export const REPORTING_HEADER = 'Reporting-Endpoints';
+export const REPORTING_VALUE = `${REPORT_GROUP}="${REPORT_PATH}"`;

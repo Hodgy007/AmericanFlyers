@@ -12,7 +12,7 @@ The live site is built and hosted by a Vercel project called `americanflyers`, i
 
 `vercel.json` holds the project settings the repository does control:
 
-- **Function durations:** `api/ai.ts` gets a 40-second limit (the AI calls are slow) and `api/auth-proxy.ts` 15 seconds.
+- **Function durations:** `api/ai.ts` gets a 40-second limit (the AI calls are slow), `api/auth-proxy.ts` 15 seconds and `api/csp-report.ts` 5 seconds.
 - **Auth rewrite:** `/api/auth/:path*` is rewritten to `/api/auth-proxy?__path=:path*`, so Neon Auth is served from our own origin (the function passes it on; a plain rewrite won't do, because Neon rejects its `X-Forwarded-Host`).
 - **Security headers**, on every path: `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, a restrictive `Permissions-Policy`, and `Strict-Transport-Security` (one year, including subdomains).
 
@@ -38,7 +38,7 @@ These are every variable the app and its functions read. Those other than `VITE_
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `VITE_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN` | none (reporting is off) | The Sentry DSN, taken from the first one that's set. The Vercel Sentry integration normally sets one. The DSN is public by design; see [Error reporting](#error-reporting-sentry). |
+| `VITE_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN` | none (reporting is off) | The Sentry DSN, taken from the first one that's set. The Vercel Sentry integration normally sets one. `api/csp-report.ts` reads the same names at run time to forward CSP violation reports to Sentry. The DSN is public by design; see [Error reporting](#error-reporting-sentry). |
 | `SENTRY_AUTH_TOKEN` | none | When set, source maps are uploaded to Sentry, then deleted from the build. |
 | `SENTRY_ORG`, `SENTRY_PROJECT` | `hodgy007`, `sentry-byzantium-car` | The Sentry organisation and project for the upload. |
 

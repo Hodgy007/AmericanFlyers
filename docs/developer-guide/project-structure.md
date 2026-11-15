@@ -14,7 +14,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `tsconfig.json` | TypeScript config for the app: strict mode, `noUnusedLocals`, and the `web-bluetooth` and `vite/client` types. |
 | `tsconfig.test.json` | TypeScript config for the tests: extends `tsconfig.json`, adds the node types, and includes `tests/**/*.ts` and the root `*.config.ts` files. |
 | `vercel.json` | Vercel settings: the functions' durations, the `/api/auth` rewrite to `api/auth-proxy.ts`, and the security headers. |
-| `api/` | The Vercel serverless functions: `ai.ts` (the AI coach's Claude and gateway calls) and `auth-proxy.ts` (Neon Auth behind `/api/auth`), plus their shared modules in `api/_lib/`. See below. |
+| `api/` | The Vercel serverless functions: `ai.ts` (the AI coach's Claude and gateway calls) `auth-proxy.ts` (Neon Auth behind `/api/auth`) and `csp-report.ts` (Content-Security-Policy violation reports), plus their shared modules in `api/_lib/`. See below. |
 | `tests/` | Vitest unit tests (`unit/`) and Playwright end-to-end tests (`e2e/`). See [Testing](testing.md). |
 | `scripts/` | One-off tools: `bake-routes.mjs` (baked real roads), `gen-store-sql.mjs` (the store seed SQL), the terrain and horizon prep scripts, and `climb-guide-smoke.sh`. |
 | `.github/` | `workflows/ci.yml`: the GitHub Actions checks on every pull request. |
@@ -186,5 +186,6 @@ The repository has no linter configuration. `tests/unit/` holds the Vitest unit 
 | --- | --- |
 | `api/ai.ts` | The AI function behind `/api/ai`: the coach, rivals and Climb guide, gated by `ai_claim()`. |
 | `api/auth-proxy.ts` | Passes `/api/auth/*` to Neon Auth, so its cookie is first-party. |
+| `api/csp-report.ts` | Receives Content-Security-Policy violation reports at `/api/csp-report`: logs them, and forwards them to Sentry when a DSN is set. |
 | `api/_lib/*.ts` | Shared modules: the request handler, the Claude and gateway clients, the rider lookup, the response schemas and the prompts. |
 | `api/tsconfig.json` | TypeScript config for the functions (`tsc -p api`). |
