@@ -28,7 +28,8 @@ import { HR_ZONES, POWER_ZONES, zoneBars } from './zones';
 import { account, onAccountChange, restoreSession } from './cloud/account';
 import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, stageGhost, stageLeaderboard, syncOnSignIn, type Activity, type LeaderboardRow } from './cloud/sync';
 import { RideRecorder } from './cloud/recorder';
-import { baselineAt, buildActivityRow, climbedSince, distanceSince, proSince, worthSaving, type Baseline } from './rideActivity';
+import { buildActivityRow } from './rideActivity';
+import { createRideSpans, MIN_RIDE_S, type Span } from './rideSpans';
 import { judgeSnapshot, parseSnapshot, replayStats, serialiseSnapshot, snapshotSummary, SNAPSHOT_EVERY_MS, SNAPSHOT_KEY, SNAPSHOT_MIN_S, type RideSnapshot } from './rideSnapshot';
 import { askToResume } from './hub/resume';
 import { initAccountUi } from './cloud/accountBar';
@@ -140,32 +141,6 @@ const { live, ride } = sim;
 const drivetrain = new Drivetrain(); // keeps the legs in step with the wheels
 const zoneRefs = () => settings;
 let player: WorkoutPlayer | null = null;
-/**
- * One activity being recorded: a window of the trip with its own recorder (second-by-second samples, its own id), its own
- * statistics and "since this started" baselines (src/rideActivity.ts). A workout is a clean boundary, so saved activities
- * never overlap in time: while one is on, `workoutSpan` records and the ride's span waits; before it, the ride so far is
- * saved; afterwards a fresh ride span starts. The trip itself (`ride`: position, time, KOM timing, finish line) never breaks.
- */
-interface Span {
-  rec: RideRecorder;
-  st: RideStats;
-  base: Baseline;
-  /** Where the trip was when this window ended (set once it has: a workout's start closes the ride's, its end closes its own). */
-  end?: Baseline;
-  /** Seconds already saved for this activity (autosave and the like skip it until it has grown). */
-  saved: number;
-  /** The workout this activity is, by name, if it is a workout's. */
-  workout: string | null;
-  /** Set when the workout ran to its end (achievements count these). */
-  completed: string | null;
-}
-function newSpan(workout: string | null = null): Span {
-  return { rec: new RideRecorder(), st: new RideStats(zoneRefs), base: baselineAt(ride), saved: 0, workout, completed: null };
-}
-let rideSpan = newSpan();
-let workoutSpan: Span | null = null;
-/** The activity being recorded now. */
-const span = () => workoutSpan ?? rideSpan;
 const sound = new Sound(settings.sound);
 const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
@@ -418,6 +393,19 @@ if (startKm > 0) {
 const TIME_SCALE = Math.min(20, Math.max(1, Number(new URLSearchParams(location.search).get('timescale')) || 1));
 // Trust and safety: demo-slider rides and ?timescale rides never get a leaderboard time (src/rideIntegrity.ts).
 const rideFlags: RideFlags = { usedDemo: false, timeScale: TIME_SCALE, splitByWorkout: false };
+// The activities being recorded (the ride's, and a workout's while one is on) live in src/rideSpans.ts; the cloud calls and summary cards stay here.
+const spans = createRideSpans({
+  ride,
+  live,
+  zones: zoneRefs,
+  heartRate: currentHr,
+  stage: currentStage,
+  player: () => player,
+  finishWorkout,
+  intervalBeeps,
+  flags: rideFlags,
+  settings: () => settings,
+});
 // The ride is stepped from real elapsed time (src/rideClock.ts), not once per animation frame: a slow frame loses no ride
 // time, and a hidden tab (no animation frames) is stepped from a worker's ticks instead (see backgroundTick).
 const clock = new RideClock(TIME_SCALE);
@@ -579,26 +567,7 @@ const rideDeps: RideDeps = {
 function simStep(dt: number, now: number) {
   stepRide(sim, rideDeps, dt, now); // power, speed, distance, time, work, KOM, finish, climbing, drivetrain, power average (src/rideSim.ts)
 
-  const moving = ride.speed > 0.3 || live.power > 0;
-  // The activity being recorded (the ride's, or the workout's while one is on): its statistics and samples, with the
-  // distance counted from where that activity began.
-  const sp = span();
-  const sample = {
-    power: live.power, cadence: live.cadence, hr: currentHr(), speedMs: ride.speed,
-    distance: ride.distance - ride.startDistance - sp.base.dist,
-    elevation: (currentStage().baseAltitude ?? 0) + ride.lastElev, // (the step has just set lastElev to the elevation here)
-  };
-  if (!workoutSpan) rideSpan.st.add(dt, live.power, live.cadence, currentHr(), moving);
-  sp.rec.tick(dt, moving, sample);
-  if (player) {
-    const pedalling = live.power > 0 || live.cadence > 0;
-    if (!player.done) {
-      player.tick(dt, pedalling, live.power);
-      if (pedalling && !player.paused) workoutSpan?.st.add(dt, live.power, live.cadence, currentHr(), true);
-    }
-    if (player.done) finishWorkout(); // reached the end, or skipped past the last step
-    else if (!player.paused) intervalBeeps();
-  }
+  spans.record(dt); // the sample, statistics and recorder of the activity being recorded, then the workout player (src/rideSpans.ts)
 }
 
 /** The drawing and screen updates for one animation frame. `dt` is what the world animates by (the drawn frame's time). */
@@ -715,7 +684,7 @@ function updateHud(grade: number) {
     grade,
     climbed: ride.climbed,
     elevation: (currentStage().baseAltitude ?? 0) + elevationAt(ride.distance),
-    stats: span().st,
+    stats: spans.current().st,
     workout: player && !player.done
       ? { target: player.targetWatts(), stepLeft: player.stepRemaining(), workoutLeft: player.duration - player.elapsed, label: player.step?.label ?? '' }
       : null,
@@ -789,10 +758,10 @@ function startWorkout(w: Workout) {
   if (player) stopWorkout(); // one workout at a time: the earlier one is saved (or dropped) first
   // A workout is a clean boundary: the ride so far (if it is worth keeping) is saved under its own id, and the workout
   // gets a window of its own, so no saved activity overlaps another. A ride too short to keep has nothing to save.
-  if (worthSaving(rideSpan.st.seconds, rideSpan.saved, MIN_RIDE_S)) void saveSpan(endSpan(rideSpan), { quiet: true });
-  else endSpan(rideSpan);
+  if (spans.worthSaving(spans.ride)) void saveSpan(spans.end(spans.ride), { quiet: true });
+  else spans.end(spans.ride);
   rideFlags.splitByWorkout = true; // (after the save above): no later piece of this trip has the whole stage from the line
-  workoutSpan = newSpan(w.name);
+  spans.workout = spans.create(w.name);
   clearSnapshot(); // it was the ride's; the next one will be the workout's
   player = new WorkoutPlayer(w, settings.ftp);
   ai?.workoutStarted();
@@ -825,16 +794,16 @@ function stopWorkoutUi() {
 function stopWorkout() {
   stopWorkoutUi();
   const w = closeWorkoutSpan();
-  if (w && worthSaving(w.st.seconds, w.saved, MIN_RIDE_S)) void saveSpan(w, { quiet: true });
+  if (w && spans.worthSaving(w)) void saveSpan(w, { quiet: true });
 }
 
 /** Closes the workout's activity window and starts a fresh ride window for whatever is ridden next. Returns the workout's window (unsaved). */
 function closeWorkoutSpan(): Span | null {
-  const w = workoutSpan;
-  workoutSpan = null;
+  const w = spans.workout;
+  spans.workout = null;
   if (w) {
-    endSpan(w);
-    rideSpan = newSpan();
+    spans.end(w);
+    spans.ride = spans.create();
     clearSnapshot();
   }
   return w;
@@ -859,7 +828,7 @@ function updateWorkoutPanel() {
 function finishWorkout() {
   if (!player) return;
   const w = player.workout;
-  const sp = workoutSpan;
+  const sp = spans.workout;
   if (!sp) { stopWorkoutUi(); return; }
   const workoutStats = sp.st;
   const items: [string, string][] = [
@@ -942,59 +911,16 @@ function setFtp(ftp: number, source: 'manual' | 'ramp_test') {
 
 // ------------------------------------------------------- saving rides ----
 
-const MIN_RIDE_S = 60; // shorter rides aren't saved
 const OLD_PENDING_KEY = 'americanflyers.pendingRide'; // a ride kept for sign-in by the guest flow this app used to have (see savePendingRide)
-
-/** Freezes where the trip was when an activity window ended, so its distance and climbing stay its own however long it waits to be saved. */
-function endSpan(sp: Span): Span {
-  sp.end ??= baselineAt(ride);
-  return sp;
-}
-
-/** Distance, climbing and pro-team distance within one activity window. */
-function spanTotals(sp: Span) {
-  if (sp.end) return { distance: Math.max(0, sp.end.dist - sp.base.dist), climbed: Math.max(0, sp.end.climbed - sp.base.climbed), proM: Math.max(0, sp.end.proM - sp.base.proM) };
-  return { distance: distanceSince(ride, sp.base), climbed: climbedSince(ride, sp.base), proM: proSince(ride, sp.base) };
-}
-
-/** The row to save for an activity window: its own id, samples, statistics, distance and climbing (never the whole trip's). */
-function buildActivity(sp: Span): Activity {
-  const isWorkout = sp.workout !== null;
-  const t = spanTotals(sp);
-  return buildActivityRow({
-    id: sp.rec.id,
-    startedAt: sp.rec.startedAt,
-    // A copy: the recorder keeps appending while a save is in flight, and the row must hold the window as it was.
-    samples: {
-      power: [...sp.rec.samples.power], cadence: [...sp.rec.samples.cadence], hr: [...sp.rec.samples.hr],
-      speed: [...sp.rec.samples.speed], distance: [...sp.rec.samples.distance], elevation: [...sp.rec.samples.elevation],
-    },
-    stats: sp.st,
-    stage: currentStage(),
-    workout: sp.workout,
-    workoutCompleted: sp.completed,
-    finished: !isWorkout && ride.finished,
-    distanceM: t.distance,
-    climbedM: t.climbed,
-    // Only a ride whose samples run from the start line gets a whole-stage time (not after a workout split the trip).
-    finishS: !isWorkout && ride.finished && ride.finishTime > 0 && leaderboardEligible(rideFlags) ? ride.finishTime : null,
-    demo: isDemoRide(rideFlags), // the database also ignores these rides for leaderboards
-    racePlace: isWorkout ? null : ride.racePlace, // weekly challenges: race wins and podiums
-    raceSize: isWorkout ? null : ride.raceSize,
-    proM: t.proM, // metres ridden with a pro team
-    ftp: settings.ftp,
-    maxHr: settings.maxHr,
-  });
-}
 
 /** Saves what is being recorded now (the workout's activity while a workout is on, else the ride's). */
 function saveRide(opts: { quiet?: boolean } = {}): Promise<boolean> {
-  return saveSpan(span(), opts);
+  return saveSpan(spans.current(), opts);
 }
 
 /** Saves any activity window worth keeping that isn't saved up to now: the workout's and the ride's. */
 function saveUnsaved(): Promise<boolean[]> {
-  return Promise.all([workoutSpan, rideSpan].flatMap((sp) => (sp && worthSaving(sp.st.seconds, sp.saved, MIN_RIDE_S) ? [saveSpan(sp, { quiet: true })] : [])));
+  return Promise.all(spans.unsaved().map((sp) => saveSpan(sp, { quiet: true })));
 }
 // The account a ride belongs to, captured when the ride starts: a save goes to it however the session changes meanwhile.
 let rideUserId: string | null = account()?.id ?? null;
@@ -1010,7 +936,7 @@ async function saveSpan(sp: Span, opts: { quiet?: boolean } = {}): Promise<boole
   // Everything the save needs is captured before the first await: Reset, Autosave or a sign-out meanwhile can't change
   // the row or its owner.
   const userId = rideUserId;
-  const activity = buildActivity(sp);
+  const activity = spans.activity(sp);
   const seconds = sp.st.seconds;
   const gen = signInGen;
   const summary = summaryVersion;
@@ -1085,9 +1011,9 @@ function writeSnapshot() {
   const me = account()?.id;
   if (!me || snapshotHandledFor !== me || hub.isOpen() || document.body.classList.contains('at-home')) return;
   if (race || eventState || ride.finished) return; // races and scheduled events aren't resumable; a finished ride is already saved
-  const sp = span();
+  const sp = spans.current();
   if (sp.rec.seconds < SNAPSHOT_MIN_S) { clearSnapshot(); return; }
-  const t = spanTotals(sp);
+  const t = spans.totals(sp);
   const snap: RideSnapshot = {
     v: 1, takenAt: Date.now(), accountId: me, stageId: currentStage().id, stageName: currentStage().name,
     ride: { distance: ride.distance, startDistance: ride.startDistance, movingTime: ride.movingTime, climbed: ride.climbed, work: ride.work, proM: ride.proM, planCounted: ride.planCounted },
@@ -1154,14 +1080,14 @@ function resumeSnapshot(snap: RideSnapshot) {
   rideFlags.usedDemo = snap.flags.usedDemo || snap.flags.timeScale !== 1; // a sped-up clock is not a ride for the leaderboards
   rideFlags.splitByWorkout = snap.flags.splitByWorkout || snap.span.workout !== null;
   // A workout that was under way is not resumed; its activity carries on as a ride (same id and title, so nothing recorded is lost).
-  rideSpan = {
+  spans.ride = {
     rec: RideRecorder.restore(snap.span.id, snap.span.startedAt, snap.span.samples),
     // The statistics are rebuilt by replaying the recorded one-second samples: good enough (see replayStats), not exact.
     st: replayStats(snap.span.samples, new RideStats(zoneRefs)),
     base: { dist: snap.span.dist0, climbed: snap.span.climb0, proM: snap.span.proM0 },
     saved: 0, workout: snap.span.workout, completed: snap.span.workoutCompleted,
   };
-  workoutSpan = null;
+  spans.workout = null;
   snapshotOwned = true; // this run now writes the copy
   peloton.reset(ride.distance);
   komUi.reset();
@@ -1185,7 +1111,7 @@ async function offerSnapshot() {
     const verdict = judgeSnapshot(snap, Date.now(), me, (id) => stageById(id).id === id);
     if (verdict === 'drop') { removeSnapshot(); return; }
     // Too old, its stage gone, or a ride already started this visit: keep it rather than ask. It is saved as it was.
-    if (verdict === 'save' || span().st.seconds > 0 || race || eventState) {
+    if (verdict === 'save' || spans.current().st.seconds > 0 || race || eventState) {
       await saveInterrupted(snap);
       removeSnapshot();
       return;
@@ -1233,7 +1159,7 @@ setInterval(() => { if (navigator.onLine !== false) void uploadQueuedRides(); },
 /** The numbers the AI coach is told after a ride (the controller turns them into the payload, src/ai/summary.ts). `sp` is the activity window to describe: the ride's, or the workout's. */
 function aiDebriefInput(sp: Span, title: string, mode: RideSummaryInput['mode'], race: { place: number; of: number } | null): RideSummaryInput {
   const st = sp.st;
-  const t = spanTotals(sp);
+  const t = spans.totals(sp);
   const plan = settings.plan ? planById(settings.plan.id) : undefined;
   const c = ai?.workoutCompliance();
   return {
@@ -1248,7 +1174,7 @@ function aiDebriefInput(sp: Span, title: string, mode: RideSummaryInput['mode'],
 
 // Save long rides every few minutes, so a closed tab doesn't lose them.
 setInterval(() => {
-  const sp = span();
+  const sp = spans.current();
   if (account() && sp.st.seconds >= MIN_RIDE_S && sp.st.seconds - sp.saved > 60) void saveRide({ quiet: true });
 }, 5 * 60 * 1000);
 
@@ -1309,11 +1235,11 @@ function cycleCamera() {
 
 /** The Reset button: show a summary of a ride worth keeping, then start afresh. */
 function endRide() {
-  const sp = span(); // the activity being recorded: the workout's while one is on, else the ride's (a ride split by a workout shows its last part)
+  const sp = spans.current(); // the activity being recorded: the workout's while one is on, else the ride's (a ride split by a workout shows its last part)
   const stats = sp.st;
   if (stats.seconds < MIN_RIDE_S) return resetRide();
   const imperial = settings.units === 'imperial';
-  const totals = spanTotals(sp);
+  const totals = spans.totals(sp);
   const km = totals.distance / 1000;
   const coach = aiDebrief(aiDebriefInput(sp, currentStage().name, player ? 'workout' : 'ride', null)); // the AI coach's debrief card
   showSummary('🚴', 'Ride summary', [
@@ -1353,8 +1279,8 @@ function resetRide() {
   komUi.reset(); // no segment effort carries over into a new ride or stage
   leaveRaceAndEvent(); // starting afresh ends a race, and leaves a scheduled event
   drivetrain.reset();
-  rideSpan = newSpan(); // (baselines from the zeroed trip)
-  workoutSpan = player ? newSpan(player.workout.name) : null;
+  spans.ride = spans.create(); // (baselines from the zeroed trip)
+  spans.workout = player ? spans.create(player.workout.name) : null;
   clearSnapshot();
   lastSentGrade = NaN;
   $('finish').hidden = true;
@@ -1732,10 +1658,10 @@ function showFinish() {
   ride.finishTime = ride.startDistance === 0 && !rideFlags.splitByWorkout ? ride.movingTime : 0;
   planDone({ stage: currentStage().id });
   // The card shows the activity being saved: the whole trip, or (after a workout split it) the ride since, not a mix of the two.
-  const sp = span();
+  const sp = spans.current();
   const stats = sp.st;
   const whole = !rideFlags.splitByWorkout;
-  const totals = spanTotals(sp);
+  const totals = spans.totals(sp);
   const racing = race && race.phase !== 'countdown' ? race : null;
   const vsGhost = ghost && ride.finishTime && !racing ? ride.finishTime - ghost.finishS : null;
   const imperial = settings.units === 'imperial';
@@ -1815,17 +1741,17 @@ function showFinish() {
     }));
   }
   const finishedSpan = sp;
-  void saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); if (saved && span() === finishedSpan) void showRank(); });
+  void saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); if (saved && spans.current() === finishedSpan) void showRank(); });
 }
 
 /** After a whole-stage ride is saved: where it puts you on the leaderboard. */
 async function showRank() {
   if (!account() || !ride.finishTime || !leaderboardEligible(rideFlags)) return;
-  const sp = span();
+  const sp = spans.current();
   const gen = signInGen;
   try {
     const rows = await stageLeaderboard(currentStage().id);
-    if (span() !== sp || signInGen !== gen) return;
+    if (spans.current() !== sp || signInGen !== gen) return;
     const me = rows.find((r) => r.is_me);
     if (!me) return;
     const total = rows.length;
@@ -2544,7 +2470,7 @@ function leaveHub() {
 /** Stops whatever is under way when the account goes (signed out, or a stale signed-in hint): the rider returns to the home page. */
 function abandonRide() {
   if (demo) setDemo(false); // the demo ride is for signed-in riders too
-  if (!player && !race && !eventState && rideSpan.st.seconds === 0) return; // nothing to stop
+  if (!player && !race && !eventState && spans.ride.st.seconds === 0) return; // nothing to stop
   if (player) stopWorkout();
   resetRide(); // (the ride was saved before sign-out, see beforeSignOut; with no account this saves nothing)
 }
@@ -2568,11 +2494,11 @@ function startFromHub(c: { stageId: string; workoutId: string | null }, mode: Ri
  */
 async function finishRide() {
   if (hub.isOpen()) return;
-  const underWay = $('finish').hidden && (span().st.seconds >= MIN_RIDE_S || !!race || !!eventState);
+  const underWay = $('finish').hidden && (spans.current().st.seconds >= MIN_RIDE_S || !!race || !!eventState);
   if (!underWay) return goToHub({ ask: false });
   const also = [race ? (eventState ? 'your race' : 'the race') : eventState ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
-  if (!(await askToLeave({ signedIn: !!account(), time: formatTime(span().st.seconds), also, purpose: 'end' }))) return;
-  if (span().st.seconds < MIN_RIDE_S) { if (player) stopWorkout(); resetRide(); hub.open(); return; } // a short race: nothing to save or summarise
+  if (!(await askToLeave({ signedIn: !!account(), time: formatTime(spans.current().st.seconds), also, purpose: 'end' }))) return;
+  if (spans.current().st.seconds < MIN_RIDE_S) { if (player) stopWorkout(); resetRide(); hub.open(); return; } // a short race: nothing to save or summarise
   leaveRaceAndEvent();
   endRide(); // the summary card; it saves the activity being recorded, and "Start a new ride" won't save it again
   if (player) { stopWorkoutUi(); closeWorkoutSpan(); } // after the summary, which reads the workout for its debrief (and has just saved the workout's activity)
@@ -2584,10 +2510,10 @@ async function finishRide() {
  */
 async function goToHub(opts: { ask?: boolean } = {}) {
   if (hub.isOpen()) return;
-  const underWay = $('finish').hidden && (span().st.seconds >= MIN_RIDE_S || !!race || !!eventState);
+  const underWay = $('finish').hidden && (spans.current().st.seconds >= MIN_RIDE_S || !!race || !!eventState);
   if (opts.ask !== false && underWay) {
     const also = [race ? (eventState ? 'your race' : 'the race') : eventState ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
-    if (!(await askToLeave({ signedIn: !!account(), time: formatTime(span().st.seconds), also }))) return;
+    if (!(await askToLeave({ signedIn: !!account(), time: formatTime(spans.current().st.seconds), also }))) return;
   }
   if (player) stopWorkout();
   resetRide(); // quietly saves a ride worth keeping, and leaves a race or group ride
