@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { collectErrors, press } from './helpers';
 
 // The AI coach and AI rivals, end to end in the built app. Neon and /api/ai are
 // both mocked: no real network, no Anthropic. Set E2E_SHOTS=<dir> to save screenshots.
@@ -25,7 +26,6 @@ const thaw = (page: Page) => page.evaluate(() => {
   w.__rafPaused = false;
   for (const cb of w.__rafQueue.splice(0)) requestAnimationFrame(cb);
 });
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 interface Fixture {
   consent: { coach: boolean; rivals: boolean };
@@ -118,16 +118,7 @@ async function setup(page: Page, f: Partial<Fixture> = {}, query = ''): Promise<
   return fx;
 }
 
-const errorsOf = (page: Page) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => {
-    if (m.type() !== 'error') return;
-    if (/Failed to load resource|net::ERR|ERR_BLOCKED|ERR_NAME|ERR_INTERNET|ERR_CONNECTION|ERR_TUNNEL|CORS|status of (4|5)\d\d/i.test(m.text())) return;
-    errors.push(`console.error: ${m.text()}`);
-  });
-  return errors;
-};
+const errorsOf = (page: Page) => collectErrors(page, { ignoreHttpStatus: true });
 
 test('AI is off until you opt in: the switches are off and rivals ride with ready-made lines', async ({ page }) => {
   const errors = errorsOf(page);

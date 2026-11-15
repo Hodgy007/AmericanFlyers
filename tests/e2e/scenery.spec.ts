@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { collectPageErrors } from './helpers';
 
 // Round 6: the climbs' roadside extras (painted words, guardrails, crowds) and the terrain textures
 // load lazily after the first frame without errors, on Low (three layers) and Medium (every layer a stage needs, with the road's asphalt normal map).
@@ -7,8 +8,7 @@ import { mockNeon } from './mockNeon';
 for (const tier of ['low', 'medium']) {
   test(`Alpe d'Huez summit on ${tier}: textures and roadside extras load without errors`, async ({ page }) => {
     test.setTimeout(240_000);
-    const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    const errors = collectPageErrors(page);
     page.on('console', (m) => {
       const t = m.text();
       if (m.type() === 'error' && !/Failed to load resource|net::ERR|ERR_|CORS/i.test(t)) errors.push(`console.error: ${t}`);

@@ -1,17 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockNeon } from './mockNeon';
 import { DIALOGS } from './dialogs';
+import { collectErrors, press, signedInRider } from './helpers';
+import { slowFrames } from './slowFrames';
 
 // Fast smoke tests of the built app, with Neon mocked (tests/e2e/mockNeon.ts): it opens on the hub,
 // Ride starts a demo ride, each main dialog opens and closes, ☰ Menu → Hub comes back, and nothing
 // throws. A second test signs in a rider with rides, a plan and a wallet and checks the hub's sections.
-
-/**
- * Clicks with the DOM, not the mouse. The 3D scene renders in software in CI and
- * on small machines, so frames are slow and Playwright's real-click checks (which
- * wait for animation frames to settle) can take many seconds each.
- */
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 /** The ids of the dialogs that are open right now. */
 const openDialogs = (page: Page) => page.evaluate(() => Array.from(document.querySelectorAll('dialog[open]')).map((d) => `#${d.id}`));
@@ -19,31 +13,13 @@ const openDialogs = (page: Page) => page.evaluate(() => Array.from(document.quer
 test('loads, starts a demo ride and opens every main dialog without errors', async ({ page }) => {
   // The longest test: the hub, a demo ride and about fifteen dialogs, each loaded on first use, all in software WebGL.
   test.setTimeout(300_000);
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => {
-    if (m.type() !== 'error') return;
-    const text = m.text();
-    // Blocked/failed network requests (fonts, analytics, Sentry) are not app errors.
-    if (/Failed to load resource|net::ERR|ERR_BLOCKED|ERR_NAME|ERR_INTERNET|ERR_CONNECTION|ERR_TUNNEL|CORS/i.test(text)) return;
-    errors.push(`console.error: ${text}`);
-  });
+  const errors = collectErrors(page);
 
-  await mockNeon(page, { signedIn: true }); // an account is required to ride
-  await page.addInitScript(() => {
-    // Skip the home page and the first-ride guide.
-    localStorage.setItem('americanflyers.signedIn', '1');
-    localStorage.setItem('americanflyers.onboarded', '1');
-  });
+  await signedInRider(page);
   // Software WebGL makes every frame expensive, which starves the test's own clicks and
   // checks. Run the render loop at ~1 fps: the app code still runs, the machine doesn't choke.
   // (Set E2E_FULL_FPS=1 to turn this off.)
-  if (!process.env.E2E_FULL_FPS) {
-    await page.addInitScript(() => {
-      const raf = window.requestAnimationFrame.bind(window);
-      window.requestAnimationFrame = (cb) => window.setTimeout(() => raf(cb), 1000) as unknown as number;
-    });
-  }
+  await slowFrames(page);
 
   await page.goto('/');
   await expect(page.locator('canvas').first()).toBeAttached();
@@ -114,25 +90,10 @@ test('loads, starts a demo ride and opens every main dialog without errors', asy
 });
 
 test('the hub for a signed-in rider: header, sections, and back from a ride', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => {
-    if (m.type() !== 'error') return;
-    if (/Failed to load resource|net::ERR|ERR_BLOCKED|ERR_NAME|ERR_INTERNET|ERR_CONNECTION|ERR_TUNNEL|CORS/i.test(m.text())) return;
-    errors.push(`console.error: ${m.text()}`);
-  });
+  const errors = collectErrors(page);
 
-  await mockNeon(page, { signedIn: true });
-  await page.addInitScript(() => {
-    localStorage.setItem('americanflyers.signedIn', '1');
-    localStorage.setItem('americanflyers.onboarded', '1');
-  });
-  if (!process.env.E2E_FULL_FPS) {
-    await page.addInitScript(() => {
-      const raf = window.requestAnimationFrame.bind(window);
-      window.requestAnimationFrame = (cb) => window.setTimeout(() => raf(cb), 1000) as unknown as number;
-    });
-  }
+  await signedInRider(page);
+  await slowFrames(page);
   await page.goto('/');
 
   // Header: name, level, credits from the wallet; the plan's next session is one click away.

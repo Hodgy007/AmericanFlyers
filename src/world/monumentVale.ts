@@ -158,8 +158,8 @@ function hull(length: number, beam: number, depth: number, paint: string, inside
   return g;
 }
 
-/** A double-sided triangle (a sail), as a geometry with its own colours. */
-function sail(a: [number, number, number], b: [number, number, number], c: [number, number, number], color: string): THREE.BufferGeometry {
+/** A double-sided triangle (a sail, a pennant or a bunting flag), as a geometry with its own colours. */
+function doubleTriangle(a: [number, number, number], b: [number, number, number], c: [number, number, number], color: string): THREE.BufferGeometry {
   const col = new THREE.Color(color);
   const pos = [...a, ...b, ...c, ...a, ...c, ...b];
   const g = new THREE.BufferGeometry();
@@ -206,7 +206,7 @@ export function buildJetty(): THREE.Group {
     k.raw(hull(4.2, 1.5, 0.68, '#e8e4d6', WOOD_LIGHT, WOOD));
     k.cyl(0.07, 0.04, 5.2, 0.5, 0.2, 0, WOOD_LIGHT, 6, 1); // the mast
     k.bar([0.5, 0.95, 0], [-1.6, 0.95, 0], 0.07, WOOD_LIGHT); // the boom
-    k.raw(sail([0.45, 1.05, 0], [0.45, 5.1, 0], [-1.55, 1.05, 0], '#efe8d2'));
+    k.raw(doubleTriangle([0.45, 1.05, 0], [0.45, 5.1, 0], [-1.55, 1.05, 0], '#efe8d2'));
     k.box(0.5, 0.07, 1.3, 0.2, 0.3, 0, WOOD, 0, 1);
   });
   k.bar([-1.1, DECK + 0.3, 20.0], [-2.1, 0.05, 20.2], 0.03, '#d2c6a8');
@@ -238,17 +238,6 @@ function archFace(lines: string[], w: number, h: number) {
   }, ARCH_BOARD);
 }
 
-/** A double-sided triangle with its own colour (a pennant or a bunting flag). */
-function flag(a: [number, number, number], b: [number, number, number], c: [number, number, number], color: string): THREE.BufferGeometry {
-  const col = new THREE.Color(color);
-  const pos = [...a, ...b, ...c, ...a, ...c, ...b];
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: 6 }, () => [col.r, col.g, col.b]).flat(), 3));
-  g.computeVertexNormals();
-  return g;
-}
-
 /**
  * The village race arch: two stout limestone piers on plinths either side of the road (their outer faces just inside where the spectators stand), an oak beam between them
  * with a painted board in front (`options.lines`: the place, then the word: START, FINISH or the sprint's name) edged top and bottom with chequered trim, braces under the beam, a pole
@@ -272,7 +261,7 @@ export function buildValeArch(o: MonumentOptions = {}): THREE.Group {
     k.cyl(0.07, 0.045, VALE_ARCH.height - (top + 0.9), x, top + 0.9, 0, OAK_LIGHT, 6, 1); // the pole
     k.ball(0.09, x, VALE_ARCH.height - 0.09, 0, '#c9a24a', 1, 1, 1, 1); // its finial
     // A pennant streaming outwards from the pole's top.
-    k.raw(flag([x, VALE_ARCH.height - 0.15, 0], [x, VALE_ARCH.height - 0.65, 0], [x + s * 1.0, VALE_ARCH.height - 0.4, 0.05], s < 0 ? '#d8432f' : '#2f5fa8'));
+    k.raw(doubleTriangle([x, VALE_ARCH.height - 0.15, 0], [x, VALE_ARCH.height - 0.65, 0], [x + s * 1.0, VALE_ARCH.height - 0.4, 0.05], s < 0 ? '#d8432f' : '#2f5fa8'));
   }
   // The beam, behind the board, and the braces under it.
   k.box(2 * pier, 0.55, 0.55, 0, bottom, -0.1, OAK, 0, 0.9);
@@ -303,7 +292,7 @@ export function buildValeArch(o: MonumentOptions = {}): THREE.Group {
     const a = at(i / N), b = at((i + 1) / N);
     k.bar(a, b, 0.04, '#4a4338');
     const m = at((i + 0.5) / N);
-    k.raw(flag([m[0] - 0.22, m[1] - 0.02, 0.02], [m[0] + 0.22, m[1] - 0.02, 0.02], [m[0], m[1] - 0.58, 0.02], FLAGS[i % FLAGS.length]));
+    k.raw(doubleTriangle([m[0] - 0.22, m[1] - 0.02, 0.02], [m[0] + 0.22, m[1] - 0.02, 0.02], [m[0], m[1] - 0.58, 0.02], FLAGS[i % FLAGS.length]));
   }
   return finish(k.build());
 }

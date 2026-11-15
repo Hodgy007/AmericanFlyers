@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon, sampleRides } from './mockNeon';
+import { collectPageErrors, press } from './helpers';
 
 // An account is required: the home page (sign in with Google, or email) is the only way in for
 // someone who is not signed in. There is no guest hub and no way past the home page.
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 const hint = (page: Page) => page.evaluate(() => localStorage.getItem('americanflyers.signedIn'));
 
 /** Software WebGL is slow: run the render loop at ~1 fps so the test's own work isn't starved. */
@@ -16,8 +16,7 @@ async function slowFrames(page: Page) {
 }
 
 test('a visitor with no account sees the home page and has no way past it', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const errors = collectPageErrors(page);
   await mockNeon(page); // no session
   await slowFrames(page);
   await page.goto('/');

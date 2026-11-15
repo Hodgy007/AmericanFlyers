@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { roadPoint } from '../course';
 import type { Stage } from '../stages';
 import { hash2 } from './noise';
-import { ROAD_HALF_WIDTH, bendsOf, hash01, isClimb } from './roadside';
+import { ROAD_HALF_WIDTH, bendsOf, hash01, isClimb, paintGeometry } from './roadside';
 import { tunnelAt } from './tunnelSpan';
 
 // Guardrails (a W-beam on posts) on mountain stages: along the outside of every
@@ -54,20 +54,11 @@ export function barrierSections(stage: Stage, d0: number, d1: number, ground: (x
 
 /** A 3 m guardrail section lying along +x: the beam and a post at its start. Colours baked in as vertex colours. */
 export function railGeometry(): THREE.BufferGeometry {
-  const paint = (g: THREE.BufferGeometry, color: string) => {
-    const n = g.toNonIndexed();
-    n.deleteAttribute('uv');
-    const c = new THREE.Color(color);
-    const arr = new Float32Array(n.attributes.position.count * 3);
-    for (let i = 0; i < arr.length; i += 3) { arr[i] = c.r; arr[i + 1] = c.g; arr[i + 2] = c.b; }
-    n.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-    return n;
-  };
   return mergeGeometries([
-    paint(new THREE.BoxGeometry(SECTION + 0.06, 0.3, 0.05).translate(SECTION / 2, 0.62, 0), '#aeb4ba'), // the W-beam
-    paint(new THREE.BoxGeometry(SECTION + 0.06, 0.06, 0.09).translate(SECTION / 2, 0.62, 0.02), '#9aa1a8'), // its ridge
-    paint(new THREE.BoxGeometry(0.12, 0.78, 0.1).translate(0, 0.39, 0.07), '#7a8087'), // post
-    paint(new THREE.BoxGeometry(0.1, 0.05, 0.06).translate(0.0, 0.62, -0.04), '#d8452f'), // a reflector on the post
+    paintGeometry(new THREE.BoxGeometry(SECTION + 0.06, 0.3, 0.05).translate(SECTION / 2, 0.62, 0), '#aeb4ba'), // the W-beam
+    paintGeometry(new THREE.BoxGeometry(SECTION + 0.06, 0.06, 0.09).translate(SECTION / 2, 0.62, 0.02), '#9aa1a8'), // its ridge
+    paintGeometry(new THREE.BoxGeometry(0.12, 0.78, 0.1).translate(0, 0.39, 0.07), '#7a8087'), // post
+    paintGeometry(new THREE.BoxGeometry(0.1, 0.05, 0.06).translate(0.0, 0.62, -0.04), '#d8452f'), // a reflector on the post
   ])!;
 }
 

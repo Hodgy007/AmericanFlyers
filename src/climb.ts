@@ -70,3 +70,12 @@ export function climbStatus(climbs: Climb[], d: number, elevationAt: (d: number)
   }
   return null;
 }
+
+const KM_PER_MI = 1.609344;
+/** A length for the climb and segment cards: km (or m under 950 m), or miles. */
+export const distText = (m: number, imperial: boolean) => {
+  if (imperial) return `${(m / 1000 / KM_PER_MI).toFixed(m < 1600 ? 2 : 1)} mi`;
+  return m < 950 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
+};
+/** A grade as a percentage with one decimal. */
+export const pctText = (g: number) => `${(g * 100).toFixed(1)}%`;

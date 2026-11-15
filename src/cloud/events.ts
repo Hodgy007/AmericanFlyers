@@ -31,11 +31,9 @@ async function check<T>(p: PromiseLike<{ data: T; error: { message: string } | n
 // ---------------------------------------------------------------- clock ----
 
 let offsetMs = 0; // server time minus this device's clock
-let synced = false;
 
 /** Server time in ms. Before the first sync (or if it fails) this is the device clock. */
 export const serverNow = () => Date.now() + offsetMs;
-export const clockSynced = () => synced;
 
 /**
  * Asks the server what time it is and keeps the offset (server − local), using the middle of the
@@ -57,7 +55,7 @@ export async function syncServerClock(tries = 3): Promise<number> {
       break;
     }
   }
-  if (best) { offsetMs = best.offset; synced = true; }
+  if (best) { offsetMs = best.offset; }
   return offsetMs;
 }
 

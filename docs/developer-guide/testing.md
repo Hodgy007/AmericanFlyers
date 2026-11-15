@@ -73,6 +73,8 @@ Conventions:
 - goes back with ☰ Menu → 🏠 Hub, checks Escape keeps focus on **Ride**, and rides again,
 - fails on any page error or console error (blocked network requests are ignored).
 
+`tests/e2e/helpers.ts` holds the setup the specs share, next to `mockNeon.ts` and `slowFrames.ts`: `press` (a DOM click), `collectPageErrors` and `collectErrors` (page errors, and console errors minus blocked requests), `signedInRider(page, { neon?, localStorage? })` (`mockNeon` as a signed-in rider plus the two `localStorage` hints, with extra keys if wanted) and `startDemo(page, watts)` (Ride, ☰ Menu, demo, set the power). They keep no state, so specs still run in parallel. A spec that needs a different setup (an extra route, another order of steps) writes its own rather than bending the helper.
+
 `tests/e2e/home.spec.ts` covers the way in: a visitor with no account sees the home page and no way past it (no *Ride without an account*, Escape does nothing, the hub stays hidden); a stale signed-in hint with no session ends on the home page; signing out returns to it; a ride left by the old guest flow is saved once at sign-in and deleted; and a workout made before accounts were required syncs to the account.
 
 `tests/e2e/csp.spec.ts` watches for Content-Security-Policy violations (`securitypolicyviolation` events and `[Report Only]` console messages) on the home page and through a signed-in Medium ride at Kestrel Vale's village and every main dialog, and fails on any; `tests/unit/csp.test.ts` keeps `vercel.json` in step with `csp.mjs` (see [Security](security.md#content-security-policy)).

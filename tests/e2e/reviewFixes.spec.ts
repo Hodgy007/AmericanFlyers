@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon, sampleRides } from './mockNeon';
+import { press } from './helpers';
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 async function openApp(page: Page, signedIn = true) {
   await mockNeon(page, { signedIn });

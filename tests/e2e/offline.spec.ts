@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { press } from './helpers';
 
 // A signed-in rider loses the connection: the ride is kept on the device (src/rideQueue.ts)
 // and uploads by itself when the connection comes back.
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 const queued = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('americanflyers.rideQueue') ?? '[]') as { activity: { id: string } }[]);
 
 test('a ride saved while offline is kept on the device and uploads when the connection is back', async ({ page }) => {

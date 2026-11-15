@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Stage } from '../stages';
+import { paintGeometry } from './roadside';
 
 // Distance signs by country. On the American stages it is the green board on a
 // pole (road.ts). On the French and Italian climbs it is the cyclists' milestone
@@ -98,17 +99,8 @@ const POST = { width: 0.7, height: 1.1, depth: 0.22 };
 
 /** The milestone post: a white block with a coloured cap, colours baked in as vertex colours. Its front (+z) is where the face goes. */
 export function milestoneGeometry(style: 'fr' | 'it'): THREE.BufferGeometry {
-  const paint = (geo: THREE.BufferGeometry, color: string) => {
-    const n = geo.toNonIndexed();
-    n.deleteAttribute('uv');
-    const c = new THREE.Color(color);
-    const arr = new Float32Array(n.attributes.position.count * 3);
-    for (let i = 0; i < arr.length; i += 3) { arr[i] = c.r; arr[i + 1] = c.g; arr[i + 2] = c.b; }
-    n.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-    return n;
-  };
   return mergeGeometries([
-    paint(new THREE.BoxGeometry(POST.width, POST.height, POST.depth).translate(0, POST.height / 2, 0), '#e9e9e4'),
-    paint(new THREE.BoxGeometry(POST.width + 0.04, 0.2, POST.depth + 0.04).translate(0, POST.height + 0.1, 0), TOP[style]),
+    paintGeometry(new THREE.BoxGeometry(POST.width, POST.height, POST.depth).translate(0, POST.height / 2, 0), '#e9e9e4'),
+    paintGeometry(new THREE.BoxGeometry(POST.width + 0.04, 0.2, POST.depth + 0.04).translate(0, POST.height + 0.1, 0), TOP[style]),
   ])!;
 }

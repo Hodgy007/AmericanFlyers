@@ -1,12 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
 import { slowFrames } from './slowFrames';
+import { collectPageErrors, press } from './helpers';
 
 // Auto graphics: starts on Ultra (a software renderer normally starts on Low, so ?softgpu=off pretends
 // this browser has a real GPU), notices jerky frames (?jank= makes them on purpose), steps down with a
 // note, remembers what it settled on for the next visit.
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 type Info = { tier: string; choice: string; autoTier: string; scale: number; remembered: string; retest: boolean; change: string };
 const gfx = (page: Page) => page.evaluate(() => (window as unknown as { __afGraphics?: Info }).__afGraphics) as Promise<Info>;
 const memory = (page: Page) => page.evaluate(() => localStorage.getItem('americanflyers.graphicsAuto'));
@@ -25,8 +25,7 @@ async function setup(page: Page, seed?: Record<string, string>) {
 
 test('Auto steps down when frames are jerky, says so, and remembers what worked', async ({ page }) => {
   test.setTimeout(300_000);
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const errors = collectPageErrors(page);
   await setup(page);
   // Record what Auto does as it happens, not just what is showing when the test next looks: the toast stays up for
   // 4.5 s and `change` is overwritten by the next step down, so on a loaded machine a late look would miss them.
@@ -81,8 +80,7 @@ test('Auto steps down when frames are jerky, says so, and remembers what worked'
 
 test('Auto starts from what it remembered, and re-tests one tier higher every third session', async ({ page }) => {
   test.setTimeout(120_000);
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const errors = collectPageErrors(page);
   const gpu = 'Test GPU (?softgpu=off)';
   const now = Date.now();
   const saved = { tier: 'medium', scale: 0.85, at: now - 1000, tested: now - 1000, sessions: 0, gpu };

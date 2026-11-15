@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { collectPageErrors } from './helpers';
 
 // Kestrel Vale (src/worlds/kestrelVale.ts): the world's five routes are ONE card in the hub with a chip each (picking a chip starts
 // that stage), and four places on the lap (the village, the lakeshore bend towards the water, the climb and the Raven Gap cutting)
@@ -73,8 +74,7 @@ test('the hub world card fits a phone', async ({ page }) => {
 
 /** Loads a stage at `km`, rides nothing, waits for the lazy chunks and the terrain, and with KESTREL_SHOTS saves a screenshot of the 3D scene. */
 async function loads(page: import('@playwright/test').Page, stage: string, km: number, tier: string, file: string, village = false, sideCamera = false, models: string[] = []) {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const errors = collectPageErrors(page);
   page.on('console', (m) => {
     const t = m.text();
     if (m.type() === 'error' && !/Failed to load resource|net::ERR|ERR_|CORS/i.test(t)) errors.push(`console.error: ${t}`);

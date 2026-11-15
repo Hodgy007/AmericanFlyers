@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { press } from './helpers';
 
 // Ground cover (grass tufts, flowers, stones beside the road): High and Ultra only. Low and Medium never
 // download its chunk; on High it appears after the first frame; stepping down to Medium disposes it and
 // stepping back up makes it again, all without errors.
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 type Cover = { calls: number; instances: number; triangles: number; cells: number };
 const cover = (page: Page) => page.evaluate(() => (window as unknown as { __afCover?: Cover }).__afCover);
 

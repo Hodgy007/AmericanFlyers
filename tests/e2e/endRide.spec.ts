@@ -1,15 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
 import { slowFrames } from './slowFrames';
+import { collectPageErrors, press } from './helpers';
 
 // The ⏹ End button on the ride screen, and ☰ Menu → ⏹ End ride.
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 /** Signed in, into a demo ride at 250 W. `timescale` runs the clock faster so a minute passes quickly. */
 async function ride(page: Page, timescale = 1) {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const errors = collectPageErrors(page);
   await mockNeon(page, { signedIn: true });
   await slowFrames(page);
   await page.addInitScript(() => {

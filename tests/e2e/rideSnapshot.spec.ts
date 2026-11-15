@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { press } from './helpers';
 
 // A ride interrupted by a crash or a closed tab is offered back at the next visit (src/rideSnapshot.ts).
 
 const KEY = 'americanflyers.rideSnapshot';
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 function snapshot(over: { takenAt?: number; seconds?: number } = {}) {
   const n = over.seconds ?? 120;
