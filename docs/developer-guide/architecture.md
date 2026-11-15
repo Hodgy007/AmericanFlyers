@@ -30,7 +30,7 @@ Four things run on a timer or event, alongside the frame loop:
 | Frame loop | Every animation frame (`requestAnimationFrame`) | Steps the ride by the real time that has passed (`simulate()`), then draws the 3D scene and, every 200 ms, the HUD and the elevation strip (`render()`). | `frame()` in `src/main.ts` |
 | Background tick | 250 ms, from a Web Worker (`src/tickWorker.ts`) | While the tab is hidden: steps the ride (no drawing) and runs trainer control, so a ride carries on behind another tab. | `main.ts` |
 | Ride snapshot | About 20 s, and when the page is hidden | Keeps a copy of the ride in this browser for the hub's resume prompt. | `src/rideSnapshot.ts` |
-| Trainer control | 1 second, and at once after a gear change | Sends grade (plus the virtual gear and the draft's wind factor) or ERG target power to the trainer, if they've changed. | `controlTrainer()` in `src/main.ts` |
+| Trainer control | 1 second, and at once after a gear change | Sends grade (plus the virtual gear and the draft's wind factor) or ERG target power to the trainer, if they've changed. | `createTrainerControl()` in `src/trainerControl.ts` (`main.ts` calls its `tick()`) |
 | Riding together | 2 seconds | Sends your position and fetches the other riders on your stage. | `Presence` in `src/cloud/presence.ts` |
 | Ride-ons | 4 seconds | Fetches ride-ons other riders have sent you (only while signed in and riding). | `RideOns` in `src/cloud/rideOns.ts` |
 | Autosave | 5 minutes | Saves a long ride while signed in. | `setInterval` in `src/main.ts` |
