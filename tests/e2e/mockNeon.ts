@@ -55,7 +55,9 @@ export function sampleRides(now = Date.now()) {
     ride(5, 11, { title: 'Endurance 45 · Heartland Rollers', workout_name: 'Endurance 45', duration_s: 2700, distance_m: 21000 }),
     ride(6, 15),
     ride(7, 19, { title: 'Ramp FTP Test · Heartland Rollers', workout_name: 'Ramp FTP Test', duration_s: 1700, distance_m: 14000 }),
-    ride(8, 27),
+    // 25 days, not 27: no gap in this list is over 7 days until here, so the rides always fall in at least four weeks in a row
+    // (the Consistency badge) whatever weekday the test runs on. At 27 the run was three weeks every Sunday, and the hub counted 6 badges.
+    ride(8, 25),
     ride(9, 40),
     ride(10, 60),
   ];

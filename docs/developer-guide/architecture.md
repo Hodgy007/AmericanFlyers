@@ -21,7 +21,7 @@ Libraries: **Three.js** (3D rendering), **@neon/neon-js** (Neon Auth and the Dat
 
 ## The shape of the app
 
-American Flyers is a single-page app with no framework. `index.html` holds the markup, and `src/main.ts` is the entry point. It wires the modules together, owns the ride state, runs the frame loop and handles the top-bar buttons. Everything else is a module it calls.
+American Flyers is a single-page app with no framework. `index.html` holds the markup, and `src/main.ts` is the entry point. It wires the modules together, owns the ride state (the shapes and the simulation step are in `src/rideSim.ts`), runs the frame loop and handles the top-bar buttons. Everything else is a module it calls.
 
 Four things run on a timer or event, alongside the frame loop:
 
@@ -167,14 +167,15 @@ The diagram shows the main dependencies. A few are worth knowing about:
 
 Each frame, `frame(now)` in `src/main.ts` does this, in order:
 
-1. Works out how much real time has passed since the last step (`src/rideClock.ts`) and runs the simulation steps below in substeps of at most 0.1 s (a catch-up is capped at 5 s; a gap of more than 10 s with no tick at all is dropped). Each part of the frame runs inside a guard (`src/loopGuard.ts`), so an exception is reported and the next frame still runs. Steps 2 to 8 are the simulation (`simStep()`), run once per substep, so everything that must follow the ride's clock lives there, including the KOM tracker (`komUi.frame()`), the recorder's samples, the workout player, the race and the AI; 9 to 11 are drawn once per frame (`render()`) and only run in a visible tab. Do not put anything that integrates over time or watches distance for jumps in `render()`: with throttled frames or a hidden tab it would see the ride seconds apart.
+1. Works out how much real time has passed since the last step (`src/rideClock.ts`) and runs the simulation step in substeps of at most 0.1 s (a catch-up is capped at 5 s; a gap of more than 10 s with no tick at all is dropped). Each part of the frame runs inside a guard (`src/loopGuard.ts`), so an exception is reported and the next frame still runs. Steps 2 to 8 are the simulation, run once per substep by `simStep()`, so everything that must follow the ride's clock lives there, including the KOM tracker (`komUi.frame()`), the recorder's samples, the workout player, the race and the AI; 9 to 11 are drawn once per frame (`render()`) and only run in a visible tab. Do not put anything that integrates over time or watches distance for jumps in `render()`: with throttled frames or a hidden tab it would see the ride seconds apart.
+
+   **Where the step lives.** `simStep()` in `main.ts` calls `stepRide()` in `src/rideSim.ts` (steps 2, 4, 5, 6 and the KOM hook below), then does the recording and the workout player (steps 7 and 8). `rideSim.ts` has no DOM, no three.js and no module state: `main.ts` owns the `RideSim` (`{ ride, live, power }`) and passes a `RideDeps` object of hooks for everything around the rider (the wind, riders, race, AI and draft are one hook, `simSurroundings()` in `main.ts`). It is unit-tested on its own in `tests/unit/rideSim.test.ts`. The order inside `stepRide()` is: power and cadence (demo, or zeroed after 3 s of silence), the surroundings hook, physics and corner braking, distance near a pro team, the start-line hold, distance / moving time / work, the KOM hook (before the finish check, so a climb that tops out at the line still counts), the finish check, climbing, the drivetrain, the 3 s power average.
 2. In demo mode, sets the power from the demo slider (or from the workout target, with a small wobble). Otherwise it checks the trainer's last reading, and zeroes power and cadence after 3 seconds of silence.
-3. Gets the other riders on the stage (predicted for now from their last update), runs steering and auto-steer (`steering.ts`, then `world.setLane()`), and works out the draft from the rider just ahead, scaled by how far across from their line you are (`draft.ts`).
-3. Gets the other riders on the stage (predicted for now from their last update) and works out the draft from the rider just ahead (`draft.ts`). In a race (see [Racing and the tour](racing-and-tour.md)) it first steps the race (`race.update()`), and the pro teams are the racers; during the countdown your speed is held at zero.
-4. Reads the road's grade at the rider's distance, and advances speed with `stepSpeed()` from [Physics and stats](physics-and-stats.md), with the drag area reduced by the draft.
-5. Advances distance, moving time and work. It checks for the finish line, and totals climbing from the elevation at the rider's distance.
-6. Updates the drivetrain (`drivetrain.ts`): the gear (automatic, or the rider's virtual gear), crank angle and bike rock, so the legs turn at a speed the wheels could produce.
-7. Times KOM segments (`komUi.frame()`), records one statistics sample, and one recorder sample while moving.
+3. Runs the surroundings (`simSurroundings()`): the wind, the other riders on the stage (predicted for now from their last update), the race (`race.update()`; the pro teams are the racers) and the AI rival, steering and auto-steer (`steering.ts`, then `world.setLane()`), and the draft from the rider just ahead, scaled by how far across from their line you are (`draft.ts`). During a race countdown your speed is held at zero (see [Racing and the tour](racing-and-tour.md)).
+4. Reads the road's grade at the rider's distance, and advances speed with `stepSpeed()` from [Physics and stats](physics-and-stats.md), with the drag area reduced by the draft, then brakes for bends (`cornering.ts`).
+5. Advances distance, moving time and work. It times KOM segments (`komUi.frame()`), checks for the finish line, and totals climbing from the elevation at the rider's distance.
+6. Updates the drivetrain (`drivetrain.ts`): the gear (automatic, or the rider's virtual gear), crank angle and bike rock, so the legs turn at a speed the wheels could produce. Then adds the power sample for the 3 s average.
+7. Records one statistics sample, and one recorder sample while moving.
 8. Advances the workout player, if one is running, with countdown beeps. It finishes the workout when the clock runs out.
 9. Updates the sounds (wind, tyres, freewheel ratchet from `freewheel.ts`, crowds, rain).
 10. Passes the other riders and the ghost to the world, and calls `world.update()` to place every rider, build terrain and roads, and render.
@@ -184,7 +185,7 @@ The frame loop never waits on the network. Saving, syncing and loading happen in
 
 ## State and storage
 
-Ride state lives in module-level objects in `src/main.ts`: `live` (what the devices report), `ride` (distance, speed, climbing and so on), `stats` and `workoutStats` (see [Physics and stats](physics-and-stats.md)), and `recorder` (per-second samples for the saved ride). Starting a new ride replaces these.
+Ride state lives in objects that `src/main.ts` owns: `live` (what the devices report) and `ride` (distance, speed, climbing and so on), both created by `createRideSim()` in `src/rideSim.ts` (which also holds the 3 s power average), and `stats` and `workoutStats` (see [Physics and stats](physics-and-stats.md)), and `recorder` (per-second samples for the saved ride). Starting a new ride replaces these.
 
 Persistent state is in `localStorage`, under these keys:
 
