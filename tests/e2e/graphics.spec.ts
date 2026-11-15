@@ -1,27 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockNeon } from './mockNeon';
+import { collectPageErrors, press, signedInRider } from './helpers';
+import { slowFrames } from './slowFrames';
 
 // The Graphics setting: in this software-rendered browser Auto picks Low (and turns shadows off),
 // the choice is saved on this device (not in the synced settings), and picking a tier applies it.
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 const gfx = (page: Page) => page.evaluate(() => (window as unknown as { __afGraphics?: { tier: string; choice: string; autoTier: string; shadows: boolean } }).__afGraphics);
 
 test('Graphics: Auto picks Low on a software renderer, and the choice is kept on this device', async ({ page }) => {
   test.setTimeout(240_000);
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  await mockNeon(page, { signedIn: true });
-  await page.addInitScript(() => {
-    localStorage.setItem('americanflyers.signedIn', '1');
-    localStorage.setItem('americanflyers.onboarded', '1');
-  });
-  if (!process.env.E2E_FULL_FPS) {
-    await page.addInitScript(() => {
-      const raf = window.requestAnimationFrame.bind(window);
-      window.requestAnimationFrame = (cb) => window.setTimeout(() => raf(cb), 1000) as unknown as number;
-    });
-  }
+  const errors = collectPageErrors(page);
+  await signedInRider(page);
+  await slowFrames(page);
   await page.goto('/');
   await expect(page.locator('#hub')).toBeVisible();
 

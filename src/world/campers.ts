@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { roadPoint } from '../course';
 import type { Stage } from '../stages';
 import { crowdAt, hotspotAt } from './crowdZones';
-import { hash01, isClimb, seedOf } from './roadside';
+import { hash01, isClimb, paintGeometry, seedOf } from './roadside';
 
 // The roadside camp on the big climbs: motorhomes, tents and parasols with folding
 // chairs parked on the verge where the crowds are (crowdZones.ts), set well back
@@ -138,17 +138,8 @@ export function planCampers(stage: Stage, d0: number, d1: number, share: number,
 
 // -------------------------------------------------------------- geometry ----
 
-const paint = (g: THREE.BufferGeometry, color: string): THREE.BufferGeometry => {
-  const n = g.index ? g.toNonIndexed() : g;
-  n.deleteAttribute('uv');
-  const c = new THREE.Color(color);
-  const arr = new Float32Array(n.attributes.position.count * 3);
-  for (let i = 0; i < arr.length; i += 3) { arr[i] = c.r; arr[i + 1] = c.g; arr[i + 2] = c.b; }
-  n.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-  return n;
-};
 /** A coloured box of size (w, h, d) centred at (x, y, z). */
-const box = (w: number, h: number, d: number, x: number, y: number, z: number, color: string) => paint(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color);
+const box = (w: number, h: number, d: number, x: number, y: number, z: number, color: string) => paintGeometry(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color);
 
 /**
  * A motorhome, 6.4 m long, lying along +x with its cab at +x: the body (white, which
@@ -171,7 +162,7 @@ export function vanGeometry(): THREE.BufferGeometry {
     parts.push(box(0.7, 1.5, 0.05, 1.0, 1.2, s * 1.16, '#d6d8da')); // the door
     parts.push(box(0.8, 0.5, 0.04, 2.5, 1.35, s * 1.11, '#1d2a35')); // cab window
     parts.push(box(5.02, 0.22, 0.03, -0.7, 0.95, s * 1.155, '#c0392b')); // the stripe
-    for (const x of [2.4, -1.9]) parts.push(paint(new THREE.CylinderGeometry(0.38, 0.38, 0.26, 8).rotateX(Math.PI / 2).translate(x, 0.38, s * 1.05), '#16181b'));
+    for (const x of [2.4, -1.9]) parts.push(paintGeometry(new THREE.CylinderGeometry(0.38, 0.38, 0.26, 8).rotateX(Math.PI / 2).translate(x, 0.38, s * 1.05), '#16181b'));
   }
   return mergeGeometries(parts)!;
 }
@@ -198,7 +189,7 @@ export function tentGeometry(): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.computeVertexNormals();
-  return mergeGeometries([paint(g, '#ffffff'), box(0.04, 0.8, 0.55, L + 0.005, 0.4, 0, '#2a2a30')])!;
+  return mergeGeometries([paintGeometry(g, '#ffffff'), box(0.04, 0.8, 0.55, L + 0.005, 0.4, 0, '#2a2a30')])!;
 }
 
 /**
@@ -217,9 +208,9 @@ export function parasolGeometry(): THREE.BufferGeometry {
   canopy.setAttribute('color', new THREE.BufferAttribute(arr, 3));
   const parts = [
     canopy,
-    paint(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 5).translate(0, 1.2, 0), '#8a8f94'),
+    paintGeometry(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 5).translate(0, 1.2, 0), '#8a8f94'),
     box(0.8, 0.04, 0.8, 0, 0.62, 0, '#d9d9d9'), // table
-    paint(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 5).translate(0, 0.3, 0), '#6c7176'),
+    paintGeometry(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 5).translate(0, 0.3, 0), '#6c7176'),
   ];
   for (const x of [-0.75, 0.75]) {
     parts.push(box(0.46, 0.05, 0.44, x, 0.44, 0.95, '#d0d0d0')); // seat

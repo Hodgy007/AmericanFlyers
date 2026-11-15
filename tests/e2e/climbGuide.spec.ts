@@ -1,12 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { collectErrors, press } from './helpers';
 
 // The hub's Climb guide, end to end in the built app. Neon and /api/ai are mocked: no real network and no
 // Perplexity. Set E2E_SHOTS=<dir> to save screenshots at phone (390x844) and laptop (960x540) sizes.
 
 const SHOTS = process.env.E2E_SHOTS;
 const shot = async (page: Page, name: string) => { if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` }); };
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 const ANSWER = {
   stageId: 'alpe-dhuez',
@@ -71,16 +71,7 @@ async function setup(page: Page, f: Partial<Fixture> = {}): Promise<Fixture> {
   return fx;
 }
 
-const errorsOf = (page: Page) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => {
-    if (m.type() !== 'error') return;
-    if (/Failed to load resource|net::ERR|ERR_BLOCKED|ERR_NAME|ERR_INTERNET|ERR_CONNECTION|ERR_TUNNEL|CORS|status of (4|5)\d\d/i.test(m.text())) return;
-    errors.push(`console.error: ${m.text()}`);
-  });
-  return errors;
-};
+const errorsOf = (page: Page) => collectErrors(page, { ignoreHttpStatus: true });
 
 const noSideScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
 

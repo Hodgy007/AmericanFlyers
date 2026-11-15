@@ -36,11 +36,6 @@ export function realNeon(): Promise<NeonClient> {
   return real;
 }
 
-/** Starts loading the SDK without using it yet. */
-export function warmNeon() {
-  realNeon().catch(() => {});
-}
-
 type Step = { get: string | symbol } | { call: unknown[] };
 
 /** A not-yet-run chain such as `neon.from('rides').select('*').eq('id', 1)`. */

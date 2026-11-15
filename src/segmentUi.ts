@@ -5,7 +5,7 @@
 
 import { account } from './cloud/account';
 import { flushPendingEfforts, myEfforts, saveSegmentEffort, segmentLeaderboard, type SegmentRow } from './cloud/segmentApi';
-import { PREVIEW_RANGE } from './climb';
+import { PREVIEW_RANGE, distText, pctText } from './climb';
 import { sharedSegmentStore, type SegmentStore } from './segmentStore';
 import {
   SegmentTracker, distanceAt, gapSeconds, gapText, judgeEffort, resultText, segmentStatus, segmentTime, segmentsFor,
@@ -30,12 +30,6 @@ interface Board {
   at: number;
 }
 
-const KM_PER_MI = 1.609344;
-const dist = (m: number, imperial: boolean) => {
-  if (imperial) return `${(m / 1000 / KM_PER_MI).toFixed(m < 1600 ? 2 : 1)} mi`;
-  return m < 950 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
-};
-const pct = (g: number) => `${(g * 100).toFixed(1)}%`;
 const TOP_ROWS = 5;
 const RETRY_AFTER = 60_000; // a failed board is tried again after this long
 const RESULT_WAIT = 2500; // how long the result toast waits for your rank
@@ -227,11 +221,11 @@ export function initSegmentUi(els: { card: HTMLElement; climbCard: HTMLElement }
         els.card.dataset.state = status.state;
       }
       if (status.state === 'ahead') {
-        set(sub, `Starts in ${dist(status.toStart, imperial)} · ${dist(seg.length, imperial)} at ${pct(seg.avg)}`);
+        set(sub, `Starts in ${distText(status.toStart, imperial)} · ${distText(seg.length, imperial)} at ${pctText(seg.avg)}`);
         gap.hidden = true;
       } else {
         const live = tracker.live;
-        set(sub, live ? `${segmentTime(live.elapsed)} · ${dist(Math.max(0, seg.length - live.x), imperial)} to go` : `${dist(seg.length, imperial)} at ${pct(seg.avg)}`);
+        set(sub, live ? `${segmentTime(live.elapsed)} · ${distText(Math.max(0, seg.length - live.x), imperial)} to go` : `${distText(seg.length, imperial)} at ${pctText(seg.avg)}`);
         drawGap(seg);
       }
       if (!shown) { els.card.hidden = false; shown = true; }

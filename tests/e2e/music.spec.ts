@@ -1,29 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { mockNeon } from './mockNeon';
+import { collectErrors, signedInRider } from './helpers';
+import { slowFrames } from './slowFrames';
 
 // The music and sound toggles: the ☰ Menu entry, the N and M keys and Settings,
 // all kept in step with each other.
 test('music and sound switch on and off, from the menu, keys and settings', async ({ page }) => {
   test.setTimeout(240_000);
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => {
-    if (m.type() !== 'error') return;
-    if (/Failed to load resource|net::ERR|ERR_BLOCKED|ERR_NAME|ERR_INTERNET|ERR_CONNECTION|ERR_TUNNEL|CORS/i.test(m.text())) return;
-    errors.push(`console.error: ${m.text()}`);
-  });
+  const errors = collectErrors(page);
 
-  await mockNeon(page, { signedIn: true });
-  await page.addInitScript(() => {
-    localStorage.setItem('americanflyers.signedIn', '1');
-    localStorage.setItem('americanflyers.onboarded', '1');
-  });
-  if (!process.env.E2E_FULL_FPS) {
-    await page.addInitScript(() => {
-      const raf = window.requestAnimationFrame.bind(window);
-      window.requestAnimationFrame = (cb) => window.setTimeout(() => raf(cb), 1000) as unknown as number;
-    });
-  }
+  await signedInRider(page);
+  await slowFrames(page);
   await page.goto('/');
   await expect(page.locator('#hub')).toBeVisible();
   await page.locator('#hub-go').click({ force: true });

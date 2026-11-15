@@ -1,31 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockNeon } from './mockNeon';
 import { slowFrames } from './slowFrames';
+import { collectPageErrors, signedInRider, startDemo } from './helpers';
 
 // Ride timing under load (docs/developer-guide/improvement-plan.md, workstream A):
 //  1. a KOM effort is timed from the simulation step, so frames a second apart (`slowFrames`) at `?timescale=20` still give the result;
 //  2. a demo ride started before the session has come back from the network is not stopped and reset when it lands.
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 async function setup(page: Page, o: { sessionDelayMs?: number } = {}) {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  await mockNeon(page, { signedIn: true, sessionDelayMs: o.sessionDelayMs });
-  await page.addInitScript(() => {
-    localStorage.setItem('americanflyers.signedIn', '1'); // the hint: the hub shows before the session is confirmed
-    localStorage.setItem('americanflyers.onboarded', '1');
-  });
+  const errors = collectPageErrors(page);
+  await signedInRider(page, { neon: { sessionDelayMs: o.sessionDelayMs } });
   return errors;
-}
-
-async function startDemo(page: Page, watts: number) {
-  await expect(page.locator('#hub')).toBeVisible();
-  await press(page, '#hub-go');
-  await expect(page.locator('#hub')).toBeHidden();
-  await press(page, '#btn-menu');
-  await press(page, '#btn-demo');
-  await page.locator('#demo-power').evaluate((el: HTMLInputElement, w) => { el.value = String(w); el.dispatchEvent(new Event('input', { bubbles: true })); }, watts);
 }
 
 /** The HUD's power reading, in watts. */

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
 import { DIALOGS } from './dialogs';
+import { press } from './helpers';
 
 // The Content-Security-Policy (csp.mjs, sent as Content-Security-Policy-Report-Only by `vite preview` and by vercel.json in
 // production) must produce no violation while the app does what riders do: open the home page, sign in, open the hub, ride on
@@ -8,7 +9,6 @@ import { DIALOGS } from './dialogs';
 // WebAssembly, textures from blob URLs, the tick worker), and open the main dialogs. A violation event or a "[Report Only]" console
 // message fails the test. See docs/developer-guide/security.md for what the policy allows and why.
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 /** Collects every securitypolicyviolation (the page's own) and every console message that reports one (which also covers workers). */
 async function watchCsp(page: Page) {

@@ -1,12 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockNeon } from './mockNeon';
+import { collectPageErrors, press, signedInRider, startDemo } from './helpers';
 
 // KOM segments: approaching a big climb shows the panel with the leaderboard, riding it shows the live gap to a
 // stored previous attempt (best and last), the top gives a result toast, and the Settings switch hides the panel.
 // A demo ride on a sped-up clock stands in for a real ride: `?komtest` lets it count for the times kept on this device
 // (it is never sent to the account), and the Data API is mocked like in the other specs.
-
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 /** An effort at a steady speed over a segment `length` metres long: splits every 50 m, in tenths of a second. */
 const steady = (length: number, seconds: number, at: number) => {
@@ -16,25 +14,14 @@ const steady = (length: number, seconds: number, at: number) => {
 };
 
 async function setup(page: Page, o: { stored?: Record<string, { best?: unknown; last?: unknown }>; settings?: Record<string, unknown> } = {}) {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  await mockNeon(page, { signedIn: true });
-  await page.addInitScript((seed) => {
-    localStorage.setItem('americanflyers.signedIn', '1');
-    localStorage.setItem('americanflyers.onboarded', '1');
-    if (seed.stored) localStorage.setItem('americanflyers.segments', JSON.stringify(seed.stored));
-    if (seed.settings) localStorage.setItem('americanflyers.settings', JSON.stringify(seed.settings));
-  }, { stored: o.stored, settings: o.settings });
+  const errors = collectPageErrors(page);
+  await signedInRider(page, {
+    localStorage: {
+      ...(o.stored ? { 'americanflyers.segments': JSON.stringify(o.stored) } : {}),
+      ...(o.settings ? { 'americanflyers.settings': JSON.stringify(o.settings) } : {}),
+    },
+  });
   return errors;
-}
-
-async function startDemo(page: Page, watts: number) {
-  await expect(page.locator('#hub')).toBeVisible();
-  await press(page, '#hub-go');
-  await expect(page.locator('#hub')).toBeHidden();
-  await press(page, '#btn-menu');
-  await press(page, '#btn-demo');
-  await page.locator('#demo-power').evaluate((el: HTMLInputElement, w) => { el.value = String(w); el.dispatchEvent(new Event('input', { bubbles: true })); }, watts);
 }
 
 test('approaching Alpe d’Huez shows the KOM panel with the board, then the live gap to your best and last attempt', async ({ page }) => {

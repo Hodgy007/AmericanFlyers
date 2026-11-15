@@ -156,12 +156,3 @@ export function equipmentEffects(l: Loadout): EquipmentEffects {
 }
 
 export const NO_EFFECTS: EquipmentEffects = { massKg: 0, cdaFactor: 1, crrDelta: 0 };
-
-/** Plain words for how an item unlocks. */
-export function unlockText(it: StoreItem): string {
-  const parts: string[] = [];
-  if (it.unlock?.climbed_m) parts.push(`climb ${it.unlock.climbed_m.toLocaleString('en-US')} m in total`);
-  if (it.unlock?.km) parts.push(`ride ${it.unlock.km.toLocaleString('en-US')} km in total`);
-  if (it.level > 1) parts.push(`reach level ${it.level}`);
-  return parts.length ? parts.join(' and ') : '';
-}

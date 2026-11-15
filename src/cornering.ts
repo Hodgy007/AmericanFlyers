@@ -31,7 +31,6 @@ let roadWet = false;
 export function setRoadWet(wet: boolean) {
   roadWet = wet;
 }
-export const isRoadWet = () => roadWet;
 
 export interface CornerOptions {
   /** The road's heading in radians at a distance (course.ts `headingAt`, or a stage's own). Its identity keys the cache. */

@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { press } from './helpers';
 
 // A workout is a clean boundary: the ride so far, the workout and the ride after are saved as separate activities that never overlap.
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 const hudSeconds = (page: Page) => page.evaluate(() => {
   const m = /(\d+):(\d\d)(?::(\d\d))?/.exec(document.getElementById('hud')?.textContent ?? '');
   if (!m) return 0;

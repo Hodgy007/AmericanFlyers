@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { Stage } from '../stages';
 
 export const ROAD_HALF_WIDTH = 4.6; // metres either side of the centreline (road.ts re-exports it)
@@ -54,4 +55,15 @@ export function seedOf(id: string): number {
   let h = 2166136261;
   for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
   return h | 0;
+}
+
+/** A copy of `g` (itself, if it has no index) without UVs and with one flat colour baked in as vertex colours, ready to merge with others. */
+export function paintGeometry(g: THREE.BufferGeometry, color: string): THREE.BufferGeometry {
+  const n = g.index ? g.toNonIndexed() : g;
+  n.deleteAttribute('uv');
+  const c = new THREE.Color(color);
+  const arr = new Float32Array(n.attributes.position.count * 3);
+  for (let i = 0; i < arr.length; i += 3) { arr[i] = c.r; arr[i + 1] = c.g; arr[i + 2] = c.b; }
+  n.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return n;
 }

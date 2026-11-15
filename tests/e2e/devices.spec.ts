@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mockNeon } from './mockNeon';
+import { press } from './helpers';
 
 // Trainer, heart rate and power meter in the ☰ Menu, remembered devices, one-tap reconnect, the
 // no-chooser reconnect on load (getDevices), and automatic reconnection after a drop.
@@ -9,7 +10,6 @@ test.use({ viewport: { width: 960, height: 600 } });
 
 const SHOTS = process.env.E2E_SHOTS; // set to a folder to save screenshots
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 
 interface MockOptions {
   /** Offer navigator.bluetooth.getDevices (Chrome with persistent permissions). */

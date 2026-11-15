@@ -1,22 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockNeon } from './mockNeon';
+import { collectPageErrors, press, signedInRider } from './helpers';
 
 // A built-in stage's road loads on demand (src/stages.ts). Picking one whose road has not arrived keeps the hub up with the Ride button
 // busy until it has; a road that cannot be fetched says so and can be asked for again; and a page opened on a stage waits for its road.
 
 test.use({ serviceWorkers: 'block' }); // (so page.route sees the chunk requests)
 
-const press = (page: Page, selector: string) => page.locator(selector).evaluate((el) => (el as HTMLElement).click());
 const ALPE = /\/assets\/alpe-[^/]*\.js/;
 
 async function openHub(page: Page, url = '/') {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  await mockNeon(page, { signedIn: true });
-  await page.addInitScript(() => {
-    localStorage.setItem('americanflyers.signedIn', '1');
-    localStorage.setItem('americanflyers.onboarded', '1');
-  });
+  const errors = collectPageErrors(page);
+  await signedInRider(page);
   await page.goto(url);
   await expect(page.locator('#hub')).toBeVisible();
   return errors;

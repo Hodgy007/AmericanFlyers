@@ -5,19 +5,13 @@
 
 import { currentStage, elevationAt } from './course';
 import { drawProfile } from './profile';
-import { findClimbs, climbStatus, type Climb } from './climb';
+import { findClimbs, climbStatus, distText, pctText, type Climb } from './climb';
 import type { Stage } from './stages';
 import { layoutCards, registerCard } from './cardDock';
 
-const KM_PER_MI = 1.609344;
 const FT_PER_M = 3.28084;
 const RESCAN_EVERY = 400; // metres, on a stage with no finish
 
-const dist = (m: number, imperial: boolean) => {
-  if (imperial) return `${(m / 1000 / KM_PER_MI).toFixed(m < 1600 ? 2 : 1)} mi`;
-  return m < 950 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
-};
-const pct = (g: number) => `${(g * 100).toFixed(1)}%`;
 
 /**
  * Keeps the card up to date. `update` is cheap: call it a few times a second.
@@ -61,9 +55,9 @@ export function initClimbUi(els: { card: HTMLElement; title: HTMLElement; sub: H
       const key = `${c.start}|${status.state}`;
       const fresh = key !== seen;
       if (status.state === 'ahead') {
-        els.title.textContent = `Next climb in ${dist(status.toStart, imperial)}`;
-        els.sub.textContent = `${dist(c.length, imperial)} at ${pct(c.avg)}, ${steepest}`;
-        chip.textContent = `⛰ Climb in ${dist(status.toStart, imperial)} · ${pct(c.avg)}`;
+        els.title.textContent = `Next climb in ${distText(status.toStart, imperial)}`;
+        els.sub.textContent = `${distText(c.length, imperial)} at ${pctText(c.avg)}, ${steepest}`;
+        chip.textContent = `⛰ Climb in ${distText(status.toStart, imperial)} · ${pctText(c.avg)}`;
         els.card.dataset.state = 'ahead';
         els.card.hidden = false;
         shown = true;
@@ -71,9 +65,9 @@ export function initClimbUi(els: { card: HTMLElement; title: HTMLElement; sub: H
       } else {
         const rise = elevationAt(c.end) - elevationAt(distance);
         const left = imperial ? `${Math.round(rise * FT_PER_M)} ft` : `${Math.round(rise)} m`;
-        els.title.textContent = `${dist(status.toTop, imperial)} to the top`;
-        els.sub.textContent = `${pct(status.avgLeft)} average from here, ${left} to climb`;
-        chip.textContent = `⛰ ${dist(status.toTop, imperial)} to the top · ${pct(status.avgLeft)}`;
+        els.title.textContent = `${distText(status.toTop, imperial)} to the top`;
+        els.sub.textContent = `${pctText(status.avgLeft)} average from here, ${left} to climb`;
+        chip.textContent = `⛰ ${distText(status.toTop, imperial)} to the top · ${pctText(status.avgLeft)}`;
         els.card.dataset.state = 'on';
         els.card.hidden = false;
         shown = true;

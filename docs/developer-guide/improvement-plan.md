@@ -1,6 +1,6 @@
 # Improvement plan (November 2026)
 
-Status: **in progress.** This page lists the fixes that came out of a review of the app on 12 November 2026, in the order they should be done, and what "done" means for each. It is a working document: when everything here is built, fold what still matters into the other guides and delete it.
+Status: **built, with two follow-ups open.** Workstreams A to D are done, E's first piece (the simulation step) is done, and Content-Security-Policy reports are collected. What is left: the further pieces of `src/main.ts` listed under E, and switching the policy from report-only to enforcing after a clean week of reports (C, item 1). This page lists the fixes that came out of a review of the app on 12 November 2026, in the order they were done, and what "done" means for each. When the two follow-ups are finished, fold what still matters into the other guides and delete it.
 
 The review looked at the code on `main`, measured the build, and used what the CI failures of that week exposed. It did not profile on a real GPU or phone, or test with a real trainer.
 
