@@ -24,7 +24,11 @@ import { Drivetrain, gearCadence, gearGradeOffset, VIRTUAL_GEARS, VIRTUAL_REF } 
 import { drawWorkout } from './workouts/graph';
 import { RAMP_TEST_ID, zoneColor, type Workout } from './workouts/model';
 import { WorkoutPlayer } from './workouts/player';
-import { HR_ZONES, POWER_ZONES, zoneBars } from './zones';
+import { createSummaryCard } from './summaryCard';
+import {
+  finishActions, finishFigures, finishItems, finishTitle, ghostComparison, KM_PER_MI, ordinal, rampTestFtp, rideSummaryActions, rideSummaryItems,
+  shareHeadline, splitNote, workoutSummaryActions, workoutSummaryItems, type RaceFigures, type SummaryAction,
+} from './summaryContent';
 import { account, onAccountChange, restoreSession } from './cloud/account';
 import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, stageGhost, stageLeaderboard, syncOnSignIn, type Activity, type LeaderboardRow } from './cloud/sync';
 import { RideRecorder } from './cloud/recorder';
@@ -85,6 +89,8 @@ import { countdownLabel, eventStageKey, joinState } from './schedule';
 import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChange, priorTotals, recordStage, refWkg, simulateStage, tourComplete, tourJersey, tourStageNumber } from './tour';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+// The finish and summary card (ending a ride, finishing a workout or the stage): built from plain data, see src/summaryContent.ts.
+const summaryCard = createSummaryCard({ backToHub: () => void goToHub({ ask: false }), zones: () => settings });
 
 /**
  * A red ✕ in the top-right corner of every dialog, so any of them closes with one click (they all
@@ -118,7 +124,6 @@ closeButtons();
 // added later: catch any that turns up without a close button as soon as one is opened.
 document.addEventListener('toggle', (e) => { if (e.target instanceof HTMLDialogElement && e.target.open) closeButtons(); }, true);
 
-const KM_PER_MI = 1.609344;
 
 let settings = loadSettings();
 
@@ -831,76 +836,17 @@ function finishWorkout() {
   const sp = spans.workout;
   if (!sp) { stopWorkoutUi(); return; }
   const workoutStats = sp.st;
-  const items: [string, string][] = [
-    ['Time', formatTime(workoutStats.seconds)],
-    ['Avg power', `${Math.round(workoutStats.avgPower)} W`],
-    ['Norm. power', `${Math.round(workoutStats.np)} W`],
-    ['TSS', String(Math.round(workoutStats.tss(settings.ftp)))],
-    ['Energy', `${Math.round(workoutStats.work / 1000)} kJ`],
-    ['Avg HR', workoutStats.avgHr ? `${Math.round(workoutStats.avgHr)} bpm` : '--'],
-  ];
-  const actions: SummaryAction[] = [{ label: 'Done', onClick: () => {} }];
-  if (w.id === RAMP_TEST_ID && workoutStats.best60 > 0) {
-    // Ramp test: FTP ≈ 75 % of the best one-minute power.
-    const ftp = Math.round(workoutStats.best60 * 0.75);
-    items.unshift(['Est. FTP', `${ftp} W`], ['Best minute', `${Math.round(workoutStats.best60)} W`]);
-    actions.unshift({
-      label: `Set my FTP to ${ftp} W`,
-      primary: true,
-      onClick: () => { setFtp(ftp, 'ramp_test'); toast(`FTP set to ${ftp} W`); },
-    });
-  }
+  const rampFtp = rampTestFtp(w.id === RAMP_TEST_ID, workoutStats.best60); // the ramp test's FTP estimate (75 % of the best minute)
+  const items = workoutSummaryItems(workoutStats, settings.ftp, rampFtp);
+  const actions = workoutSummaryActions(rampFtp, (ftp) => { setFtp(ftp, 'ramp_test'); toast(`FTP set to ${ftp} W`); });
   sp.completed = w.name;
   planDone({ workout: w.id });
-  const zones = zoneSummary(workoutStats);
+  const zones = summaryCard.zoneSections(workoutStats);
   const coach = aiDebrief(aiDebriefInput(sp, w.name, 'workout', null)); // the AI coach's debrief card
   stopWorkoutUi();
   closeWorkoutSpan(); // the workout is its own activity; a fresh ride window starts after it
-  showSummary('💪', `${w.name}: complete!`, items, actions, [...(coach ? [coach.node] : []), ...zones]);
+  summaryCard.show('💪', `${w.name}: complete!`, items, actions, [...(coach ? [coach.node] : []), ...zones]);
   void saveSpan(sp).then((saved) => coach?.rideSaved(saved ? sp.rec.id : null));
-}
-
-interface SummaryAction { label: string; primary?: boolean; onClick: () => void }
-
-function showSummary(flag: string, title: string, items: [string, string][], actions: SummaryAction[], extra: Node[] = []) {
-  summaryVersion++;
-  $('finish').querySelector('.finish-card')!.classList.toggle('wide', extra.length > 0);
-  $('finish-extra').replaceChildren(...extra);
-  $('finish-note').textContent = '';
-  $('finish').querySelector('.finish-flag')!.textContent = flag;
-  $('finish-title').textContent = title;
-  const statsEl = $('finish-stats');
-  statsEl.replaceChildren(...items.map(([k, v]) => {
-    const d = document.createElement('div');
-    d.innerHTML = '<span></span><strong></strong>';
-    d.querySelector('span')!.textContent = k;
-    d.querySelector('strong')!.textContent = v;
-    return d;
-  }));
-  $('finish-actions').replaceChildren(...actions.map((a) => {
-    const b = document.createElement('button');
-    b.textContent = a.label;
-    if (a.primary) b.className = 'primary';
-    b.addEventListener('click', () => { $('finish').hidden = true; a.onClick(); });
-    return b;
-  }), backToHubButton());
-  $('finish').hidden = false;
-}
-
-/** The summary card's "Back to the hub" (the ride is over, so no questions asked). */
-function backToHubButton() {
-  const b = document.createElement('button');
-  b.textContent = '🏠 Back to the hub';
-  b.addEventListener('click', () => { $('finish').hidden = true; void goToHub({ ask: false }); });
-  return b;
-}
-
-/** Heart-rate and power zone breakdowns for a ride summary. */
-function zoneSummary(st: RideStats) {
-  return [
-    zoneBars('Heart-rate zones', HR_ZONES, st.hrZones, { ref: settings.maxHr, unit: 'bpm' }),
-    zoneBars('Power zones', POWER_ZONES, st.powerZones, { ref: settings.ftp, unit: 'W' }),
-  ];
 }
 
 function setFtp(ftp: number, source: 'manual' | 'ramp_test') {
@@ -924,8 +870,6 @@ function saveUnsaved(): Promise<boolean[]> {
 }
 // The account a ride belongs to, captured when the ride starts: a save goes to it however the session changes meanwhile.
 let rideUserId: string | null = account()?.id ?? null;
-// Bumped by every summary card: a save finishing after the card was replaced doesn't write into the new one.
-let summaryVersion = 0;
 
 /**
  * Saves one activity window to the rider's account (the same one is updated on later saves). Updates the note on the
@@ -939,11 +883,11 @@ async function saveSpan(sp: Span, opts: { quiet?: boolean } = {}): Promise<boole
   const activity = spans.activity(sp);
   const seconds = sp.st.seconds;
   const gen = signInGen;
-  const summary = summaryVersion;
+  const summary = summaryCard.version();
   const sameAccount = () => account()?.id === userId && signInGen === gen;
   const note = $('finish-note');
   const showNote = !opts.quiet && !$('finish').hidden;
-  const noteCurrent = () => showNote && sameAccount() && summaryVersion === summary && !$('finish').hidden;
+  const noteCurrent = () => showNote && sameAccount() && summaryCard.version() === summary && !$('finish').hidden;
   const alreadyQueued = rideQueue.list().some((r) => r.userId === userId && r.activity.id === activity.id);
   const kept = rideQueue.add(userId, activity); // durable before the first await (src/rideQueue.ts), so nothing can lose it
   if (kept !== 'failed') sp.saved = Math.max(sp.saved, seconds); // queued: the 5-minute autosave needn't retry it
@@ -961,7 +905,7 @@ async function saveSpan(sp: Span, opts: { quiet?: boolean } = {}): Promise<boole
     if (noteCurrent()) note.textContent = '✓ Saved to your rides';
     // Credits and levels come from the server's count of your saved rides.
     if (sameAccount()) garage.afterRide().then((r) => {
-      if (!r || opts.quiet || !sameAccount() || summaryVersion !== summary) return;
+      if (!r || opts.quiet || !sameAccount() || summaryCard.version() !== summary) return;
       const text = rewardText(r);
       if (text && noteCurrent()) note.append(Object.assign(document.createElement('div'), { className: 'finish-reward', textContent: `🪙 ${text}` }));
       if (r.levelAfter > r.levelBefore) toast(`⭐ Level ${r.levelAfter}!`, 5000);
@@ -1238,25 +1182,14 @@ function endRide() {
   const sp = spans.current(); // the activity being recorded: the workout's while one is on, else the ride's (a ride split by a workout shows its last part)
   const stats = sp.st;
   if (stats.seconds < MIN_RIDE_S) return resetRide();
-  const imperial = settings.units === 'imperial';
   const totals = spans.totals(sp);
-  const km = totals.distance / 1000;
   const coach = aiDebrief(aiDebriefInput(sp, currentStage().name, player ? 'workout' : 'ride', null)); // the AI coach's debrief card
-  showSummary('🚴', 'Ride summary', [
-    ['Time', formatTime(stats.seconds)],
-    ['Distance', imperial ? `${(km / KM_PER_MI).toFixed(2)} mi` : `${km.toFixed(2)} km`],
-    ['Avg power', `${Math.round(stats.avgPower)} W`],
-    ['Norm. power', `${Math.round(stats.np)} W`],
-    ['Avg HR', stats.avgHr ? `${Math.round(stats.avgHr)} bpm` : '--'],
-    ['Climbed', `${Math.round(imperial ? totals.climbed * 3.28084 : totals.climbed)} ${imperial ? 'ft' : 'm'}`],
-  ], [
-    { label: 'Keep riding', onClick: () => {} },
-    { label: 'Start a new ride', primary: true, onClick: resetRide },
-  ], [...(coach ? [coach.node] : []), ...zoneSummary(stats)]);
+  summaryCard.show('🚴', 'Ride summary', rideSummaryItems(stats, totals, settings.units === 'imperial'), rideSummaryActions(resetRide),
+    [...(coach ? [coach.node] : []), ...summaryCard.zoneSections(stats)]);
   const rideId = sp.rec.id;
-  if (ride.movingTime >= 180) void ai?.rideEnded({ distance: ride.distance, finish: null, finishS: null, movingTime: ride.movingTime, lengthKm: null }, (n) => $('finish-extra').prepend(n));
-  const split = rideFlags.splitByWorkout && !sp.workout ? 'Part of this trip was a workout, saved as its own activity; these numbers are the ride since.' : '';
-  if (split) $('finish-extra').prepend(Object.assign(document.createElement('p'), { className: 'finish-ghost', textContent: `ℹ️ ${split}` }));
+  if (ride.movingTime >= 180) void ai?.rideEnded({ distance: ride.distance, finish: null, finishS: null, movingTime: ride.movingTime, lengthKm: null }, (n) => summaryCard.prependExtra(n));
+  const split = splitNote(!!rideFlags.splitByWorkout, !!sp.workout);
+  if (split) summaryCard.prependNote('finish-ghost', `ℹ️ ${split}`);
   void saveSpan(sp).then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); });
 }
 
@@ -1666,25 +1599,11 @@ function showFinish() {
   const vsGhost = ghost && ride.finishTime && !racing ? ride.finishTime - ghost.finishS : null;
   const imperial = settings.units === 'imperial';
   const finish = currentStage().finish!;
-  const timeS = whole ? ride.movingTime : stats.seconds;
-  const avgPower = timeS > 0 ? Math.round(whole ? ride.work / ride.movingTime : stats.avgPower) : 0;
-  const avgKmh = timeS > 0 ? ((whole ? finish - ride.startDistance : totals.distance) / timeS) * 3.6 : 0;
-  const climbedM = whole ? ride.climbed : totals.climbed;
-  const items: [string, string][] = [
-    ['Time', formatTime(timeS)],
-    ['Avg power', `${avgPower} W`],
-    ['Avg speed', `${(imperial ? avgKmh / KM_PER_MI : avgKmh).toFixed(1)} ${imperial ? 'mph' : 'km/h'}`],
-    ['Climbed', `${Math.round(imperial ? climbedM * 3.28084 : climbedM)} ${imperial ? 'ft' : 'm'}`],
-    ['Avg HR', stats.avgHr ? `${Math.round(stats.avgHr)} bpm` : '--'],
-    ['Norm. power', `${Math.round(stats.np)} W`],
-  ];
-  let actions: SummaryAction[] = [
-    { label: 'Keep riding', onClick: () => {} },
-    { label: 'Ride it again', primary: true, onClick: resetRide },
-  ];
-  let extra: Node[] = zoneSummary(stats);
-  let title = `${currentStage().name}: finished!`;
-  let shareHeadline: string | undefined;
+  const input = { stats, totals, whole, ride, finish, imperial };
+  const { timeS, avgPower, climbedM } = finishFigures(input);
+  let actions = finishActions(resetRide);
+  let extra: Node[] = summaryCard.zoneSections(stats);
+  let raceFig: RaceFigures | null = null;
   const shareBadges: string[] = [];
   let aiRace: { place: number; of: number } | null = null;
   if (racing) {
@@ -1693,12 +1612,8 @@ function showFinish() {
     ride.racePlace = r.place;
     ride.raceSize = r.rows.length;
     aiRace = { place: r.place, of: r.rows.length };
-    shareHeadline = `${ordinal(r.place)} of ${r.rows.length}`;
+    raceFig = { place: r.place, of: r.rows.length, time: r.me.time, sprint: r.me.sprint, kom: r.me.kom };
     if (r.tour) shareBadges.push(...myJerseys(r.tour).map((j) => `👕 ${JERSEY_NAMES[j]}`));
-    items.splice(0, 1, ['Place', `${ordinal(r.place)} of ${r.rows.length}`], ['Race time', raceTime(r.me.time)]);
-    items.splice(2, 0, ['Points', `${r.me.sprint} sprint · ${r.me.kom} mountain`]);
-    items.length = Math.min(items.length, 6);
-    title = `${currentStage().name}: ${ordinal(r.place)}`;
     const results = raceUiModule.peek()?.m.resultsNode(r.rows, r.tour); // loaded when the race began
     if (results) extra = [results, ...extra];
     actions = r.actions;
@@ -1711,13 +1626,13 @@ function showFinish() {
   }
   const coach = aiDebrief(aiDebriefInput(sp, currentStage().name, aiRace ? 'race' : 'ride', aiRace)); // the AI coach's debrief card
   if (coach) extra = [coach.node, ...extra];
-  showSummary('🏁', title, items, actions, extra);
-  $('finish').querySelector('.finish-card')!.classList.toggle('race', !!racing);
+  summaryCard.show('🏁', finishTitle(currentStage().name, raceFig?.place ?? null), finishItems({ ...input, race: raceFig }), actions, extra);
+  summaryCard.setRace(!!racing);
   const rideId = sp.rec.id;
   const rideLen = currentStage().finish;
-  void ai?.rideEnded({ distance: ride.distance, finish: rideLen, finishS: ride.finishTime || null, movingTime: ride.movingTime, lengthKm: rideLen ? Math.round(rideLen / 100) / 10 : null }, (n) => $('finish-extra').prepend(n));
+  void ai?.rideEnded({ distance: ride.distance, finish: rideLen, finishS: ride.finishTime || null, movingTime: ride.movingTime, lengthKm: rideLen ? Math.round(rideLen / 100) / 10 : null }, (n) => summaryCard.prependExtra(n));
   const offBoard = leaderboardNote(rideFlags);
-  if (offBoard) $('finish-extra').prepend(Object.assign(document.createElement('p'), { className: 'finish-ghost off-board', textContent: `ℹ️ ${offBoard}` }));
+  if (offBoard) summaryCard.prependNote('finish-ghost off-board', `ℹ️ ${offBoard}`);
   // 📤 Share: a picture of the ride (route, numbers, place, your colours).
   const finishStage = currentStage();
   const finishFrom = ride.startDistance + (whole ? 0 : sp.base.dist);
@@ -1726,19 +1641,14 @@ function showFinish() {
     stage: finishStage, fromM: finishFrom, toM: finishTo, title: finishStage.name.replace('Hell of the West · ', ''),
     subtitle: `${racing ? 'Race · ' : ''}${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`,
     timeS, avgPower, climbedM, distanceM: finishTo - finishFrom,
-    headline: shareHeadline ?? (vsGhost !== null && vsGhost < 0 && ghost?.isMe ? 'New personal best' : undefined),
+    headline: shareHeadline(aiRace, vsGhost, !!ghost?.isMe),
     badges: shareBadges, imperial, kit: settings.kit,
     rider: garage.wallet ? `Level ${garage.wallet.level} · ${levelTitle(garage.wallet.level)}` : undefined,
   }), toast);
   if (vsGhost !== null && ghost) {
-    const who = ghost.isMe ? 'your best' : `${ghost.name}’s ghost`;
-    $('finish-title').textContent = vsGhost < 0 && ghost.isMe
-      ? `${currentStage().name}: new personal best!`
-      : $('finish-title').textContent;
-    $('finish-extra').prepend(Object.assign(document.createElement('p'), {
-      className: 'finish-ghost',
-      textContent: vsGhost < 0 ? `🏆 ${raceTime(-vsGhost)} faster than ${who}` : `${raceTime(vsGhost)} behind ${who}`,
-    }));
+    const cmp = ghostComparison(currentStage().name, vsGhost, ghost);
+    if (cmp.title) summaryCard.setTitle(cmp.title);
+    summaryCard.prependNote('finish-ghost', cmp.note);
   }
   const finishedSpan = sp;
   void saveRide().then((saved) => { coach?.rideSaved(saved ? rideId : null); if (saved) clearSnapshot(); if (saved && spans.current() === finishedSpan) void showRank(); });
@@ -1758,12 +1668,6 @@ async function showRank() {
     toast(me.rank === 1 ? `🥇 You’re the fastest ever on ${currentStage().name}!` : `🏆 You’re ${ordinal(me.rank)} on the ${currentStage().name} leaderboard${total > 25 ? '' : ` of ${total}`}.`, 7000);
     if (settings.ghost && (!ghost || ghost.isMe)) void loadMyGhost(); // race your new best next time
   } catch { /* leaderboard is a bonus */ }
-}
-
-function ordinal(n: number) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 /** "8.4 km to go · next: Virage 14 in 230 m" for stages with a finish. */
