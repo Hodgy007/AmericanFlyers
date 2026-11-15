@@ -71,6 +71,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `atmosphereUi.ts` | The ☰ Menu → Time & weather dialog. |
 | `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish; and race mode (`startRace`, `makeRoster`, `RaceField`) that hands the field to the race engine. |
 | `rideSim.ts` | The ride's state (`RideState`, `LiveInput`, the 3 s `PowerRing`) and `stepRide()`, one simulation step: stale power, speed from physics, corner braking, distance, moving time, work, the finish and climbing, with the rest of the app reached through a `RideDeps` hooks object. No DOM or Three.js; `main.ts` owns the instances. Tested in `tests/unit/rideSim.test.ts`. |
+| `rideSurroundings.ts` | The "surroundings" hook of the simulation step: the wind following the stage and weather (and `?wind=`), live riders, pro teams and the AI rival gathered onto the road, the race, steering, the draft and its easing, and the cross-wind shift. `createRideSurroundings()` owns that state (`roadRiders`, `draft`, `draftSaving`, `lastCrossShift`, `windStage`); everything else is a hook. No DOM or Three.js. Tested in `tests/unit/rideSurroundings.test.ts`. |
 | `raceSim.ts` | The race engine: riders in groups, attacks, breaks, chases, cracks, merges, sprints, lines and points. No DOM or Three.js. |
 | `race.ts` | The race you are riding: countdown, live panel numbers, jersey holders and results. |
 | `raceUi.ts` | The 3-2-1, the live race panel, and the result tables. |
