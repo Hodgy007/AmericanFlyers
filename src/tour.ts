@@ -152,6 +152,11 @@ export function tourJersey(): [string, string] | null {
   return null;
 }
 
+/** The jersey colours to wear on `stageId`: only on a tour stage do you wear one (see `tourJersey`). */
+export function tourJerseyFor(stageId: string): [string, string] | null {
+  return TOUR_STAGE_IDS.includes(stageId) ? tourJersey() : null;
+}
+
 /** The jerseys you currently wear, for display. */
 export function myJerseys(p: TourProgress | null = current): Jersey[] {
   const h = jerseyHolders(p);

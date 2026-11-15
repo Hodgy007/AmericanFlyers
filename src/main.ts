@@ -27,7 +27,7 @@ import { WorkoutPlayer } from './workouts/player';
 import { createSummaryCard } from './summaryCard';
 import {
   finishActions, finishFigures, finishItems, finishTitle, ghostComparison, KM_PER_MI, ordinal, rampTestFtp, rideSummaryActions, rideSummaryItems,
-  shareHeadline, splitNote, workoutSummaryActions, workoutSummaryItems, type RaceFigures, type SummaryAction,
+  shareHeadline, splitNote, workoutSummaryActions, workoutSummaryItems, type RaceFigures,
 } from './summaryContent';
 import { account, onAccountChange, restoreSession } from './cloud/account';
 import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, stageGhost, stageLeaderboard, syncOnSignIn, type Activity, type LeaderboardRow } from './cloud/sync';
@@ -78,13 +78,13 @@ import type { AiRide } from './ai/aiRide';
 import type { AiHostBase } from './ai/create';
 import type { RideSummaryInput } from './ai/summary';
 // Racing and the Hell of the West tour (race.ts, raceUi.ts, tour.ts, tourUi.ts).
-import { LiveRace, raceSetup, type PanelData, type ResultRow } from './race';
+import type { PanelData, ResultRow } from './race';
+import { createRaceSession, type CommentaryKit } from './raceSession';
 // Scheduled group rides and races, and the race commentator (schedule.ts, eventSession.ts, eventsUi.ts, commentary.ts, cloud/events.ts).
-import type { RaceCommentary } from './commentary';
-import { DropWatcher, EVENT_REF_WKG, eventOver, mergeEventResults, secondsSinceStart, type ActiveEvent, type RealResult } from './eventSession';
+import { INELIGIBLE_NOTE, eventResultEligible, eventStageAvailable, mergeEventResults, type ActiveEvent, type RealResult } from './eventSession';
 import { eventResults, serverNow, submitEventResult, syncServerClock, type EventRow } from './cloud/events';
-import { countdownLabel, eventStageKey, joinState } from './schedule';
-import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChange, priorTotals, recordStage, refWkg, simulateStage, tourComplete, tourJersey, tourStageNumber } from './tour';
+import { eventStageKey, joinState } from './schedule';
+import { JERSEY_NAMES, TOUR_STAGE_IDS, getTour, loadTour, myJerseys, onTourChange, recordStage, refWkg, simulateStage, tourJerseyFor, tourStageNumber } from './tour';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // The finish and summary card (ending a ride, finishing a workout or the stage): built from plain data, see src/summaryContent.ts.
@@ -147,7 +147,6 @@ let player: WorkoutPlayer | null = null;
 const sound = new Sound(settings.sound);
 const beeps = { step: undefined as unknown, left: Infinity };
 const peloton = new Peloton(); // computer-ridden pro teams
-let race: LiveRace | null = null; // the race being ridden, if any
 onLazyError((msg) => toast(msg, 5000));
 // Racing screens (the 3-2-1, live panel and result tables) and the commentator are only
 // needed once a race starts, so they load then (and in a spare moment after the first frame).
@@ -164,10 +163,43 @@ const commentary = lazy(() => import('./commentary').then((m) => {
   const commentator = new m.Commentator(clipPlayer, () => performance.now() / 1000);
   return { m, clipPlayer, commentator };
 }));
-let raceCommentary: RaceCommentary | null = null;
-let clipsPreloaded = false;
-/** The scheduled event you have joined (a race or a group ride), if any. */
-let eventState: { ev: ActiveEvent; drop: DropWatcher; demoUsed: boolean } | null = null;
+/**
+ * The race or scheduled event you are riding (src/raceSession.ts): `raceSession.race` and `raceSession.event` are the state; lining up
+ * a race, joining and leaving an event, finishing a race and the per-frame lobby and commentary rules are its methods. The stage choice,
+ * the lazy screens, the toasts, the beeps and presence reach it as hooks here.
+ */
+const raceSession = createRaceSession({
+  peloton,
+  tour: { get: getTour, record: recordStage },
+  refWkg: () => refWkg(settings.ftp, settings.riderKg),
+  random: Math.random,
+  serverNow,
+  nowS: () => performance.now() / 1000,
+  rider: () => ({ distance: ride.distance, power: live.power, ftp: settings.ftp }),
+  toast,
+  toastLater: (text, delayMs, ms) => { window.setTimeout(() => toast(text, ms), delayMs); },
+  beep: (last) => sound.beep(last),
+  prefetchRaceUi: () => raceUiModule.prefetch(),
+  hidePanel: () => raceUi.panel(null, false),
+  hideCountdown: () => raceUi.countdown(null),
+  useCommentary: (run) => {
+    void use(commentary, ({ m, commentator }) => run({
+      reset: () => commentator.reset(),
+      create: () => new m.RaceCommentary(commentator),
+      preload: () => m.ClipPlayer.preload(),
+    } satisfies CommentaryKit));
+  },
+  commentator: () => commentary.peek()?.commentator ?? null,
+  commentaryWanted: () => settings.commentary && sound.enabled,
+  stopClips: () => commentary.peek()?.clipPlayer.stop(),
+  eventBar: { show: (title, status) => eventBar.show(title, status), hide: () => eventBar.hide() },
+  restagePresence: () => presence.restage(),
+  otherRiders: () => presence.count,
+  groupGap: () => { const g = peloton.groupRide; return g ? peloton.back(g) - ride.distance : null; },
+  resetRide: () => resetRide(),
+  beginRace: (stage, tourStage) => beginRace(stage, tourStage),
+  openTour: () => openTour(),
+});
 // The AI coach and rival for this ride (src/ai/aiRide.ts). Not in the entry chunk: `ai` stays null
 // until the controller has loaded (a rider who opted in, a rival chosen, the Rivals dialog or the
 // AI switches opened), and every hook below is `ai?.…`, so until then they do nothing.
@@ -281,7 +313,7 @@ function profileSpan(): [number, number] {
 }
 
 function canJump() {
-  return demo && !player && !race && !eventState;
+  return demo && !player && !raceSession.race && !raceSession.event;
 }
 
 function profileDistanceAt(clientX: number) {
@@ -484,9 +516,9 @@ const around = createRideSurroundings({
   roadWind,
   presence: { riders: () => presence.riders() },
   peloton,
-  race: () => race,
-  eventState: () => eventState,
-  eventHolding,
+  race: () => raceSession.race,
+  eventState: () => raceSession.event,
+  eventHolding: () => raceSession.eventHolding(),
   demo: () => demo,
   ai: () => ai,
   workoutTarget: () => (player && !player.done && !player.paused ? player.targetWatts() : null),
@@ -527,7 +559,7 @@ const rideDeps: RideDeps = {
     return { massKg: settings.riderKg + settings.bikeKg + equipment.massKg, cdaFactor: equipment.cdaFactor, crrDelta: equipment.crrDelta };
   },
   proNearby: () => around.roadRiders.some((r) => r.team && Math.abs(r.distance - ride.distance) < 30),
-  holding: () => !!race?.holding || eventHolding(),
+  holding: () => !!raceSession.race?.holding || raceSession.eventHolding(),
   segmentFrame: (distance, movingTime, work, riding) => komUi.frame(distance, movingTime, work, riding),
   onFinish: showFinish,
   drivetrain,
@@ -548,9 +580,9 @@ function render(now: number, dt: number) {
   updateMusic(); // the riding score follows the speed and the road
 
   const others = around.roadRiders.slice(); // the riders on the road as of the last simulation step, plus the ghost below
-  const g = race ? null : ghostRider(); // no ghost in a race
+  const g = raceSession.race ? null : ghostRider(); // no ghost in a race
   if (g) others.push(g);
-  else if (settings.ghost && !race) {
+  else if (settings.ghost && !raceSession.race) {
     // No whole-stage ghost: on a KOM segment, your best effort on it rides ahead or behind you.
     const kg = komUi.ghost();
     if (kg) others.push({ id: 'ghost', name: 'Your best', distance: kg.distance, speedMs: kg.speedMs, power: 200, cadence: 88, ghost: true });
@@ -559,7 +591,7 @@ function render(now: number, dt: number) {
   world.update({ distance: ride.distance, speedMs: ride.speed, crankAngle: drivetrain.crankAngle, rock: drivetrain.rock }, dt);
   noteFirstFrame();
   if (settings.miniMap && !ride.finished) {
-    miniMap.update(now, { distance: ride.distance, riders: others, lines: race ? race.course.lines.filter((l) => l.kind !== 'finish').map((l) => ({ kind: l.kind, d: l.d })) : [] });
+    miniMap.update(now, { distance: ride.distance, riders: others, lines: raceSession.race ? raceSession.race.course.lines.filter((l) => l.kind !== 'finish').map((l) => ({ kind: l.kind, d: l.d })) : [] });
   }
 
   if (now - lastHud > 200) {
@@ -574,11 +606,11 @@ function render(now: number, dt: number) {
     climbUi.update(ride.distance, settings.miniMap, !ride.finished && $('finish').hidden, settings.units === 'imperial'); // not over the finish card or ride summary
     komUi.update(ride.distance, settings.komPanel, !ride.finished && $('finish').hidden, settings.units === 'imperial');
     placeBelowHud();
-    raceUi.countdown(race?.countText ?? null);
-    const panelData = race && race.phase === 'racing' && !ride.finished ? race.panel(ride.distance) : null;
+    raceUi.countdown(raceSession.race?.countText ?? null);
+    const panelData = raceSession.race && raceSession.race.phase === 'racing' && !ride.finished ? raceSession.race.panel(ride.distance) : null;
     raceUi.panel(panelData, settings.units === 'imperial');
-    updateCommentary(panelData);
-    updateEvent();
+    raceSession.updateCommentary(panelData);
+    raceSession.updateEvent();
     if (player) {
       drawWorkout(profileCanvas, player.steps, { elapsed: player.elapsed, trace: player.trace });
     } else {
@@ -906,7 +938,7 @@ const snapshots = createSnapshotKeeper({
   now: () => Date.now(),
   accountId: () => account()?.id,
   idle: () => hub.isOpen() || document.body.classList.contains('at-home'),
-  notResumable: () => !!(race || eventState || ride.finished), // races and scheduled events aren't resumable; a finished ride is already saved
+  notResumable: () => !!(raceSession.race || raceSession.event || ride.finished), // races and scheduled events aren't resumable; a finished ride is already saved
   seconds: () => spans.current().rec.seconds,
   input: (me) => {
     const sp = spans.current();
@@ -917,7 +949,7 @@ const snapshots = createSnapshotKeeper({
     };
   },
   stageExists: (id) => stageById(id).id === id,
-  rideStarted: () => spans.current().st.seconds > 0 || !!race || !!eventState,
+  rideStarted: () => spans.current().st.seconds > 0 || !!raceSession.race || !!raceSession.event,
   imperial: () => settings.units === 'imperial',
   ask: askToResume,
   resume: (snap) => resumeSnapshot(snap),
@@ -1089,10 +1121,7 @@ function endRide() {
 
 /** Ends a race and leaves a group ride, keeping the ride's own numbers. */
 function leaveRaceAndEvent() {
-  if (race) { race = null; peloton.endRace(); raceUi.panel(null, false); raceUi.countdown(null); }
-  raceCommentary = null;
-  commentary.peek()?.clipPlayer.stop();
-  endEvent();
+  raceSession.leave();
 }
 
 function resetRide() {
@@ -1238,37 +1267,7 @@ function beginRace(stage: Stage, tourStage: number | null = null) {
   if (stageNotHere(stage, () => beginRace(stage, tourStage))) return;
   if (stage !== currentStage()) chooseStage(stage);
   else resetRide();
-  const tour = tourStage ? getTour() : null;
-  const seed = tour ? tour.seed : Math.floor(Math.random() * 1e9);
-  const { roster, course } = raceSetup(stage, seed);
-  const field = peloton.startRace(course, roster, refWkg(settings.ftp, settings.riderKg), seed);
-  race = new LiveRace(stage, field, priorTotals(tour, stage.id), tourStage);
-  attachRace(race);
-  const stageNo = tourStage ? `Stage ${tourStage} of the tour · ` : '';
-  toast(`${stageNo}${stage.name.replace('Hell of the West · ', '')}: roll up to the line.`, 4000);
-}
-
-/** The rider has crossed the line: lets the field finish, saves a tour stage, and builds the buttons. */
-function finishRace(r: LiveRace) {
-  const rows: ResultRow[] = r.results();
-  const me = rows.find((x) => x.you) ?? { id: 'me', name: 'You', team: -1, time: r.time, sprint: 0, kom: 0, you: true };
-  const place = rows.findIndex((x) => x.you) + 1;
-  const stage = r.stage;
-  let tour = getTour();
-  const tourN = tourStageNumber(stage.id);
-  const actions: SummaryAction[] = [{ label: 'Keep riding', onClick: () => {} }];
-  if (tour && tourN) {
-    recordStage(stage.id, rows);
-    tour = getTour();
-    const worn = myJerseys(tour);
-    if (worn.length) window.setTimeout(() => toast(`You lead the tour: ${worn.map((j) => JERSEY_NAMES[j].toLowerCase()).join(' and ')}!`, 6000), 1200);
-    const next = TOUR_STAGE_IDS[tourN];
-    if (next && tour && !tourComplete(tour)) actions.push({ label: `Next: stage ${tourN + 1}`, primary: true, onClick: () => beginRace(stageById(next), tourN + 1) });
-    else actions.push({ label: 'Tour standings', primary: true, onClick: openTour });
-  } else {
-    actions.push({ label: 'Race again', primary: true, onClick: () => beginRace(stage, tourN) });
-  }
-  return { rows, me, place, tour: tour && tourN ? tour : null, actions };
+  raceSession.start(stage, tourStage);
 }
 
 const tourUi = lazy(() => import('./tourUi').then((m) => m.initTourUi({
@@ -1296,7 +1295,7 @@ onTourChange((p) => {
 
 /** On a tour stage, lead a classification and you wear its jersey (yellow, green or polka dots) over your kit. */
 function updateTourJersey() {
-  setTourJersey((TOUR_STAGE_IDS as readonly string[]).includes(currentStage().id) ? tourJersey() : null);
+  setTourJersey(tourJerseyFor(currentStage().id));
 }
 updateTourJersey();
 
@@ -1307,7 +1306,7 @@ updateTourJersey();
 
 const eventsUi = lazy(() => import('./eventsUi').then((m) => {
   const bar = m.initEventBar(() => {
-    const was = eventState?.ev;
+    const was = raceSession.event?.ev;
     resetRide();
     if (was) toast(`You left ${was.title}.`);
   });
@@ -1315,7 +1314,7 @@ const eventsUi = lazy(() => import('./eventsUi').then((m) => {
     join: (row) => { void joinEvent(row); },
     stageName: (id) => stageById(id).name,
     openSignIn: (why) => accountUi.openSignIn(why),
-    currentEventId: () => eventState?.ev.id ?? null,
+    currentEventId: () => raceSession.event?.ev.id ?? null,
   });
   return { m, bar };
 }));
@@ -1326,120 +1325,17 @@ const eventBar = {
   hide: () => eventsUi.peek()?.bar.hide(),
 };
 
-function eventHolding() {
-  return !!eventState && eventState.ev.kind === 'group_ride' && secondsSinceStart(eventState.ev, serverNow()) < 0;
-}
-
-/** Wires a new race to the beeps and the commentator (single races, tour stages and events). */
-function attachRace(r: LiveRace) {
-  r.onBeep = (last) => sound.beep(last);
-  raceUiModule.prefetch();
-  raceCommentary = null;
-  // The commentator is normally loaded already (prefetched after the first frame); if not, it joins in a moment.
-  void use(commentary, ({ m, commentator }) => {
-    if (race !== r) return; // the race ended or changed while it loaded
-    commentator.reset();
-    raceCommentary = new m.RaceCommentary(commentator);
-    r.onEvent = (text, kind) => raceCommentary?.event(text, kind);
-    if (!clipsPreloaded && settings.commentary && sound.enabled) { clipsPreloaded = true; m.ClipPlayer.preload(); }
-  });
-}
-
 async function joinEvent(row: EventRow) {
   if (!account()) return; // (only reachable from the hub and the Events dialog, which need an account)
   await syncServerClock();
   const startsAtMs = new Date(row.starts_at).getTime();
   if (joinState(row.kind, startsAtMs, serverNow()) !== 'open') { toast('That event isn’t open to join right now.'); return; }
   const stage = stageById(row.stage_id);
-  if (stage.id !== row.stage_id || (row.kind === 'race' && stage.finish === null)) { toast('Sorry, that event’s stage isn’t available.'); return; }
+  if (!eventStageAvailable(row, stage)) { toast('Sorry, that event’s stage isn’t available.'); return; }
   if (stageNotHere(stage, () => void joinEvent(row))) return;
   if (stage !== currentStage()) chooseStage(stage);
   else resetRide();
-  const ev: ActiveEvent = {
-    id: row.id, kind: row.kind, stageId: row.stage_id, title: row.title, startsAtMs, seed: row.seed, paceWkg: row.pace_wkg, durationMin: row.duration_min,
-  };
-  eventState = { ev, drop: new DropWatcher(), demoUsed: false };
-  const clock = () => secondsSinceStart(ev, serverNow());
-  if (ev.kind === 'race') {
-    const { roster, course } = raceSetup(stage, ev.seed);
-    // A scheduled event runs in shared conditions: the same field on every client, whatever the rider's weather.
-    const field = peloton.startRace(course, roster, EVENT_REF_WKG, ev.seed, 'event');
-    race = new LiveRace(stage, field, new Map(), null);
-    race.useEventClock(clock);
-    attachRace(race);
-  } else {
-    peloton.startGroupRide(ev.paceWkg ?? 2.6, ev.seed, clock);
-  }
-  presence.restage(); // only riders in this event see each other
-  toast(clock() < 0 ? `You’re on the line for ${ev.title}. The start is synchronised for everyone.` : `${ev.title} is under way. Go!`, 5000);
-  updateEvent();
-}
-
-/** Leaves the event (you finish, reset, or pick another stage): the road goes back to normal. */
-function endEvent() {
-  if (!eventState) return;
-  eventState = null;
-  peloton.endGroupRide(ride.distance);
-  eventBar.hide();
-  presence.restage();
-}
-
-const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-
-/** About five times a second: the lobby countdown, the group ride's "you've been dropped" notes. */
-function updateEvent() {
-  if (!eventState) return;
-  const { ev } = eventState;
-  const t = secondsSinceStart(ev, serverNow());
-  const others = presence.count;
-  if (t < 0) {
-    const where = others > 0 ? ` · ${others} other rider${others === 1 ? '' : 's'} on the line` : '';
-    eventBar.show(ev.title, `${t > -3600 ? `Starts in ${mmss(-t)}` : countdownLabel(-t * 1000)}${where}`);
-    return;
-  }
-  if (ev.kind === 'race') { eventBar.hide(); return; }
-  // Group ride.
-  if (eventOver(ev, serverNow())) {
-    toast('The group ride is over. Thanks for riding!', 6000);
-    resetRide();
-    return;
-  }
-  const g = peloton.groupRide;
-  if (!g) return;
-  const gap = peloton.back(g) - ride.distance; // metres behind the back of the group
-  const note = eventState.drop.update(gap, performance.now() / 1000);
-  if (note === 'dropped') toast('You’ve been dropped. The group keeps its pace and won’t wait: dig in to get back on, or ride your own ride.', 6000);
-  if (note === 'back') toast('Back with the group. Nice work!', 3500);
-  const status = eventState.drop.isDropped
-    ? `${Math.round(gap)} m off the back`
-    : gap > 8 ? `${Math.round(gap)} m behind the group` : gap < -8 ? `${Math.round(-gap)} m ahead of the group` : 'with the group';
-  eventBar.show(ev.title, `${status} · ${mmss(t)} in`);
-}
-
-/** The race commentator: feeds it this frame's race picture. Called with the live panel's numbers. */
-function updateCommentary(panel: ReturnType<LiveRace['panel']> | null) {
-  const c = commentary.peek();
-  if (!c) return;
-  const { commentator } = c;
-  commentator.enabled = settings.commentary && sound.enabled;
-  if (!race || !raceCommentary) return;
-  if (race.phase === 'countdown' && race.untilGo > 5 && race.untilGo <= 30) raceCommentary.lobby();
-  if (!panel) { commentator.tick(); return; }
-  raceCommentary.update({
-    t: panel.raceTime,
-    place: panel.place,
-    total: panel.total,
-    myDistance: ride.distance,
-    leadDistance: panel.leadPos,
-    finish: race.course.finish,
-    power: live.power,
-    ftp: settings.ftp,
-    groups: panel.groups,
-    yellowIsYou: panel.jerseys.yellow === 'You',
-    tour: race.tourStage !== null,
-    summits: race.course.lines.filter((l) => l.kind === 'summit').map((l) => l.d),
-    dt: 0.2,
-  });
+  raceSession.join(row, stage);
 }
 
 /**
@@ -1452,10 +1348,10 @@ function eventFinishPanel(ev: ActiveEvent, rows: ResultRow[], myTime: number, av
   const bots = rows.map((r) => ({ name: r.name, time: r.time, team: r.team, you: r.you }));
   const draw = (real: RealResult[]) => { const m = eventsUi.peek()?.m; if (m) box.replaceChildren(m.eventResultsNode(mergeEventResults(bots, real, myTime), real.filter((r) => !r.is_me).length + 1)); };
   draw([]);
-  const eligible = !demoUsed && TIME_SCALE === 1 && avgPower > 0;
+  const eligible = eventResultEligible(demoUsed, TIME_SCALE, avgPower);
   const note = document.createElement('p');
   note.className = 'muted small';
-  if (!eligible) note.textContent = 'Demo rides and sped-up clocks don’t count towards the event results.';
+  if (!eligible) note.textContent = INELIGIBLE_NOTE;
   const refresh = async () => {
     try {
       const real = await eventResults(ev.id);
@@ -1489,7 +1385,7 @@ function showFinish() {
   const stats = sp.st;
   const whole = !rideFlags.splitByWorkout;
   const totals = spans.totals(sp);
-  const racing = race && race.phase !== 'countdown' ? race : null;
+  const racing = raceSession.race && raceSession.race.phase !== 'countdown' ? raceSession.race : null;
   const vsGhost = ghost && ride.finishTime && !racing ? ride.finishTime - ghost.finishS : null;
   const imperial = settings.units === 'imperial';
   const finish = currentStage().finish!;
@@ -1502,7 +1398,7 @@ function showFinish() {
   let aiRace: { place: number; of: number } | null = null;
   if (racing) {
     racing.update(0.001, ride.distance, ride.speed); // make sure the line is recorded for this frame
-    const r = finishRace(racing);
+    const r = raceSession.finish(racing);
     ride.racePlace = r.place;
     ride.raceSize = r.rows.length;
     aiRace = { place: r.place, of: r.rows.length };
@@ -1511,12 +1407,10 @@ function showFinish() {
     const results = raceUiModule.peek()?.m.resultsNode(r.rows, r.tour); // loaded when the race began
     if (results) extra = [results, ...extra];
     actions = r.actions;
-    raceCommentary?.finished(r.place);
-    if (eventState?.ev.kind === 'race') extra = [eventFinishPanel(eventState.ev, r.rows, r.me.time, avgPower, eventState.demoUsed), ...extra];
-    race = null; // the race is over: the teams go back to riding the road
-    peloton.endRace(ride.distance);
-    raceUi.panel(null, false);
-    endEvent(); // the lobby and presence go back to the normal road
+    raceSession.announceFinish(r.place);
+    const joined = raceSession.event;
+    if (joined?.ev.kind === 'race') extra = [eventFinishPanel(joined.ev, r.rows, r.me.time, avgPower, joined.demoUsed), ...extra];
+    raceSession.endRace(ride.distance); // the race is over: the teams go back to riding the road, and the lobby and presence to the normal road
   }
   const coach = aiDebrief(aiDebriefInput(sp, currentStage().name, aiRace ? 'race' : 'ride', aiRace)); // the AI coach's debrief card
   if (coach) extra = [coach.node, ...extra];
@@ -1679,7 +1573,7 @@ updateMapMenu();
  */
 function applyProTeams(on: boolean, was: boolean) {
   if (on === was) return;
-  if (on && !race && !eventState) peloton.reset(ride.distance, !hub.isOpen());
+  if (on && !raceSession.race && !raceSession.event) peloton.reset(ride.distance, !hub.isOpen());
   updateProTeamsMenu();
 }
 function setProTeams(on: boolean) {
@@ -1691,7 +1585,7 @@ function setProTeams(on: boolean) {
 /** ☰ Menu → Pro teams on/off mirrors the Settings checkbox and the hub's ride mode. In a race or group ride the field is the pro teams, so it says so. */
 function updateProTeamsMenu() {
   const btn = $<HTMLButtonElement>('btn-proteams');
-  const fixed = !!race || !!eventState;
+  const fixed = !!raceSession.race || !!raceSession.event;
   btn.textContent = fixed ? '🚴 Pro teams: racing' : settings.proTeams ? '🚴 Pro teams: on' : '🚴 Pro teams: off';
   btn.disabled = fixed;
   btn.setAttribute('role', 'menuitemcheckbox');
@@ -1758,7 +1652,7 @@ function syncMusic() {
     return;
   }
   const over = !$('finish').hidden; // the ride's summary card is up
-  const racing = (!!race && race.phase !== 'countdown') || !!eventState;
+  const racing = (!!raceSession.race && raceSession.race.phase !== 'countdown') || !!raceSession.event;
   m.intensity = over ? 0.15 : racing ? 0.8 : Math.min(1, 0.15 + ride.speed / 11 + (live.power > settings.ftp ? 0.2 : 0));
   // Make the score follow the effort: speed sets the pace, the road's grade the mood.
   const grade = over || racing ? 0 : gradeAt(ride.distance);
@@ -1921,7 +1815,7 @@ onSyncError((msg) => toast(msg, 6000));
 // ---- AI coach and rivals (src/ai/): the host the controller is given when it loads ----
 const stageLines = () => {
   const st = currentStage();
-  if (race) return race.course.lines;
+  if (raceSession.race) return raceSession.race.course.lines;
   return [...(st.race?.sprints ?? []).map((l) => ({ kind: 'sprint' as const, d: l.d, name: l.name })), ...(st.race?.summits ?? []).map((l) => ({ kind: 'summit' as const, d: l.d, name: l.name }))];
 };
 const patchAiSettings = (p: Partial<Pick<Settings, 'aiCoach' | 'aiRivals'>>) => { updateSettings({ ...p }); };
@@ -1932,9 +1826,9 @@ function aiHost(): AiHostBase {
     toast,
     stage: currentStage,
     stageLines,
-    briefKey: () => `${currentStage().id}:${race ? 'r' : ''}`,
+    briefKey: () => `${currentStage().id}:${raceSession.race ? 'r' : ''}`,
     stageName: () => currentStage().name,
-    rideMode: () => (player ? 'workout' : race ? 'race' : 'ride'),
+    rideMode: () => (player ? 'workout' : raceSession.race ? 'race' : 'ride'),
     workoutBrief: () => {
       if (!player) return null;
       return {
@@ -1998,7 +1892,7 @@ function aiDebrief(input: RideSummaryInput): { node: Node; rideSaved(activityId:
 
 const presence = new Presence(
   () => settings.rideTogether && !document.body.classList.contains('at-home')
-    ? { stageId: eventState ? eventStageKey(currentStage().id, eventState.ev.id) : currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence, kit: kitString(playerLook()) }
+    ? { stageId: raceSession.event ? eventStageKey(currentStage().id, raceSession.event.ev.id) : currentStage().id, distance: ride.distance, speedMs: ride.speed, power: live.power, cadence: live.cadence, kit: kitString(playerLook()) }
     : null,
   () => true,
 );
@@ -2268,7 +2162,7 @@ function leaveHub() {
 /** Stops whatever is under way when the account goes (signed out, or a stale signed-in hint): the rider returns to the home page. */
 function abandonRide() {
   if (demo) setDemo(false); // the demo ride is for signed-in riders too
-  if (!player && !race && !eventState && spans.ride.st.seconds === 0) return; // nothing to stop
+  if (!player && !raceSession.race && !raceSession.event && spans.ride.st.seconds === 0) return; // nothing to stop
   if (player) stopWorkout();
   resetRide(); // (the ride was saved before sign-out, see beforeSignOut; with no account this saves nothing)
 }
@@ -2292,9 +2186,9 @@ function startFromHub(c: { stageId: string; workoutId: string | null }, mode: Ri
  */
 async function finishRide() {
   if (hub.isOpen()) return;
-  const underWay = $('finish').hidden && (spans.current().st.seconds >= MIN_RIDE_S || !!race || !!eventState);
+  const underWay = $('finish').hidden && (spans.current().st.seconds >= MIN_RIDE_S || !!raceSession.race || !!raceSession.event);
   if (!underWay) return goToHub({ ask: false });
-  const also = [race ? (eventState ? 'your race' : 'the race') : eventState ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
+  const also = [raceSession.race ? (raceSession.event ? 'your race' : 'the race') : raceSession.event ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
   if (!(await askToLeave({ signedIn: !!account(), time: formatTime(spans.current().st.seconds), also, purpose: 'end' }))) return;
   if (spans.current().st.seconds < MIN_RIDE_S) { if (player) stopWorkout(); resetRide(); hub.open(); return; } // a short race: nothing to save or summarise
   leaveRaceAndEvent();
@@ -2308,9 +2202,9 @@ async function finishRide() {
  */
 async function goToHub(opts: { ask?: boolean } = {}) {
   if (hub.isOpen()) return;
-  const underWay = $('finish').hidden && (spans.current().st.seconds >= MIN_RIDE_S || !!race || !!eventState);
+  const underWay = $('finish').hidden && (spans.current().st.seconds >= MIN_RIDE_S || !!raceSession.race || !!raceSession.event);
   if (opts.ask !== false && underWay) {
-    const also = [race ? (eventState ? 'your race' : 'the race') : eventState ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
+    const also = [raceSession.race ? (raceSession.event ? 'your race' : 'the race') : raceSession.event ? 'the group ride' : '', player ? 'your workout' : ''].filter(Boolean).join(' and ');
     if (!(await askToLeave({ signedIn: !!account(), time: formatTime(spans.current().st.seconds), also }))) return;
   }
   if (player) stopWorkout();
@@ -2346,7 +2240,7 @@ const hub = initHub({
   race: function hubRace(stage: Stage) { if (stageNotHere(stage, () => hubRace(stage))) return; leaveHub(); beginRace(stage, tourStageNumber(stage.id)); },
   joinEvent: async (row) => {
     await joinEvent(row); // checks the account and the join window, and shows why if it can't
-    if (eventState) leaveHub();
+    if (raceSession.event) leaveHub();
   },
   startPlan: (id) => {
     const plan = planById(id);

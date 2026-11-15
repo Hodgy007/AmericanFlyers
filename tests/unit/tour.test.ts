@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ME, type ResultRow } from '../../src/race';
 import {
   JERSEY_COLOURS, TOUR_STAGE_IDS, getTour, jerseyHolders, loadTour, myJerseys, onTourChange, priorTotals, quitTour, recordStage,
-  refWkg, simulateStage, standings, startTour, tourComplete, tourJersey, tourStageNumber, totals, type TourProgress,
+  refWkg, simulateStage, standings, startTour, tourComplete, tourJersey, tourJerseyFor, tourStageNumber, totals, type TourProgress,
 } from '../../src/tour';
 
 const row = (id: string, time: number, sprint = 0, kom = 0): ResultRow => ({ id, name: id, team: -1, time, sprint, kom, you: id === ME });
@@ -165,5 +165,16 @@ describe('simulateStage', () => {
     const p: TourProgress = { id: 't', seed: 2, stage: 0, results: [] };
     const place = (ftp: number) => simulateStage(p, TOUR_STAGE_IDS[0], { ftp, riderKg: 70, bikeKg: 8 }).findIndex((r) => r.you);
     expect(place(380)).toBeLessThan(place(180));
+  });
+});
+
+describe('tourJerseyFor', () => {
+  it('is the jersey you lead in only on a tour stage', () => {
+    loadTour(progress());
+    expect(tourJerseyFor(TOUR_STAGE_IDS[2])).toEqual(JERSEY_COLOURS.yellow);
+    expect(tourJerseyFor('route66')).toBeNull();
+  });
+  it('is null on a tour stage with no tour', () => {
+    expect(tourJerseyFor(TOUR_STAGE_IDS[0])).toBeNull();
   });
 });

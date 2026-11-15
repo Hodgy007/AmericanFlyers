@@ -2,7 +2,9 @@
 // so it can be unit-tested: the shared clock, the "you've been dropped" watcher
 // for group rides, and merging real riders' results with the bots'.
 
-import type { EventKind } from './schedule';
+import type { EventRow } from './cloud/events';
+import { countdownLabel, type EventKind } from './schedule';
+import type { Stage } from './stages';
 
 /** A scheduled event you have joined. */
 export interface ActiveEvent {
@@ -29,6 +31,56 @@ export const secondsSinceStart = (ev: Pick<ActiveEvent, 'startsAtMs'>, serverNow
 /** Has the event run its course (a group ride ends after its duration)? */
 export const eventOver = (ev: Pick<ActiveEvent, 'startsAtMs' | 'durationMin'>, serverNowMs: number) =>
   serverNowMs > ev.startsAtMs + ev.durationMin * 60000;
+
+/** The event a joined row becomes. `startsAtMs` is the row's start as milliseconds since the epoch. */
+export function activeEvent(row: EventRow, startsAtMs: number): ActiveEvent {
+  return {
+    id: row.id, kind: row.kind, stageId: row.stage_id, title: row.title, startsAtMs, seed: row.seed, paceWkg: row.pace_wkg, durationMin: row.duration_min,
+  };
+}
+
+/**
+ * Is the event's stage here to ride? `stage` is what the library gave for the row's stage id: it comes back as
+ * another stage when the id is unknown, and a race needs a stage with a finish line.
+ */
+export const eventStageAvailable = (row: Pick<EventRow, 'stage_id' | 'kind'>, stage: Pick<Stage, 'id' | 'finish'>) =>
+  stage.id === row.stage_id && !(row.kind === 'race' && stage.finish === null);
+
+/** A group ride holds the rider on the line until its start; a race holds through the race's own countdown instead. */
+export const eventHolding = (ev: Pick<ActiveEvent, 'kind' | 'startsAtMs'>, serverNowMs: number) =>
+  ev.kind === 'group_ride' && secondsSinceStart(ev, serverNowMs) < 0;
+
+/** What the toast says on joining: `t` is `secondsSinceStart` at that moment. */
+export const joinMessage = (title: string, t: number) =>
+  t < 0 ? `You’re on the line for ${title}. The start is synchronised for everyone.` : `${title} is under way. Go!`;
+
+// ---------------------------------------------------------- lobby strip ----
+
+/** Minutes and seconds, for the lobby strip: 4:07. */
+export const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** The lobby strip's status before the start: `t` is `secondsSinceStart` (negative), `others` the other riders on the line. */
+export function lobbyStatus(t: number, others: number): string {
+  const where = others > 0 ? ` · ${others} other rider${others === 1 ? '' : 's'} on the line` : '';
+  return `${t > -3600 ? `Starts in ${mmss(-t)}` : countdownLabel(-t * 1000)}${where}`;
+}
+
+export const GROUP_RIDE_OVER_MESSAGE = 'The group ride is over. Thanks for riding!';
+
+/** What the rider is told when a `DropWatcher` note comes up. */
+export function dropMessage(note: 'dropped' | 'back'): { text: string; ms: number } {
+  return note === 'dropped'
+    ? { text: 'You’ve been dropped. The group keeps its pace and won’t wait: dig in to get back on, or ride your own ride.', ms: 6000 }
+    : { text: 'Back with the group. Nice work!', ms: 3500 };
+}
+
+/** The lobby strip's status on a group ride: where the rider is against the back of the group (`gapM`, negative if ahead of it) and the ride's clock. */
+export function groupRideStatus(gapM: number, dropped: boolean, t: number): string {
+  const where = dropped
+    ? `${Math.round(gapM)} m off the back`
+    : gapM > 8 ? `${Math.round(gapM)} m behind the group` : gapM < -8 ? `${Math.round(-gapM)} m ahead of the group` : 'with the group';
+  return `${where} · ${mmss(t)} in`;
+}
 
 // ------------------------------------------------------------ group ride ----
 
@@ -69,6 +121,11 @@ export class DropWatcher {
 }
 
 // ---------------------------------------------------------------- results ----
+
+/** Does this ride count towards the event results? Not a demo ride, not a sped-up clock, and only if the rider pedalled. */
+export const eventResultEligible = (demoUsed: boolean, timeScale: number, avgPower: number) => !demoUsed && timeScale === 1 && avgPower > 0;
+
+export const INELIGIBLE_NOTE = 'Demo rides and sped-up clocks don’t count towards the event results.';
 
 export interface BotResult { name: string; time: number; team: number; you: boolean }
 export interface RealResult { name: string; finish_s: number; is_me: boolean }
