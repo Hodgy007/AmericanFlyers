@@ -44,9 +44,10 @@ import { initRidersUi } from './ridersUi';
 import { Ghost, raceTime } from './ghost';
 import { Sound } from './sound';
 import { Peloton } from './peloton';
-import { draftFrom, DRAFT_MAX_GAP, DRAFT_SWEET_SPOT, type Draft } from './draft';
+import { createRideSurroundings, parseUrlWind } from './rideSurroundings';
+import { DRAFT_MAX_GAP, DRAFT_SWEET_SPOT } from './draft';
 // Wind, echelons, the mini-map and the climb preview (world/wind.ts, miniMap.ts, climbUi.ts, windUi.ts).
-import { draftShift, wind } from './world/wind';
+import { wind } from './world/wind';
 import { crowdNear } from './world/crowdZones'; // where crowds line the road (sound and the spectators drawn by the world)
 import { initWindUi } from './windUi';
 import { MiniMap } from './miniMap';
@@ -189,10 +190,6 @@ let raceCommentary: RaceCommentary | null = null;
 let clipsPreloaded = false;
 /** The scheduled event you have joined (a race or a group ride), if any. */
 let eventState: { ev: ActiveEvent; drop: DropWatcher; demoUsed: boolean } | null = null;
-let draft: Draft | null = null; // the rider just ahead, if any
-let lastCrossShift = 0; // crosswind echelon: metres right of a rider's line the shelter sits
-let draftSaving = 0; // fraction of air drag saved, eased
-let roadRiders: OtherRider[] = []; // live riders and pro teams on the road now (for ride-ons)
 // The AI coach and rival for this ride (src/ai/aiRide.ts). Not in the entry chunk: `ai` stays null
 // until the controller has loaded (a rider who opted in, a rival chosen, the Rivals dialog or the
 // AI switches opened), and every hook below is `ai?.…`, so until then they do nothing.
@@ -276,7 +273,7 @@ function controlTrainer() {
   // In someone's draft the trainer's wind resistance drops too, so it feels easier;
   // aero kit from the garage (frame, wheels, helmet, suit) trims it a little as well.
   // Thinner air at altitude lowers it as well, as in the app's own physics.
-  const dragFactor = Math.round((1 - draftSaving) * garage.effects().cdaFactor * (airDensityAt(currentStage(), ride.distance) / SEA_LEVEL_AIR_DENSITY) * 50) / 50;
+  const dragFactor = Math.round((1 - around.draftSaving) * garage.effects().cdaFactor * (airDensityAt(currentStage(), ride.distance) / SEA_LEVEL_AIR_DENSITY) * 50) / 50;
   // The road's wind goes to the trainer's simulation too (headwind positive), in half-metre steps.
   const headwind = Math.round(roadWind(ride.distance).head * 2) / 2;
   if (Math.abs(target - lastSentGrade) < 0.1 && dragFactor === lastSentWind && headwind === lastSentHeadwind) return;
@@ -394,7 +391,6 @@ if (startupNote) window.setTimeout(() => { startupNoteUntil = performance.now() 
 const world = new World($<HTMLCanvasElement>('scene'), markerConfig());
 world.setAtmosphere(settings.timeOfDay, settings.weather);
 // Wind, and the mini-map and climb preview.
-let windStage: Stage | null = null;
 const windUi = initWindUi($('wind-chip'), $('wind-arrow'), $('wind-text'));
 const miniMap = new MiniMap($('minimap'), $<HTMLCanvasElement>('minimap-canvas'));
 const climbUi = initClimbUi({ card: $('climb-card'), title: $('cc-title'), sub: $('cc-sub'), canvas: $<HTMLCanvasElement>('cc-profile') });
@@ -437,14 +433,6 @@ const komUi = initSegmentUi(
 komUi.reset(); // finds the stage's segments now, so timing starts with the first frame
 
 const lateralOf = (id: string) => world.lateralOf(id);
-
-// `?wind=8,90` forces the wind: speed in m/s, then the degrees it blows towards, turning right from the way the stage starts (90 = from the left). For testing.
-const urlWind = (() => {
-  const raw = new URLSearchParams(location.search).get('wind');
-  if (!raw) return undefined;
-  const [ms, angle] = raw.split(',').map(Number);
-  return Number.isFinite(ms) ? { ms, angle: Number.isFinite(angle) ? angle : 90 } : undefined;
-})();
 
 // ---- The hub (src/hub): while it is open nothing rides; the world just circles your rider, behind the blur. ----
 let lastHubDraw = 0;
@@ -523,6 +511,34 @@ function simulate(now: number, limits: Limits) {
   for (let i = 0; i < s.count; i++) simStep(s.dt, s.startMs + (i + 1) * s.realMs);
 }
 
+/** The wind, riders, race, AI rival, steering and draft around you (src/rideSurroundings.ts). It owns that state; this file reads it. */
+const around = createRideSurroundings({
+  ride,
+  live,
+  settings: () => settings,
+  urlWind: parseUrlWind(location.search), // `?wind=8,90` forces the wind: speed in m/s, then the degrees it blows towards, turning right from the way the stage starts (90 = from the left). For testing.
+  wind,
+  setRoadWet,
+  weather: () => world.weather,
+  stage: currentStage,
+  headingAt,
+  gradeAt,
+  roadWind,
+  presence: { riders: () => presence.riders() },
+  peloton,
+  race: () => race,
+  eventState: () => eventState,
+  eventHolding,
+  demo: () => demo,
+  ai: () => ai,
+  workoutTarget: () => (player && !player.done && !player.paused ? player.targetWatts() : null),
+  workoutElapsed: () => (player ? player.elapsed : null),
+  heartRate: currentHr,
+  steering,
+  lane: { current: () => world.currentLane, set: (target) => world.setLane(target) },
+  lateralOf,
+});
+
 /** What the simulation step (src/rideSim.ts) calls for the things around the rider. Built once; every member reads the live state. */
 const rideDeps: RideDeps = {
   course: {
@@ -546,13 +562,13 @@ const rideDeps: RideDeps = {
     live.lastReadingAt = now;
     return true;
   },
-  surroundings: simSurroundings,
-  draftSaving: () => draftSaving,
+  surroundings: (dt) => around.step(dt),
+  draftSaving: () => around.draftSaving,
   rider() {
     const equipment = garage.effects(); // frame, wheels, tyres, helmet and suit change mass, drag area and rolling resistance
     return { massKg: settings.riderKg + settings.bikeKg + equipment.massKg, cdaFactor: equipment.cdaFactor, crrDelta: equipment.crrDelta };
   },
-  proNearby: () => roadRiders.some((r) => r.team && Math.abs(r.distance - ride.distance) < 30),
+  proNearby: () => around.roadRiders.some((r) => r.team && Math.abs(r.distance - ride.distance) < 30),
   holding: () => !!race?.holding || eventHolding(),
   segmentFrame: (distance, movingTime, work, riding) => komUi.frame(distance, movingTime, work, riding),
   onFinish: showFinish,
@@ -585,52 +601,6 @@ function simStep(dt: number, now: number) {
   }
 }
 
-/**
- * The simulation step's "surroundings" hook: the wind, the race, the pro teams, the AI rival, other riders, steering and the draft.
- * Side effects on other subsystems, so it stays here; it leaves `draftSaving` and `roadRiders` for the rest of the step.
- */
-function simSurroundings(dt: number) {
-  // The wind: follows the stage and the weather being shown.
-  if (windStage !== currentStage()) {
-    windStage = currentStage();
-    wind.setStage(urlWind ? { id: windStage.id, wind: urlWind } : windStage, headingAt(0));
-  }
-  wind.enabled = settings.wind;
-  wind.setWeather(world.weather);
-  setRoadWet(world.weather === 'rain' && !race && !eventState); // wet bends are slower; races and events share one field, so they stay on dry rules
-  wind.update(dt);
-  const crossShift = draftShift(roadWind(ride.distance).cross); // the sheltered spot sits this far to the right of a rider's line
-  lastCrossShift = crossShift;
-
-  // Other riders on the road, and the draft from the one just ahead.
-  // A copy: presence.riders() returns its own reused array, and the pro teams and the AI rival are added to this one.
-  const liveRiders: OtherRider[] = settings.rideTogether ? presence.riders().slice() : [];
-  if (race) race.update(dt, ride.distance, ride.speed); // the field races with you
-  if (settings.proTeams || race || eventState) {
-    peloton.update(dt);
-    liveRiders.push(...peloton.riders());
-  }
-  // ---- AI coach and rival (src/ai/): tips as you ride, and a rival on the road ----
-  if (ai) {
-    const ahead = liveRiders.reduce((m, r) => (r.distance > ride.distance && r.distance - ride.distance < m ? r.distance - ride.distance : m), Infinity);
-    const target = player && !player.done && !player.paused ? player.targetWatts() : null;
-    const rival = ai.frame({
-      dt, movingTime: ride.movingTime, distance: ride.distance, watts: live.power, cadence: live.cadence, hr: currentHr(),
-      gradePct: gradeAt(ride.distance) * 100, finish: currentStage().finish, finishS: ride.finishTime, finished: ride.finished,
-      targetW: target, workoutS: player ? player.elapsed : null, gapAheadM: Number.isFinite(ahead) ? ahead : null,
-      drafting: !!draft && draft.saving > 0.01, riding: !ride.finished && !race?.holding && !eventHolding(),
-    });
-    if (rival) liveRiders.push(rival);
-  }
-  // ---- end of AI ----
-  roadRiders = liveRiders;
-  steering.update(dt, { autoSteer: settings.autoSteer, distance: ride.distance, riders: liveRiders, lateralOf: lateralOf, shift: crossShift, headingAt });
-  world.setLane(steering.target);
-  draft = draftFrom(ride.distance, liveRiders, 60, { lane: world.currentLane, lateralOf, shift: crossShift });
-  draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
-  if (eventState && demo) eventState.demoUsed = true; // demo riding keeps you off the event results
-}
-
 /** The drawing and screen updates for one animation frame. `dt` is what the world animates by (the drawn frame's time). */
 function render(now: number, dt: number) {
   const grade = gradeAt(ride.distance);
@@ -638,7 +608,7 @@ function render(now: number, dt: number) {
   sound.update(dt, { speedMs: ride.speed, pedalling: live.power > 0 || live.cadence > 0, crowd: crowdNear(ride.distance), cassetteRevs: drivetrain.crankRate * drivetrain.ratio });
   updateMusic(); // the riding score follows the speed and the road
 
-  const others = roadRiders.slice(); // the riders on the road as of the last simulation step, plus the ghost below
+  const others = around.roadRiders.slice(); // the riders on the road as of the last simulation step, plus the ghost below
   const g = race ? null : ghostRider(); // no ghost in a race
   if (g) others.push(g);
   else if (settings.ghost && !race) {
@@ -760,17 +730,18 @@ function updateHud(grade: number) {
  */
 function updateDraftPanel() {
   const panel = $('draft-panel');
+  const draft = around.draft;
   if (!draft || ride.finished) { panel.hidden = true; return; }
   panel.hidden = false;
   const imperial = settings.units === 'imperial';
   const gapText = imperial ? `${Math.round(draft.gap * 3.28084)} ft` : `${draft.gap < 10 ? draft.gap.toFixed(1) : Math.round(draft.gap)} m`;
   const v = ride.speed;
   const airSpeed = Math.max(0, v + roadWind(ride.distance).head);
-  const watts = 0.5 * airDensityAt(currentStage(), ride.distance) * DEFAULT_PARAMS.cda * garage.effects().cdaFactor * airSpeed * airSpeed * v * draftSaving / 0.976;
+  const watts = 0.5 * airDensityAt(currentStage(), ride.distance) * DEFAULT_PARAMS.cda * garage.effects().cdaFactor * airSpeed * airSpeed * v * around.draftSaving / 0.976;
   // Behind them but off their line: the gauge says which way to move.
   const offLine = draft.gap <= DRAFT_MAX_GAP && draft.overlap < 0.5;
   const move = draft.offset < 0 ? '◀' : '▶';
-  const inDraft = draftSaving > 0.03 && !offLine;
+  const inDraft = around.draftSaving > 0.03 && !offLine;
   panel.classList.toggle('on', inDraft);
   panel.classList.toggle('sweet', draft.gap <= DRAFT_SWEET_SPOT);
   const who = draft.team ?? draft.name;
@@ -778,9 +749,9 @@ function updateDraftPanel() {
   $('draft-title').textContent = inDraft ? `In ${who}’s draft${group}` : `${who} ahead${group}`;
   $('draft-gap').textContent = gapText;
   $('draft-hint').textContent = offLine
-    ? `Move ${move} ${Math.abs(lastCrossShift) >= 0.3 ? 'to the sheltered side of their wheel (crosswind)' : 'into their wheel'}${draft.gap > DRAFT_SWEET_SPOT * 2 ? ' and close up' : ''}`
+    ? `Move ${move} ${Math.abs(around.lastCrossShift) >= 0.3 ? 'to the sheltered side of their wheel (crosswind)' : 'into their wheel'}${draft.gap > DRAFT_SWEET_SPOT * 2 ? ' and close up' : ''}`
     : inDraft
-    ? `−${Math.round(draftSaving * 100)}% drag${watts >= 5 ? ` · saving ~${Math.round(watts)} W` : ''}${draft.overlap < 0.9 ? ` · line up on their wheel ${move}` : draft.gap > DRAFT_SWEET_SPOT ? ` · closer than ${imperial ? '7 ft' : `${DRAFT_SWEET_SPOT} m`} for the most` : ''}`
+    ? `−${Math.round(around.draftSaving * 100)}% drag${watts >= 5 ? ` · saving ~${Math.round(watts)} W` : ''}${draft.overlap < 0.9 ? ` · line up on their wheel ${move}` : draft.gap > DRAFT_SWEET_SPOT ? ` · closer than ${imperial ? '7 ft' : `${DRAFT_SWEET_SPOT} m`} for the most` : ''}`
     : `Close to ${imperial ? '40 ft' : `${DRAFT_MAX_GAP} m`} to get in the draft`;
   // The bar fills as you close in: empty at 60 m, full at the sweet spot.
   const fill = Math.max(0, Math.min(1, (60 - draft.gap) / (60 - DRAFT_SWEET_SPOT)));
@@ -2440,7 +2411,7 @@ peloton.reset(ride.distance);
 const rideOns = new RideOns(() => settings.rideTogether && !document.body.classList.contains('at-home'));
 const rideOnsUi = initRideOnsUi({
   rideOns,
-  riders: () => roadRiders,
+  riders: () => around.roadRiders,
   myDistance: () => ride.distance,
   showEmote: (id, emoji) => world.showEmote(id, emoji),
   toast,
