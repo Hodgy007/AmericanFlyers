@@ -19,7 +19,6 @@ import { World, type CameraMode } from './world/world';
 import { loadSettings, migrateSettings, normalizeSettings, saveSettings, type Settings } from './settings';
 import { proTeamsOnRoad, type RideMode } from './rideMode';
 import { formatTime, Hud, openDataBlocks } from './hud';
-import { RideStats } from './stats';
 import { Drivetrain, gearCadence } from './drivetrain';
 import { createTrainerControl, gearReadout } from './trainerControl';
 import { drawWorkout } from './workouts/graph';
@@ -32,10 +31,8 @@ import {
 } from './summaryContent';
 import { account, onAccountChange, restoreSession } from './cloud/account';
 import { forgetLocalCopies, onSyncError, pushSettings, recordFtp, saveActivity, stageGhost, stageLeaderboard, syncOnSignIn, type Activity, type LeaderboardRow } from './cloud/sync';
-import { RideRecorder } from './cloud/recorder';
-import { buildActivityRow } from './rideActivity';
 import { createRideSpans, MIN_RIDE_S, type Span } from './rideSpans';
-import { judgeSnapshot, parseSnapshot, replayStats, serialiseSnapshot, snapshotSummary, SNAPSHOT_EVERY_MS, SNAPSHOT_KEY, SNAPSHOT_MIN_S, type RideSnapshot } from './rideSnapshot';
+import { createSnapshotKeeper, interruptedActivity, restoreSpan, resumedFlags, resumedRide, type RideSnapshot } from './rideSnapshot';
 import { askToResume } from './hub/resume';
 import { initAccountUi } from './cloud/accountBar';
 import { lazy, loadOnClick, markFirstFrame, onLazyError, prefetchWhenIdle, use } from './lazy';
@@ -904,67 +901,37 @@ function keepOffline(activity: Activity, userId = account()?.id) {
 // Every ~20 s while a ride is under way (and when the page is hidden or closed) a copy of it goes to localStorage
 // (src/rideSnapshot.ts). At the next visit the rider is offered it back: Resume, Save it and start fresh, or Discard.
 
-let snapshotOwned = false; // this run has written the copy: only then may it delete it (an earlier run's copy waits for the rider's answer)
-let snapshotHandledFor: string | null = null; // the account whose leftover copy has been dealt with: writing starts after that, so it can't overwrite one
-let lastSnapshotAt = 0;
-
-const readSnapshotRaw = () => { try { return localStorage.getItem(SNAPSHOT_KEY); } catch { return null; } };
-const removeSnapshot = () => { try { localStorage.removeItem(SNAPSHOT_KEY); } catch { /* storage blocked */ } };
-
-/** Deletes this run's copy: the ride was saved and ended, reset, or is too short. Never touches one left by an earlier run. */
-function clearSnapshot() {
-  if (!snapshotOwned) return;
-  snapshotOwned = false;
-  removeSnapshot();
-}
-
-/** Writes the safety copy of the activity being recorded, if a ride is under way. */
-function writeSnapshot() {
-  const me = account()?.id;
-  if (!me || snapshotHandledFor !== me || hub.isOpen() || document.body.classList.contains('at-home')) return;
-  if (race || eventState || ride.finished) return; // races and scheduled events aren't resumable; a finished ride is already saved
-  const sp = spans.current();
-  if (sp.rec.seconds < SNAPSHOT_MIN_S) { clearSnapshot(); return; }
-  const t = spans.totals(sp);
-  const snap: RideSnapshot = {
-    v: 1, takenAt: Date.now(), accountId: me, stageId: currentStage().id, stageName: currentStage().name,
-    ride: { distance: ride.distance, startDistance: ride.startDistance, movingTime: ride.movingTime, climbed: ride.climbed, work: ride.work, proM: ride.proM, planCounted: ride.planCounted },
-    flags: { usedDemo: rideFlags.usedDemo, timeScale: rideFlags.timeScale, splitByWorkout: !!rideFlags.splitByWorkout },
-    span: {
-      id: sp.rec.id, startedAt: sp.rec.startedAt?.toISOString() ?? null, samples: sp.rec.samples,
-      dist0: sp.base.dist, climb0: sp.base.climbed, proM0: sp.base.proM,
-      workout: sp.workout, workoutCompleted: sp.completed, distanceM: t.distance, climbedM: t.climbed,
-    },
-  };
-  try {
-    localStorage.setItem(SNAPSHOT_KEY, serialiseSnapshot(snap));
-    snapshotOwned = true;
-  } catch {
-    removeSnapshot(); // it didn't fit (or storage is blocked): drop it silently rather than leave an old one that looks current
-    snapshotOwned = false;
-  }
-}
-
-/** Called every frame (and every background tick): rewrites the copy about every 20 s. */
-function snapshotTick(now: number) {
-  if (now - lastSnapshotAt < SNAPSHOT_EVERY_MS) return;
-  lastSnapshotAt = now;
-  writeSnapshot();
-}
-const writeSnapshotNow = () => loopGuard.run('snapshot', writeSnapshot);
+const snapshots = createSnapshotKeeper({
+  storage: () => localStorage,
+  now: () => Date.now(),
+  accountId: () => account()?.id,
+  idle: () => hub.isOpen() || document.body.classList.contains('at-home'),
+  notResumable: () => !!(race || eventState || ride.finished), // races and scheduled events aren't resumable; a finished ride is already saved
+  seconds: () => spans.current().rec.seconds,
+  input: (me) => {
+    const sp = spans.current();
+    const t = spans.totals(sp);
+    return {
+      now: Date.now(), accountId: me, stage: { id: currentStage().id, name: currentStage().name }, ride, flags: rideFlags,
+      span: { id: sp.rec.id, startedAt: sp.rec.startedAt, samples: sp.rec.samples, base: sp.base, workout: sp.workout, completed: sp.completed, distanceM: t.distance, climbedM: t.climbed },
+    };
+  },
+  stageExists: (id) => stageById(id).id === id,
+  rideStarted: () => spans.current().st.seconds > 0 || !!race || !!eventState,
+  imperial: () => settings.units === 'imperial',
+  ask: askToResume,
+  resume: (snap) => resumeSnapshot(snap),
+  saveInterrupted: (snap) => saveInterrupted(snap),
+});
+const clearSnapshot = () => snapshots.clear();
+const snapshotTick = (now: number) => snapshots.tick(now);
+const writeSnapshotNow = () => loopGuard.run('snapshot', snapshots.write);
 window.addEventListener('pagehide', writeSnapshotNow);
 document.addEventListener('visibilitychange', () => { if (pageHidden()) writeSnapshotNow(); });
 
 /** An interrupted ride, saved as it was (no resuming): the same path as any ride, including the offline queue. */
 async function saveInterrupted(snap: RideSnapshot) {
-  const flags: RideFlags = { usedDemo: snap.flags.usedDemo, timeScale: snap.flags.timeScale, splitByWorkout: snap.flags.splitByWorkout };
-  const stats = replayStats(snap.span.samples, new RideStats(zoneRefs));
-  const row = buildActivityRow({
-    id: snap.span.id, startedAt: snap.span.startedAt ? new Date(snap.span.startedAt) : null, samples: snap.span.samples, stats,
-    stage: { id: snap.stageId, name: snap.stageName }, workout: snap.span.workout, workoutCompleted: snap.span.workoutCompleted,
-    finished: false, distanceM: snap.span.distanceM, climbedM: snap.span.climbedM, finishS: null, demo: isDemoRide(flags),
-    racePlace: null, raceSize: null, proM: Math.max(0, snap.ride.proM - snap.span.proM0), ftp: settings.ftp, maxHr: settings.maxHr,
-  });
+  const row = interruptedActivity(snap, zoneRefs);
   try {
     await saveActivity(row, snap.accountId);
     accountUi.invalidate();
@@ -983,24 +950,12 @@ function resumeSnapshot(snap: RideSnapshot) {
   if (stageNotHere(stage, () => resumeSnapshot(snap))) return;
   leaveHub();
   chooseStage(stage); // (starts afresh, so nothing of an earlier ride is left)
-  Object.assign(ride, {
-    distance: snap.ride.distance, startDistance: snap.ride.startDistance, speed: 0, movingTime: snap.ride.movingTime,
-    climbed: snap.ride.climbed, work: snap.ride.work, proM: snap.ride.proM, planCounted: snap.ride.planCounted,
-    finished: false, finishTime: 0, racePlace: 0, raceSize: 0,
-  });
+  Object.assign(ride, resumedRide(snap));
   ride.lastElev = elevationAt(ride.distance);
-  rideFlags.usedDemo = snap.flags.usedDemo || snap.flags.timeScale !== 1; // a sped-up clock is not a ride for the leaderboards
-  rideFlags.splitByWorkout = snap.flags.splitByWorkout || snap.span.workout !== null;
-  // A workout that was under way is not resumed; its activity carries on as a ride (same id and title, so nothing recorded is lost).
-  spans.ride = {
-    rec: RideRecorder.restore(snap.span.id, snap.span.startedAt, snap.span.samples),
-    // The statistics are rebuilt by replaying the recorded one-second samples: good enough (see replayStats), not exact.
-    st: replayStats(snap.span.samples, new RideStats(zoneRefs)),
-    base: { dist: snap.span.dist0, climbed: snap.span.climb0, proM: snap.span.proM0 },
-    saved: 0, workout: snap.span.workout, completed: snap.span.workoutCompleted,
-  };
+  Object.assign(rideFlags, resumedFlags(snap));
+  spans.ride = restoreSpan(snap, zoneRefs);
   spans.workout = null;
-  snapshotOwned = true; // this run now writes the copy
+  snapshots.adopt(); // this run now writes the copy
   peloton.reset(ride.distance);
   komUi.reset();
   world.jumped();
@@ -1008,36 +963,7 @@ function resumeSnapshot(snap: RideSnapshot) {
   toast(`Welcome back: your ride on ${currentStage().name} is picked up where it stopped. Pedal to carry on.`, 6000);
 }
 
-let offering = false;
-/** Once the session has settled for an account: deals with a copy left by an interrupted ride (offers it, saves it quietly, or drops it). */
-async function offerSnapshot() {
-  const me = account()?.id;
-  if (!me || offering || snapshotHandledFor === me) return;
-  offering = true;
-  try {
-    const raw = readSnapshotRaw();
-    if (!raw) return;
-    const snap = parseSnapshot(raw);
-    if (!snap) { removeSnapshot(); return; } // not ours to read (another version, damaged)
-    if (snap.accountId !== me) return; // another rider's: leave it for them
-    const verdict = judgeSnapshot(snap, Date.now(), me, (id) => stageById(id).id === id);
-    if (verdict === 'drop') { removeSnapshot(); return; }
-    // Too old, its stage gone, or a ride already started this visit: keep it rather than ask. It is saved as it was.
-    if (verdict === 'save' || spans.current().st.seconds > 0 || race || eventState) {
-      await saveInterrupted(snap);
-      removeSnapshot();
-      return;
-    }
-    const choice = await askToResume({ stageName: snap.stageName, summary: snapshotSummary(snap, Date.now(), settings.units === 'imperial') });
-    if (account()?.id !== me) return; // signed out while the question was open
-    if (choice === 'resume') { removeSnapshot(); resumeSnapshot(snap); }
-    else if (choice === 'save') { removeSnapshot(); await saveInterrupted(snap); }
-    else removeSnapshot();
-  } finally {
-    offering = false;
-    if (account()?.id === me) snapshotHandledFor = me;
-  }
-}
+const offerSnapshot = () => snapshots.offer();
 
 // --------------------------------------------------- rides saved offline ----
 // Rides that couldn't be saved wait on this device (src/rideQueue.ts) and upload when
@@ -2264,7 +2190,7 @@ onAccountChange(async (a) => {
     if (hadOwner) abandonRide(); // queues any unsaved outgoing ride under its original owner, never the new account
     rideUserId = a?.id ?? null;
     if (hadOwner) forgetLocalCopies();
-    snapshotHandledFor = null; // the next account's leftover copy (if any) is offered afresh
+    snapshots.forgetHandled(); // the next account's leftover copy (if any) is offered afresh
     ghost = null;
     ghostSeq++;
   }
