@@ -29,7 +29,9 @@ async function watchCsp(page: Page) {
 test('the home page, with the email form open, reports no CSP violation', async ({ page }) => {
   const found = await watchCsp(page);
   await mockNeon(page, { signedIn: false });
-  await page.goto('/?hero=dog');
+  const response = await page.goto('/?hero=dog');
+  expect(response?.headers()['content-security-policy-report-only']).toContain('report-uri /api/csp-report');
+  expect(response?.headers()['reporting-endpoints']).toBe('csp="/api/csp-report"');
   await expect(page.locator('#home')).toBeVisible();
   await press(page, '#home-email-toggle');
   await expect(page.locator('#home-email')).toBeVisible();

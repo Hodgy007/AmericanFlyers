@@ -6,6 +6,10 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Content-Security-Policy reports
+
+- **Violation reports now go somewhere.** The policy (still report-only) has `report-uri /api/csp-report` and `report-to csp`, with a `Reporting-Endpoints` header. The new function `api/csp-report.ts` accepts both report formats, strips query strings and fragments and drops the referrer, ignores browser-extension noise, logs each report as a `csp-report {...}` line in the Vercel logs and, when a Sentry DSN is set, forwards it to Sentry's security endpoint. `vite preview` and `vite dev` answer the endpoint with `204`. See [Security](../developer-guide/security.md#content-security-policy).
+
 ### Code review follow-ups
 
 From a full review of the app (pull request #47).

@@ -1,9 +1,10 @@
 import { defineConfig, type Plugin } from 'vite';
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
-import { CSP_HEADER, NEON_DATA_API_ORIGIN, buildCsp } from './csp.mjs';
+import { CSP_HEADER, NEON_DATA_API_ORIGIN, REPORTING_HEADER, REPORTING_VALUE, REPORT_PATH, buildCsp } from './csp.mjs';
 
 // Sentry: the DSN is public (it only lets the browser send error reports).
 // The Vercel Sentry integration provides it as SENTRY_DSN or
@@ -98,7 +99,24 @@ function shortCommit(): string | null {
 // local runs see the violations. A VITE_NEON_DATA_API_URL override is allowed too.
 const indexHtml = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
 const dataApiOrigin = env.VITE_NEON_DATA_API_URL ? new URL(env.VITE_NEON_DATA_API_URL).origin : NEON_DATA_API_ORIGIN;
-const cspHeaders = (dev: boolean) => ({ [CSP_HEADER]: buildCsp(indexHtml, { dev, dataApiOrigin }) });
+const cspHeaders = (dev: boolean) => ({ [CSP_HEADER]: buildCsp(indexHtml, { dev, dataApiOrigin }), [REPORTING_HEADER]: REPORTING_VALUE });
+
+// In production /api/csp-report is a Vercel function (api/csp-report.ts). `vite preview` and `vite dev` have no functions,
+// so they answer the report with 204 and keep it, so a report does not show up as a failed request in the browser tests.
+function cspReportSink(): Plugin {
+  const sink = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    if (req.url?.split('?')[0] !== REPORT_PATH) return next();
+    if (req.method !== 'POST') { res.statusCode = 405; res.setHeader('Allow', 'POST'); return res.end(); }
+    req.resume();
+    res.statusCode = 204;
+    res.end();
+  };
+  return {
+    name: 'af-csp-report-sink',
+    configureServer: (server) => { server.middlewares.use(sink); },
+    configurePreviewServer: (server) => { server.middlewares.use(sink); },
+  };
+}
 
 export default defineConfig({
   base: './',
@@ -132,6 +150,7 @@ export default defineConfig({
   plugins: [
     serviceWorkerVersion(),
     preloadApp(),
+    cspReportSink(),
     ...(uploadMaps
       ? [
           sentryVitePlugin({

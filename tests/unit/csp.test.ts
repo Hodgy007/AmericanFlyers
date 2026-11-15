@@ -1,17 +1,28 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CSP_HEADER, buildCsp, inlineScriptHashes } from '../../csp.mjs';
+import { CSP_HEADER, REPORTING_HEADER, REPORTING_VALUE, buildCsp, inlineScriptHashes } from '../../csp.mjs';
 
 // vercel.json carries the Content-Security-Policy text for production; vite.config.ts sends the same from csp.mjs
 // for `vite preview` and `vite dev`, so the browser tests see what production would. They must not drift apart.
 
 const html = readFileSync('index.html', 'utf8');
 const vercel = JSON.parse(readFileSync('vercel.json', 'utf8')) as { headers: { source: string; headers: { key: string; value: string }[] }[] };
+const vercelFunctions = (JSON.parse(readFileSync('vercel.json', 'utf8')) as { functions: Record<string, { maxDuration: number }> }).functions;
 const sent = vercel.headers.find((h) => h.source === '/(.*)')!.headers;
 
 describe('Content-Security-Policy', () => {
   it('vercel.json carries the policy csp.mjs builds from index.html (run `npm run csp:sync` if this fails)', () => {
     expect(sent.find((h) => h.key === CSP_HEADER)?.value).toBe(buildCsp(html));
+  });
+
+  it('sends reports to /api/csp-report: report-uri and report-to in the policy, and the matching Reporting-Endpoints header', () => {
+    const policy = buildCsp(html);
+    expect(policy).toContain('report-uri /api/csp-report');
+    expect(policy).toContain('report-to csp');
+    expect(sent.find((h) => h.key === REPORTING_HEADER)?.value).toBe('csp="/api/csp-report"');
+    expect(REPORTING_VALUE).toBe('csp="/api/csp-report"');
+    expect(policy).toContain("connect-src 'self'"); // so the browser may POST the report to our own origin
+    expect(vercelFunctions['api/csp-report.ts']?.maxDuration).toBe(5);
   });
 
   it('is report-only for now: no enforcing header yet', () => {
