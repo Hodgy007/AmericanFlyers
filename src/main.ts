@@ -11,8 +11,9 @@ import { loadStage, stageLoader, stageProfile, type Stage } from './stages';
 import { startupStage, startupStageFailed } from './startupStage';
 import { stageFigures } from './hub/data';
 import { addRoute, allStages, deleteRoute, stageById } from './routes/library';
-import { airDensityAt, stepSpeed, DEFAULT_PARAMS, SEA_LEVEL_AIR_DENSITY } from './physics';
-import { limitCornerSpeed, setRoadWet } from './cornering'; // slowing for bends on descents
+import { airDensityAt, DEFAULT_PARAMS, SEA_LEVEL_AIR_DENSITY } from './physics';
+import { setRoadWet } from './cornering'; // wet bends are slower (the braking itself is in rideSim.ts)
+import { createRideSim, resetRideState, stepRide, STALE_MS, type RideDeps } from './rideSim'; // the ride's state and the simulation step
 import { drawProfile } from './profile';
 import { World, type CameraMode } from './world/world';
 import { loadSettings, migrateSettings, normalizeSettings, saveSettings, type Settings } from './settings';
@@ -115,7 +116,6 @@ closeButtons();
 // added later: catch any that turns up without a close button as soon as one is opened.
 document.addEventListener('toggle', (e) => { if (e.target instanceof HTMLDialogElement && e.target.open) closeButtons(); }, true);
 
-const STALE_MS = 3000; // treat trainer as idle if no data for this long
 const KM_PER_MI = 1.609344;
 
 let settings = loadSettings();
@@ -133,20 +133,10 @@ let trainer: Trainer | null = null;
 let demo = false;
 let demoPower = 150;
 
-const live = { power: 0, cadence: 0, heartRate: 0, trainerHr: 0, lastReadingAt: 0, lastHrAt: 0 };
-const ride = { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 };
+// The ride's state and the step that advances it live in src/rideSim.ts; this file owns the instances (same objects for the life of the page).
+const sim = createRideSim();
+const { live, ride } = sim;
 const drivetrain = new Drivetrain(); // keeps the legs in step with the wheels
-/** The last few seconds of power for the 3 s average: a fixed-size ring, oldest first (no shift() per frame). */
-const POWER_SAMPLES = 3000;
-const powerRing: { t: number; p: number }[] = Array.from({ length: POWER_SAMPLES }, () => ({ t: -Infinity, p: 0 }));
-let powerHead = 0; // where the next sample goes
-let powerCount = 0; // how many of the ring's slots hold a sample
-
-/** Callbacks over the live power samples, oldest first (the same order a plain growing array had). */
-function eachPowerSample(fn: (s: { t: number; p: number }) => void) {
-  const start = (powerHead - powerCount + POWER_SAMPLES) % POWER_SAMPLES;
-  for (let i = 0; i < powerCount; i++) fn(powerRing[(start + i) % POWER_SAMPLES]);
-}
 const zoneRefs = () => settings;
 let player: WorkoutPlayer | null = null;
 /**
@@ -533,9 +523,18 @@ function simulate(now: number, limits: Limits) {
   for (let i = 0; i < s.count; i++) simStep(s.dt, s.startMs + (i + 1) * s.realMs);
 }
 
-/** One simulation step: `dt` simulated seconds, ending at `now` (real clock). Everything that must be exact in wall-clock terms lives here. */
-function simStep(dt: number, now: number) {
-  if (demo) {
+/** What the simulation step (src/rideSim.ts) calls for the things around the rider. Built once; every member reads the live state. */
+const rideDeps: RideDeps = {
+  course: {
+    finish: () => currentStage().finish,
+    gradeAt,
+    elevationAt,
+    airDensityAt: (d) => airDensityAt(currentStage(), d),
+    headwindAt: (d) => roadWind(d).head,
+    headingAt: () => currentStage().headingAt,
+  },
+  demoInput(now) {
+    if (!demo) return false;
     // In a workout the demo rider follows the target, with a little wobble.
     const target = player && !player.done && !player.paused ? player.targetWatts() : null;
     if (target !== null) setDemoPower(Math.round(target + Math.sin(now / 900) * 4));
@@ -545,11 +544,52 @@ function simStep(dt: number, now: number) {
       : settings.virtualShifting && ride.speed > 2 ? Math.round(Math.min(140, gearCadence(ride.speed, vGear)))
       : Math.round(78 + demoPower / 25 + Math.sin(now / 1700) * 3);
     live.lastReadingAt = now;
-  } else if (now - live.lastReadingAt > STALE_MS) {
-    live.power = 0;
-    live.cadence = 0;
-  }
+    return true;
+  },
+  surroundings: simSurroundings,
+  draftSaving: () => draftSaving,
+  rider() {
+    const equipment = garage.effects(); // frame, wheels, tyres, helmet and suit change mass, drag area and rolling resistance
+    return { massKg: settings.riderKg + settings.bikeKg + equipment.massKg, cdaFactor: equipment.cdaFactor, crrDelta: equipment.crrDelta };
+  },
+  proNearby: () => roadRiders.some((r) => r.team && Math.abs(r.distance - ride.distance) < 30),
+  holding: () => !!race?.holding || eventHolding(),
+  segmentFrame: (distance, movingTime, work, riding) => komUi.frame(distance, movingTime, work, riding),
+  onFinish: showFinish,
+  drivetrain,
+};
 
+/** One simulation step: `dt` simulated seconds, ending at `now` (real clock). Everything that must be exact in wall-clock terms lives here. */
+function simStep(dt: number, now: number) {
+  stepRide(sim, rideDeps, dt, now); // power, speed, distance, time, work, KOM, finish, climbing, drivetrain, power average (src/rideSim.ts)
+
+  const moving = ride.speed > 0.3 || live.power > 0;
+  // The activity being recorded (the ride's, or the workout's while one is on): its statistics and samples, with the
+  // distance counted from where that activity began.
+  const sp = span();
+  const sample = {
+    power: live.power, cadence: live.cadence, hr: currentHr(), speedMs: ride.speed,
+    distance: ride.distance - ride.startDistance - sp.base.dist,
+    elevation: (currentStage().baseAltitude ?? 0) + ride.lastElev, // (the step has just set lastElev to the elevation here)
+  };
+  if (!workoutSpan) rideSpan.st.add(dt, live.power, live.cadence, currentHr(), moving);
+  sp.rec.tick(dt, moving, sample);
+  if (player) {
+    const pedalling = live.power > 0 || live.cadence > 0;
+    if (!player.done) {
+      player.tick(dt, pedalling, live.power);
+      if (pedalling && !player.paused) workoutSpan?.st.add(dt, live.power, live.cadence, currentHr(), true);
+    }
+    if (player.done) finishWorkout(); // reached the end, or skipped past the last step
+    else if (!player.paused) intervalBeeps();
+  }
+}
+
+/**
+ * The simulation step's "surroundings" hook: the wind, the race, the pro teams, the AI rival, other riders, steering and the draft.
+ * Side effects on other subsystems, so it stays here; it leaves `draftSaving` and `roadRiders` for the rest of the step.
+ */
+function simSurroundings(dt: number) {
   // The wind: follows the stage and the weather being shown.
   if (windStage !== currentStage()) {
     windStage = currentStage();
@@ -588,67 +628,7 @@ function simStep(dt: number, now: number) {
   world.setLane(steering.target);
   draft = draftFrom(ride.distance, liveRiders, 60, { lane: world.currentLane, lateralOf, shift: crossShift });
   draftSaving += ((draft?.saving ?? 0) - draftSaving) * (1 - Math.exp(-dt / 0.6));
-
-  const grade = gradeAt(ride.distance);
-  // ---- Garage equipment (src/garage): frame, wheels, tyres, helmet and suit change mass, drag area and rolling resistance. ----
-  const equipment = garage.effects();
-  ride.speed = stepSpeed(ride.speed, live.power, grade, dt, {
-    ...DEFAULT_PARAMS,
-    massKg: settings.riderKg + settings.bikeKg + equipment.massKg,
-    cda: DEFAULT_PARAMS.cda * equipment.cdaFactor * (1 - draftSaving),
-    crr: DEFAULT_PARAMS.crr + equipment.crrDelta,
-    airDensity: airDensityAt(currentStage(), ride.distance), // thinner air up high
-  }, roadWind(ride.distance).head); // air speed = road speed + headwind
-  ride.speed = limitCornerSpeed(ride.speed, ride.distance, dt, { headingAt: currentStage().headingAt }); // brake into bends
-  // ---- end of garage equipment ----
-  // Distance ridden within 30 m of a pro team (a weekly challenge).
-  if (!ride.finished && ride.speed > 0.3 && liveRiders.some((r) => r.team && Math.abs(r.distance - ride.distance) < 30)) ride.proM += ride.speed * dt;
-  if (race?.holding || eventHolding()) ride.speed = 0; // waiting on the line for the start
   if (eventState && demo) eventState.demoUsed = true; // demo riding keeps you off the event results
-  ride.distance += ride.speed * dt;
-  if (ride.speed > 0.3 && !ride.finished) {
-    ride.movingTime += dt;
-    ride.work += live.power * dt;
-  }
-  komUi.frame(ride.distance, ride.movingTime, ride.work, ride.speed > 0.3 && !ride.finished && !race?.holding && !eventHolding()); // before the finish check: a climb that tops out at the line still counts
-  const finish = currentStage().finish;
-  if (finish !== null && !ride.finished && ride.distance >= finish) showFinish();
-  const elev = elevationAt(ride.distance);
-  if (elev > ride.lastElev && !ride.finished) ride.climbed += elev - ride.lastElev;
-  ride.lastElev = elev;
-  drivetrain.update(dt, ride.speed, live.cadence, live.power);
-
-  const ps = powerRing[powerHead];
-  ps.t = now;
-  ps.p = live.power;
-  powerHead = (powerHead + 1) % POWER_SAMPLES;
-  if (powerCount < POWER_SAMPLES) powerCount++;
-  let oldest = (powerHead - powerCount + POWER_SAMPLES) % POWER_SAMPLES;
-  while (powerCount && now - powerRing[oldest].t > 3000) {
-    powerCount--;
-    oldest = (oldest + 1) % POWER_SAMPLES;
-  }
-
-  const moving = ride.speed > 0.3 || live.power > 0;
-  // The activity being recorded (the ride's, or the workout's while one is on): its statistics and samples, with the
-  // distance counted from where that activity began.
-  const sp = span();
-  const sample = {
-    power: live.power, cadence: live.cadence, hr: currentHr(), speedMs: ride.speed,
-    distance: ride.distance - ride.startDistance - sp.base.dist,
-    elevation: (currentStage().baseAltitude ?? 0) + elev,
-  };
-  if (!workoutSpan) rideSpan.st.add(dt, live.power, live.cadence, currentHr(), moving);
-  sp.rec.tick(dt, moving, sample);
-  if (player) {
-    const pedalling = live.power > 0 || live.cadence > 0;
-    if (!player.done) {
-      player.tick(dt, pedalling, live.power);
-      if (pedalling && !player.paused) workoutSpan?.st.add(dt, live.power, live.cadence, currentHr(), true);
-    }
-    if (player.done) finishWorkout(); // reached the end, or skipped past the last step
-    else if (!player.paused) intervalBeeps();
-  }
 }
 
 /** The drawing and screen updates for one animation frame. `dt` is what the world animates by (the drawn frame's time). */
@@ -749,9 +729,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-hud-pos]').forEach((b) => b.
 }));
 
 function updateHud(grade: number) {
-  let powerSum = 0;
-  eachPowerSample((s) => { powerSum += s.p; });
-  const power3s = powerSum / Math.max(1, powerCount);
+  const power3s = sim.power.mean();
   const finish = currentStage().finish;
   $('stage-name').textContent = stageProgress();
   hud.update({
@@ -1400,12 +1378,10 @@ function resetRide() {
   ensureAi();
   rideFlags.usedDemo = false;
   rideFlags.splitByWorkout = !!player; // a workout still going carries on in a new activity of its own (so this trip is split)
-  Object.assign(ride, { distance: 0, startDistance: 0, speed: 0, movingTime: 0, climbed: 0, lastElev: 0, work: 0, finished: false, finishTime: 0, planCounted: false, proM: 0, racePlace: 0, raceSize: 0 });
+  resetRideState(sim); // the trip back to zero, and an empty power average
   komUi.reset(); // no segment effort carries over into a new ride or stage
   leaveRaceAndEvent(); // starting afresh ends a race, and leaves a scheduled event
   drivetrain.reset();
-  powerHead = 0;
-  powerCount = 0;
   rideSpan = newSpan(); // (baselines from the zeroed trip)
   workoutSpan = player ? newSpan(player.workout.name) : null;
   clearSnapshot();

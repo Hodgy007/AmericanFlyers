@@ -70,6 +70,7 @@ This page lists every file and folder in the repository, with a one-line summary
 | `climbUi.ts` | The climb preview card. |
 | `atmosphereUi.ts` | The ☰ Menu → Time & weather dialog. |
 | `peloton.ts` | The computer-ridden pro teams: names and kits, paces, physics, the two-by-two paceline, and respawning at the finish; and race mode (`startRace`, `makeRoster`, `RaceField`) that hands the field to the race engine. |
+| `rideSim.ts` | The ride's state (`RideState`, `LiveInput`, the 3 s `PowerRing`) and `stepRide()`, one simulation step: stale power, speed from physics, corner braking, distance, moving time, work, the finish and climbing, with the rest of the app reached through a `RideDeps` hooks object. No DOM or Three.js; `main.ts` owns the instances. Tested in `tests/unit/rideSim.test.ts`. |
 | `raceSim.ts` | The race engine: riders in groups, attacks, breaks, chases, cracks, merges, sprints, lines and points. No DOM or Three.js. |
 | `race.ts` | The race you are riding: countdown, live panel numbers, jersey holders and results. |
 | `raceUi.ts` | The 3-2-1, the live race panel, and the result tables. |
