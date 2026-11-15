@@ -2,7 +2,7 @@
 
 This page documents the Bluetooth services, characteristics and opcodes the app uses, how it parses the Indoor Bike Data and Cycling Power notifications, the control point sequence, the grade and target-power commands, and the once-per-second control loop.
 
-Source: [`src/ble/trainer.ts`](../../src/ble/trainer.ts), [`src/ble/heartRate.ts`](../../src/ble/heartRate.ts), and the control loop in [`src/main.ts`](../../src/main.ts).
+Source: [`src/ble/trainer.ts`](../../src/ble/trainer.ts), [`src/ble/heartRate.ts`](../../src/ble/heartRate.ts), and the control loop in [`src/trainerControl.ts`](../../src/trainerControl.ts).
 
 ## Services and characteristics
 
@@ -26,7 +26,7 @@ Logic: [`src/ble/remembered.ts`](../../src/ble/remembered.ts) (pure helpers, uni
 - **On load, no chooser (feature-detected).** If `navigator.bluetooth.getDevices` exists, the remembered id is looked up in it, `watchAdvertisements()` waits for the first `advertisementreceived` (8 s timeout), then `gatt.connect()` runs (it is tried even after the timeout). Chrome exposes `getDevices` behind `chrome://flags/#enable-web-bluetooth-new-permissions-backend`; chromestatus lists shipping by default for Chrome 169. Without it nothing here runs.
 - **Otherwise, one tap.** A banner and the ☰ Menu show **Reconnect *name***. The click handler calls `requestDevice({ filters: [{ name }], optionalServices })` so the chooser lists just that device (a user gesture is required, so it is wired directly to the click). A `NotFoundError` after a named request produces a "didn't find" toast; the plain **Connect trainer** button always opens the full chooser.
 - **Drops.** A remembered device that fires `gattserverdisconnected` is retried on the same `BluetoothDevice` with waits of 1, 2, 4, 8 and 15 s (`RECONNECT_DELAYS_MS`, `Reconnector`), then the app gives up with a toast and leaves the Reconnect buttons. A manual Disconnect never retries. The ride is not ended: `trainerChanged(null)` zeroes live power and cadence.
-- **After a reconnect.** `openTrainer()` re-subscribes to Indoor Bike Data and the Control Point and redoes Request Control / Start. `devicesUi` calls `trainerChanged(trainer)`, and `main.ts` clears `lastSentGrade` and `lastSentWatts`, so the next `controlTrainer()` tick sends the current grade (or ERG watts) again.
+- **After a reconnect.** `openTrainer()` re-subscribes to Indoor Bike Data and the Control Point and redoes Request Control / Start. `devicesUi` calls `trainerChanged(trainer)`, and `main.ts` calls `resendAll()` on the trainer control, which forgets the last grade and ERG watts, so the next `tick()` sends the current grade (or ERG watts) again.
 
 Tests: `tests/e2e/devices.spec.ts` replaces `navigator.bluetooth` with a mock (FTMS trainer, heart-rate strap, optional `getDevices`, simulated drops, failing connects) and covers the banner, the name-filtered request, the no-chooser path, automatic reconnection with backoff, the resend of resistance, and Forget.
 
@@ -113,7 +113,7 @@ Flags bit 0 selects the format: when set, heart rate is a `uint16` at byte 1; ot
 
 ## The control loop
 
-`controlTrainer()` in `src/main.ts` runs once a second, and straight away after a virtual gear change. It does nothing unless the trainer can be controlled.
+`tick()` of `createTrainerControl()` (`src/trainerControl.ts`; the pure decision is `decideTrainerCommand()`) runs once a second, and straight away after a virtual gear change. It does nothing unless the trainer can be controlled.
 
 1. **ERG takes priority.** If a workout is running and not finished, it reads the target watts. It sends them only if they differ from the last value by at least 1 W. When ERG ends, it clears the last grade so the grade is sent again.
 2. **Otherwise, grade.** The target is the road grade at the rider's distance, multiplied by the **Trainer difficulty** (0–100%), plus the virtual gear's offset when virtual shifting is on, clamped to −10…+20% and rounded to 0.1%. It's sent with the draft's wind factor, and only if the grade differs from the last value by at least 0.1% or the wind factor has changed.

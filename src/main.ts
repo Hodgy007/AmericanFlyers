@@ -20,7 +20,8 @@ import { loadSettings, migrateSettings, normalizeSettings, saveSettings, type Se
 import { proTeamsOnRoad, type RideMode } from './rideMode';
 import { formatTime, Hud, openDataBlocks } from './hud';
 import { RideStats } from './stats';
-import { Drivetrain, gearCadence, gearGradeOffset, VIRTUAL_GEARS, VIRTUAL_REF } from './drivetrain';
+import { Drivetrain, gearCadence } from './drivetrain';
+import { createTrainerControl, gearReadout } from './trainerControl';
 import { drawWorkout } from './workouts/graph';
 import { RAMP_TEST_ID, zoneColor, type Workout } from './workouts/model';
 import { WorkoutPlayer } from './workouts/player';
@@ -202,8 +203,7 @@ const devices = initDevices({
   onHeartRate: (bpm) => { live.heartRate = bpm; live.lastHrAt = performance.now(); },
   trainerChanged: (t) => {
     trainer = t;
-    lastSentGrade = NaN; // a (re)connected trainer is sent the grade (or ERG watts) again at the next tick
-    lastSentWatts = NaN;
+    trainerControl.resendAll(); // a (re)connected trainer is sent the grade (or ERG watts) again at the next tick
     if (t && demo) setDemo(false);
     // The ride carries on; power falls to zero until it is back (unless a separate power meter is still sending).
     if (!t && devices.powerSource() !== 'meter') { live.power = 0; live.cadence = 0; }
@@ -218,77 +218,45 @@ function roadWind(distance: number) {
   return wind.at(headingAt(distance));
 }
 
-// Control the trainer once a second: ERG (hold the workout's target watts)
+// Control the trainer once a second (src/trainerControl.ts): ERG (hold the workout's target watts)
 // during a workout, otherwise the road grade scaled by the difficulty setting.
 // With virtual shifting on, the chosen gear adds to (or takes off) the grade.
-let lastSentGrade = NaN;
-let lastSentWatts = NaN;
-let lastSentWind = 1;
-let lastSentHeadwind = 0;
 const powerMatch = new PowerMatch(); // ERG with a separate power meter: gently corrects the target sent to the trainer
-let lastControlAt = 0;
-function controlTrainer() {
-  if (!trainer?.canControl) return;
-  const now = performance.now();
-  const dt = lastControlAt ? Math.min(5, (now - lastControlAt) / 1000) : 0;
-  lastControlAt = now;
-  let watts = player && !player.done ? player.targetWatts() : null;
-  if (watts !== null) {
-    // A separate power meter is the source of truth for watts: the trainer is asked for a few percent more or less
-    // so that the meter, not the trainer's own reading, sits on the target.
-    if (settings.powerMatch && devices.powerSource() === 'meter') {
-      watts = Math.round(powerMatch.update({ target: watts, meterWatts: live.power, pedalling: live.cadence > 0 && !player!.paused, dt }));
-    } else powerMatch.reset();
-    if (Math.abs(watts - lastSentWatts) < 1) return;
-    lastSentWatts = watts;
-    lastSentGrade = NaN; // resend the grade when ERG ends
-    // A refused or unanswered command is sent again at the next tick (the trainer layer re-requests control, with a back-off).
-    trainer.setTargetPower(watts).then((r) => { if (!r.ok) lastSentWatts = NaN; }, () => { lastSentWatts = NaN; });
-    return;
-  }
-  powerMatch.reset();
-  const road = gradeAt(ride.distance) * 100 * (settings.difficulty / 100);
-  const gear = settings.virtualShifting ? gearGradeOffset(vGear) : 0;
-  const target = Math.round(Math.max(-10, Math.min(20, road + gear)) * 10) / 10;
-  // In someone's draft the trainer's wind resistance drops too, so it feels easier;
-  // aero kit from the garage (frame, wheels, helmet, suit) trims it a little as well.
-  // Thinner air at altitude lowers it as well, as in the app's own physics.
-  const dragFactor = Math.round((1 - around.draftSaving) * garage.effects().cdaFactor * (airDensityAt(currentStage(), ride.distance) / SEA_LEVEL_AIR_DENSITY) * 50) / 50;
-  // The road's wind goes to the trainer's simulation too (headwind positive), in half-metre steps.
-  const headwind = Math.round(roadWind(ride.distance).head * 2) / 2;
-  if (Math.abs(target - lastSentGrade) < 0.1 && dragFactor === lastSentWind && headwind === lastSentHeadwind) return;
-  lastSentGrade = target;
-  lastSentWind = dragFactor;
-  lastSentHeadwind = headwind;
-  lastSentWatts = NaN;
-  trainer.setGrade(target, dragFactor, headwind).then((r) => { if (!r.ok) lastSentGrade = NaN; }, () => { lastSentGrade = NaN; });
-}
-setInterval(controlTrainer, 1000);
+const trainerControl = createTrainerControl({
+  trainer: () => trainer,
+  settings: () => settings,
+  now: () => performance.now(),
+  live,
+  player: () => player,
+  powerFromMeter: () => devices.powerSource() === 'meter',
+  powerMatch,
+  roadGrade: () => gradeAt(ride.distance),
+  draftSaving: () => around.draftSaving,
+  cdaFactor: () => garage.effects().cdaFactor,
+  airDensityRatio: () => airDensityAt(currentStage(), ride.distance) / SEA_LEVEL_AIR_DENSITY,
+  headwind: () => roadWind(ride.distance).head,
+});
+setInterval(() => trainerControl.tick(), 1000);
 
 // ------------------------------------------------------ virtual shifting ----
 
-let vGear = VIRTUAL_REF;
-
 function shift(by: number) {
-  if (!settings.virtualShifting) return;
-  const next = Math.max(0, Math.min(VIRTUAL_GEARS.length - 1, vGear + by));
-  if (next === vGear) return;
-  vGear = next;
-  drivetrain.virtualGear = vGear;
+  if (!trainerControl.shift(by)) return;
+  drivetrain.virtualGear = trainerControl.gear;
   sound.shift(by > 0);
   updateGearPanel();
-  controlTrainer(); // feel it straight away
+  trainerControl.tick(); // feel it straight away
 }
 
 function updateGearPanel() {
   const on = settings.virtualShifting;
   $('gear-panel').hidden = !on;
-  drivetrain.virtualGear = on ? vGear : null;
+  drivetrain.virtualGear = on ? trainerControl.gear : null;
   if (!on) return;
-  $('gear-num').textContent = String(vGear + 1);
-  const pct = vGear / (VIRTUAL_GEARS.length - 1);
-  $('gear-bar').style.setProperty('--gear', String(pct));
-  $('gear-ratio').textContent = `${VIRTUAL_GEARS[vGear].toFixed(2)} : 1`;
+  const g = gearReadout(trainerControl.gear);
+  $('gear-num').textContent = g.number;
+  $('gear-bar').style.setProperty('--gear', String(g.fraction));
+  $('gear-ratio').textContent = g.ratio;
 }
 
 // ----------------------------------------------------------------- demo ----
@@ -480,7 +448,7 @@ const pageHidden = () => document.hidden || document.visibilityState === 'hidden
  */
 function backgroundTick() {
   if (!pageHidden() || document.body.classList.contains('at-home')) return;
-  loopGuard.run('trainer', controlTrainer); // the 1 s interval is throttled in a hidden tab
+  loopGuard.run('trainer', () => trainerControl.tick()); // the 1 s interval is throttled in a hidden tab
   if (hub.isOpen()) return; // the hub pauses the ride
   // A tick gap over 10 s means the machine slept or the page was frozen: that time is dropped, not simulated.
   const now = performance.now();
@@ -550,7 +518,7 @@ const rideDeps: RideDeps = {
     live.power = demoPower;
     if (demoPower > 0) rideFlags.usedDemo = true;
     live.cadence = demoPower <= 0 ? 0
-      : settings.virtualShifting && ride.speed > 2 ? Math.round(Math.min(140, gearCadence(ride.speed, vGear)))
+      : settings.virtualShifting && ride.speed > 2 ? Math.round(Math.min(140, gearCadence(ride.speed, trainerControl.gear)))
       : Math.round(78 + demoPower / 25 + Math.sin(now / 1700) * 3);
     live.lastReadingAt = now;
     return true;
@@ -771,7 +739,7 @@ function startWorkout(w: Workout) {
   player = new WorkoutPlayer(w, settings.ftp);
   ai?.workoutStarted();
   beeps.step = undefined;
-  lastSentWatts = NaN;
+  trainerControl.resendWatts();
   $('workout-panel').hidden = false;
   placeWorkoutPanel();
   $('wp-name').textContent = w.name;
@@ -788,7 +756,7 @@ function stopWorkoutUi() {
   player = null;
   beeps.step = undefined;
   $('workout-panel').hidden = true;
-  lastSentGrade = NaN; // back to road resistance
+  trainerControl.resendGrade(); // back to road resistance
 }
 
 /**
@@ -1215,7 +1183,7 @@ function resetRide() {
   spans.ride = spans.create(); // (baselines from the zeroed trip)
   spans.workout = player ? spans.create(player.workout.name) : null;
   clearSnapshot();
-  lastSentGrade = NaN;
+  trainerControl.resendGrade();
   $('finish').hidden = true;
   world.jumped();
 }
@@ -1751,7 +1719,7 @@ $<HTMLDialogElement>('settings').addEventListener('close', () => {
   if (nextAi.coach !== prevAi.coach || nextAi.rivals !== prevAi.rivals) void use(aiLazy, (a) => a.applyConsent(nextAi, prevAi)); // the database holds the real opt-in
   if (settings.ftp !== oldFtp) recordFtp(settings.ftp, 'manual').catch((e) => toast(`Couldn’t save your FTP history: ${(e as Error).message}`));
   world.setMarkers(markerConfig());
-  lastSentGrade = NaN;
+  trainerControl.resendGrade();
   updateGearPanel();
   updateMapMenu();
   applyProTeams(settings.proTeams, wasProTeams);
@@ -2326,7 +2294,7 @@ onAccountChange(async (a) => {
       hud.setFields(settings.dataFields);
       world.setMarkers(markerConfig());
       placeWorkoutPanel();
-      lastSentGrade = NaN;
+      trainerControl.resendGrade();
       setSound(settings.sound);
       sound.setMusic(settings.music); // (settings was replaced above, so setMusic() would skip as "unchanged")
       updateMusicMenu();
