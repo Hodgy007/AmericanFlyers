@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Peloton } from '../../src/peloton';
 import { LiveRace, raceSetup, EVENT_STEP } from '../../src/race';
 import {
-  BACK_GAP_M, DROPPED_GAP_M, DropWatcher, EVENT_REF_WKG, eventOver, mergeEventResults, secondsSinceStart,
+  BACK_GAP_M, DROPPED_GAP_M, DropWatcher, EVENT_REF_WKG, GROUP_RIDE_OVER_MESSAGE, INELIGIBLE_NOTE, activeEvent, dropMessage, eventHolding,
+  eventOver, eventResultEligible, eventStageAvailable, groupRideStatus, joinMessage, lobbyStatus, mergeEventResults, mmss, secondsSinceStart,
 } from '../../src/eventSession';
 import { stageById } from '../../src/routes/library';
 import { wind, WindState, type Climate } from '../../src/world/wind';
@@ -155,5 +156,66 @@ it('finishes scheduled bots on the same fixed grid regardless of when results ar
     const complete = vi.spyOn(breezy.field.sim, 'runToEnd').mockImplementation(() => {});
     breezy.results();
     expect(complete).toHaveBeenCalledExactlyOnceWith(undefined, 0.5);
+  });
+});
+
+describe('joining', () => {
+  const row = { id: 'e1', kind: 'race' as const, stage_id: 'route66', title: 'Evening race', starts_at: '2026-01-01T19:30:00Z', seed: 5, pace_wkg: 2.8, duration_min: 90, waiting: 3, results: 0, my_finish_s: null };
+  it('turns a schedule row into the active event', () => {
+    expect(activeEvent(row, 123)).toEqual({ id: 'e1', kind: 'race', stageId: 'route66', title: 'Evening race', startsAtMs: 123, seed: 5, paceWkg: 2.8, durationMin: 90 });
+  });
+  it('needs the stage the row names, and a finish line for a race', () => {
+    expect(eventStageAvailable(row, { id: 'route66', finish: 1000 })).toBe(true);
+    expect(eventStageAvailable(row, { id: 'heartland', finish: 1000 })).toBe(false); // the library gave another stage for an unknown id
+    expect(eventStageAvailable(row, { id: 'route66', finish: null })).toBe(false);
+    expect(eventStageAvailable({ ...row, kind: 'group_ride' }, { id: 'route66', finish: null })).toBe(true);
+  });
+  it('holds a group ride on the line before its start, and nothing else', () => {
+    const ev = { kind: 'group_ride' as const, startsAtMs: 1000 };
+    expect(eventHolding(ev, 999)).toBe(true);
+    expect(eventHolding(ev, 1000)).toBe(false);
+    expect(eventHolding({ kind: 'race', startsAtMs: 1000 }, 0)).toBe(false);
+  });
+  it('says on the line or under way', () => {
+    expect(joinMessage('Race', -1)).toBe('You’re on the line for Race. The start is synchronised for everyone.');
+    expect(joinMessage('Race', 0)).toBe('Race is under way. Go!');
+  });
+});
+
+describe('the lobby strip', () => {
+  it('writes minutes and seconds', () => {
+    expect(mmss(0)).toBe('0:00');
+    expect(mmss(65.9)).toBe('1:05');
+    expect(mmss(754)).toBe('12:34');
+  });
+  it('counts down the last hour, then switches to a label, and counts the others on the line', () => {
+    expect(lobbyStatus(-272, 0)).toBe('Starts in 4:32');
+    expect(lobbyStatus(-3599, 1)).toBe('Starts in 59:59 · 1 other rider on the line');
+    expect(lobbyStatus(-3600, 3)).toBe('starts in 1 h 0 min · 3 other riders on the line');
+    expect(lobbyStatus(-7500, 0)).toBe('starts in 2 h 5 min');
+  });
+  it('says where you are against the group', () => {
+    expect(groupRideStatus(0, false, 125)).toBe('with the group · 2:05 in');
+    expect(groupRideStatus(8, false, 0)).toBe('with the group · 0:00 in');
+    expect(groupRideStatus(8.5, false, 0)).toBe('9 m behind the group · 0:00 in');
+    expect(groupRideStatus(-8.5, false, 0)).toBe('9 m ahead of the group · 0:00 in');
+    expect(groupRideStatus(140.4, true, 600)).toBe('140 m off the back · 10:00 in');
+    expect(groupRideStatus(10, true, 600)).toBe('10 m off the back · 10:00 in'); // dropped wins until the watcher says you are back
+  });
+  it('has its messages', () => {
+    expect(GROUP_RIDE_OVER_MESSAGE).toBe('The group ride is over. Thanks for riding!');
+    expect(dropMessage('dropped').ms).toBe(6000);
+    expect(dropMessage('dropped').text).toMatch(/^You’ve been dropped\./);
+    expect(dropMessage('back')).toEqual({ text: 'Back with the group. Nice work!', ms: 3500 });
+  });
+});
+
+describe('what counts towards the results', () => {
+  it('needs no demo riding, a real-time clock and some power', () => {
+    expect(eventResultEligible(false, 1, 180)).toBe(true);
+    expect(eventResultEligible(true, 1, 180)).toBe(false);
+    expect(eventResultEligible(false, 5, 180)).toBe(false);
+    expect(eventResultEligible(false, 1, 0)).toBe(false);
+    expect(INELIGIBLE_NOTE).toBe('Demo rides and sped-up clocks don’t count towards the event results.');
   });
 });

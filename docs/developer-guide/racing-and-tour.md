@@ -32,11 +32,11 @@ Riders are individual units that travel in **groups**. A group has a front wheel
 
 ## Wiring in `main.ts`
 
-- `beginRace(stage, tourStage)` resets the stage, builds the roster and `RaceField` (`peloton.startRace`), and creates a `LiveRace`.
+- `beginRace(stage, tourStage)` in `main.ts` chooses the stage and resets the ride; `raceSession.start()` (`src/raceSession.ts`) then builds the roster and `RaceField` (`peloton.startRace`), creates a `LiveRace` and wires its beeps and commentator. `raceSession.race` and `raceSession.event` are the state.
 - Each frame, `race.update()` steps the sim (before the player moves, with last frame's distance), and `peloton.riders()` feeds the other-riders list. While `race.holding` (the countdown), the player's speed is held at zero.
 - The 200 ms HUD tick draws the countdown and `race.panel()`.
-- `showFinish()` branches for a race: `race.results()`, `recordStage()` for a tour, and the results tables on the finish card.
-- `resetRide()` ends a race (`peloton.endRace()` restores the free-ride groups).
+- `showFinish()` branches for a race: `raceSession.finish()` takes `race.results()`, calls `recordStage()` for a tour and works out the card's buttons; `main.ts` adds the results tables to the finish card.
+- `resetRide()` ends a race (`raceSession.leave()`, which calls `peloton.endRace()` to restore the free-ride groups).
 
 ## The tour
 
@@ -52,21 +52,22 @@ Group rides and races at set times (see the [user guide](../user-guide/events-an
 | [`src/eventSession.ts`](../../src/eventSession.ts) | Pure: `ActiveEvent`, `secondsSinceStart()`, `EVENT_REF_WKG`, `DropWatcher` (group rides) and `mergeEventResults()` (finish card). |
 | [`src/cloud/events.ts`](../../src/cloud/events.ts) | The RPC calls, and the server clock: `syncServerClock()` stores `server − local` from the quickest of three round trips and `serverNow()` applies it. |
 | [`src/eventsUi.ts`](../../src/eventsUi.ts) | The `#events` dialog, the `#event-bar` strip and the finish card's results table. |
-| `src/main.ts` (section "scheduled events") | `joinEvent()`, `endEvent()`, `updateEvent()` and `eventFinishPanel()`. |
+| [`src/raceSession.ts`](../../src/raceSession.ts) | `createRaceSession()`: `join()`, `leave()`, `updateEvent()` (the lobby strip and the "dropped" notes) and the event state. |
+| `src/main.ts` (section "scheduled events") | `joinEvent()` (the account, the join window, the stage and the ride reset, then `raceSession.join()`) and `eventFinishPanel()`. |
 
 How the start is shared:
 
 - The event is identified by `id`, `starts_at` and `seed`. `LiveRace.useEventClock(() => secondsSinceStart(...))` makes the countdown follow the server's clock, and in the racing phase steps the sim in **fixed** `EVENT_STEP` (0.25 s) slices up to the clock instead of by frame `dt`. The sim never reads the player (only `reportPlayer()` records crossings), so the same seed, the same fixed `EVENT_REF_WKG` (3.4) and the same slices give identical bots on every device. A late joiner's first frames catch the sim up (up to 600 slices a frame).
 - A group ride is `Peloton.startGroupRide(wkg, seed, clock)`: one 12-rider group stepped the same way at a steady W/kg, from just ahead of the start line. `Peloton.reset()` (choosing another stage) ends it.
 - Presence uses the stage key `eventStageKey(stage, event id)`, so only riders in the event see each other.
-- Result time is `sim.t` at the line (race time since the event's start). `submit_event_result` sends it with the average power, unless the ride used the demo or `?timescale` (guard: `eventState.demoUsed`, `TIME_SCALE`). The finish card merges the sim's field, the server's results (polled every 15 s) and your own time.
+- Result time is `sim.t` at the line (race time since the event's start). `submit_event_result` sends it with the average power, unless the ride used the demo or `?timescale` (guard: `eventResultEligible()` in `eventSession.ts`, from `raceSession.event.demoUsed` and `TIME_SCALE`). The finish card merges the sim's field, the server's results (polled every 15 s) and your own time.
 
 ## The commentator
 
 [`src/commentary.ts`](../../src/commentary.ts):
 
 - **`Commentator`** (pure, injected player and clock) decides whether a line may play now: one at a time, a 3 s pause, a cooldown per kind of line (`COOLDOWN`), at most 5 lines a minute (must-hear priority-3 lines excepted), a one-slot queue for priority 2 and 3 lines that expires after 8 s, and never the same variant twice in a row.
-- **`RaceCommentary`** maps `LiveRace.onEvent(text, kind)` (attack, break, caught, sprint) and a per-tick `RaceSnapshot` (built in `updateCommentary()` in `main.ts` from `race.panel()`) to clips: start, lobby, halfway, last kilometre, summits, gaps, and lines about the player (lead, attack, dropped and back, yellow jersey, finish).
+- **`RaceCommentary`** maps `LiveRace.onEvent(text, kind)` (attack, break, caught, sprint) and a per-tick `RaceSnapshot` (built by `raceSnapshot()` in `src/raceSession.ts`, called from `raceSession.updateCommentary()`, from `race.panel()`) to clips: start, lobby, halfway, last kilometre, summits, gaps, and lines about the player (lead, attack, dropped and back, yellow jersey, finish).
 - **`ClipPlayer`** plays `public/audio/commentary/<key>-<n>.mp3` with an `<audio>` element and calls `Sound.duck()` (master gain 0.8 to 0.45) while a line plays. `ClipPlayer.preload()` fetches the clips when the first race starts.
 - `CLIPS` holds what each file says. A unit test checks every entry has a file. The clips (39, mono 48 kbps, about 1 MB in all) were generated with Higgsfield (model `seed_audio`, one preset male voice) and converted with ffmpeg: `ffmpeg -ac 1 -ar 24000 -b:a 48k` with leading and trailing silence trimmed and `loudnorm`. To add or change a line, edit `CLIPS`, generate the audio the same way, and save it as `<key>-<n>.mp3`.
 - Setting `commentary` (default on); `commentator.enabled = settings.commentary && sound.enabled`.
