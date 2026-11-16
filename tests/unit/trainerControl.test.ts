@@ -100,8 +100,21 @@ describe('decideTrainerCommand in simulation', () => {
   it('resends when the rounded grade moves by about 0.1 or more', () => {
     expect(decideTrainerCommand(sim({ roadGrade: 0.052 }), sent()).command).toEqual({ kind: 'grade', grade: 5.2, dragFactor: 1, headwind: 0 });
     expect(decideTrainerCommand(sim({ roadGrade: 0.048 }), sent()).command).toEqual({ kind: 'grade', grade: 4.8, dragFactor: 1, headwind: 0 });
-    // A single 0.1 step is 0.0999… in floating point from 5.0, so it falls under the 0.1 threshold (as it always did).
-    expect(decideTrainerCommand(sim({ roadGrade: 0.051 }), sent()).command).toBeNull();
+    // A single 0.1 step (5.1 − 5.0 is 0.0999… in floating point) is sent: the change is compared in tenths.
+    expect(decideTrainerCommand(sim({ roadGrade: 0.051 }), sent()).command).toEqual({ kind: 'grade', grade: 5.1, dragFactor: 1, headwind: 0 });
+    expect(decideTrainerCommand(sim({ roadGrade: 0.049 }), sent()).command).toEqual({ kind: 'grade', grade: 4.9, dragFactor: 1, headwind: 0 });
+  });
+  it('sends a step of 0.1 up or down from every tenth between -10 and 20, and never resends the same value', () => {
+    for (let t = -100; t <= 200; t++) {
+      const g = t / 10;
+      const last = sent({ grade: g });
+      expect(decideTrainerCommand(sim({ roadGrade: g / 100 }), last).command, `${g} again`).toBeNull();
+      if (t < 200) expect(decideTrainerCommand(sim({ roadGrade: (t + 1) / 1000 }), last).command, `${g} up`).toMatchObject({ kind: 'grade', grade: (t + 1) / 10 });
+      if (t > -100) expect(decideTrainerCommand(sim({ roadGrade: (t - 1) / 1000 }), last).command, `${g} down`).toMatchObject({ kind: 'grade', grade: (t - 1) / 10 });
+    }
+  });
+  it('sends the first grade whatever it is (nothing sent yet)', () => {
+    expect(decideTrainerCommand(sim({ roadGrade: 0 }), freshLastSent()).command).toEqual({ kind: 'grade', grade: 0, dragFactor: 1, headwind: 0 });
   });
   it('resends when only the drag factor changes', () => {
     expect(decideTrainerCommand(sim({ draftSaving: 0.2 }), sent()).command).toEqual({ kind: 'grade', grade: 5, dragFactor: 0.8, headwind: 0 });

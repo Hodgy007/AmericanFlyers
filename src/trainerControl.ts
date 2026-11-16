@@ -98,7 +98,8 @@ export function decideTrainerCommand(input: ErgInput | SimInput, last: LastSent)
   const grade = gradeToSend(input.roadGrade, input.difficulty, input.virtualShifting, input.gear);
   const dragFactor = dragFactorToSend(input.draftSaving, input.cdaFactor, input.airDensityRatio);
   const headwind = headwindToSend(input.headwind);
-  if (Math.abs(grade - last.grade) < GRADE_RESEND_STEP && dragFactor === last.wind && headwind === last.headwind) return { command: null, last };
+  // Compared in tenths: both grades are rounded to 0.1, but 5.1 - 5.0 is 0.0999… in floating point and would slip under a step of 0.1. (NaN, nothing sent yet, is never under.)
+  if (Math.round(Math.abs(grade - last.grade) / GRADE_RESEND_STEP) < 1 && dragFactor === last.wind && headwind === last.headwind) return { command: null, last };
   return { command: { kind: 'grade', grade, dragFactor, headwind }, last: { grade, watts: NaN, wind: dragFactor, headwind } };
 }
 
