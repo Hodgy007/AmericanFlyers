@@ -1311,7 +1311,8 @@ const eventsUi = lazy(() => import('./eventsUi').then((m) => {
     if (was) toast(`You left ${was.title}.`);
   });
   m.initEventsUi({
-    join: (row) => { void joinEvent(row); },
+    // The list can be opened from the hub as well as from the road: once joined, the hub closes, as it does for the hub's own Join button.
+    join: (row) => { void joinEvent(row).then(() => { if (raceSession.event && hub.isOpen()) leaveHub(); }); },
     stageName: (id) => stageById(id).name,
     openSignIn: (why) => accountUi.openSignIn(why),
     currentEventId: () => raceSession.event?.ev.id ?? null,

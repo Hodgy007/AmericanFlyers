@@ -4,6 +4,8 @@ import type { Page } from '@playwright/test';
 // `signedIn: false` is a visitor with no account (no session, empty tables): the app shows the home page and nothing else.
 // `signedIn: true` is a rider with rides, an FTP history, a plan, a garage wallet and this week's
 // challenges, so the hub has things to show. `sessionDelayMs` holds the session back that long (a slow sign-in restore).
+// `events` replaces the two upcoming events (an evening race 3 hours away, a group ride 20 hours away) with rows of the
+// `rpc/upcoming_events` shape (see `sampleEvent`), so a test can have one open to join; `rpc/server_now` answers the real clock.
 
 /** Neon Auth sends cookies, so the browser wants the page's own origin (not *) and credentials allowed. */
 const cors = (origin: string | undefined) => ({
@@ -69,7 +71,25 @@ export function sampleSegmentBoard(now = Date.now()) {
   return [row(1, 'Alex M.', 3012), row(2, 'Jo K.', 3077), row(3, 'Priya S.', 3140), row(4, 'Tom H.', 3201), row(5, 'Lena B.', 3255), row(7, 'Sam R.', 3290, true)];
 }
 
-export async function mockNeon(page: Page, opts: { signedIn?: boolean; segmentBoard?: unknown[]; sessionDelayMs?: number } = {}) {
+/** One `rpc/upcoming_events` row for `mockNeon`'s `events` option, starting `startsInS` seconds from `now` (negative: already under way). */
+export function sampleEvent(kind: 'race' | 'group_ride', startsInS: number, over: Record<string, unknown> = {}, now = Date.now()) {
+  return {
+    id: `ev-${kind}-test`,
+    kind,
+    stage_id: kind === 'race' ? 'route66' : 'heartland',
+    title: kind === 'race' ? 'Evening race: Route 66 Flats' : 'Group ride: Heartland Rollers, 2.6 W/kg',
+    starts_at: new Date(now + startsInS * 1000).toISOString(),
+    seed: 7,
+    pace_wkg: kind === 'race' ? null : 2.6,
+    duration_min: kind === 'race' ? 150 : 90,
+    waiting: 0,
+    results: 0,
+    my_finish_s: null,
+    ...over,
+  };
+}
+
+export async function mockNeon(page: Page, opts: { signedIn?: boolean; segmentBoard?: unknown[]; sessionDelayMs?: number; events?: unknown[] } = {}) {
   const signedIn = !!opts.signedIn;
   const now = Date.now();
   const startsAt = (hours: number) => new Date(now + hours * 3600000).toISOString();
@@ -127,6 +147,7 @@ export async function mockNeon(page: Page, opts: { signedIn?: boolean; segmentBo
       case 'rpc/server_now':
         return json(new Date().toISOString());
       case 'rpc/upcoming_events':
+        if (opts.events) return json(opts.events);
         return json([
           { id: 'ev-race', kind: 'race', stage_id: 'alpe-dhuez', title: "Evening race: Alpe d'Huez", starts_at: startsAt(3), seed: 11, pace_wkg: null, duration_min: 150, waiting: 4, results: 0, my_finish_s: null },
           { id: 'ev-ride', kind: 'group_ride', stage_id: 'heartland', title: 'Group ride: Heartland Rollers, 2.6 W/kg', starts_at: startsAt(20), seed: 12, pace_wkg: 2.6, duration_min: 90, waiting: 0, results: 0, my_finish_s: null },
