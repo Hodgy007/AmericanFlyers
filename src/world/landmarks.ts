@@ -18,6 +18,11 @@ import type { MonumentId } from './monumentTypes';
 export const MONUMENT_GLB: Partial<Record<MonumentId, { file: string; yaw: number }>> = {
   'geant-tourmalet': { file: 'geant.glb', yaw: -Math.PI / 2 },
   'ventoux-observatory': { file: 'ventoux-summit.glb', yaw: Math.PI },
+  // Higgsfield models turned in their files to face +z like the code-built ones, so no extra yaw (public/models/README.md).
+  'alpe-village': { file: 'alpe-village.glb', yaw: 0 },
+  'ski-apartments': { file: 'ski-apartments.glb', yaw: 0 },
+  'washington-summit': { file: 'washington-summit.glb', yaw: 0 },
+  'diablo-summit': { file: 'diablo-summit.glb', yaw: 0 },
 };
 
 const BEHIND = 250;

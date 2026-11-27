@@ -6,6 +6,10 @@ The repository has no tags, so each group is named for the pull request that mer
 
 ## Unreleased
 
+### Modelled summit buildings
+
+- **Four more climbs finish beside modelled buildings** (Higgsfield, about 0.5 MB each, packed like the other landmarks): the chalets of the Alpe d'Huez summit village (`alpe-village.glb`), the ski-resort apartment blocks on the Alpe and the Tourmalet (`ski-apartments.glb`), Mount Washington's summit buildings and observatory tower (`washington-summit.glb`) and Mount Diablo's sandstone summit building with its beacon tower (`diablo-summit.glb`). Same places, sizes and facing as the code-built ones, which stay as the fallback if a file is missing (`MONUMENT_GLB` in `landmarks.ts`). Each was a GPT Image 2.5 front view (0.5 credits) and a Tripo H3.1 image-to-3D mesh (9 credits): 38 credits in all.
+
 ### Content-Security-Policy reports
 
 - **Violation reports now go somewhere.** The policy (still report-only) has `report-uri /api/csp-report` and `report-to csp`, with a `Reporting-Endpoints` header. The new function `api/csp-report.ts` accepts both report formats, strips query strings and fragments and drops the referrer, ignores browser-extension noise, logs each report as a `csp-report {...}` line in the Vercel logs and, when a Sentry DSN is set, forwards it to Sentry's security endpoint. `vite preview` and `vite dev` answer the endpoint with `204`. See [Security](../developer-guide/security.md#content-security-policy).
