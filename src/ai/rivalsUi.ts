@@ -4,6 +4,7 @@
 // a memory.
 
 import type { RivalRecord } from '../cloud/aiApi';
+import { attachPortrait } from './portraits';
 import { RIVALS, type RivalProfile } from './rivals';
 
 export interface RivalsUiDeps {
@@ -48,6 +49,7 @@ export function initRivalsUi(deps: RivalsUiDeps) {
     swatch.style.background = `linear-gradient(135deg, ${r.jersey} 0 50%, ${r.accent} 50% 100%)`;
     swatch.style.borderColor = r.frame;
     swatch.textContent = r.emoji;
+    attachPortrait(swatch, r.id);
     const info = h('div', 'rival-info');
     info.append(h('strong', '', r.name), h('span', 'rival-tag', r.tagline), h('span', 'rival-record', recordText(rec)));
     if (rec?.notes.length) {

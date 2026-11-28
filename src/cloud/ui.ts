@@ -13,7 +13,7 @@ import { toFit } from './fit';
 import { mountVerifyBanner } from './verifyBanner';
 import { accountTab } from './accountTab';
 import { loadDebrief } from './aiApi';
-import { COACH_NAME, debriefBody } from '../ai/coachUi';
+import { COACH_NAME, coachFace, debriefBody } from '../ai/coachUi';
 import { sanitizeDebrief } from '../ai/sanitize';
 import { adminCreateEvent, adminDeleteEvent, upcomingEvents } from './events';
 import { myEffortLog } from './segmentApi';
@@ -407,7 +407,7 @@ export function initAccountDialogs(deps: Deps) {
     el.append(coach);
     loadDebrief(a.id).then((d) => {
       if (!d || !sanitizeDebrief(d)) return;
-      coach.replaceChildren(h('header', {}, h('span', { class: 'coach-face', text: '🧢' }), h('strong', { text: COACH_NAME })), debriefBody(sanitizeDebrief(d)!, 'claude', {}));
+      coach.replaceChildren(h('header', {}, coachFace(), h('strong', { text: COACH_NAME })), debriefBody(sanitizeDebrief(d)!, 'claude', {}));
       coach.hidden = false;
     }).catch(() => {});
     const charts = h('div', { class: 'act-charts' }, h('p', { class: 'muted small', text: 'Loading the ride…' }));

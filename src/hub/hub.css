@@ -214,6 +214,14 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 .hub-card:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.3); }
 .hub-card.selected { border-color: var(--red-hi); box-shadow: 0 0 0 1px var(--red-hi), 0 12px 40px rgba(214, 40, 57, 0.28); }
 .hub-card:has(.hub-pick:focus-visible) { border-color: var(--red-hi); box-shadow: var(--ring), 0 8px 26px rgba(0, 0, 0, 0.3); }
+.hub-banner { position: relative; aspect-ratio: 16 / 9; background: rgba(255, 255, 255, 0.05); overflow: hidden; }
+.hub-banner-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* a soft fade into the card, so the profile below reads as part of the picture's foot */
+.hub-banner::after { content: ''; position: absolute; inset: auto 0 0; height: 40%; background: linear-gradient(180deg, transparent, rgba(10, 16, 38, 0.78)); pointer-events: none; }
+.hub-card:hover .hub-banner-img { transform: scale(1.03); }
+.hub-banner-img { transition: transform 0.4s ease; }
+/* a world's card spans the grid: a wide strip instead of a tall 16:9 */
+.hub-world .hub-banner { aspect-ratio: auto; height: clamp(120px, 20vw, 220px); }
 .hub-thumb { display: block; width: 100%; height: 88px; background: rgba(255, 255, 255, 0.04); }
 .hub-card-body { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 14px; min-width: 0; }
 .hub-card h3 { margin: 0; font-size: inherit; }
@@ -457,6 +465,7 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
   .hub-grid, .hub-sk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .hub-plans, .hub-events, .hub-one { grid-template-columns: 1fr; }
   .hub-thumb { height: 60px; }
+  .hub-world .hub-banner { height: 120px; }
   .hub-card-body { padding: 10px 11px 11px; }
   .hub-pick { font-size: 19px; }
   .hub-card .hub-desc { display: none; }
@@ -481,6 +490,7 @@ body.at-hub :is(.topbar, .hud-wrap, .bottom, .workout-panel, .demo-panel, .gear-
 
 @media (prefers-reduced-motion: reduce) {
   .hub-sk { animation: none; }
-  .hub-card, .hub-dock, .hub-dock.show, .hub-xp i { transition: none; }
+  .hub-card, .hub-dock, .hub-dock.show, .hub-xp i, .hub-banner-img { transition: none; }
+  .hub-card:hover .hub-banner-img { transform: none; }
   .hub-card:hover { transform: none; }
 }

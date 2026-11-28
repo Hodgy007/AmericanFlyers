@@ -16,7 +16,7 @@ import { RivalBot } from './rivalBot';
 import { LineLimiter, RivalTriggerEngine } from './rivalTriggers';
 import { rivalById } from './rivals';
 import { sanitizeDebrief, sanitizePlan, sanitizeRivalLines, sanitizeRivalPost, sanitizeTip } from './sanitize';
-import { speak } from './speech';
+import { setVoiceDuck, speakAs } from './speech';
 import { RideStory } from './story';
 import { pickFresh } from './text';
 import { buildDebrief, type RideSummaryInput } from './summary';
@@ -40,6 +40,8 @@ export interface AiHost {
   patchSettings(p: Partial<Pick<AiSettings, 'aiCoach' | 'aiRivals'>>): void;
   openSettings(): void;
   openSignIn(reason: string): void;
+  /** Quiets the ride sounds while a recorded line plays. */
+  duck?(on: boolean): void;
 }
 
 /** What main.ts tells us every frame. */
@@ -93,6 +95,7 @@ export class AiRide {
 
   constructor(private readonly host: AiHost) {
     this.bubble = initCoachBubble();
+    if (host.duck) setVoiceDuck(host.duck);
   }
 
   private coachOn() { return this.host.settings().aiCoach && this.host.signedIn(); }
@@ -309,7 +312,7 @@ export class AiRide {
     const profile = rivalById(this.rivalId);
     this.said = { text: line, until: performance.now() + SPEECH_S * 1000 }; // real time: the bubble stays up for 6 s whatever the ride clock does
     this.host.toast(`${profile?.emoji ?? ''} ${who}: “${line}”`, 4500);
-    if (profile && this.host.settings().coachVoice) speak(line, profile.speech);
+    if (profile && this.host.settings().coachVoice) speakAs(profile.id, line, profile.speech);
   }
 
   /**

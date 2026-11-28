@@ -1847,6 +1847,7 @@ function aiHost(): AiHostBase {
     patchSettings: patchAiSettings,
     openSettings,
     openSignIn: (reason) => accountUi.openSignIn(reason),
+    duck: (on) => sound.duck(on),
   };
 }
 function rivalsDeps() {

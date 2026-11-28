@@ -24,23 +24,31 @@ export function cannedTip(moment: CoachMoment, rand: () => number = Math.random)
   return list[Math.floor(rand() * list.length) % list.length];
 }
 
+/** The plan's fixed lines (the others have numbers in them): listed here so they can be recorded (voiceLines.ts). */
+export const COACH_PLAN_LINES = [
+  'Easy warm-up first. Smooth pedalling, loose shoulders.',
+  'Settle in and find an easy rhythm.',
+  'Last kilometre. Empty the tank.',
+] as const;
+const [WARM_UP, SETTLE_IN, LAST_KM] = COACH_PLAN_LINES;
+
 const km = (m: number) => (m / 1000).toFixed(m >= 10000 ? 0 : 1);
 
 /** A plan built from the stage's features alone: no model needed. */
 export function cannedPlan(p: PlanPayload): PlanResult {
   const tips: CoachTip[] = [];
   if (p.workout) {
-    tips.push({ at_m: null, at_s: 5, text: 'Easy warm-up first. Smooth pedalling, loose shoulders.' });
+    tips.push({ at_m: null, at_s: 5, text: WARM_UP });
     const hard = p.workout.steps.filter((s) => (s.pctFtp ?? 0) >= 0.85 && s.durS >= 60).slice(0, 5);
     for (const s of hard) tips.push({ at_m: null, at_s: Math.max(5, s.atS - 10), text: `${s.label}: hold the target and breathe steadily.` });
   } else {
-    tips.push({ at_m: 100, at_s: null, text: 'Settle in and find an easy rhythm.' });
+    tips.push({ at_m: 100, at_s: null, text: SETTLE_IN });
     for (const c of p.stage.climbs.slice(0, 4)) {
       tips.push({ at_m: Math.max(0, c.startM - 300), at_s: null, text: `Climb ahead, ${km(c.endM - c.startM)} km at ${c.avgPct.toFixed(0)}%. Stay seated and steady.` });
     }
     for (const s of p.stage.sprints.slice(0, 2)) tips.push({ at_m: Math.max(0, s.atM - 400), at_s: null, text: `${s.name} sprint soon. Pick your moment.` });
     for (const k of p.stage.koms.slice(0, 1)) tips.push({ at_m: Math.max(0, k.atM - 400), at_s: null, text: `${k.name} summit points ahead. Dig in!` });
-    if (p.stage.lengthM) tips.push({ at_m: Math.max(0, p.stage.lengthM - 1000), at_s: null, text: 'Last kilometre. Empty the tank.' });
+    if (p.stage.lengthM) tips.push({ at_m: Math.max(0, p.stage.lengthM - 1000), at_s: null, text: LAST_KM });
   }
   const sorted = tips.sort((a, b) => (a.at_m ?? a.at_s ?? 0) - (b.at_m ?? b.at_s ?? 0)).slice(0, 8);
   return { tips: sorted.map((t) => ({ ...t, text: cleanLine(t.text, 18) })) };

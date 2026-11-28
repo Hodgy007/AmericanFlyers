@@ -4,11 +4,16 @@
 
 import { cannedDebrief } from './canned';
 import { suggestionById } from './catalogue';
-import { speak, stopSpeaking } from './speech';
+import { speakAs, stopSpeaking } from './speech';
+import { COACH_VOICE } from './voiceLines';
+import { portrait } from './portraits';
 import type { DebriefPayload, DebriefResult } from './types';
 
 export const COACH_NAME = 'Coach Marty';
 export const BUBBLE_MS = 6000;
+
+/** Coach Marty's face: his portrait over the 🧢, which shows if the picture isn't there. */
+export const coachFace = () => portrait(COACH_VOICE, '🧢', 'coach-face');
 
 export interface CoachBubble { show(text: string, voice: boolean): void; hide(): void }
 
@@ -18,7 +23,8 @@ export function initCoachBubble(): CoachBubble {
   el.className = 'coach-bubble';
   el.setAttribute('role', 'status');
   el.hidden = true;
-  el.innerHTML = '<span class="coach-face" aria-hidden="true">🧢</span><div><strong></strong><p></p></div>';
+  el.innerHTML = '<div><strong></strong><p></p></div>';
+  el.prepend(coachFace());
   el.querySelector('strong')!.textContent = COACH_NAME;
   document.body.append(el);
   const p = el.querySelector('p')!;
@@ -31,7 +37,7 @@ export function initCoachBubble(): CoachBubble {
       requestAnimationFrame(() => el.classList.add('show'));
       clearTimeout(timer);
       timer = window.setTimeout(hide, BUBBLE_MS);
-      if (voice) speak(text, { pitch: 0.85, rate: 0.95 });
+      if (voice) speakAs(COACH_VOICE, text, { pitch: 0.85, rate: 0.95 });
     },
     hide() { clearTimeout(timer); stopSpeaking(); el.classList.remove('show'); el.hidden = true; },
   };
@@ -92,7 +98,7 @@ export function debriefBody(d: DebriefResult, source: 'claude' | 'canned', deps:
 export function debriefCard(deps: DebriefCardDeps) {
   const card = h('section', 'coach-card');
   const head = h('header');
-  head.append(h('span', 'coach-face', '🧢'), h('strong', '', COACH_NAME));
+  head.append(coachFace(), h('strong', '', COACH_NAME));
   const body = h('div', 'coach-card-body');
   card.append(head, body);
   if (deps.invite) {

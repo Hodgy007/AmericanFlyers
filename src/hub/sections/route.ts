@@ -10,12 +10,22 @@ import { segmentsFor, shortStageName } from '../../segments';
 import { isStageLoaded, loadStage, stageCatalogue, stageProfile, worldLapProfile, type Stage } from '../../stages';
 import { climbText, distanceText, pickStage, stageFigures } from '../data';
 import { button, drawWhenVisible, forgetCanvas, h } from '../dom';
+import { STAGE_ART, stageArtUrl } from '../stageArt';
 import type { SectionMount } from '../types';
 
 /** The names of a stage's KOM segments: found from its road once that has arrived, until then the catalogue's list (so the hub's cards don't fetch every road). */
 function komNames(stage: Stage): string[] {
   if (isStageLoaded(stage) || stage.uploaded) return segmentsFor(stage).map((g) => g.name);
   return stageCatalogue(stage)?.segments ?? [];
+}
+
+/** The card's banner picture, only for a built-in stage or world whose art has been generated (STAGE_ART): never an uploaded route. Null otherwise. */
+function banner(id: string, uploaded: boolean | undefined): HTMLElement | null {
+  if (uploaded || !STAGE_ART.has(id)) return null;
+  const img = h('img', { class: 'hub-banner-img', src: stageArtUrl(id), alt: '', loading: 'lazy', decoding: 'async', width: '1280', height: '720' });
+  const box = h('div', { class: 'hub-banner', 'aria-hidden': 'true' }, img);
+  img.addEventListener('error', () => box.remove()); // a missing or broken file: the card is just as it was
+  return box;
 }
 
 export const mount: SectionMount = (root, ctx) => {
@@ -87,6 +97,7 @@ export const mount: SectionMount = (root, ctx) => {
       }, 'hub-mini hub-race', { title: `The big climbs on ${stage.name}: who holds the KOM, and your best`, 'aria-label': `KOM segments on ${stage.name}: ${segs.join(', ')}`, 'data-fkey': `kom-${stage.id}` }));
     }
     const el = h('article', { class: 'hub-card hub-stage' },
+      banner(stage.id, stage.uploaded),
       canvas,
       h('div', { class: 'hub-card-body' }, h('h3', {}, pick), meta, h('p', { class: 'hub-desc', text: stage.tagline }), foot),
       h('span', { class: 'hub-tick', 'aria-hidden': 'true', text: '✓ Chosen' }),
@@ -145,6 +156,7 @@ export const mount: SectionMount = (root, ctx) => {
       if (best) { bests.textContent = `🏆 ${raceTime(best.finishS)}`; bests.title = `Your best whole-stage time on ${shortStageName(stage.name)}`; }
     }
     const el = h('article', { class: 'hub-card hub-stage hub-world' },
+      banner(w.id, false),
       canvas,
       h('div', { class: 'hub-card-body' },
         h('h3', { class: 'hub-world-name', text: w.name }),
